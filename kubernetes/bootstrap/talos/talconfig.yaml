@@ -5,7 +5,7 @@ talosVersion: v1.7.0
 # renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
 kubernetesVersion: v1.30.0
 
-clusterName: &cluster kflix
+clusterName: &cluster titans
 endpoint: https://10.100.0.10:6443
 clusterPodNets:
   - "10.69.0.0/16"
@@ -15,6 +15,8 @@ additionalApiServerCertSans: &sans
   - "10.100.0.10"
   - 127.0.0.1 # KubePrism
   - "k8s.thezoo.house"
+  - "titans.thezoo.house"
+  - "pantheon.thezoo.house"
 additionalMachineCertSans: *sans
 cniConfig:
   name: none
@@ -29,16 +31,14 @@ nodes:
       - deviceSelector:
           hardwareAddr: "58:47:ca:75:7a:24"
         dhcp: false
-        vlans:
-          - vlanId: 100
-            addresses:
-              - "10.100.47.35/16"
-            mtu: 1500
-            routes:
-              - network: 0.0.0.0/0
-                gateway: "10.100.0.1"
-            vip:
-              ip: "10.100.0.10"
+        addresses:
+          - "10.100.47.35/16"
+        mtu: 1500
+        routes:
+          - network: 0.0.0.0/0
+            gateway: "10.100.0.1"
+        vip:
+          ip: "10.100.0.10"
   - hostname: "tethys"
     ipAddress: "10.100.252.13"
     installDisk: "/dev/nvme0n1"
@@ -48,16 +48,14 @@ nodes:
       - deviceSelector:
           hardwareAddr: "58:47:ca:75:52:38"
         dhcp: false
-        vlans:
-          - vlanId: 100
-            addresses:
-              - "10.100.252.13/16"
-            mtu: 1500
-            routes:
-              - network: 0.0.0.0/0
-                gateway: "10.100.0.1"
-            vip:
-              ip: "10.100.0.10"
+        addresses:
+          - "10.100.252.13/16"
+        mtu: 1500
+        routes:
+          - network: 0.0.0.0/0
+            gateway: "10.100.0.1"
+        vip:
+          ip: "10.100.0.10"
   - hostname: "coeus"
     ipAddress: "10.100.47.49"
     installDisk: "/dev/nvme0n1"
@@ -67,16 +65,14 @@ nodes:
       - deviceSelector:
           hardwareAddr: "58:47:ca:75:7a:32"
         dhcp: false
-        vlans:
-          - vlanId: 100
-            addresses:
-              - "10.100.47.49/16"
-            mtu: 1500
-            routes:
-              - network: 0.0.0.0/0
-                gateway: "10.100.0.1"
-            vip:
-              ip: "10.100.0.10"
+        addresses:
+          - "10.100.47.49/16"
+        mtu: 1500
+        routes:
+          - network: 0.0.0.0/0
+            gateway: "10.100.0.1"
+        vip:
+          ip: "10.100.0.10"
   - hostname: "chronos"
     ipAddress: "10.100.225.30"
     installDisk: "/dev/nvme0n1"
@@ -86,14 +82,12 @@ nodes:
       - deviceSelector:
           hardwareAddr: "18:31:bf:e0:3d:1e"
         dhcp: false
-        vlans:
-          - vlanId: 100
-            addresses:
-              - "10.100.225.30/16"
-            mtu: 1500
-            routes:
-              - network: 0.0.0.0/0
-                gateway: "10.100.0.1"
+        addresses:
+          - "10.100.225.30/16"
+        mtu: 1500
+        routes:
+          - network: 0.0.0.0/0
+            gateway: "10.100.0.1"
   - hostname: "rhea"
     ipAddress: "10.100.26.38"
     installDisk: "/dev/sdb"
@@ -103,14 +97,12 @@ nodes:
       - deviceSelector:
           hardwareAddr: "d8:bb:c1:1a:a0:85"
         dhcp: false
-        vlans:
-          - vlanId: 100
-            addresses:
-              - "10.100.26.38/16"
-            mtu: 1500
-            routes:
-              - network: 0.0.0.0/0
-                gateway: "10.100.0.1"
+        addresses:
+          - "10.100.26.38/16"
+        mtu: 1500
+        routes:
+          - network: 0.0.0.0/0
+            gateway: "10.100.0.1"
 
 patches:
   # Configure containerd

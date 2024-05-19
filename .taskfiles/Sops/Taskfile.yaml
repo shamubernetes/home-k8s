@@ -25,10 +25,31 @@ tasks:
           if [ -d "{{.KUBERNETES_DIR}}" ]; then
               find "{{.KUBERNETES_DIR}}" -type f -name "*.sops.*" -exec grep -L "ENC\[AES256_GCM" {} \;
           fi
-
+  decrypt:
+    desc: Decrypt all Kubernetes SOPS secrets
+    cmds:
+    - for: {var: file}
+      task: .decrypt-file
+      vars:
+        file: "{{.ITEM}}"
+    vars:
+      file:
+        sh: |
+          if [ -d "{{.KUBERNETES_DIR}}" ]; then
+              find "{{.KUBERNETES_DIR}}" -type f -name "*.sops.*" -exec grep -l "ENC\[AES256_GCM" {} \;
+          fi
   .encrypt-file:
     internal: true
     cmd: sops --encrypt --in-place {{.file}}
+    requires:
+      vars: ["file"]
+    preconditions:
+    - {msg: "Missing Sops config file", sh: "test -f {{.SOPS_CONFIG_FILE}}"}
+    - {msg: "Missing Sops Age key file", sh: "test -f {{.AGE_FILE}}",}
+
+  .decrypt-file:
+    internal: true
+    cmd: sops --decrypt --in-place {{.file}}
     requires:
       vars: ["file"]
     preconditions:

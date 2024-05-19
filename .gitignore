@@ -1,14 +1,9 @@
-# Trash
-.DS_Store
-Thumbs.db
-# k8s
-kubeconfig
+############################################
+############### Repo Config ################
+############################################
 talosconfig
 .decrypted~*.yaml
 .config.env
-*.agekey
-*.pub
-*.key
 # Private
 .private
 .bin
@@ -24,3 +19,313 @@ Brewfile.lock.json
 wiki
 # Bootstrap
 /config.yaml
+
+################# Testing ##################
+*-test.yaml
+extracted_values.yaml
+
+################# Ansible ##################
+ansible_old
+ansible/ansible.log
+ansible/roles/*
+
+################### K8S ####################
+kubeconfig
+
+################### Helm ###################
+*.tgz
+Chart.lock
+.venv
+
+# ---------------------------------------- #
+
+############################################
+############## Global Config ###############
+############################################
+
+############################################
+################ Mac Trash #################
+############################################
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+############################################
+############### Linux Trash ################
+############################################
+*~
+
+# temporary files which can be created if a process still has a handle open of a deleted file
+.fuse_hidden*
+
+# KDE directory preferences
+.directory
+
+# Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
+
+############################################
+############## Windows Trash ###############
+############################################
+# Windows thumbnail cache files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# Dump file
+*.stackdump
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+############################################
+############# Microsoft Office #############
+############################################
+*.tmp
+
+# Word temporary
+~$*.doc*
+
+# Word Auto Backup File
+Backup of *.doc*
+
+# Excel temporary
+~$*.xls*
+
+# Excel Backup File
+*.xlk
+
+# PowerPoint temporary
+~$*.ppt*
+
+# Visio autosave temporary files
+*.~vsd*
+
+############################################
+############### Backup Files ###############
+############################################
+*.bak
+*.backup
+*.gho
+*.ori
+*.orig
+*.tmp
+*.swp
+*.log
+*.old
+*.new
+*.copy
+
+############################################
+############ Visual Studio Code ############
+############################################
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+*.code-workspace
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+############################################
+############### Sublime Text ###############
+############################################
+*.sublime-workspace
+*.sublime-project
+
+############################################
+############## Intellij Idea ###############
+############################################
+*.iml
+*.ipr
+*.iws
+.idea/
+
+############################################
+################# Eclipse ##################
+############################################
+*.project
+*.classpath
+*.settings
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+############################################
+################# Netbeans #################
+############################################
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+############################################
+################### Sops ###################
+############################################
+*.sops.decrypted~*
+*.agekey
+*.pub
+*.key
+
+############################################
+########### Virtual Environment ############
+############################################
+.Python
+[Bb]in
+[Ii]nclude
+[Ll]ib
+[Ll]ib64
+[Ll]ocal
+[Ss]cripts
+pyvenv.cfg
+.venv
+pip-selfcheck.json
+
+############################################
+################ Terraform #################
+############################################
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+*.tfvars
+*.tfvars.json
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+*tfplan*
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+############################################
+############### Diff & Patch ###############
+############################################
+*.diff
+*.patch
+
+############################################
+################### GPG ####################
+############################################
+*.gpg
+*.asc
+secring.*
+
+############################################
+################### Nix ####################
+############################################
+# Ignore build outputs from performing a nix-build or `nix build` command
+result
+result-*
+
+# Ignore the result symlink that points to the latest build output
+result-link
+
+# Ignore the nix store
+/nix/store/
+
+############################################
+################# OpenSSL ##################
+############################################
+## Certificate Authority
+*.ca
+
+## Certificate
+*.crt
+
+## Certificate Sign Request
+*.csr
+
+## Certificate
+*.der
+
+## Key database file
+*.kdb
+
+## OSCP request data
+*.org
+
+## PKCS #12
+*.p12
+
+## PEM-encoded certificate data
+*.pem
+
+## Random number seed
+*.rnd
+
+## SSLeay data
+*.ssleay
+
+## S/MIME message
+*.smime
+
+############################################
+################### End ####################
+############################################

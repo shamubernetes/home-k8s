@@ -14,6 +14,6 @@ fisher install PatrickF1/fzf.fish
 
 # Create/update virtual environment
 if ! grep -q "venv /workspaces/" .venv/pyvenv.cfg; then
-    rm -rf .venv
+  rm -rf .venv
 fi
 task workstation:venv

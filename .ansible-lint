@@ -1,0 +1,13 @@
+exclude_paths:
+- kubernetes
+- archive
+- .github
+- .taskfiles
+- .
+skip_list:
+- var-naming
+warn_list:
+- command-instead-of-shell
+- deprecated-command-syntax
+- experimental
+- no-changed-when

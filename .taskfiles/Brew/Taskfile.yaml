@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: '3'
+
+tasks:
+
+  brew-installed:
+    silent: true
+    cmds:
+    - '[ -x "$(command -v brew)" ] || (echo "Homebrew is not installed, please install it from https://brew.sh" && exit 1)'
+
+  brew-install:
+    silent: true
+    deps:
+    - task: brew-installed
+    cmds:
+    - echo "Installing {{.PACKAGE}} via homebrew..."
+    - brew install {{.PACKAGE}}
+    - echo "Installed {{.PACKAGE}} via homebrew"
+    vars:
+      PACKAGE: "{{.PACKAGE}}"
+      CLI_PACKAGE: "{{default .PACKAGE .CLI_PACKAGE}}"
+
+  install-pre-commit:
+    silent: true
+    cmds:
+    - task: brew-install
+      vars:
+        PACKAGE: '{{.PACKAGE}}'
+    status:
+    - '[ -f $(brew --prefix)/bin/{{.PACKAGE}} ]'
+    vars:
+      PACKAGE: pre-commit

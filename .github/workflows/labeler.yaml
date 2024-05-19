@@ -1,4 +1,3 @@
----
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "Labeler"
 
@@ -15,7 +14,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Labeler
-        uses: actions/labeler@v5
-        with:
-          configuration-path: .github/labeler.yaml
+    - name: Labeler
+      uses: actions/labeler@v5
+      with:
+        configuration-path: .github/labeler.yaml

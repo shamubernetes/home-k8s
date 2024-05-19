@@ -32,3 +32,25 @@ tasks:
   .reset:
     internal: true
     cmd: rm -rf {{.KUBERNETES_DIR}}
+
+  staging:
+    desc: Switch cluster to Staging LE Certs
+    cmds:
+    - sed -i 's/production/staging/g' kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
+    - git add kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
+    - sed -i 's/production/staging/g' kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
+    - git add kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
+    - sed -i 's/production/staging/g' kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
+    - git add kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
+    - 'git commit -m "fix(kubernetes): Staging TLS"'
+
+  production:
+    desc: Switch cluster to Staging LE Certs
+    cmds:
+    - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
+    - git add kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
+    - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
+    - git add kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
+    - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
+    - git add kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
+    - 'git commit -m "fix(kubernetes): Production TLS"'

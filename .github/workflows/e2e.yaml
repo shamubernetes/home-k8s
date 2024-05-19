@@ -24,21 +24,21 @@ jobs:
         - talos
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
 
     - name: Setup Homebrew
       id: setup-homebrew
       uses: Homebrew/actions/setup-homebrew@master
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5
       id: setup-python
       with:
         python-version: "3.11" # minimum supported version
 
     - name: Cache homebrew packages
       if: ${{ github.event_name == 'pull_request' }}
-      uses: actions/cache@v4
+      uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4
       id: cache-homebrew-packages
       with:
         key: homebrew-${{ runner.os }}-${{ steps.setup-homebrew.outputs.gems-hash }}-${{ hashFiles('.taskfiles/Workstation/Brewfile') }}
@@ -46,7 +46,7 @@ jobs:
 
     - name: Cache venv
       if: ${{ github.event_name == 'pull_request' }}
-      uses: actions/cache@v4
+      uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4
       with:
         key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt', 'requirements.yaml') }}
         path: .venv

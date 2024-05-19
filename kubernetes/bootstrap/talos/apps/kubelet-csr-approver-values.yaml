@@ -1,3 +1,2 @@
----
 providerRegex: ^(oceanus|tethys|coeus|chronos|rhea)$
 bypassDnsResolution: true

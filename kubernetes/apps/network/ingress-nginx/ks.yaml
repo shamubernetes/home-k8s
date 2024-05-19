@@ -1,4 +1,3 @@
----
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -10,7 +9,7 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-    - name: cert-manager-issuers
+  - name: cert-manager-issuers
   path: ./kubernetes/apps/network/ingress-nginx/certificates
   prune: true
   sourceRef:
@@ -32,7 +31,7 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-    - name: ingress-nginx-certificates
+  - name: ingress-nginx-certificates
   path: ./kubernetes/apps/network/ingress-nginx/internal
   prune: true
   sourceRef:
@@ -54,7 +53,7 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-    - name: ingress-nginx-certificates
+  - name: ingress-nginx-certificates
   path: ./kubernetes/apps/network/ingress-nginx/external
   prune: true
   sourceRef:

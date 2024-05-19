@@ -11,6 +11,7 @@ from bcrypt import hashpw, gensalt
 import makejinja
 import validation
 
+
 def encrypt(value: str) -> str:
     return hashpw(value.encode(), gensalt(rounds=10)).decode("ascii")
 
@@ -39,6 +40,7 @@ def import_filter(file: Path) -> Callable[[dict[str, Any]], bool]:
 
 
 class Plugin(makejinja.plugin.Plugin):
+
     def __init__(self, data: dict[str, Any], config: makejinja.config.Config):
         self._data = data
         self._config = config
@@ -52,16 +54,13 @@ class Plugin(makejinja.plugin.Plugin):
 
         validation.validate(data)
 
-
     def filters(self) -> makejinja.plugin.Filters:
         return [encrypt, nthhost]
-
 
     def path_filters(self):
         return [self._mjfilter_func]
 
-
     def _mjfilter_func(self, path: Path) -> bool:
         return not any(
-            path.is_relative_to(excluded_dir) for excluded_dir in self._excluded_dirs
-        )
+            path.is_relative_to(excluded_dir)
+            for excluded_dir in self._excluded_dirs)

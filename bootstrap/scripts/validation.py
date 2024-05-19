@@ -8,13 +8,17 @@ import socket
 import sys
 
 DISTRIBUTIONS = ["k3s", "talos"]
-GLOBAL_CLI_TOOLS = ["age", "flux", "helmfile", "sops", "jq", "kubeconform", "kustomize"]
+GLOBAL_CLI_TOOLS = [
+    "age", "flux", "helmfile", "sops", "jq", "kubeconform", "kustomize"
+]
 TALOS_CLI_TOOLS = ["talosctl", "talhelper"]
 CLOUDFLARE_TOOLS = ["cloudflared"]
 
 
 def required(*keys: str):
+
     def wrapper_outter(func: Callable):
+
         @wraps(func)
         def wrapper(data: dict, *_, **kwargs) -> None:
             for key in keys:
@@ -30,7 +34,8 @@ def required(*keys: str):
 def validate_python_version() -> None:
     required_version = (3, 11, 0)
     if sys.version_info < required_version:
-        raise ValueError(f"Python {sys.version_info} is below 3.11. Please upgrade.")
+        raise ValueError(
+            f"Python {sys.version_info} is below 3.11. Please upgrade.")
 
 
 def validate_ip(ip: str) -> str:
@@ -57,7 +62,7 @@ def validate_node(node: dict, node_cidr: str, distribution: str) -> None:
     if not re.match(r"^[a-z0-9-\.]+$", node.get('name')):
         raise ValueError(f"Node {node.get('name')} has an invalid name")
     if distribution in ["k3s"]:
-        if not node.get("ssh_user") :
+        if not node.get("ssh_user"):
             raise ValueError(f"Node {node.get('name')} is missing ssh_user")
     if distribution in ["talos"]:
         if not node.get("talos_disk"):
@@ -65,16 +70,20 @@ def validate_node(node: dict, node_cidr: str, distribution: str) -> None:
         if not node.get("talos_nic"):
             raise ValueError(f"Node {node.get('name')} is missing talos_nic")
         if not re.match(r"(?:[0-9a-fA-F]:?){12}", node.get("talos_nic")):
-            raise ValueError(f"Node {node.get('name')} has an invalid talos_nic, is this a MAC address?")
+            raise ValueError(
+                f"Node {node.get('name')} has an invalid talos_nic, is this a MAC address?"
+            )
     ip = validate_ip(node.get("address"))
     if netaddr.IPAddress(ip, 4) not in netaddr.IPNetwork(node_cidr):
-        raise ValueError(f"Node {node.get('name')} is not in the node CIDR {node_cidr}")
+        raise ValueError(
+            f"Node {node.get('name')} is not in the node CIDR {node_cidr}")
     port = 50000 if distribution in ["talos"] else 22
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(5)
         result = sock.connect_ex((ip, port))
         if result != 0:
-            raise ValueError(f"Node {node.get('name')} port {port} is not open")
+            raise ValueError(
+                f"Node {node.get('name')} port {port} is not open")
 
 
 @required("bootstrap_distribution", "bootstrap_cloudflare")
@@ -110,8 +119,10 @@ def validate_age(key: str, **_) -> None:
         raise ValueError(f"Invalid Age public key {key}")
 
 
-@required("bootstrap_node_network", "bootstrap_node_inventory", "bootstrap_distribution")
-def validate_nodes(node_cidr: str, nodes: dict[list], distribution: str, **_) -> None:
+@required("bootstrap_node_network", "bootstrap_node_inventory",
+          "bootstrap_distribution")
+def validate_nodes(node_cidr: str, nodes: dict[list], distribution: str,
+                   **_) -> None:
     node_cidr = validate_network(node_cidr, 4)
 
     controllers = [node for node in nodes if node.get('controller') == True]

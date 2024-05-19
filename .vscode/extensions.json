@@ -1,15 +1,21 @@
 {
-    "recommendations": [
-        "albert.TabOut",
-        "britesnow.vscode-toggle-quotes",
-        "fcrespo82.markdown-table-formatter",
-        "mikestead.dotenv",
-        "mitchdenny.ecdc",
-        "redhat.ansible",
-        "signageos.signageos-vscode-sops",
-        "will-stone.in-any-case",
-        "EditorConfig.editorconfig",
-        "PKief.material-icon-theme",
-        "Gruntfuggly.todo-tree"
-    ]
+  "recommendations": [
+    "albert.TabOut",
+    "BriteSnow.vscode-toggle-quotes",
+    "editorconfig.editorconfig",
+    "EditorConfig.editorconfig",
+    "elagil.pre-commit-helper",
+    "fcrespo82.markdown-table-formatter",
+    "fnando.linter",
+    "foxundermoon.shell-format",
+    "Gruntfuggly.todo-tree",
+    "kiliantyler.kubernetes-yaml-formatter-x",
+    "mikestead.dotenv",
+    "mitchdenny.ecdc",
+    "PKief.material-icon-theme",
+    "redhat.ansible",
+    "signageos.signageos-vscode-sops",
+    "task.vscode-task",
+    "will-stone.in-any-case"
+  ]
 }

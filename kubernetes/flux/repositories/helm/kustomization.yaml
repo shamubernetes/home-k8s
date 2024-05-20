@@ -12,3 +12,4 @@ resources:
 - ./postfinance.yaml
 - ./spegel.yaml
 - ./stakater.yaml
+- ./onepassword.yaml

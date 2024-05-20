@@ -3,3 +3,5 @@ kind: Kustomization
 resources:
 - ./cluster-settings.yaml
 - ./cluster-secrets.sops.yaml
+- ./op-credentials.sops.yaml
+- ./op-connect-token.sops.yaml

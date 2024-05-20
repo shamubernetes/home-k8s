@@ -1,0 +1,4 @@
+checks:
+  addAllBuiltIn: true
+  exclude:
+  - "use-namespace"

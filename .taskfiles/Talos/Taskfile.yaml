@@ -71,7 +71,11 @@ tasks:
     preconditions:
     - {msg: "Missing kubeconfig", sh: "test -f {{.KUBECONFIG_FILE}}",}
 
-  upgrade-talos:
+  # upgrade-talos:
+  #   desc: Upgrade talos on all nodes
+  #   cmd: talosctl upgrade --image {{.image}} --preserve=true --reboot-mode=default
+
+  upgrade-talos-node:
     desc: Upgrade talos on a node
     cmd: talosctl --nodes {{.node}} upgrade --image {{.image}} --preserve=true --reboot-mode=default
     requires:

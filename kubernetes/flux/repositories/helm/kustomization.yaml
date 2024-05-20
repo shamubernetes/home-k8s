@@ -13,3 +13,4 @@ resources:
 - ./spegel.yaml
 - ./stakater.yaml
 - ./onepassword.yaml
+- ./external-secrets.yaml

@@ -54,3 +54,11 @@ tasks:
     - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
     - git add kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
     - 'git commit -m "fix(kubernetes): Production TLS"'
+
+  webhook:
+    desc: Print out the Webhook URL for github
+    cmd: kubectl -n flux-system get receiver github-receiver -o jsonpath='{.status.webhookPath}'
+
+  webhook-secret:
+    desc: Print out the Webhook Secret for github
+    cmd: kubectl -n flux-system get secret github-webhook-token-secret -o jsonpath='{.data.token}' | base64 --decode

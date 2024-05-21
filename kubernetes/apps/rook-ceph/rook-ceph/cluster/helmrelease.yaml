@@ -63,6 +63,7 @@ spec:
       storage:
         useAllNodes: true
         useAllDevices: true
+        deviceFilter: sda
         config:
           osdsPerDevice: "1"
       placement:

@@ -1,19 +1,20 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./backube.yaml
 - ./bjw-s.yaml
 - ./cilium.yaml
 - ./external-dns.yaml
+- ./external-secrets.yaml
 - ./ingress-nginx.yaml
-- ./k8s-gateway.yaml
 - ./jetstack.yaml
+- ./k8s-gateway.yaml
 - ./metrics-server.yaml
+- ./onepassword.yaml
 - ./openebs.yaml
+- ./piraeus.yaml
 - ./postfinance.yaml
+- ./rook-ceph.yaml
 - ./spegel.yaml
 - ./stakater.yaml
-- ./onepassword.yaml
-- ./external-secrets.yaml
-- ./piraeus.yaml
-- ./backube.yaml
-- ./rook-ceph.yaml
+- ./stevehipwell.yaml

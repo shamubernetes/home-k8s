@@ -14,3 +14,5 @@ resources:
 - ./stakater.yaml
 - ./onepassword.yaml
 - ./external-secrets.yaml
+- ./piraeus.yaml
+- ./backube.yaml

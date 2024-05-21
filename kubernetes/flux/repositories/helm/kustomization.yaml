@@ -13,6 +13,7 @@ resources:
 - ./onepassword.yaml
 - ./openebs.yaml
 - ./piraeus.yaml
+- ./prometheus-community.yaml
 - ./postfinance.yaml
 - ./rook-ceph.yaml
 - ./spegel.yaml

@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta1.json
+apiVersion: helm.toolkit.fluxcd.io/v2beta2
+kind: HelmRelease
+metadata:
+  name: ghar-set-zoo
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.9.1
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: ghar-controller
+    namespace: actions-runner-system
+  valuesFrom:
+  - targetPath: githubConfigSecret.github_app_id
+    kind: Secret
+    name: actions-runner-controller-auth-secret
+    valuesKey: ACTION_RUNNER_CONTROLLER_GITHUB_APP_ID
+  - targetPath: githubConfigSecret.github_app_installation_id
+    kind: Secret
+    name: actions-runner-controller-auth-secret
+    valuesKey: ACTION_RUNNER_CONTROLLER_GITHUB_INSTALLATION_ID
+  - targetPath: githubConfigSecret.github_app_private_key
+    kind: Secret
+    name: actions-runner-controller-auth-secret
+    valuesKey: ACTION_RUNNER_CONTROLLER_GITHUB_PRIVATE_KEY
+  values:
+    nameOverride: ghar-set-zoo
+    runnerScaleSetName: ghar-set-zoo
+    githubConfigUrl: https://github.com/kflix-tv
+    minRunners: 2
+    maxRunners: 12
+    containerMode:
+      type: dind
+    template:
+      spec:
+        containers:
+        - name: runner
+          image: ghcr.io/kflix-tv/actions-runner:2.316.1@sha256:7e24b93a580432e70247da8a8bfc0aa76586fd33b248425e0ca9e639154aca8e
+          command: ["/home/runner/run.sh"]
+    controllerServiceAccount:
+      name: ghar-controller
+      namespace: actions-runner-system

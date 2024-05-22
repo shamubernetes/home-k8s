@@ -4,6 +4,7 @@ resources:
 - ./backube.yaml
 - ./bjw-s.yaml
 - ./cilium.yaml
+- ./cloudnative-pg.yaml
 - ./external-dns.yaml
 - ./external-secrets.yaml
 - ./ingress-nginx.yaml
@@ -13,8 +14,8 @@ resources:
 - ./onepassword.yaml
 - ./openebs.yaml
 - ./piraeus.yaml
-- ./prometheus-community.yaml
 - ./postfinance.yaml
+- ./prometheus-community.yaml
 - ./rook-ceph.yaml
 - ./spegel.yaml
 - ./stakater.yaml

@@ -35,6 +35,9 @@ includes:
   talos: .taskfiles/Talos/Taskfile.yaml
   sops: .taskfiles/Sops/Taskfile.yaml
   workstation: .taskfiles/Workstation/Taskfile.yaml
+  github:
+    aliases: ["gh"]
+    taskfile: .taskfiles/Github/Taskfile.yaml
   precommit:
     aliases: ["pc"]
     taskfile: .taskfiles/Precommit/Taskfile.yaml

@@ -1,0 +1,14 @@
+version: "3"
+
+tasks:
+  login:
+    desc: Login to Github
+    cmd: gh auth login
+
+  publish-schemas:
+    desc: Run the Publish Schemas Github Action
+    cmd: gh workflow run "Publish Schemas"
+
+  update-kubeconfig:
+    desc: Update the kubeconfig file
+    cmd: gh secret set KUBECONFIG --body "$(command cat {{.ROOT_DIR}}/kubeconfig | base64 | tr -d '\n')"

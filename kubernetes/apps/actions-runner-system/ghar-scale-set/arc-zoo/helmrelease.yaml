@@ -24,22 +24,10 @@ spec:
   dependsOn:
   - name: ghar-controller
     namespace: actions-runner-system
-  valuesFrom:
-  - targetPath: githubConfigSecret.github_app_id
-    kind: Secret
-    name: actions-runner-controller-auth-secret
-    valuesKey: ACTION_RUNNER_CONTROLLER_GITHUB_APP_ID
-  - targetPath: githubConfigSecret.github_app_installation_id
-    kind: Secret
-    name: actions-runner-controller-auth-secret
-    valuesKey: ACTION_RUNNER_CONTROLLER_GITHUB_INSTALLATION_ID
-  - targetPath: githubConfigSecret.github_app_private_key
-    kind: Secret
-    name: actions-runner-controller-auth-secret
-    valuesKey: ACTION_RUNNER_CONTROLLER_GITHUB_PRIVATE_KEY
   values:
     nameOverride: ghar-set-zoo
     runnerScaleSetName: ghar-set-zoo
+    githubConfigSecret: actions-runner-controller-auth-secret
     githubConfigUrl: https://github.com/kflix-tv
     minRunners: 2
     maxRunners: 12

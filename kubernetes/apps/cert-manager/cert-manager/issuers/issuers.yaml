@@ -17,6 +17,7 @@ spec:
       selector:
         dnsZones:
         - "${SECRET_DOMAIN}"
+# yamllint disable-line rule:document-start
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer

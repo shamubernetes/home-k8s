@@ -19,6 +19,7 @@ spec:
   interval: 30m
   retryInterval: 1m
   timeout: 5m
+# yamllint disable-line rule:document-start
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -41,6 +42,7 @@ spec:
   interval: 30m
   retryInterval: 1m
   timeout: 5m
+# yamllint disable-line rule:document-start
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

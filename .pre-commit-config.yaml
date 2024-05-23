@@ -1,7 +1,7 @@
 fail_fast: false
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.6.0 # Use the ref you want to point at
+  rev: v4.6.0
   hooks:
   - id: check-added-large-files
   - id: check-case-conflict
@@ -24,10 +24,7 @@ repos:
 - repo: https://github.com/gruntwork-io/pre-commit
   rev: v0.1.23
   hooks:
-  - id: terraform-fmt
-  - id: terraform-validate
-  - id: tflint
-  - id: helmlint
+  - id: helmlint # Move to trunk
 
 - repo: https://github.com/Lucas-C/pre-commit-hooks
   rev: v1.5.5
@@ -47,29 +44,6 @@ repos:
     args: [--exclude, "**/*.patch.yaml"]
     files: .yaml$
 
-- repo: https://github.com/compilerla/conventional-pre-commit
-  rev: v3.2.0
-  hooks:
-  - id: conventional-pre-commit
-    stages: [commit-msg]
-    args: []
-
-- repo: https://github.com/google/yamlfmt
-  rev: v0.12.1
-  hooks:
-  - id: yamlfmt
-
-- repo: https://github.com/adrienverge/yamllint.git
-  rev: v1.35.1
-  hooks:
-  - id: yamllint
-    args: [-c=.yamllint.yaml]
-
-- repo: https://github.com/stackrox/kube-linter
-  rev: v0.6.8
-  hooks:
-  - id: kube-linter
-
 - repo: https://gitlab.com/bmares/check-json5
   rev: v1.0.0
   hooks:
@@ -78,9 +52,9 @@ repos:
 - repo: https://github.com/python-jsonschema/check-jsonschema
   rev: 0.28.3
   hooks:
-  - id: check-metaschema
+  - id: check-metaschema # Move to trunk
     files: docs/.*schema\.json$
-  - id: check-jsonschema
+  - id: check-jsonschema # Move to trunk
     files: ^yamlfmt\.yaml$
     args: ["--schemafile", "docs/yamlfmt-schema.json"]
 

@@ -24,6 +24,7 @@ rules:
 - apiGroups: ["dragonflydb.io"]
   resources: ["dragonflies/status"]
   verbs: ["get", "patch", "update"]
+# yamllint disable-line rule:document-start
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

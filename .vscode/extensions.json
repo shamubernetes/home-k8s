@@ -16,6 +16,7 @@
     "redhat.ansible",
     "signageos.signageos-vscode-sops",
     "task.vscode-task",
-    "will-stone.in-any-case"
+    "will-stone.in-any-case",
+    "trunk.io"
   ]
 }

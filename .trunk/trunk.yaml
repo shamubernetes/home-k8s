@@ -57,6 +57,7 @@ lint:
   - yamlfmt@0.12.1
 actions:
   enabled:
+  - commitlint
   - trunk-announce
   - trunk-check-pre-push
   - trunk-check-pre-commit

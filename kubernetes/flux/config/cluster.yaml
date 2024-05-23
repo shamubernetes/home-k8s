@@ -13,6 +13,7 @@ spec:
     /*
     # include kubernetes directory
     !/kubernetes
+# yamllint disable-line rule:document-start
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

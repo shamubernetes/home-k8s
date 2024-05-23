@@ -8,6 +8,7 @@ spec:
   url: oci://ghcr.io/fluxcd/flux-manifests
   ref:
     tag: v2.3.0
+# yamllint disable-line rule:document-start
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

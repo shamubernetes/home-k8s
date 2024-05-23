@@ -3,7 +3,6 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: external-secrets
-# yamllint disable-line rule:document-start
 sops:
   kms: []
   gcp_kms: []
@@ -24,6 +23,7 @@ sops:
   pgp: []
   encrypted_regex: ^(data|stringData)$
   version: 3.8.1
+# yamllint disable-line rule:document-start
 ---
 # yaml-language-server builtin
 apiVersion: v1

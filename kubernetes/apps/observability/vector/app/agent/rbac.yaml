@@ -6,6 +6,7 @@ rules:
 - apiGroups: [""]
   resources: ["namespaces", "nodes", "pods"]
   verbs: ["list", "watch"]
+# yamllint disable-line rule:document-start
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

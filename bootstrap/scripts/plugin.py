@@ -4,12 +4,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from typing import Any
-from netaddr import IPNetwork
-from bcrypt import hashpw, gensalt
-
 import makejinja
 import validation
+from bcrypt import gensalt, hashpw
+from netaddr import IPNetwork
 
 
 def encrypt(value: str) -> str:
@@ -62,5 +60,5 @@ class Plugin(makejinja.plugin.Plugin):
 
     def _mjfilter_func(self, path: Path) -> bool:
         return not any(
-            path.is_relative_to(excluded_dir)
-            for excluded_dir in self._excluded_dirs)
+            path.is_relative_to(excluded_dir) for excluded_dir in self._excluded_dirs
+        )

@@ -1,4 +1,0 @@
-[flake8]
-indent-size = 2
-max-line-length = 120
-ignore = E402

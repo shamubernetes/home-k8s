@@ -14,3 +14,6 @@ area/taskfile:
 - changed-files:
   - any-glob-to-any-file: .taskfiles/**/*
   - any-glob-to-any-file: Taskfile*
+area/trunk:
+- changed-files:
+  - any-glob-to-any-file: .trunk/**/*

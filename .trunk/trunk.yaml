@@ -29,23 +29,24 @@ lint:
   disabled:
   - prettier
   - markdownlint
+  - checkov
+  - trivy
   enabled:
   - actionlint@1.7.0
   - bandit@1.7.8
   - black@24.4.2
-  # - checkov@3.2.103
   - git-diff-check
   - gitleaks@8.18.2
   - hadolint@2.12.0
   - isort@5.13.2
   - kube-linter@0.6.4
-  - markdown-link-check@3.11.2
+  - markdown-link-check@3.12.2
   - osv-scanner@1.7.3
   - oxipng@9.1.1
   - pre-commit-hooks@4.6.0
   - remark-lint@12.0.1
-  - renovate@37.372.1
-  - ruff@0.4.4
+  - renovate@37.376.0
+  - ruff@0.4.5
   - shellcheck@0.10.0
   - shfmt@3.6.0
   - svgo@3.3.2

@@ -1,8 +1,0 @@
-# yaml-language-server builtin
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: actions-runner-system
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: disabled
-    volsync.backube/privileged-movers: "true"

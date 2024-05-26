@@ -1,7 +1,0 @@
-# yaml-language-server builtin
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: op
-  labels:
-    kustomize.toolkit.fluxcd.io/prune: disabled

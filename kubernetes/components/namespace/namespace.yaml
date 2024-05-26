@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: _placeholder # Placeholder for replacement
+  name: ${NAMESPACE}
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
+    volsync.backube/privileged-movers: ${VOLSYNC_PRIVILEGED_MOVERS:-"false"}

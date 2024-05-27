@@ -98,7 +98,7 @@ spec:
               ORIGIN_URL: http://adguard-home-origin:3000
               ORIGIN_WEB_URL: https://adguard.${SECRET_DOMAIN}
               REPLICA_URL: http://adguard-home-replica:3000
-              REPLICA_WEB_URL: https://replica.adguard.${SECRET_DOMAIN}
+              REPLICA_WEB_URL: https://adguard-replica.${SECRET_DOMAIN}
               REPLICA_AUTO_SETUP: "true"
               CRON: "*/10 * * * *"
             securityContext:
@@ -173,7 +173,7 @@ spec:
       replica:
         <<: *ingress
         hosts:
-        - host: replica.adguard.${SECRET_DOMAIN}
+        - host: adguard-replica.${SECRET_DOMAIN}
           paths:
           - path: /
             service:

@@ -74,7 +74,7 @@ spec:
         statefulset:
           volumeClaimTemplates:
           - name: data
-            storageClass: rook-ceph-block
+            storageClass: ceph-blockpool
             accessMode: ReadWriteOnce
             size: 2Gi
             globalMounts:

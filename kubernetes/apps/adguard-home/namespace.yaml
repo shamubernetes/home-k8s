@@ -1,0 +1,7 @@
+# yaml-language-server builtin
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: adguard-home
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled

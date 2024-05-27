@@ -10,5 +10,5 @@ formatter:
   indentless_arrays: true
   disallow_anchors: false
   max_line_length: 0
-  drop_merge_tag: false
+  drop_merge_tag: true
   pad_line_comments: 1

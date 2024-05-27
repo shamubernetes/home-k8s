@@ -23,6 +23,9 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
   values:
     controllers:
       adguard-home:
@@ -51,7 +54,7 @@ spec:
                   failureThreshold: 30
                   periodSeconds: 5
             securityContext:
-              allowPrivilegeEscalation: false
+              allowPrivilegeEscalation: true
             resources:
               requests:
                 cpu: 100m

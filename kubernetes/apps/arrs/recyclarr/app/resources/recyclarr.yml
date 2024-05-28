@@ -3,13 +3,18 @@ sonarr:
   sonarr:
     base_url: http://sonarr.arrs.svc.cluster.local
     api_key: !env_var SONARR_API_KEY
-
+    media_naming:
+      series: plex
+      season: default
+      episodes:
+        rename: true
+        standard: default
+        daily: default
+        anime: default
     delete_old_custom_formats: true
     replace_existing_custom_formats: true
-
     quality_definition:
       type: series
-
     quality_profiles:
     - name: Web 1080p
       reset_unmatched_scores:
@@ -37,34 +42,20 @@ sonarr:
         - WEBRip-480p
       - name: DVD
       - name: SDTV
-    - name: Web 720p
-      reset_unmatched_scores:
-        enabled: true
-      upgrade:
-        allowed: true
-        until_quality: Web-720p
-        until_score: 10000
-      min_format_score: 0
-      quality_sort: top
-      qualities:
-      - name: Web-720p
-        qualities:
-        - WEBDL-720p
-        - WEBRip-720p
-      - name: HDTV-720p
-      - name: Web-480p
-        qualities:
-        - WEBDL-480p
-        - WEBRip-480p
-      - name: DVD
-      - name: SDTV
     custom_formats:
     - trash_ids:
       # Unwanted
       - 85c61753df5da1fb2aab6f2a47426b09 # BR-DISK
       - 9c11cd3f07101cdba90a2d81cf0e56b4 # LQ
+      - e2315f990da2e2cbfc9fa5b7a6fcfe48 # LQ (Release Title)
       - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
       - fbcb31d8dabd2a319072b84fc0b7249c # Extras
+      # Optional
+      - 32b367365729d530ca1c124a0b180c64 # Bad Dual Groups
+      - 82d40da2bc6923f41e14394075dd4b03 # No-RlsGroup
+      - e1a997ddb54e3ecbfe06341ad323c458 # Obfuscated
+      - 06d66ab109d4d2eddb2794d21526d140 # Retags
+      - 1b3994c551cbb92a2c781af061f4ab44 # Scene
       # Misc
       - ec8fa7296b64e8cd390a1600981f3923 # Repack/Proper
       - eb3d5cc0a2be0db205fb823640db6a3c # Repack v2
@@ -72,6 +63,7 @@ sonarr:
       # Streaming Services
       - d660701077794679fd59e8bdf4ce3a29 # AMZN
       - f67c9ca88f463a48346062e8ad07713f # ATVP
+      - 77a7b25585c18af08f60b1547bb9b4fb # CC
       - 4e9a630db98d5391aec1368a0256e2fe # CRAV
       - 36b72f59f4ea20aad9316f475f2d9fbb # DCU
       - 89358767a60cc28783cdc3d0be9388a4 # DSNP
@@ -90,7 +82,6 @@ sonarr:
       - ae58039e1319178e6be73caab5c42166 # SHO
       - 1efe8da11bfd74fbbcd4d8117ddb9213 # STAN
       - 5d2317d99af813b6529c7ebf01c83533 # VDL
-      - 77a7b25585c18af08f60b1547bb9b4fb # CC
       # HQ Source Groups
       - e6258996055b9fbab7e9cb2f75819294 # WEB Tier 01
       - 58790d4e2fdcd9733aa7ae68ba2bb503 # WEB Tier 02

@@ -112,5 +112,5 @@ spec:
         server: 10.0.10.100
         path: /mnt/user/Media
         globalMounts:
-        - path: /media/Downloads/sabnzbd
+        - path: /mnt/media/Downloads/sabnzbd
           subPath: Downloads/sabnzbd

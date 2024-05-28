@@ -1,0 +1,11 @@
+# TODO: Move to volsync template
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sabnzbd
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 3Gi
+  storageClassName: ceph-block

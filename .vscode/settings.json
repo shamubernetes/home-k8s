@@ -80,5 +80,9 @@
     "ansible": "./ansible/*.yaml",
     "Kubernetes": "./kubernetes/*.yaml"
   },
+  "yaml.customTags": [
+    "!secret scalar",
+    "!env_var scalar"
+  ],
   "yaml.schemaStore.enable": true
 }

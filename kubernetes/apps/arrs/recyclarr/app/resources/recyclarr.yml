@@ -104,6 +104,11 @@ radarr:
   radarr:
     base_url: http://radarr.arrs.svc.cluster.local
     api_key: !env_var RADARR_API_KEY
+    media_naming:
+      folder: plex
+      movie:
+        rename: true
+        standard: default
     delete_old_custom_formats: true
     replace_existing_custom_formats: true
     quality_definition:

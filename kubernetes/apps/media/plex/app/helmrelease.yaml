@@ -85,7 +85,6 @@ spec:
         ports:
           http:
             port: *plexPort
-            nodePort: *plexPort
     ingress:
       app:
         annotations:

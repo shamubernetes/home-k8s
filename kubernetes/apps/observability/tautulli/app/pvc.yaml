@@ -1,0 +1,11 @@
+# TODO: Move to volsync template
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tautulli
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: ${VOLSYNC_CAPACITY}
+  storageClassName: ceph-block

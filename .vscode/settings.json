@@ -1,6 +1,6 @@
 {
   "[shellscript]": {
-    "editor.defaultFormatter": "foxundermoon.shell-format",
+    "editor.defaultFormatter": "trunk.io",
     "editor.formatOnSave": true
   },
   "[yaml]": {

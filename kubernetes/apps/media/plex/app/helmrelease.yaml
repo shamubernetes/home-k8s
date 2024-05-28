@@ -119,7 +119,7 @@ spec:
         type: emptyDir
       media:
         type: nfs
-        server: mnemosyne.${SECRET_DOMAIN}
+        server: 10.0.10.100
         path: /Media
         globalMounts:
         - path: /media

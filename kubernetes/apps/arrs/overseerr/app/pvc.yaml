@@ -1,0 +1,23 @@
+# TODO: Move to volsync template
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: recyclarr
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: ${VOLSYNC_CAPACITY}
+  storageClassName: ceph-block
+# yamllint disable rule:document-start
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: overseerr-cache
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 15Gi
+  storageClassName: ceph-block

@@ -120,7 +120,7 @@ spec:
       media:
         type: nfs
         server: 10.0.10.100
-        path: /Media
+        path: /mnt/user/Media
         globalMounts:
         - path: /media
           readOnly: true

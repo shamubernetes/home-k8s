@@ -28,7 +28,7 @@ spec:
     namespace: volsync
   values:
     controllers:
-      prowlarr:
+      bazarr:
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
@@ -89,7 +89,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
     service:
       app:
-        controller: app
+        controller: *app
         ports:
           http:
             port: *port

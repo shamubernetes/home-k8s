@@ -25,13 +25,15 @@ spec:
       strategy: rollback
       retries: 3
   dependsOn:
+  - name: prometheus-operator-crds
+    namespace: observability
   - name: openebs
     namespace: openebs-system
   - name: thanos
     namespace: observability
   values:
     crds:
-      enabled: true
+      enabled: false
     cleanPrometheusOperatorObjectNames: true
     alertmanager:
       enabled: true

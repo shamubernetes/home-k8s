@@ -36,6 +36,8 @@ spec:
     alertmanager:
       ingress:
         enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
         pathType: Prefix
         ingressClassName: internal
         hosts: ["alertmanager.${SECRET_DOMAIN}"]

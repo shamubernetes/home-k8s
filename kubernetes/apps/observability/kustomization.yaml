@@ -9,3 +9,4 @@ resources:
 - ./vector/ks.yaml
 - ./loki/ks.yaml
 - ./tautulli/ks.yaml
+- ./grafana/ks.yaml

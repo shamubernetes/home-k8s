@@ -34,6 +34,7 @@ spec:
       enabled: true
     cleanPrometheusOperatorObjectNames: true
     alertmanager:
+      enabled: true
       ingress:
         enabled: true
         annotations:

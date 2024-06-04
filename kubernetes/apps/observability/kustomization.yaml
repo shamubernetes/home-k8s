@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./thanos/ks.yaml
+- ./prometheus-operator-crds/ks.yaml
 - ./kube-prometheus-stack/ks.yaml
 - ./gatus/ks.yaml
 - ./vector/ks.yaml

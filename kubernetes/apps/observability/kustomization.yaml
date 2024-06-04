@@ -11,3 +11,4 @@ resources:
 - ./loki/ks.yaml
 - ./tautulli/ks.yaml
 - ./grafana/ks.yaml
+- ./unpoller/ks.yaml

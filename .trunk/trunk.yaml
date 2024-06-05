@@ -18,6 +18,9 @@ plugins:
   - id: yamlfmt
     ref: v0.12.1
     uri: https://github.com/kiliantyler/trunk-yamlfmt
+  - id: yls-check
+    ref: v0.0.1
+    uri: https://github.com/kiliantyler/trunk-yls
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:
@@ -32,6 +35,7 @@ lint:
   - checkov
   - trivy
   enabled:
+  - yls-check
   - actionlint@1.7.0
   - bandit@1.7.8
   - black@24.4.2

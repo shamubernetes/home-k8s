@@ -7,7 +7,7 @@ for K8S_VERSION in $K8S_VERSIONS master; do
   PREFIX=https://k8s-schemas.pages.dev/kubernetes/${K8S_VERSION}/_definitions.json
 
   if [ ! -d "${K8S_VERSION}" ]; then
-    openapi2jsonschema -o "schemas/kubernetes/${K8S_VERSION}" --expanded --kubernetes --prefix "${PREFIX}" "${SCHEMA}"
-    openapi2jsonschema -o "schemas/kubernetes/${K8S_VERSION}" --kubernetes --prefix "${PREFIX}" "${SCHEMA}"
+    openapi2jsonschema -o "/home/runner/schemas/kubernetes/${K8S_VERSION}" --expanded --kubernetes --prefix "${PREFIX}" "${SCHEMA}"
+    openapi2jsonschema -o "/home/runner/schemas/kubernetes/${K8S_VERSION}" --kubernetes --prefix "${PREFIX}" "${SCHEMA}"
   fi
 done

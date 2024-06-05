@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-OPENAPI2JSONSCHEMABIN="docker run -i -v ${PWD}/k8sSchemas:/out/schemas ghcr.io/yannh/openapi2jsonschema:latest"
+OPENAPI2JSONSCHEMABIN="docker run -i -v /home/runner/k8sSchemas:/out/schemas ghcr.io/yannh/openapi2jsonschema:latest"
 
 # renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
 K8S_VERSIONS="v1.30.1"

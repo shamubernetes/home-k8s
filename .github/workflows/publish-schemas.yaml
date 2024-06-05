@@ -58,14 +58,13 @@ jobs:
 
     - name: Run k8s-schemas
       shell: bash
-      run: ./.github/workflows/resources/k8s-schemas.sh
+      run: |
+        ./.github/workflows/resources/k8s-schemas.sh
 
     - name: Combine schemas
       shell: bash
       run: |
-        mkdir -p /home/runner/schemas/kubernetes
         mv /home/runner/.datree/crdSchemas/* /home/runner/schemas/.
-        mv /home/runner/k8sSchemas/* /home/runner/schemas/kubernetes/.
 
     - name: Deploy to Cloudflare Pages
       uses: cloudflare/wrangler-action@a08dc762e87e8754e0d56a16a35a70b406bc869f # v3.6.1

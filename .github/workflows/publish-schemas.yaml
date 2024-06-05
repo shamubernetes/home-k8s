@@ -59,7 +59,8 @@ jobs:
     - name: Run k8s-schemas
       shell: bash
       run: |
-        PIP_CONSTRAINT=.github/workflows/resources/constraint.txt python -m pip install pyyaml=5.4.1
+        echo 'Cython < 3.0' > /tmp/constraint.txt
+        PIP_CONSTRAINT=/tmp/constraint.txt python -m pip install pyyaml=5.4.1
         pip install openapi2jsonschema
         ./.github/workflows/resources/k8s-schemas.sh
 

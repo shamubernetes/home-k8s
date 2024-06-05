@@ -59,13 +59,9 @@ jobs:
     - name: Run k8s-schemas
       shell: bash
       run: |
-        mkdir -p /home/runner/schemas/kubernetes
+        PIP_CONSTRAINT=./.github/workflows/resources/constraint.txt python -m pip install pyyaml=5.4.1
+        pip install openapi2jsonschema
         ./.github/workflows/resources/k8s-schemas.sh
-
-    - name: Combine schemas
-      shell: bash
-      run: |
-        mv /home/runner/.datree/crdSchemas/* /home/runner/schemas
 
     - name: Deploy to Cloudflare Pages
       uses: cloudflare/wrangler-action@a08dc762e87e8754e0d56a16a35a70b406bc869f # v3.6.1

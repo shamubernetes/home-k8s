@@ -1,9 +1,0 @@
-block-list-secret-scan: []
-branch: master
-download-external-modules: false
-evaluate-variables: true
-external-modules-download-path: .external_modules
-mask: []
-secrets-history-timeout: 12h
-secrets-scan-file-type: []
-summary-position: top

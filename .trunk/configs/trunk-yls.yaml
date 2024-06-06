@@ -1,0 +1,3 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+excluded_domains:
+- kubernetes-schemas.pages.dev

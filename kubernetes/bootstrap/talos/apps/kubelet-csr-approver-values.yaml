@@ -1,2 +1,3 @@
+# trunk-ignore-all(trunk-yls/no-yls)
 providerRegex: ^(oceanus|tethys|coeus|chronos|rhea)$
 bypassDnsResolution: true

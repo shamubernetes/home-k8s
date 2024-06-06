@@ -12,3 +12,4 @@ resources:
 - ./tautulli/ks.yaml
 - ./grafana/ks.yaml
 - ./unpoller/ks.yaml
+- ./smartctl-exporter/ks.yaml

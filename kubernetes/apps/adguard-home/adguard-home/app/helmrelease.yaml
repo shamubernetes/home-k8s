@@ -63,6 +63,12 @@ spec:
         pod:
           priorityClassName: system-cluster-critical
           affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
             podAntiAffinity:
               preferredDuringSchedulingIgnoredDuringExecution:
               - weight: 1
@@ -72,6 +78,15 @@ spec:
                     matchLabels:
                       app.kubernetes.io/name: adguard-home
                       app.kubernetes.io/component: adguard-home
+          tolerations:
+          - key: CriticalAddonsOnly
+            operator: Exists
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/master
+            operator: Exists
+            effect: NoSchedule
         statefulset:
           volumeClaimTemplates:
           - name: data
@@ -107,28 +122,12 @@ spec:
           labels:
           securityContext:
             runAsNonRoot: true
-    defaultPodOptions:
-      # securityContext:
-      #   runAsNonRoot: true
-      #   runAsUser: 65534
-      #   runAsGroup: 65534
-      #   seccompProfile: {type: RuntimeDefault}
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/control-plane
-                operator: Exists
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - key: node-role.kubernetes.io/control-plane
-        operator: Exists
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
+    # defaultPodOptions:
+    #   securityContext:
+    #     runAsNonRoot: true
+    #     runAsUser: 65534
+    #     runAsGroup: 65534
+    #     seccompProfile: {type: RuntimeDefault}
     service:
       app:
         controller: adguard-home

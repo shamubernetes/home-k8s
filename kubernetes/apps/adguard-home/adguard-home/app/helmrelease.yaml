@@ -203,7 +203,7 @@ spec:
           paths:
           - path: /
             service:
-              identifier: replica
+              identifier: secondary
               port: http
       tertiary:
         <<: *ingress
@@ -212,5 +212,5 @@ spec:
           paths:
           - path: /
             service:
-              identifier: replica
+              identifier: tertiary
               port: http

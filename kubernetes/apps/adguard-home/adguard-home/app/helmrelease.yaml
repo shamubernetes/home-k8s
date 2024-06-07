@@ -32,7 +32,7 @@ spec:
         type: statefulset
         annotations:
           reloader.stakater.com/auto: "true"
-        replicas: 2
+        replicas: 3
         containers:
           app:
             image:
@@ -112,9 +112,12 @@ spec:
             env:
               ORIGIN_URL: http://adguard-home-origin:3000
               ORIGIN_WEB_URL: https://adguard.${SECRET_DOMAIN}
-              REPLICA_URL: http://adguard-home-replica:3000
-              REPLICA_WEB_URL: https://adguard-replica.${SECRET_DOMAIN}
-              REPLICA_AUTO_SETUP: "true"
+              REPLICA1_URL: http://adguard-home-secondary:3000
+              REPLICA1_WEB_URL: https://adguard-secondary.${SECRET_DOMAIN}
+              REPLICA1_AUTO_SETUP: "true"
+              REPLICA2_URL: http://adguard-home-tertiary:3000
+              REPLICA2_WEB_URL: https://adguard-tertiary.${SECRET_DOMAIN}
+              REPLICA2_AUTO_SETUP: "true"
               CRON: "*/10 * * * *"
             securityContext:
               readOnlyRootFilesystem: true
@@ -161,16 +164,26 @@ spec:
           udp:
             port: 53
             protocol: UDP
-      replica:
+      secondary:
         <<: *origin-http
         extraSelectorLabels:
           apps.kubernetes.io/pod-index: "1"
-      replica-dns:
+      secondary-dns:
         <<: *origin-dns
         extraSelectorLabels:
           apps.kubernetes.io/pod-index: "1"
         annotations:
           io.cilium/lb-ipam-ips: 10.100.0.101
+      tertiary:
+        <<: *origin-http
+        extraSelectorLabels:
+          apps.kubernetes.io/pod-index: "2"
+      tertiary-dns:
+        <<: *origin-dns
+        extraSelectorLabels:
+          apps.kubernetes.io/pod-index: "2"
+        annotations:
+          io.cilium/lb-ipam-ips: 10.100.0.102
     ingress:
       origin: &ingress
         annotations:
@@ -183,10 +196,19 @@ spec:
             service:
               identifier: origin
               port: http
-      replica:
+      secondary:
         <<: *ingress
         hosts:
-        - host: adguard-replica.${SECRET_DOMAIN}
+        - host: adguard-secondary.${SECRET_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: replica
+              port: http
+      tertiary:
+        <<: *ingress
+        hosts:
+        - host: adguard-tertiary.${SECRET_DOMAIN}
           paths:
           - path: /
             service:

@@ -108,22 +108,8 @@ spec:
           securityContext:
             runAsNonRoot: true
     defaultPodOptions:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/control-plane
-                operator: Exists
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - key: node-role.kubernetes.io/control-plane
-        operator: Exists
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
     #   securityContext:
     #     runAsNonRoot: true
     #     runAsUser: 568

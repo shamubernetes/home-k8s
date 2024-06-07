@@ -107,7 +107,9 @@ spec:
           labels:
           securityContext:
             runAsNonRoot: true
-    # defaultPodOptions:
+    defaultPodOptions:
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
     #   securityContext:
     #     runAsNonRoot: true
     #     runAsUser: 568

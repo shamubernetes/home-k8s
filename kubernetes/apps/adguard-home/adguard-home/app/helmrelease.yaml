@@ -131,6 +131,14 @@ spec:
     #     runAsUser: 65534
     #     runAsGroup: 65534
     #     seccompProfile: {type: RuntimeDefault}
+    persistence:
+      certificate:
+        enabled: true
+        type: secret
+        name: "${SECRET_DOMAIN/./-}-production-tls"
+        globalMounts:
+        - path: /etc/ssl/certs
+          readOnly: true
     service:
       app:
         controller: adguard-home

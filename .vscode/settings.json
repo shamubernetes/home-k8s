@@ -70,6 +70,7 @@
     "vars": "other"
   },
   "sops.defaults.ageKeyFile": "age.key",
+  "sops.configPath": ".sops.yaml",
   "vs-kubernetes": {
     "vs-kubernetes.knownKubeconfigs": [
       "./kubeconfig"

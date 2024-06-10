@@ -36,10 +36,7 @@ spec:
       masquerade: true
       tproxy: true
       lbExternalClusterIP: true
-      vlanBypass:
-      - 69
-      - 96
-      - 100
+      vlanBypass: [0]
     cgroup:
       automount:
         enabled: false

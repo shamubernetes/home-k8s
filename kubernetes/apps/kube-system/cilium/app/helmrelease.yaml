@@ -22,11 +22,11 @@ spec:
       retries: 3
   values:
     autoDirectNodeRoutes: true
-    bgp:
-      enabled: true
-      announce:
-        loadbalancerIP: true
-        podCIDR: true
+    # bgp:
+    #   enabled: true
+    #   announce:
+    #     loadbalancerIP: true
+    #     podCIDR: true
     bgpControlPlane:
       enabled: true
     bandwidthManager:

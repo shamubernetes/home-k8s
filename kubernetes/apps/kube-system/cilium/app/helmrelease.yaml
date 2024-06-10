@@ -22,10 +22,24 @@ spec:
       retries: 3
   values:
     autoDirectNodeRoutes: true
+    bgp:
+      enabled: true
+      announce:
+        loadbalancerIP: true
+        podCIDR: true
     bgpControlPlane:
       enabled: true
+    bandwidthManager:
+      enabled: true
+      bbr: true
     bpf:
-      masquerade: false
+      masquerade: true
+      tproxy: true
+      lbExternalClusterIP: true
+      vlanBypass:
+      - 69
+      - 96
+      - 100
     cgroup:
       automount:
         enabled: false
@@ -70,6 +84,8 @@ spec:
         ingress:
           enabled: true
           className: internal
+          annotations:
+            external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
           hosts: ["hubble.${SECRET_DOMAIN}"]
     ipam:
       mode: kubernetes
@@ -85,7 +101,6 @@ spec:
       mode: snat
     localRedirectPolicy: true
     operator:
-      replicas: 1
       rollOutPods: true
       prometheus:
         enabled: true

@@ -5,13 +5,13 @@ talosVersion: v1.7.4
 kubernetesVersion: v1.30.1
 
 clusterName: &cluster titans
-endpoint: https://10.100.0.10:6443
+endpoint: https://10.100.47.10:6443
 clusterPodNets:
-- "10.69.0.0/16"
+- &clusterPodNet "10.69.0.0/16"
 clusterSvcNets:
-- "10.96.0.0/16"
+- &clusterSvcNet "10.96.0.0/16"
 additionalApiServerCertSans: &sans
-- "10.100.0.10"
+- &kubeVIP "10.100.47.10"
 - 127.0.0.1 # KubePrism
 - "k8s.thezoo.house"
 - "titans.thezoo.house"
@@ -31,15 +31,15 @@ nodes:
       hardwareAddr: "58:47:ca:75:7a:24"
     dhcp: false
     addresses:
-    - "10.100.47.35/16"
+    - "10.100.47.35/24"
     mtu: 1500
     routes:
     - network: 0.0.0.0/0
-      gateway: "10.100.0.1"
+      gateway: &gateway "10.100.47.1"
     vip:
-      ip: "10.100.0.10"
+      ip: *kubeVIP
 - hostname: "tethys"
-  ipAddress: "10.100.252.13"
+  ipAddress: "10.100.47.48"
   installDisk: "/dev/nvme0n1"
   talosImageURL: factory.talos.dev/installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba
   controlPlane: true
@@ -48,13 +48,13 @@ nodes:
       hardwareAddr: "58:47:ca:75:52:38"
     dhcp: false
     addresses:
-    - "10.100.252.13/16"
+    - "10.100.47.48/24"
     mtu: 1500
     routes:
     - network: 0.0.0.0/0
-      gateway: "10.100.0.1"
+      gateway: *gateway
     vip:
-      ip: "10.100.0.10"
+      ip: *kubeVIP
 - hostname: "coeus"
   ipAddress: "10.100.47.49"
   installDisk: "/dev/nvme0n1"
@@ -65,15 +65,15 @@ nodes:
       hardwareAddr: "58:47:ca:75:7a:32"
     dhcp: false
     addresses:
-    - "10.100.47.49/16"
+    - "10.100.47.49/24"
     mtu: 1500
     routes:
     - network: 0.0.0.0/0
-      gateway: "10.100.0.1"
+      gateway: *gateway
     vip:
-      ip: "10.100.0.10"
+      ip: *kubeVIP
 - hostname: "chronos"
-  ipAddress: "10.100.225.30"
+  ipAddress: "10.100.47.50"
   installDisk: "/dev/nvme0n1"
   talosImageURL: factory.talos.dev/installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba
   controlPlane: false
@@ -82,13 +82,13 @@ nodes:
       hardwareAddr: "18:31:bf:e0:3d:1e"
     dhcp: false
     addresses:
-    - "10.100.225.30/16"
+    - "10.100.47.50/24"
     mtu: 1500
     routes:
     - network: 0.0.0.0/0
-      gateway: "10.100.0.1"
+      gateway: *gateway
 - hostname: "rhea"
-  ipAddress: "10.100.26.38"
+  ipAddress: "10.100.47.51"
   installDisk: "/dev/sdb"
   talosImageURL: factory.talos.dev/installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba
   controlPlane: false
@@ -97,11 +97,11 @@ nodes:
       hardwareAddr: "d8:bb:c1:1a:a0:85"
     dhcp: false
     addresses:
-    - "10.100.26.38/16"
+    - "10.100.47.51/24"
     mtu: 1500
     routes:
     - network: 0.0.0.0/0
-      gateway: "10.100.0.1"
+      gateway: *gateway
 
 patches:
 # Configure containerd
@@ -142,7 +142,7 @@ patches:
       extraArgs:
         rotate-server-certificates: true
       nodeIP:
-        validSubnets: ["10.100.0.0/16"]
+        validSubnets: ["10.100.47.0/24"]
 
 # Force nameserver
 - |-
@@ -199,7 +199,7 @@ controlPlane:
         extraArgs:
           listen-metrics-urls: http://0.0.0.0:2381
         advertisedSubnets:
-          - "10.100.0.0/16"
+          - "10.100.47.0/24"
 
   # Disable default API server admission plugins.
   - |-

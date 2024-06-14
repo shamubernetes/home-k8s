@@ -191,7 +191,7 @@ spec:
         extraSelectorLabels:
           apps.kubernetes.io/pod-index: "2"
         annotations:
-          io.cilium/lb-ipam-ips: 10.10047.202
+          io.cilium/lb-ipam-ips: 10.100.47.202
     ingress:
       origin: &ingress
         annotations:

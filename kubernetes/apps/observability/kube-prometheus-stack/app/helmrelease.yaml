@@ -81,7 +81,7 @@ spec:
     kubeControllerManager:
       enabled: true
       endpoints: &cp
-      - 10.100.47.35
+      - 10.100.47.35 # TODO: Get these out of here and into a central location
       - 10.100.47.48
       - 10.100.47.49
     kubeEtcd:

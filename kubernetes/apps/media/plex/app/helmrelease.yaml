@@ -81,7 +81,7 @@ spec:
         controller: plex
         type: LoadBalancer
         annotations:
-          io.cilium/lb-ipam-ips: ${IPAM_IP_PLEX}
+          io.cilium/lb-ipam-ips: "${IPAM_IP_PLEX}"
         ports:
           http:
             port: *plexPort
@@ -119,7 +119,7 @@ spec:
         type: emptyDir
       media:
         type: nfs
-        server: 10.0.10.100
+        server: "${IPAM_IP_NFS}"
         path: /mnt/user/Media
         globalMounts:
         - path: /media

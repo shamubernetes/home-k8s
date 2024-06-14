@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/v1.30.1/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-ipam
+  namespace: flux-system
+data:
+  # Nodes
+  NODE_CIDR: "10.100.47.0/32"
+  # Cluster
+  CLUSTER_CIDR: "10.69.0.0/16"
+  # Outside of the IPAM Range
+  IPAM_IP_NFS: 10.0.10.100
+  IPAM_IP_GATEWAY: 10.100.47.1
+  IPAM_RANGE: "24"
+  # IPAM Range
+  IPAM_LB_RANGE_START: 10.100.47.200
+  IPAM_LB_RANGE_END: 10.100.47.250
+  IPAM_IP_PLEX: 10.100.47.230
+  IPAM_IP_NGINX_EXTERNAL: 10.100.47.249
+  IPAM_IP_NGINX_INTERNAL: 10.100.47.250
+  IPAM_IP_VECTOR: 10.100.47.214
+  IPAM_IP_K8S_GATEWAY: 10.100.47.
+  IPAM_IP_POSTGRES: 10.100.47.220
+  IPAM_IP_ADGUARD_0: 10.100.47.200
+  IPAM_IP_ADGUARD_1: 10.100.47.201
+  IPAM_IP_ADGUARD_2: 10.100.47.202

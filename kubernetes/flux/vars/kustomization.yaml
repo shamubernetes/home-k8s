@@ -3,6 +3,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./cluster-settings.yaml
+- ./cluster-ipam.yaml
 - ./cluster-secrets.sops.yaml
 - ./op-credentials.sops.yaml
 - ./op-connect-token.sops.yaml

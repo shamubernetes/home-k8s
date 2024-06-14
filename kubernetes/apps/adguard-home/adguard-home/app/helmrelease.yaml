@@ -145,6 +145,10 @@ spec:
         ports:
           http:
             port: *adguardPort
+          https-dns:
+            port: 443
+          tls-dns:
+            port: 853
       sync:
         controller: sync
         ports:
@@ -157,10 +161,6 @@ spec:
         ports:
           http:
             port: *adguardPort
-          https-dns:
-            port: 443
-          tls-dns:
-            port: 853
       origin-dns: &origin-dns
         controller: adguard-home
         extraSelectorLabels:
@@ -197,6 +197,15 @@ spec:
         annotations:
           io.cilium/lb-ipam-ips: "${IPAM_IP_ADGUARD_2}"
     ingress:
+      https-dns:
+        className: internal
+        hosts:
+        - host: "adguard-dns.${SECRET_DOMAIN}"
+          paths:
+          - path: /dns-query
+            service:
+              identifier: app
+              port: https-dns
       origin: &ingress
         annotations:
           external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
@@ -208,10 +217,6 @@ spec:
             service:
               identifier: origin
               port: http
-          - path: /dns-query
-            service:
-              identifier: origin
-              port: https-dns
       secondary:
         <<: *ingress
         hosts:

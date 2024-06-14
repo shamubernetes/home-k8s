@@ -22,21 +22,18 @@ spec:
       retries: 3
   values:
     autoDirectNodeRoutes: true
-    # bgp:
-    #   enabled: true
-    #   announce:
-    #     loadbalancerIP: true
-    #     podCIDR: true
     bgpControlPlane:
       enabled: true
     bandwidthManager:
       enabled: true
       bbr: true
     bpf:
+      lbExternalClusterIP: false
       masquerade: true
       tproxy: true
-      lbExternalClusterIP: true
-      vlanBypass: [0]
+      vlanBypass:
+      - 0
+      - 100
     cgroup:
       automount:
         enabled: false
@@ -52,6 +49,9 @@ spec:
     # devices: eno+ eth+
     endpointRoutes:
       enabled: true
+    endpointStatus:
+      enabled: true
+      status: policy
     hubble:
       enabled: true
       metrics:
@@ -83,19 +83,22 @@ spec:
           className: internal
           annotations:
             external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
-          hosts: ["hubble.${SECRET_DOMAIN}"]
+          hosts:
+          - "hubble.${SECRET_DOMAIN}"
     ipam:
       mode: kubernetes
-    ipv4NativeRoutingCIDR: "${CLUSTER_CIDR}"
+    ipv4NativeRoutingCIDR: "${CLUSTER_INTERNAL_CIDR}"
     k8sServiceHost: 127.0.0.1
     k8sServicePort: 7445
     kubeProxyReplacement: true
     kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
     l2announcements:
       enabled: true
+    l7proxy:
+      enabled: true
     loadBalancer:
       algorithm: maglev
-      mode: snat
+      mode: dsr
     localRedirectPolicy: true
     operator:
       rollOutPods: true

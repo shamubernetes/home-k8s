@@ -137,7 +137,7 @@ spec:
         type: secret
         name: "${SECRET_DOMAIN/./-}-production-tls"
         globalMounts:
-        - path: /etc/ssl/certs
+        - path: /opt/letsencrypt/live
           readOnly: true
     service:
       app:

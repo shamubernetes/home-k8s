@@ -163,7 +163,7 @@ spec:
           apps.kubernetes.io/pod-index: "0"
         type: LoadBalancer
         annotations:
-          io.cilium/lb-ipam-ips: 10.100.47.200
+          io.cilium/lb-ipam-ips: "${IPAM_IP_ADGUARD_0}"
         externalTrafficPolicy: Local
         ports:
           tcp:
@@ -181,7 +181,7 @@ spec:
         extraSelectorLabels:
           apps.kubernetes.io/pod-index: "1"
         annotations:
-          io.cilium/lb-ipam-ips: 10.100.47.201
+          io.cilium/lb-ipam-ips: "${IPAM_IP_ADGUARD_1}"
       tertiary:
         <<: *origin-http
         extraSelectorLabels:
@@ -191,7 +191,7 @@ spec:
         extraSelectorLabels:
           apps.kubernetes.io/pod-index: "2"
         annotations:
-          io.cilium/lb-ipam-ips: 10.100.47.202
+          io.cilium/lb-ipam-ips: "${IPAM_IP_ADGUARD_2}"
     ingress:
       origin: &ingress
         annotations:

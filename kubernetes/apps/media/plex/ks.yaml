@@ -24,4 +24,3 @@ spec:
     substitute:
       APP: *app
       GATUS_PATH: /web/index.html
-      IPAM_IP_PLEX: 10.100.0.30

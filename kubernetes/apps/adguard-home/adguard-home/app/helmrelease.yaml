@@ -157,6 +157,10 @@ spec:
         ports:
           http:
             port: *adguardPort
+          https-dns:
+            port: 443
+          tls-dns:
+            port: 853
       origin-dns: &origin-dns
         controller: adguard-home
         extraSelectorLabels:
@@ -204,6 +208,10 @@ spec:
             service:
               identifier: origin
               port: http
+          - path: /dns-query
+            service:
+              identifier: origin
+              port: https-dns
       secondary:
         <<: *ingress
         hosts:
@@ -213,6 +221,10 @@ spec:
             service:
               identifier: secondary
               port: http
+          - path: /dns-query
+            service:
+              identifier: secondary
+              port: https-dns
       tertiary:
         <<: *ingress
         hosts:
@@ -222,3 +234,7 @@ spec:
             service:
               identifier: tertiary
               port: http
+          - path: /dns-query
+            service:
+              identifier: tertiary
+              port: https-dns

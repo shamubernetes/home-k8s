@@ -40,5 +40,5 @@ spec:
       name: cluster-settings
     - kind: Secret
       name: cluster-secrets
-    - kind: Secret
+    - kind: ConfigMap
       name: cluster-ipam

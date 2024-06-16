@@ -15,7 +15,7 @@ jobs:
       pull-requests: write
     steps:
     - name: Label Size
-      uses: pascalgn/size-label-action@v0.4.3
+      uses: pascalgn/size-label-action@bbbaa0d5ccce8e2e76254560df5c64b82dac2e12 # v0.5.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:

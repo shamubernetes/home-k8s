@@ -21,7 +21,7 @@ jobs:
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
     - name: Sync Labels
-      uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2
+      uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
       with:
         config-file: .github/labels.yaml
         delete-other-labels: true

@@ -16,44 +16,15 @@
     },
     "editor.tabSize": 2
   },
-  "ansible.ansible.path": ".venv/bin/ansible",
-  "ansible.python.activationScript": ".venv/bin/activate",
-  "ansible.python.interpreterPath": ".venv/bin/python3",
-  "ansible.validation.enabled": true,
-  "ansible.validation.lint.arguments": "-c ansible/.ansible-lint",
-  "ansible.validation.lint.enabled": true,
-  "ansible.validation.lint.path": ".venv/bin/ansible-lint",
   "editor.formatOnSave": true,
   "files.associations": {
-    "*.json5": "jsonc",
+    "*.json5": "json5",
     "./ansible/**/*.sops.yaml": "yaml",
     "./ansible/**/*.yaml": "ansible",
     "./ansible/**/inventory/**/*.yaml": "yaml",
     "./kubernetes/**/*.sops.toml": "plaintext"
   },
   "files.trimTrailingWhitespace": true,
-  "linter.linters": {
-    "shellcheck": {
-      "command": [
-        "shellcheck",
-        "--format",
-        "json",
-        "--rcfile",
-        ".shellcheckrc",
-        "-"
-      ],
-      "enabled": true,
-      "languages": [
-        "shellscript",
-        "bash"
-      ],
-      "name": "shellcheck",
-      "url": "https://github.com/koalaman/shellcheck",
-      "when": [
-        "!$zsh"
-      ]
-    }
-  },
   "material-icon-theme.folders.associations": {
     ".taskfiles": "utils",
     "bootstrap": "import",

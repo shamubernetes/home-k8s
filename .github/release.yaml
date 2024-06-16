@@ -1,17 +1,27 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-release-config.json
 changelog:
   exclude:
-    authors:
-    - renovate
     labels:
     - type/digest
   categories:
-  - title: Major Updates
+  - title: Kubernetes
     labels:
-    - type/major
-  - title: Minor Updates
+    - area/kubernetes
+  - title: Bootstrap
     labels:
-    - type/minor
+    - area/bootstrap
+  - title: Docs
+    labels:
+    - area/docs
+  - title: Taskfile
+    labels:
+    - area/taskfile
+  - title: GitHub
+    labels:
+    - area/github
+  - title: Trunk
+    labels:
+    - area/trunk
   - title: Other Changes
     labels:
     - "*"

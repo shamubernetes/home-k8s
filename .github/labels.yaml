@@ -1,8 +1,8 @@
 # trunk-ignore-all(trunk-yls/no-yls)
 # Area
-- {name: "area/ansible", color: "0e8a16"}
 - {name: "area/bootstrap", color: "0e8a16"}
-- {name: "area/github", color: "0e8a16"}
+- {name: "area/ci", color: "0e8a16"}
+- {name: "area/docs", color: "0e8a16"}
 - {name: "area/kubernetes", color: "0e8a16"}
 - {name: "area/taskfile", color: "0e8a16"}
 - {name: "area/trunk", color: "0e8a16"}
@@ -10,23 +10,30 @@
 - {name: "distro/k3s", color: "ffc300"}
 - {name: "distro/talos", color: "ffc300"}
 # Renovate
-- {name: "renovate/ansible", color: "027fa0"}
 - {name: "renovate/container", color: "027fa0"}
 - {name: "renovate/github-action", color: "027fa0"}
 - {name: "renovate/github-release", color: "027fa0"}
+- {name: "renovate/grafana-dashboard", color: "027fa0"}
 - {name: "renovate/helm", color: "027fa0"}
 # Semantic Type
+- {name: "type/pin", color: "ffec19"}
 - {name: "type/digest", color: "ffec19"}
 - {name: "type/patch", color: "ffec19"}
 - {name: "type/minor", color: "ff9800"}
 - {name: "type/major", color: "f6412d"}
 - {name: "type/break", color: "f6412d"}
+# Size
+- {name: size/XS, color: "009900"}
+- {name: size/S, color: "77bb00"}
+- {name: size/M, color: "eebb00"}
+- {name: size/L, color: "ee9900"}
+- {name: size/XL, color: "ee5500"}
+- {name: size/XXL, color: "ee0000"}
 # Release Issue
 - {name: "image-not-found", color: "ee0701"}
 # Uncategorized
 - {name: "bug", color: "ee0701"}
 - {name: "do-not-merge", color: "ee0701"}
-- {name: "docs", color: "f4d1b7"}
 - {name: "enhancement", color: "84b6eb"}
 - {name: "broken-links", color: "7b55d7"}
 - {name: "question", color: "cc317c"}

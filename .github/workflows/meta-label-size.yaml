@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Meta - Label Size
+name: "Meta - Label Size"
 
 on:
   workflow_dispatch:

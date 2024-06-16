@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Meta - Enforce PR labels
+name: "Meta - Enforce PR labels"
 
 on:
   pull_request:

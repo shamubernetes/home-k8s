@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Meta - Label Size
+
+on:
+  workflow_dispatch:
+  pull_request_target:
+    branches: ["main"]
+
+jobs:
+  label-size:
+    name: Label Size
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Label Size
+      uses: pascalgn/size-label-action@v0.4.3
+      with:
+        sizes: >
+          {
+            "0": "XS",
+            "20": "S",
+            "50": "M",
+            "200": "L",
+            "800": "XL",
+            "2000": "XXL"
+          }

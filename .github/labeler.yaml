@@ -1,11 +1,13 @@
 # trunk-ignore-all(trunk-yls/no-yls)
-area/ansible:
-- changed-files:
-  - any-glob-to-any-file: ansible/**/*
 area/bootstrap:
 - changed-files:
   - any-glob-to-any-file: bootstrap/**/*
-area/github:
+area/docs:
+- changed-files:
+  - any-glob-to-any-file:
+    - "docs/**/*"
+    - "README.md"
+area/ci:
 - changed-files:
   - any-glob-to-any-file: .github/**/*
 area/kubernetes:

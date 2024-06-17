@@ -10,8 +10,15 @@ on:
         required: false
       logLevel:
         description: Log Level
-        default: debug
+        default: warn
         required: false
+        type: choice
+        options:
+        - debug
+        - info
+        - warn
+        - error
+        - fatal
       version:
         description: Renovate version
         default: latest
@@ -22,18 +29,24 @@ on:
     branches: ["main"]
     paths:
     - .github/renovate.json5
+    - .github/renovate/*
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
   cancel-in-progress: true
 
+# Retrieve BOT_USER_ID via `curl -s "https://api.github.com/users/${BOT_USERNAME}%5Bbot%5D" | jq .id`
 env:
   LOG_LEVEL: "${{ inputs.logLevel || 'debug' }}"
-  RENOVATE_AUTODISCOVER: true
-  RENOVATE_AUTODISCOVER_FILTER: "${{ github.repository }}"
-  RENOVATE_DRY_RUN: "${{ inputs.dryRun == true }}"
   RENOVATE_PLATFORM: github
   RENOVATE_PLATFORM_COMMIT: true
+  RENOVATE_ONBOARDING_CONFIG_FILE_NAME: .github/renovate.json5
+  RENOVATE_AUTODISCOVER: true
+  RENOVATE_AUTODISCOVER_FILTER: "${{ github.repository }}"
+  RENOVATE_USERNAME: "${{ secrets.BOT_USERNAME }}[bot]"
+  RENOVATE_GIT_AUTHOR: "${{ secrets.BOT_USERNAME }} <${{ secrets.BOT_USER_ID }}+${{ secrets.BOT_USERNAME }}[bot]@users.noreply.github.com>"
+  RENOVATE_DRY_RUN: "${{ inputs.dryRun == true }}"
+  WORKFLOW_RENOVATE_LOG_LEVEL: WARN
   WORKFLOW_RENOVATE_VERSION: "${{ inputs.version || 'latest' }}"
 
 jobs:
@@ -41,26 +54,12 @@ jobs:
     name: Renovate
     runs-on: ["ghar-set-zoo"]
     steps:
-    - uses: 1password/load-secrets-action/configure@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2.0.0
-      with:
-        connect-host: ${{ secrets.OP_CONNECT_HOST }}
-
-    - name: Load Bot Credentials
-      id: bot-credentials
-      uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2.0.0
-      with:
-        export-env: false
-      env:
-        OP_CONNECT_TOKEN: ${{ secrets.OP_CONNECT_TOKEN }}
-        BOT_APP_ID: op://Kubernetes/kTVBot/APP_ID
-        BOT_PRIVATE_KEY: op://Kubernetes/kTVBot/PRIVATE_KEY
-
     - name: Generate Token
       uses: actions/create-github-app-token@c8f55efbd427e7465d6da1106e7979bc8aaee856 # v1.10.1
       id: app-token
       with:
-        app-id: "${{ steps.bot-credentials.outputs.BOT_APP_ID }}"
-        private-key: "${{ steps.bot-credentials.outputs.BOT_PRIVATE_KEY }}"
+        app-id: "${{ secrets.BOT_APP_ID }}"
+        private-key: "${{ secrets.BOT_PRIVATE_KEY }}"
 
     - name: Checkout
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7

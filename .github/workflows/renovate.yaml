@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Renovate"
+
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: Dry Run
+        default: "false"
+        required: false
+      logLevel:
+        description: Log Level
+        default: debug
+        required: false
+      version:
+        description: Renovate version
+        default: latest
+        required: false
+  schedule:
+  - cron: "0 * * * *"
+  push:
+    branches: ["main"]
+    paths:
+    - .github/renovate.json5
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  LOG_LEVEL: "${{ inputs.logLevel || 'debug' }}"
+  RENOVATE_AUTODISCOVER: true
+  RENOVATE_AUTODISCOVER_FILTER: "${{ github.repository }}"
+  RENOVATE_DRY_RUN: "${{ inputs.dryRun == true }}"
+  RENOVATE_PLATFORM: github
+  RENOVATE_PLATFORM_COMMIT: true
+  WORKFLOW_RENOVATE_VERSION: "${{ inputs.version || 'latest' }}"
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ["ghar-set-zoo"]
+    steps:
+    - uses: 1password/load-secrets-action/configure@v1
+      with:
+        connect-host: ${{ secrets.OP_CONNECT_HOST }}
+
+    - name: Load Bot Credentials
+      id: bot-credentials
+      uses: 1password/load-secrets-action@v1
+      with:
+        export-env: false
+      env:
+        OP_CONNECT_TOKEN: ${{ secrets.OP_CONNECT_TOKEN }}
+        BOT_APP_ID: op://Kubernetes/kTVBot/APP_ID
+        BOT_PRIVATE_KEY: op://Kubernetes/kTVBot/PRIVATE_KEY
+
+    - name: Generate Token
+      uses: actions/create-github-app-token@v1
+      id: app-token
+      with:
+        app-id: "${{ steps.bot-credentials.outputs.BOT_APP_ID }}"
+        private-key: "${{ steps.bot-credentials.outputs.BOT_PRIVATE_KEY }}"
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        token: "${{ steps.app-token.outputs.token }}"
+
+    - name: Renovate
+      uses: renovatebot/github-action@v40.1.12
+      with:
+        configurationFile: .github/renovate.json5
+        token: "${{ steps.app-token.outputs.token }}"
+        renovate-version: "${{ env.WORKFLOW_RENOVATE_VERSION }}"

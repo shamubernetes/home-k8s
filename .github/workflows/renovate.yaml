@@ -41,13 +41,13 @@ jobs:
     name: Renovate
     runs-on: ["ghar-set-zoo"]
     steps:
-    - uses: 1password/load-secrets-action/configure@v1
+    - uses: 1password/load-secrets-action/configure@971116bbffed9bfe57bd55447317d56fbc7a6a81 # v1.3.2
       with:
         connect-host: ${{ secrets.OP_CONNECT_HOST }}
 
     - name: Load Bot Credentials
       id: bot-credentials
-      uses: 1password/load-secrets-action@v1
+      uses: 1password/load-secrets-action@971116bbffed9bfe57bd55447317d56fbc7a6a81 # v1.3.2
       with:
         export-env: false
       env:

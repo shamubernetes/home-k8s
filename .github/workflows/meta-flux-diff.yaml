@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: "Flux Diff"
+name: "Meta - Flux Diff"
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ concurrency:
 jobs:
   flux-diff:
     name: Flux Diff
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     permissions:
       contents: read
       pull-requests: write

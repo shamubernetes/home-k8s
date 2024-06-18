@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: "Kubeconform"
+name: "Check - Kubeconform"
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ env:
 jobs:
   kubeconform:
     name: Kubeconform
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     steps:
     - name: Checkout
       uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7

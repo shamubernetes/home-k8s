@@ -18,10 +18,24 @@ changelog:
     - area/taskfile
   - title: GitHub
     labels:
-    - area/github
+    - area/ci
   - title: Trunk
     labels:
     - area/trunk
+  - title: Massive Changes
+    labels:
+    - size/xxl
+    - size/xl
+  - title: Large Changes
+    labels:
+    - size/l
+  - title: Medium Changes
+    labels:
+    - size/m
+  - title: Small Changes
+    labels:
+    - size/s
+    - size/xs
   - title: Other Changes
     labels:
     - "*"

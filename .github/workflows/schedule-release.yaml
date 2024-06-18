@@ -12,7 +12,7 @@ jobs:
     runs-on: ["ghar-set-zoo"]
     steps:
     - name: Generate Token
-      uses: actions/create-github-app-token@v1
+      uses: actions/create-github-app-token@c8f55efbd427e7465d6da1106e7979bc8aaee856 # v1.10.1
       id: app-token
       with:
         app-id: "${{ secrets.BOT_APP_ID }}"

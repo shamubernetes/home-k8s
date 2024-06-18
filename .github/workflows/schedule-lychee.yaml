@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: "Meta - Lychee"
+name: "Schedule - Lychee"
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ env:
 jobs:
   lychee:
     name: Lychee
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     permissions:
       contents: read
       issues: write
@@ -46,6 +46,8 @@ jobs:
     - name: Find Link Checker Issue
       id: find-issue
       shell: bash
+      env:
+        GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
       run: |
         issue_number=$( \
             gh issue list \

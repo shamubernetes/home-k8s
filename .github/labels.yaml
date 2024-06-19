@@ -1,4 +1,4 @@
-# trunk-ignore-all(trunk-yls/no-yls)
+# yaml-language-server: $schema=https://raw.githubusercontent.com/kFlix-tv/json-schemas/main/endbug.labelsync.schema.json
 # Area
 - {name: "area/bootstrap", color: "0e8a16"}
 - {name: "area/ci", color: "0e8a16"}
@@ -39,4 +39,4 @@
 - {name: "broken-links", color: "7b55d7"}
 - {name: "question", color: "cc317c"}
 - {name: "community", color: "0e8a16"}
-- {name: "hold/upstream", color: "ee0701"}
+- {name: "hold/upstream", color: "ee0701", aliases: ["hold", "upstream"], description: "Issue is blocked by an upstream dependency"}

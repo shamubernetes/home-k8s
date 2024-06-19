@@ -7,7 +7,7 @@ on:
   - cron: "0 0 * * 0"
   push:
     branches: ["main"]
-    paths: [".github/workflows/publish-schemas.yaml"]
+    paths: [".github/workflows/publish-schemas.yaml", ".github/workflows/resources/k8s-schemas.sh"]
 
 jobs:
   publish-schemas:

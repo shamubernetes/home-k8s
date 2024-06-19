@@ -6,7 +6,7 @@ changelog:
   categories:
   - title: Kubernetes
     labels:
-    - area/kubernetes
+    - area/k8s
   - title: Bootstrap
     labels:
     - area/bootstrap
@@ -15,7 +15,7 @@ changelog:
     - area/docs
   - title: Taskfile
     labels:
-    - area/taskfile
+    - area/task
   - title: GitHub
     labels:
     - area/ci

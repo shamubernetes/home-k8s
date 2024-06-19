@@ -10,10 +10,10 @@ area/docs:
 area/ci:
 - changed-files:
   - any-glob-to-any-file: .github/**/*
-area/kubernetes:
+area/k8s:
 - changed-files:
   - any-glob-to-any-file: kubernetes/**/*
-area/taskfile:
+area/task:
 - changed-files:
   - any-glob-to-any-file: .taskfiles/**/*
   - any-glob-to-any-file: Taskfile*

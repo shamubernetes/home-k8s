@@ -11,48 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changed-clusters:
-    name: Changed Clusters
-    runs-on: ["ghar-set-zoo"]
-    outputs:
-      matrix: ${{ steps.changed-clusters.outputs.all_changed_and_modified_files }}
-    steps:
-    - name: Generate Token
-      uses: actions/create-github-app-token@c8f55efbd427e7465d6da1106e7979bc8aaee856 # v1.10.1
-      id: app-token
-      with:
-        app-id: "${{ secrets.BOT_APP_ID }}"
-        private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
-
-    - name: Checkout
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-      with:
-        token: "${{ steps.app-token.outputs.token }}"
-        fetch-depth: 0
-
-    - name: Get Changed Clusters
-      id: changed-clusters
-      uses: tj-actions/changed-files@d6babd6899969df1a11d14c368283ea4436bca78 # v44.5.2
-      with:
-        files: kubernetes/**
-        dir_names: true
-        dir_names_max_depth: 2
-        matrix: true
-
-    - name: List All Changed Clusters
-      run: echo "${{ steps.changed-clusters.outputs.all_changed_and_modified_files }}"
-
   extract-images:
     name: Extract Images
-    runs-on: ubuntu-latest
-    needs: ["changed-clusters"]
+    runs-on: ["ghar-set-zoo"]
     permissions:
       pull-requests: write
-    strategy:
-      matrix:
-        paths: ${{ fromJSON(needs.changed-clusters.outputs.matrix) }}
-      max-parallel: 4
-      fail-fast: false
     outputs:
       matrix: ${{ steps.extract-images.outputs.images }}
     steps:
@@ -88,7 +51,7 @@ jobs:
       with:
         args: >-
           get cluster
-          --path /github/workspace/default/${{ matrix.paths }}/flux
+          --path /github/workspace/default/kubernetes/flux
           --enable-images
           --output yaml
           --output-file default.yaml
@@ -98,7 +61,7 @@ jobs:
       with:
         args: >-
           get cluster
-          --path /github/workspace/pull/${{ matrix.paths }}/flux
+          --path /github/workspace/pull//flux
           --enable-images
           --output yaml
           --output-file pull.yaml
@@ -128,7 +91,7 @@ jobs:
   test-images:
     if: ${{ needs.extract-images.outputs.matrix != '[]' }}
     name: Test images
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     needs: ["extract-images"]
     strategy:
       matrix:
@@ -144,7 +107,7 @@ jobs:
     if: ${{ always() }}
     needs: ["test-images"]
     name: Test Images Successful
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     steps:
     - if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
       name: Check matrix status

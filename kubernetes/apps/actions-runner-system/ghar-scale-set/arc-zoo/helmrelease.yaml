@@ -35,6 +35,14 @@ spec:
       type: dind
     template:
       spec:
+        initContainers:
+        - name: init-permissions
+          image: busybox
+          command: ["sh", "-c", "mkdir -p /home/runner/.docker && chown -R root:1001 /home/runner/.docker && chmod -R 775 /home/runner/.docker"]
+          volumeMounts:
+          - name: docker-config-json
+            mountPath: /home/runner/.docker
+            subPath: config.json
         containers:
         - name: runner
           annotations:
@@ -56,10 +64,6 @@ spec:
               path: config.json
         securityContext:
           fsGroup: 1001
-        initContainers:
-        - name: init-permissions
-          image: busybox
-          command: ["sh", "-c", "mkdir -p /home/runner/.docker && chown -R root:1001 /home/runner/.docker && chmod -R 775 /home/runner/.docker"]
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

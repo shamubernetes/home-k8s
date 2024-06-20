@@ -53,6 +53,7 @@ spec:
             secretNamespace: actions-runner-system
             items:
             - key: .dockerconfigjson
+              path: config.json
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

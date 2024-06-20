@@ -6,3 +6,4 @@ resources:
 - ./webhooks/ks.yaml
 - ./monitoring/ks.yaml
 - ./notifications/ks.yaml
+- ./capacitor/ks.yaml

@@ -50,13 +50,11 @@ spec:
           secret:
             secretName: docker-config-json
             secretNamespace: actions-runner-system
-            defaultMode: 0777
+            defaultMode: 0775
             items:
             - key: .dockerconfigjson
               path: config.json
         securityContext:
-          runAsUser: 1001
-          runAsGroup: 1001
           fsGroup: 1001
     controllerServiceAccount:
       name: ghar-controller

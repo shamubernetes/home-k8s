@@ -4,46 +4,38 @@ kind: HelmRelease
 metadata:
   name: &app capacitor
 spec:
-  interval: 15m
+  interval: 30m
   chart:
     spec:
       chart: app-template
       version: 3.2.1
       sourceRef:
         kind: HelmRepository
-        name: bjw-s-charts
+        name: bjw-s
         namespace: flux-system
   install:
-    createNamespace: true
     remediation:
       retries: 3
   upgrade:
+    cleanupOnFail: true
     remediation:
+      strategy: rollback
       retries: 3
   values:
     controllers:
       capacitor:
-        replicas: 2
-        pod:
-          securityContext:
-            fsGroup: 999
+        replicas: 1
         containers:
           app:
-            env:
-              TZ: ${TIMEZONE}
             image:
               repository: ghcr.io/gimlet-io/capacitor
               tag: v0.4.2@sha256:085f61f6359d15cfd7b13695bbce7e6623ed7bad78882803cd3aadefcc4e87b0
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                - ALL
-              readOnlyRootFilesystem: true
+            env:
+              TZ: ${TIMEZONE}
             probes:
               startup:
                 enabled: false
-              liveness: &probe
+              liveness: &probes
                 enabled: true
                 custom: true
                 spec:
@@ -55,24 +47,34 @@ spec:
                   periodSeconds: 10
                   timeoutSeconds: 1
                   failureThreshold: 3
-              readiness: *probe
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
             resources:
               requests:
                 cpu: 190m
                 memory: 127Mi
               limits:
                 memory: 127Mi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
     serviceAccount:
       create: false
       name: capacitor
     service:
       app:
-        controller: capacitor
+        controller: *app
         ports:
           http:
-            enabled: true
             port: *port
-            protocol: HTTP
     ingress:
       app:
         annotations:

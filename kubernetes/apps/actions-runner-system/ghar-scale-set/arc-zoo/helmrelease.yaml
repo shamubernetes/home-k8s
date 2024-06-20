@@ -43,8 +43,8 @@ spec:
           command: ["/home/runner/run.sh"]
           volumeMounts:
           - name: docker-config-json
-            mountPath: /home/runner/.docker/config.json
-            subPath: config.json
+            mountPath: /home/runner/.docker
+            subPath: .docker
         volumes:
         - name: docker-config-json
           secret:

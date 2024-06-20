@@ -40,9 +40,8 @@ spec:
           image: busybox
           command: ["sh", "-c", "mkdir -p /home/runner/.docker && chown -R root:1001 /home/runner/.docker && chmod -R 775 /home/runner/.docker"]
           volumeMounts:
-          - name: docker-config-json
+          - name: docker-config-dir
             mountPath: /home/runner/.docker
-            subPath: config.json
         containers:
         - name: runner
           annotations:
@@ -53,6 +52,8 @@ spec:
           - name: docker-config-json
             mountPath: /home/runner/.docker/config.json
             subPath: config.json
+          - name: docker-config-dir
+            mountPath: /home/runner/.docker
         volumes:
         - name: docker-config-json
           secret:
@@ -62,6 +63,8 @@ spec:
             items:
             - key: .dockerconfigjson
               path: config.json
+        - name: docker-config-dir
+          emptyDir: {}
         securityContext:
           fsGroup: 1001
     controllerServiceAccount:

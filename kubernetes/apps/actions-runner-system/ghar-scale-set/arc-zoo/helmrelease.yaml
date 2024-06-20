@@ -37,16 +37,22 @@ spec:
       spec:
         containers:
         - name: runner
+          annotations:
+            reloader.stakater.com/auto: "true"
           image: ghcr.io/kflix-tv/actions-runner:2.317.0@sha256:f05a3e263d66ff0065143d07480200d310d469650283b805de986d44775412ae
           command: ["/home/runner/run.sh"]
           volumeMounts:
           - name: docker-config-json
             mountPath: /home/runner/.docker/config.json
             subPath: config.json
+            readOnly: true
         volumes:
         - name: docker-config-json
           secret:
             secretName: docker-config-json
+            secretNamespace: actions-runner-system
+            items:
+            - key: .dockerconfigjson
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

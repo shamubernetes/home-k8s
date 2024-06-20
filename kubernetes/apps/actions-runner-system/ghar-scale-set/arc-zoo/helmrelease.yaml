@@ -45,7 +45,6 @@ spec:
           - name: docker-config-json
             mountPath: /home/runner/.docker/config.json
             subPath: config.json
-            readOnly: true
         volumes:
         - name: docker-config-json
           secret:

@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Cache - Trunk"
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.trunk/trunk.yaml]
+
+permissions: read-all
+
+jobs:
+  cache_trunk:
+    name: Cache Trunk
+    runs-on: ["ghar-set-zoo"]
+    permissions:
+      actions: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+    - name: Trunk Check
+      uses: trunk-io/trunk-action@v1
+      with:
+        check-mode: populate_cache_only

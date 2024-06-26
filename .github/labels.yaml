@@ -15,7 +15,6 @@
 - {name: "renovate/dash", color: "027fa0"}
 - {name: "renovate/helm", color: "027fa0"}
 - {name: "renovate/pip", color: "027fa0"}
-- {name: "renovate/dash", color: "027fa0"}
 # Semantic Type
 - {name: "type/pin", color: "ffec19"}
 - {name: "type/digest", color: "ffec19"}

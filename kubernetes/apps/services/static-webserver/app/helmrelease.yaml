@@ -90,7 +90,7 @@ spec:
       public:
         type: nfs
         server: ${IPAM_IP_NFS}
-        path: /public
+        path: /mnt/user/public
         globalMounts:
         - path: /public
           readOnly: true

@@ -131,24 +131,7 @@ spec:
     #     runAsUser: 65534
     #     runAsGroup: 65534
     #     seccompProfile: {type: RuntimeDefault}
-    persistence:
-      certificate:
-        enabled: true
-        type: secret
-        name: "${SECRET_DOMAIN/./-}-production-tls"
-        globalMounts:
-        - path: /opt/letsencrypt/live
-          readOnly: true
     service:
-      app:
-        controller: adguard-home
-        ports:
-          http:
-            port: *adguardPort
-          https-dns:
-            port: 443
-          tls-dns:
-            port: 853
       sync:
         controller: sync
         ports:

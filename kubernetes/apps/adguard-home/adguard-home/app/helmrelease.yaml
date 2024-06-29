@@ -180,15 +180,6 @@ spec:
         annotations:
           io.cilium/lb-ipam-ips: "${IPAM_IP_ADGUARD_2}"
     ingress:
-      https-dns:
-        className: internal
-        hosts:
-        - host: "adguard-dns.${SECRET_DOMAIN}"
-          paths:
-          - path: /dns-query
-            service:
-              identifier: app
-              port: https-dns
       origin: &ingress
         annotations:
           external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}

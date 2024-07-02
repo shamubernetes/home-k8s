@@ -6,7 +6,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 30m
-  url: "https://github.com/kFlix-tv/home-k8s"
+  url: "https://github.com/shamubernetes/home-k8s"
   ref:
     branch: "main"
   ignore: |

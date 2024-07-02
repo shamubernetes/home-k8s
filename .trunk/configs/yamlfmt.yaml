@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/kFlix-tv/json-schemas/main/google.yamlfmt.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shamubernetes/json-schemas/main/google.yamlfmt.schema.json
 formatter:
   type: basic
   indent: 2

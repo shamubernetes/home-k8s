@@ -17,10 +17,10 @@ plugins:
     uri: https://github.com/trunk-io/plugins
   - id: yamlfmt
     ref: v0.12.1
-    uri: https://github.com/kiliantyler/trunk-yamlfmt
+    uri: https://github.com/shamubernetes/trunk-yamlfmt
   - id: trunk-yls
     ref: v1.0.2
-    uri: https://github.com/kiliantyler/trunk-yls
+    uri: https://github.com/shamubernetes/trunk-yls
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:

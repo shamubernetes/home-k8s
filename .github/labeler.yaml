@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/kFlix-tv/json-schemas/main/actions.labeler.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shamubernetes/json-schemas/main/actions.labeler.schema.json
 area/bootstrap:
 - changed-files:
   - any-glob-to-any-file: bootstrap/**/*

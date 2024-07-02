@@ -28,7 +28,7 @@ spec:
     nameOverride: ghar-set-zoo
     runnerScaleSetName: ghar-set-zoo
     githubConfigSecret: actions-runner-controller-auth-secret
-    githubConfigUrl: https://github.com/kflix-tv
+    githubConfigUrl: https://github.com/shamubernetes
     minRunners: 2
     maxRunners: 12
     containerMode:
@@ -46,7 +46,7 @@ spec:
         - name: runner
           annotations:
             reloader.stakater.com/auto: "true"
-          image: ghcr.io/kflix-tv/actions-runner:2.317.0@sha256:f05a3e263d66ff0065143d07480200d310d469650283b805de986d44775412ae
+          image: ghcr.io/shamubernetes/actions-runner:2.317.0@sha256:f05a3e263d66ff0065143d07480200d310d469650283b805de986d44775412ae
           command: ["/home/runner/run.sh"]
           volumeMounts:
           - name: docker-config-json

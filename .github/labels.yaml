@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/kFlix-tv/json-schemas/main/endbug.labelsync.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shamubernetes/json-schemas/main/endbug.labelsync.schema.json
 # Area
 - {name: "area/bootstrap", color: "0e8a16"}
 - {name: "area/ci", color: "0e8a16"}

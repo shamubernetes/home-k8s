@@ -1,6 +1,9 @@
 # editorconfig.org
 root = true
 
+
+# Common settings
+# ============
 [*]
 indent_style = space
 indent_size = 2
@@ -8,3 +11,45 @@ end_of_line = lf
 charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
+
+# Git configuration files uses tabs as indentation units
+# ============
+[.git*]
+indent_style = tab
+
+# Markdown documents
+# ============
+[*.{md,mkd,mkdn,markdown}]
+
+# Trailing whitespace means manual linebreaks
+# ============
+trim_trailing_whitespace = false
+
+# Don't check indentation size as it can't handle intentional indentation
+# in list item after hardbreaks to align with the node markers, use
+# Markdownlint to check instead
+# ============
+indent_size = unset
+
+# Go source files
+# ============
+[*.go]
+indent_size = 4
+
+# Avoid git patch fail to apply due to stripped unmodified lines that contains only spaces
+# ============
+[/.git/**]
+trim_trailing_whitespace = false
+
+# Makefiles for *Make
+# ============
+[{Makefile,*.mk}]
+indent_style = tab
+
+# Diff & Patch files
+# ============
+[*.{diff,patch}]
+
+# Trailing whitespaces are unchanged lines in patch files
+# ============
+trim_trailing_whitespace = false

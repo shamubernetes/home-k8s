@@ -39,9 +39,6 @@ includes:
   precommit:
     aliases: ["pc"]
     taskfile: .taskfiles/Precommit/Taskfile.yaml
-  user:
-    taskfile: .taskfiles/User
-    optional: true
 
 tasks:
 

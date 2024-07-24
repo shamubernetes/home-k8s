@@ -1,63 +1,82 @@
-############################################
-############### Repo Config ################
-############################################
+################################################################################
+##       ██████╗ ██╗████████╗██╗ ██████╗ ███╗   ██╗ ██████╗ ██████╗ ███████╗  ##
+##      ██╔════╝ ██║╚══██╔══╝██║██╔════╝ ████╗  ██║██╔═══██╗██╔══██╗██╔════╝  ##
+##      ██║  ███╗██║   ██║   ██║██║  ███╗██╔██╗ ██║██║   ██║██████╔╝█████╗    ##
+##      ██║   ██║██║   ██║   ██║██║   ██║██║╚██╗██║██║   ██║██╔══██╗██╔══╝    ##
+##  ██╗ ╚██████╔╝██║   ██║   ██║╚██████╔╝██║ ╚████║╚██████╔╝██║  ██║███████╗  ##
+##  ╚═╝  ╚═════╝ ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝  ##
+################################################################################
+
+
+##################################################
+##                                              ##
+##                 Repo Config                   ##
+##                                              ##
+##################################################
+# ---------------------------------------------- #
+
+# Talos Config
 talosconfig
-.decrypted~*.yaml
-.config.env
+
 # Private
 .private
-.bin
-# Ansible
-.venv*
-# Taskfile
-.task
-# Brew
-Brewfile.lock.json
-# intellij
-.idea
-# wiki
-wiki
+
 # Bootstrap
-/config.yaml
-
-################# Testing ##################
-*-test.yaml
-extracted_values.yaml
-
-################# Ansible ##################
-ansible_old
-ansible/ansible.log
-ansible/roles/*
+.config.yaml
 
 ################### K8S ####################
 kubeconfig
 
-################### Helm ###################
-*.tgz
-Chart.lock
-.venv
+# ---------------------------------------------- #
 
-# ---------------------------------------- #
+##################################################
+##                                              ##
+##                Global Config                  ##
+##                                              ##
+##################################################
 
-############################################
-############## Global Config ###############
-############################################
+##################################################
+##                                              ##
+##                     Git                      ##
+##                                              ##
+##################################################
 
-############################################
-################ Mac Trash #################
-############################################
+# Created by git for backups. To disable backups in Git:
+# $ git config --global mergetool.keepBackup false
+# ============
+*.orig
+
+# Created by git when using merge tools for conflicts
+# ============
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+*_BACKUP_*.txt
+*_BASE_*.txt
+*_LOCAL_*.txt
+*_REMOTE_*.txt
+
+##################################################
+##                                              ##
+##                  Mac Trash                   ##
+##                                              ##
+##################################################
+
 # General
+# ============
 .DS_Store
 .AppleDouble
 .LSOverride
 
-# Icon must end with two \r
 Icon
 
 # Thumbnails
+# ============
 ._*
 
 # Files that might appear in the root of a volume
+# ============
 .DocumentRevisions-V100
 .fseventsd
 .Spotlight-V100
@@ -67,48 +86,63 @@ Icon
 .com.apple.timemachine.donotpresent
 
 # Directories potentially created on remote AFP share
+# ============
 .AppleDB
 .AppleDesktop
 Network Trash Folder
 Temporary Items
 .apdisk
 
-############################################
-############### Linux Trash ################
-############################################
-*~
+##################################################
+##                                              ##
+##                 Linux Trash                  ##
+##                                              ##
+##################################################
 
-# temporary files which can be created if a process still has a handle open of a deleted file
+# Temporary files which can be created if a process still has a handle open of a deleted file
+# ============
+*~
 .fuse_hidden*
 
 # KDE directory preferences
+# ============
 .directory
 
 # Linux trash folder which might appear on any partition or disk
+# ============
 .Trash-*
 
 # .nfs files are created when an open file is removed but is still being accessed
+# ============
 .nfs*
 
-############################################
-############## Windows Trash ###############
-############################################
+##################################################
+##                                              ##
+##                Windows Trash                 ##
+##                                              ##
+##################################################
+
 # Windows thumbnail cache files
+# ============
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 ehthumbs_vista.db
 
 # Dump file
+# ============
 *.stackdump
 
 # Folder config file
+# ============
 [Dd]esktop.ini
 
 # Recycle Bin used on file shares
+# ============
 $RECYCLE.BIN/
 
 # Windows Installer files
+# ============
 *.cab
 *.msi
 *.msix
@@ -116,34 +150,162 @@ $RECYCLE.BIN/
 *.msp
 
 # Windows shortcuts
+# ============
 *.lnk
 
-############################################
-############# Microsoft Office #############
-############################################
+##################################################
+##                                              ##
+##                  Archiving                   ##
+##                                              ##
+##################################################
+
+# The traditional archive format on Unix-like systems, now used mainly for the creation of static libraries.
+# ============
+*.a
+*.ar
+
+# RPM files consist of metadata concatenated with (usually) a cpio archive. Newer RPM systems also support other archives, as cpio is becoming obsolete. cpio is also used with initramfs.
+# ============
+*.cpio
+
+# A self-extracting archive that uses the Bourne shell (sh).
+# ============
+*.shar
+
+# A system for storing multiple files. LBR archives typically contained files processed by SQ, or the archive itself was compressed with SQ. LBR archives that were compressed with SQ ended with the extension .LQR
+# ============
+*.LBR
+
+# An archive format originally used mainly for archiving and distribution of the exact, nearly-exact, or custom-modified contents of an optical storage medium such as a CD-ROM or DVD-ROM. However, it can be used to archive the contents of other storage media, selected partitions, folders, and/or files. The resulting archive is typically optimized for convenient rendering to (re-)writable CD or DVD media.
+# ============
+*.iso
+
+# A library format used primarily on the Commodore 64 and 128 lines of computers. This bears no resemblance to the DOS LBR format. While library files were quick to implement (a number of programs exist to work with them) they are crippled in that they cannot grow with use: once a file has been created it cannot be amended (files added, changed or deleted) without recreating the entire file.
+# ============
+*.lbr
+
+# An archive format used by Mozilla for storing binary diffs. Used in conjunction with bzip2.
+# ============
+*.mar
+
+# A common archive format used on Unix-like systems. Generally used in conjunction with compressors such as gzip, bzip2, compress or xz to create .tar.gz, .tar.bz2, .tar.Z or tar.xz files.
+# ============
+*.tar
+
+# Other Archive formats
+# ============
+*.7z
+*.bz2
+*.bzip
+*.bzip2
+*.cab
+*.deb
+*.dmg
+*.egg
+*.gem
+*.gz
+*.gzip
+*.iso
+*.jar
+*.lzma
+*.msi
+*.msm
+*.msp
+*.rar
+*.rpm
+*.tar
+*.tgz
+*.txz
+*.xar
+*.xpi
+*.xz
+*.zip
+
+##################################################
+##                                              ##
+##               Package Managers               ##
+##                                              ##
+##################################################
+
+# Red Hat Package Manager
+# ============
+*.rpm
+
+# Debian package
+# ============
+*.deb
+
+# MicroSoft Installer
+# ============
+*.msi
+*.msm
+*.msp
+
+# Mozilla package installer
+# ============
+*.xpi
+
+# Ruby Package
+# ============
+*.gem
+
+##################################################
+##                                              ##
+##                    Audio                     ##
+##                                              ##
+##################################################
+
+*.aif
+*.iff
+*.m3u
+*.m4a
+*.mid
+*.mp3
+*.mpa
+*.ra
+*.wav
+*.wma
+*.ogg
+*.flac
+
+##################################################
+##                                              ##
+##               Microsoft Office                ##
+##                                              ##
+##################################################
+
 *.tmp
 
 # Word temporary
+# ============
 ~$*.doc*
 
 # Word Auto Backup File
+# ============
 Backup of *.doc*
 
 # Excel temporary
+# ============
 ~$*.xls*
 
 # Excel Backup File
+# ============
 *.xlk
 
 # PowerPoint temporary
+# ============
 ~$*.ppt*
 
 # Visio autosave temporary files
+# ============
 *.~vsd*
 
-############################################
-############### Backup Files ###############
-############################################
+##################################################
+##                                              ##
+##                 Backup Files                 ##
+##                                              ##
+##################################################
+
 *.bak
 *.backup
 *.gho
@@ -156,40 +318,90 @@ Backup of *.doc*
 *.new
 *.copy
 
-############################################
-############ Visual Studio Code ############
-############################################
+##################################################
+##                                              ##
+##                   Database                   ##
+##                                              ##
+##################################################
+
+*.accdb
+*.db
+*.dbf
+*.mdb
+*.pdb
+*.sqlite3
+*.db-shm
+*.db-wal
+
+##################################################
+##                                              ##
+##                   Homebrew                   ##
+##                                              ##
+##################################################
+
+Brewfile.lock.json
+
+##################################################
+##                                              ##
+##                     Helm                     ##
+##                                              ##
+##################################################
+
+# Chart dependencies
+# ============
+**/charts/*.tgz
+*-test.yaml
+extracted_values.yaml
+
+##################################################
+##                                              ##
+##              Visual Studio Code              ##
+##                                              ##
+##################################################
+
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
+!.vscode/extensions
 *.code-workspace
 
 # Local History for Visual Studio Code
+# ============
 .history/
 
 # Built Visual Studio Code Extensions
+# ============
 *.vsix
 
-############################################
-############### Sublime Text ###############
-############################################
+##################################################
+##                                              ##
+##                 Sublime Text                 ##
+##                                              ##
+##################################################
+
 *.sublime-workspace
 *.sublime-project
 
-############################################
-############## Intellij Idea ###############
-############################################
+##################################################
+##                                              ##
+##                Intellij Idea                 ##
+##                                              ##
+##################################################
+
 *.iml
 *.ipr
 *.iws
 .idea/
 
-############################################
-################# Eclipse ##################
-############################################
+##################################################
+##                                              ##
+##                   Eclipse                    ##
+##                                              ##
+##################################################
+
 *.project
 *.classpath
 *.settings
@@ -205,26 +417,35 @@ local.properties
 .loadpath
 .recommenders
 
-############################################
-################# Netbeans #################
-############################################
+##################################################
+##                                              ##
+##                   Netbeans                   ##
+##                                              ##
+##################################################
+
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
 
-############################################
-################### Sops ###################
-############################################
+##################################################
+##                                              ##
+##                     Sops                     ##
+##                                              ##
+##################################################
+
 *.sops.decrypted~*
 *.agekey
 *.pub
 *.key
 
-############################################
-########### Virtual Environment ############
-############################################
+##################################################
+##                                              ##
+##             Virtual Environment              ##
+##                                              ##
+##################################################
+
 .Python
 [Bb]in
 [Ii]nclude
@@ -235,96 +456,493 @@ pyvenv.cfg
 .venv
 pip-selfcheck.json
 
-############################################
-################ Terraform #################
-############################################
+##################################################
+##                                              ##
+##                  Terraform                   ##
+##                                              ##
+##################################################
+
 # Local .terraform directories
+# ============
 **/.terraform/*
 
 # .tfstate files
+# ============
 *.tfstate
 *.tfstate.*
 
 # Crash log files
+# ============
 crash.log
 crash.*.log
 
+# Variable definitions
+# ============
 *.tfvars
 *.tfvars.json
 
+# Ignore override files as they are usually used to override resources locally
+# ============
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
+# Plan output files
+# ============
 *tfplan*
 
 # Ignore CLI configuration files
+# ============
 .terraformrc
 terraform.rc
 
-############################################
-############### Diff & Patch ###############
-############################################
+##################################################
+##                                              ##
+##                 Diff & Patch                 ##
+##                                              ##
+##################################################
+
 *.diff
 *.patch
 
-############################################
-################### GPG ####################
-############################################
+##################################################
+##                                              ##
+##                     GPG                      ##
+##                                              ##
+##################################################
+
 *.gpg
 *.asc
 secring.*
 
-############################################
-################### Nix ####################
-############################################
+##################################################
+##                                              ##
+##                     Nix                      ##
+##                                              ##
+##################################################
+
 # Ignore build outputs from performing a nix-build or `nix build` command
+# ============
 result
 result-*
 
 # Ignore the result symlink that points to the latest build output
+# ============
 result-link
 
 # Ignore the nix store
+# ============
 /nix/store/
 
-############################################
-################# OpenSSL ##################
-############################################
-## Certificate Authority
+##################################################
+##                                              ##
+##                   OpenSSL                    ##
+##                                              ##
+##################################################
+
+# Certificate Authority
+# ============
 *.ca
 
-## Certificate
+# Certificate
+# ============
 *.crt
 
-## Certificate Sign Request
+# Certificate Sign Request
+# ============
 *.csr
 
-## Certificate
+# Certificate
+# ============
 *.der
 
-## Key database file
+# Key database file
+# ============
 *.kdb
 
-## OSCP request data
+# OSCP request data
+# ============
 *.org
 
-## PKCS #12
+# PKCS #12
+# ============
 *.p12
 
-## PEM-encoded certificate data
+# PEM-encoded certificate data
+# ============
 *.pem
 
-## Random number seed
+# Random number seed
+# ============
 *.rnd
 
-## SSLeay data
+# SSLeay data
+# ============
 *.ssleay
 
-## S/MIME message
+# S/MIME message
+# ============
 *.smime
 
-############################################
-################### End ####################
-############################################
+##################################################
+##                                              ##
+##                   Node.JS                    ##
+##                                              ##
+##################################################
+
+# Logs
+# ============
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+# ============
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+# ============
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Directory for instrumented libs generated by jscoverage/JSCover
+# ============
+lib-cov
+
+# Coverage directory used by tools like istanbul
+# ============
+coverage
+*.lcov
+
+# nyc test coverage
+# ============
+.nyc_output
+
+# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
+# ============
+.grunt
+
+# Bower dependency directory (https://bower.io/)
+# ============
+bower_components
+
+# node-waf configuration
+# ============
+.lock-wscript
+
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+# ============
+build/Release
+
+# Dependency directories
+# ============
+node_modules/
+jspm_packages/
+
+# Snowpack dependency directory (https://snowpack.dev/)
+# ============
+web_modules/
+
+# TypeScript cache
+# ============
+*.tsbuildinfo
+
+# Optional npm cache directory
+# ============
+.npm
+
+# Optional eslint cache
+# ============
+.eslintcache
+
+# Optional stylelint cache
+# ============
+.stylelintcache
+
+# Microbundle cache
+# ============
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+# ============
+.node_repl_history
+
+# Output of 'npm pack'
+# ============
+*.tgz
+
+# Yarn Integrity file
+# ============
+.yarn-integrity
+
+# dotenv environment variable files
+# ============
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# parcel-bundler cache (https://parceljs.org/)
+# ============
+.cache
+.parcel-cache
+
+# Next.js build output
+# ============
+.next
+out
+
+# Nuxt.js build / generate output
+# ============
+.nuxt
+dist
+
+# Gatsby files
+# ============
+.cache/
+
+# vuepress build output
+# ============
+.vuepress/dist
+
+# vuepress v2.x temp and cache directory
+# ============
+.temp
+.cache
+
+# Serverless directories
+# ============
+.serverless/
+
+# FuseBox cache
+# ============
+.fusebox/
+
+# DynamoDB Local files
+# ============
+.dynamodb/
+
+# TernJS port file
+# ============
+.tern-port
+
+# yarn v2
+# ============
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+##################################################
+##                                              ##
+##                    Python                    ##
+##                                              ##
+##################################################
+
+# Byte-compiled / optimized / DLL files
+# ============
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+# ============
+*.so
+
+# Distribution / packaging
+# ============
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+# ============
+*.manifest
+*.spec
+
+# Installer logs
+# ============
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+# ============
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+# ============
+*.mo
+*.pot
+
+# Django stuff:
+# ============
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+# ============
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+# ============
+.scrapy
+
+# Sphinx documentation
+# ============
+docs/_build/
+
+# PyBuilder
+# ============
+.pybuilder/
+target/
+
+# Jupyter Notebook
+# ============
+.ipynb_checkpoints
+
+# IPython
+# ============
+profile_default/
+ipython_config.py
+
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/#use-with-ide
+# ============
+.pdm.toml
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+# ============
+__pypackages__/
+
+# Celery stuff
+# ============
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+# ============
+*.sage.py
+
+# Environments
+# ============
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+# ============
+.spyderproject
+.spyproject
+
+# Rope project settings
+# ============
+.ropeproject
+
+# mkdocs documentation
+# ============
+/site
+
+# mypy
+# ============
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+# ============
+.pyre/
+
+# pytype static type analyzer
+# ============
+.pytype/
+
+# Cython debug symbols
+# ============
+cython_debug/
+
+##################################################
+##                                              ##
+##                    GoTask                    ##
+##                                              ##
+##################################################
+
+.task/
+
+##################################################
+##                                              ##
+##                    Trunk                     ##
+##                                              ##
+##################################################
+
+trunk/*out
+trunk/*logs
+trunk/*actions
+trunk/*notifications
+trunk/*tools
+trunk/plugins
+trunk/user_trunk.yaml
+trunk/user.yaml
+trunk/tmp
+
+##################################################
+##                                              ##
+##                     TODO                     ##
+##                                              ##
+##################################################
+
+.TODO*
+
+
+##################################################
+##                                              ##
+##                     End                      ##
+##                                              ##
+##################################################

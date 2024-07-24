@@ -1,30 +1,33 @@
 {
-  "[shellscript]": {
-    "editor.defaultFormatter": "trunk.io",
-    "editor.formatOnSave": true
+  "editor.defaultFormatter": "trunk.io",
+  "editor.formatOnSave": true,
+  "git.enableSmartCommit": true,
+  "git.ignoreLimitWarning": true,
+  "gitlens.advanced.fileHistoryFollowsRenames": true,
+  "gitlens.codeLens.enabled": false,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": true,
+  "sops.defaults.ageKeyFile": "age.key",
+  "sops.configPath": ".sops.yaml",
+  "terminal.integrated.scrollback": 100000,
+  "workbench.list.horizontalScrolling": true,
+  // File Types
+  "[markdown]": {
+    "editor.fontLigatures": false
   },
   "[yaml]": {
-    "diffEditor.ignoreTrimWhitespace": false,
-    "editor.autoIndent": "keep",
-    "editor.defaultFormatter": "trunk.io",
-    "editor.formatOnSave": true,
-    "editor.insertSpaces": true,
-    "editor.quickSuggestions": {
-      "comments": false,
-      "other": true,
-      "strings": true
-    },
-    "editor.tabSize": 2
+    "editor.fontLigatures": false
   },
-  "editor.formatOnSave": true,
+  // Extension Settings
   "files.associations": {
     "*.json5": "json5",
     "./ansible/**/*.sops.yaml": "yaml",
     "./ansible/**/*.yaml": "ansible",
     "./ansible/**/inventory/**/*.yaml": "yaml",
-    "./kubernetes/**/*.sops.toml": "plaintext"
+    "./kubernetes/**/*.sops.toml": "plaintext",
+    ".TODO": "markdown"
   },
-  "files.trimTrailingWhitespace": true,
   "material-icon-theme.folders.associations": {
     ".taskfiles": "utils",
     "bootstrap": "import",
@@ -40,21 +43,14 @@
     "terraforms": "terraform",
     "vars": "other"
   },
-  "sops.defaults.ageKeyFile": "age.key",
-  "sops.configPath": ".sops.yaml",
   "vs-kubernetes": {
     "vs-kubernetes.knownKubeconfigs": [
       "./kubeconfig"
     ],
     "vs-kubernetes.kubeconfig": "./kubeconfig"
   },
-  "yaml.schemas": {
-    "ansible": "./ansible/*.yaml",
-    "Kubernetes": "./kubernetes/*.yaml"
-  },
   "yaml.customTags": [
     "!secret scalar",
     "!env_var scalar"
   ],
-  "yaml.schemaStore.enable": true
 }

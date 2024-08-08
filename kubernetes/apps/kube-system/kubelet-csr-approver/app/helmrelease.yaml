@@ -4,7 +4,7 @@ kind: HelmRelease
 metadata:
   name: kubelet-csr-approver
 spec:
-  interval: 30m
+  interval: 10m
   chart:
     spec:
       chart: kubelet-csr-approver
@@ -19,10 +19,12 @@ spec:
   upgrade:
     cleanupOnFail: true
     remediation:
+      strategy: rollback
       retries: 3
+  valuesFrom:
+  - kind: ConfigMap
+    name: kubelet-csr-approver-helm-values
   values:
-    providerRegex: ^(oceanus|tethys|coeus|chronos|rhea)$
-    bypassDnsResolution: true
     metrics:
       enable: true
       serviceMonitor:

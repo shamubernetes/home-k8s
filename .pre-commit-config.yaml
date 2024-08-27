@@ -60,7 +60,7 @@ repos:
     args: ["--schemafile", "docs/yamlfmt-schema.json"]
 
 - repo: https://github.com/gitguardian/ggshield
-  rev: v1.30.2
+  rev: v1.31.0
   hooks:
   - id: ggshield
     language_version: python3

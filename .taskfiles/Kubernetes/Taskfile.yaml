@@ -1,64 +1,74 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 version: "3"
 
-vars:
-  KUBECONFORM_SCRIPT: "{{.SCRIPTS_DIR}}/kubeconform.sh"
-
 tasks:
 
-  resources:
-    desc: Gather common resources in your cluster, useful when asking for support
-    cmds:
-    - for: {var: resource}
-      cmd: kubectl get {{.ITEM}} {{.CLI_ARGS | default "-A"}}
+  apply-ks:
+    desc: Apply a Flux Kustomization resource for a cluster
+    summary: |
+      cluster: Cluster to run command against (required)
+      path: Path to the Flux Kustomization resource (required)
+      ns: Namespace the Flux Kustomization exists in (default: flux-system)
+    cmd: |
+      flux --context {{.cluster}} build ks $(basename {{.path}}) \
+          --namespace {{.ns}} \
+          --kustomization-file {{.KUBERNETES_DIR}}/{{.cluster}}/apps/{{.path}}/ks.yaml \
+          --path {{.KUBERNETES_DIR}}/{{.cluster}}/apps/{{.path}} \
+          {{- if contains "not found" .ks }}--dry-run \{{ end }}
+      | \
+      kubectl --context {{.cluster}} apply --server-side \
+          --field-manager=kustomize-controller -f -
+    requires:
+      vars: ["cluster", "path"]
     vars:
-      resource: >-
-        nodes
-        gitrepositories
-        kustomizations
-        helmrepositories
-        helmreleases
-        certificates
-        certificaterequests
-        ingresses
-        pods
-
-  kubeconform:
-    desc: Validate Kubernetes manifests with kubeconform
-    cmd: bash {{.KUBECONFORM_SCRIPT}} {{.KUBERNETES_DIR}}
+      ns: '{{.ns | default "flux-system"}}'
+      ks:
+        sh: flux --context {{.cluster}} --namespace {{.ns}} get kustomizations $(basename {{.path}}) 2>&1
     preconditions:
-    - {msg: "Missing kubeconform script", sh: "test -f {{.KUBECONFORM_SCRIPT}}",}
+    - test -f {{.KUBERNETES_DIR}}/{{.cluster}}/apps/{{.path}}/ks.yaml
 
-  .reset:
-    internal: true
-    cmd: rm -rf {{.KUBERNETES_DIR}}
+  browse-pvc:
+    desc: Browse a PersistentVolumeClaim
+    summary: |
+      cluster: Cluster to run command against (default: main)
+      ns: Namespace to browse PersistentVolumeClaims in (default: default)
+      claim: PersistentVolumeClaim to browse (required)
+    interactive: true
+    cmd: kubectl browse-pvc --context {{.cluster}} --namespace {{.ns}} {{.claim}}
+    vars:
+      cluster: '{{.cluster | default "main"}}'
+      ns: '{{.ns | default "default"}}'
+    requires:
+      vars: ["claim"]
+    preconditions:
+    - kubectl --context {{.cluster}} --namespace {{.ns}} get persistentvolumeclaims {{.claim}}
 
-  staging:
-    desc: Switch cluster to Staging LE Certs
+  delete-failed-pods:
+    desc: Delete all pods with an Evicted/Failed/Succeeded status
+    summary: |
+      cluster: Cluster to run command against (default: main)
     cmds:
-    - sed -i 's/production/staging/g' kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
-    - git add kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
-    - sed -i 's/production/staging/g' kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
-    - git add kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
-    - sed -i 's/production/staging/g' kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
-    - git add kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
-    - 'git commit -m "fix(kubernetes): Staging TLS"'
+    - for: ["Evicted", "Failed", "Succeeded"]
+      cmd: kubectl --context {{.cluster}} delete pods --field-selector status.phase={{.ITEM}} -A --ignore-not-found=true
+    vars:
+      cluster: '{{.cluster | default "main"}}'
 
-  production:
-    desc: Switch cluster to Staging LE Certs
-    cmds:
-    - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
-    - git add kubernetes/apps/network/ingress-nginx/certificates/kustomization.yaml
-    - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
-    - git add kubernetes/apps/network/ingress-nginx/external/helmrelease.yaml
-    - sed -i 's/staging/production/g' kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
-    - git add kubernetes/apps/network/ingress-nginx/internal/helmrelease.yaml
-    - 'git commit -m "fix(kubernetes): Production TLS"'
-
-  webhook:
-    desc: Print out the Webhook URL for github
-    cmd: kubectl -n flux-system get receiver github-receiver -o jsonpath='{.status.webhookPath}'
-
-  webhook-secret:
-    desc: Print out the Webhook Secret for github
-    cmd: kubectl -n flux-system get secret github-webhook-token-secret -o jsonpath='{.data.token}' | base64 --decode
+  sync-secrets:
+    desc: Sync ExternalSecret resources from provider
+    summary: |
+      cluster: Cluster to run command against (default: main)
+      ns: Namespace to sync secret in (default: default)
+      secret: Secret to sync (default: unset/all secrets)
+    cmd: |
+      {{if eq .secret ""}}
+        kubectl get externalsecret --all-namespaces --no-headers -A | awk '{print $1, $2}' \
+          | xargs --max-procs=2 -l bash -c 'kubectl -n $0 annotate externalsecret $1 force-sync=$(date +%s) --overwrite'
+      {{else}}
+        kubectl --context {{.cluster}} --namespace {{.ns}} annotate externalsecret {{.secret}} force-sync=$(date +%s) --overwrite
+      {{end}}
+    vars:
+      secret: '{{ .secret | default ""}}'
+      ns: '{{.ns | default "default"}}'
+      cluster: '{{.cluster | default "main"}}'
+    preconditions:
+    - kubectl --context {{.cluster}} --namespace {{.ns}} get externalsecret {{.secret}}

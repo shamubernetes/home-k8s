@@ -1,0 +1,12 @@
+[tools]
+trunk = "latest"
+kubectl = "latest"
+sops = "latest"
+age = "latest"
+task = "latest"
+
+[env]
+KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"
+SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
+K8S_AUTH_KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"
+TALOSCONFIG = "{{config_root}}/kubernetes/bootstrap/talos/clusterconfig/talosconfig"

@@ -9,8 +9,10 @@ spec:
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
+  dependsOn:
+  - name: external-secrets-secret-store
   path: ./kubernetes/apps/network/external-dns/cloudflare
-  prune: true
+  prune: false
   sourceRef:
     kind: GitRepository
     name: home-kubernetes
@@ -32,13 +34,13 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-  - name: external-secrets-stores
+  - name: external-secrets-secret-store
   path: ./kubernetes/apps/network/external-dns/unifi
   prune: false
   sourceRef:
     kind: GitRepository
     name: home-kubernetes
   wait: true
-  interval: 30m
+  interval: 10m
   retryInterval: 1m
   timeout: 5m

@@ -4,6 +4,7 @@ kubectl = "latest"
 sops = "latest"
 age = "latest"
 task = "latest"
+flux2 = "2.3.0"
 
 [env]
 KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"

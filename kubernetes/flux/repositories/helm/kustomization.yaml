@@ -4,7 +4,7 @@ kind: Kustomization
 resources:
 - ./actions-runner-controller.yaml
 - ./backube.yaml
-- ./bjw-s.yaml
+- ./bernd-schorgers.yaml
 - ./cilium.yaml
 - ./cloudnative-pg.yaml
 - ./coredns.yaml

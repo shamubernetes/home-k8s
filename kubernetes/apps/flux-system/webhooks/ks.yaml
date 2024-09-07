@@ -9,6 +9,8 @@ spec:
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
+  dependsOn:
+  - name: external-secrets-secret-store
   path: ./kubernetes/apps/flux-system/webhooks/app
   prune: true
   sourceRef:

@@ -20,6 +20,9 @@ spec:
     cleanupOnFail: true
     remediation:
       retries: 3
+  dependsOn:
+  - name: nginx-external
+    namespace: network
   values:
     controllers:
       cloudflared:
@@ -42,8 +45,8 @@ spec:
               TUNNEL_ID:
                 valueFrom:
                   secretKeyRef:
-                    name: cloudflared-secret
-                    key: TUNNEL_ID
+                    name: cloudflared-tunnel-secret
+                    key: CLOUDFLARE_TUNNEL_ID
             args:
             - tunnel
             - --config
@@ -103,7 +106,7 @@ spec:
           readOnly: true
       creds:
         type: secret
-        name: cloudflared-secret
+        name: cloudflared-tunnel-secret
         globalMounts:
         - path: /etc/cloudflared/creds/credentials.json
           subPath: credentials.json

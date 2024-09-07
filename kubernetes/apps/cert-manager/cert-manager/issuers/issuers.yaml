@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/v1/clusterissuer_v1.json
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/clusterissuer_v1.json
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -13,14 +13,14 @@ spec:
     - dns01:
         cloudflare:
           apiTokenSecretRef:
-            name: cert-manager-secret
-            key: api-token
+            name: cloudflare-secret
+            key: CLOUDFLARE_API_TOKEN
       selector:
         dnsZones:
         - "${SECRET_DOMAIN}"
 # yamllint disable-line rule:document-start
 ---
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/v1/clusterissuer_v1.json
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/clusterissuer_v1.json
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:

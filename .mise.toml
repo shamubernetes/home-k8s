@@ -1,10 +1,10 @@
 [tools]
-trunk = "latest"
-kubectl = "latest"
-sops = "latest"
-age = "latest"
-task = "latest"
-flux2 = "2.3.0"
+trunk = "1.22.3"
+kubectl = "1.31.0"
+sops = "3.9.0"
+age = "1.2.0"
+task = "3.38.0"
+flux2 = "2.2.0"
 
 [env]
 KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"

@@ -31,7 +31,7 @@ spec:
           tag: v0.2.2@sha256:7778b1e932e920181007be34bb03306722e85fc8ded34cd87c0f16060b9f07e3
         env:
         - name: UNIFI_HOST
-          value: "${IPAM_IP_GATEWAY}"
+          value: "https://${IPAM_IP_GATEWAY}"
         - name: UNIFI_USER
           valueFrom:
             secretKeyRef:

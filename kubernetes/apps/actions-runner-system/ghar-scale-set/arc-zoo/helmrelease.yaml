@@ -46,7 +46,7 @@ spec:
         - name: runner
           annotations:
             reloader.stakater.com/auto: "true"
-          image: ghcr.io/shamubernetes/actions-runner:2.319.1@sha256:c8d928d4935dd7575d3f23adce155427fb0e163b3048866b7d4d154b76d919ce
+          image: ghcr.io/shamubernetes/actions-runner:2.319.1@sha256:3d814293f70983b148d796a4d7738ef439621c774010731dc5e945d8e36feb6e
           command: ["/home/runner/run.sh"]
           volumeMounts:
           - name: docker-config-json

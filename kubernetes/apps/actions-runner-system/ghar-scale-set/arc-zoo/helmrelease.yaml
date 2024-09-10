@@ -35,38 +35,10 @@ spec:
       type: dind
     template:
       spec:
-        initContainers:
-        - name: init-permissions
-          image: busybox
-          command: ["sh", "-c", "mkdir -p /home/runner/.docker && chown -R root:1001 /home/runner/.docker && chmod -R 775 /home/runner/.docker"]
-          volumeMounts:
-          - name: docker-config-dir
-            mountPath: /home/runner/.docker
         containers:
         - name: runner
-          annotations:
-            reloader.stakater.com/auto: "true"
           image: ghcr.io/shamubernetes/actions-runner:2.319.1@sha256:3d814293f70983b148d796a4d7738ef439621c774010731dc5e945d8e36feb6e
           command: ["/home/runner/run.sh"]
-          volumeMounts:
-          - name: docker-config-json
-            mountPath: /home/runner/.docker/config.json
-            subPath: config.json
-          - name: docker-config-dir
-            mountPath: /home/runner/.docker
-        volumes:
-        - name: docker-config-json
-          secret:
-            secretName: docker-config-json
-            secretNamespace: actions-runner-system
-            defaultMode: 0775
-            items:
-            - key: .dockerconfigjson
-              path: config.json
-        - name: docker-config-dir
-          emptyDir: {}
-        securityContext:
-          fsGroup: 1001
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

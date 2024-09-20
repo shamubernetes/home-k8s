@@ -1,0 +1,131 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: satisfactory
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.4.0
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      satisfactory:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: wolveix/satisfactory-server
+              tag: v1.8.6
+            env:
+              TZ: America/New_York
+              AUTOPAUSE: false # -- pause game when no player is connected
+              AUTOSAVEINTERVAL: 300 # -- autosave interval in seconds
+              AUTOSAVENUM: 5 # -- number of rotating autosave files
+              AUTOSAVEONDISCONNECT: true # -- autosave when last player disconnects
+              # CRASHREPORT: true # -- automatic crash reporting
+              # DEBUG: false # -- for debugging the server
+              # DISABLESEASONALEVENTS: false # -- disable the FICSMAS event (you miserable bastard)
+              LOG: false # -- disable Satisfactory log pruning
+              MAXOBJECTS: 2162688 # -- set the object limit for your server
+              MAXPLAYERS: 10 # -- set the player limit for your server
+              MAXTICKRATE: 30 # -- set the maximum sim tick rate for your server
+              PGID: 568 # -- set the group ID of the user the server will run as
+              PUID: 568 # -- set the user ID of the user the server will run as
+              ROOTLESS: true # -- run the container as a non-root user
+              SERVERBEACONPORT: &beaconport 15000 # -- set the game's beacon port
+              SERVERGAMEPORT: &gameport 7777 # -- set the game's port
+              # SERVERIP: 0.0.0.0    # -- set the game's ip (usually not needed)
+              SERVERQUERYPORT: &queryport 15777 # -- set the game's query port
+              SERVERSTREAMING: true # -- toggle whether the game utilizes asset streaming
+              SKIPUPDATE: false # -- avoid updating the game on container start/restart
+              # STEAMBETA: false # -- set experimental game version
+              TIMEOUT: 60 # -- set client timeout (in seconds)
+              # VMOVERRIDE: false # -- skips the CPU model check (should not ordinarily be used)
+            # probes: # TODO: Implement probes if possible
+            #   liveness: &probes
+            #     enabled: true
+            #     custom: true
+            #     spec:
+            #       httpGet:
+            #         path: /
+            #         port: *gameport
+            #       initialDelaySeconds: 0
+            #       periodSeconds: 10
+            #       timeoutSeconds: 1
+            #       failureThreshold: 3
+            #   readiness: *probes
+            #   startup:
+            #     enabled: true
+            #     spec:
+            #       failureThreshold: 30
+            #       periodSeconds: 10
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 500m
+              limits:
+                memory: 16Gi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        supplementalGroups: [44, 10000]
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: satisfactory
+        type: LoadBalancer
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_SATISFACTORY}"
+        ports:
+          query:
+            enabled: true
+            port: *queryport
+            protocol: UDP
+          beacon:
+            enabled: true
+            port: *beaconport
+            protocol: UDP
+          game:
+            enabled: true
+            port: *gameport
+            protocol: UDP
+          game-tcp:
+            enabled: true
+            port: *gameport
+            protocol: TCP
+    persistence:
+      config:
+        enabled: true
+        existingClaim: satisfactory-config
+        globalMounts:
+        - path: /config
+      gamedata:
+        existingClaim: satisfactory-data
+        globalMounts:
+        - path: /config/gamefiles
+      steamcmd:
+        type: emptyDir
+        globalMounts:
+        - path: /home/steam

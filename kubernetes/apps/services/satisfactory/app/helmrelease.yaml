@@ -29,51 +29,13 @@ spec:
         containers:
           app:
             image:
-              repository: wolveix/satisfactory-server
-              tag: v1.8.6
+              repository: ghcr.io/shamubernetes/satisfactory
+              tag: 15811013
+            envFrom:
+            - configMapRef:
+                name: satisfactory-config
             env:
               TZ: America/New_York
-              AUTOPAUSE: false # -- pause game when no player is connected
-              AUTOSAVEINTERVAL: 300 # -- autosave interval in seconds
-              AUTOSAVENUM: 5 # -- number of rotating autosave files
-              AUTOSAVEONDISCONNECT: true # -- autosave when last player disconnects
-              # CRASHREPORT: true # -- automatic crash reporting
-              # DEBUG: false # -- for debugging the server
-              # DISABLESEASONALEVENTS: false # -- disable the FICSMAS event (you miserable bastard)
-              LOG: false # -- disable Satisfactory log pruning
-              MAXOBJECTS: 2162688 # -- set the object limit for your server
-              MAXPLAYERS: 10 # -- set the player limit for your server
-              MAXTICKRATE: 30 # -- set the maximum sim tick rate for your server
-              PGID: 568 # -- set the group ID of the user the server will run as
-              PUID: 568 # -- set the user ID of the user the server will run as
-              ROOTLESS: true # -- run the container as a non-root user
-              SERVERBEACONPORT: &beaconport 15000 # -- set the game's beacon port
-              SERVERGAMEPORT: &gameport 7777 # -- set the game's port
-              # SERVERIP: 0.0.0.0    # -- set the game's ip (usually not needed)
-              SERVERQUERYPORT: &queryport 15777 # -- set the game's query port
-              SERVERSTREAMING: true # -- toggle whether the game utilizes asset streaming
-              SKIPUPDATE: false # -- avoid updating the game on container start/restart
-              # STEAMBETA: false # -- set experimental game version
-              TIMEOUT: 60 # -- set client timeout (in seconds)
-              # VMOVERRIDE: false # -- skips the CPU model check (should not ordinarily be used)
-            # probes: # TODO: Implement probes if possible
-            #   liveness: &probes
-            #     enabled: true
-            #     custom: true
-            #     spec:
-            #       httpGet:
-            #         path: /
-            #         port: *gameport
-            #       initialDelaySeconds: 0
-            #       periodSeconds: 10
-            #       timeoutSeconds: 1
-            #       failureThreshold: 3
-            #   readiness: *probes
-            #   startup:
-            #     enabled: true
-            #     spec:
-            #       failureThreshold: 30
-            #       periodSeconds: 10
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
@@ -101,19 +63,19 @@ spec:
         ports:
           query:
             enabled: true
-            port: *queryport
+            port: 15000
             protocol: UDP
           beacon:
             enabled: true
-            port: *beaconport
+            port: 15001
             protocol: UDP
           game:
             enabled: true
-            port: *gameport
+            port: 7777
             protocol: UDP
           game-tcp:
             enabled: true
-            port: *gameport
+            port: 7777
             protocol: TCP
     persistence:
       config:

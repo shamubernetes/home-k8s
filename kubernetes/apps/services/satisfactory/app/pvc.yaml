@@ -3,23 +3,10 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: satisfactory-config
+  name: satisfactory-save
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
       storage: 10Gi
-  storageClassName: ceph-block
-# yamllint disable rule:document-start
----
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/v1.30.2/persistentvolumeclaim-v1.json
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: satisfactory-data
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 50Gi
   storageClassName: ceph-block

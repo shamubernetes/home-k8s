@@ -80,14 +80,6 @@ spec:
     persistence:
       config:
         enabled: true
-        existingClaim: satisfactory-config
+        existingClaim: satisfactory-save
         globalMounts:
-        - path: /config
-      gamedata:
-        existingClaim: satisfactory-data
-        globalMounts:
-        - path: /config/gamefiles
-      steamcmd:
-        type: emptyDir
-        globalMounts:
-        - path: /home/steam
+        - path: /app/.config/Epic/FactoryGame/Saved/SaveGames

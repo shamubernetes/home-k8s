@@ -5,3 +5,9 @@ resources:
 - ./pvc.yaml
 - ./helmrelease.yaml
 - ../../../../templates/gatus/external
+configMapGenerator:
+- name: satisfactory-config
+  files:
+  - ./configs/config.yaml
+generatorOptions:
+  disableNameSuffixHash: true

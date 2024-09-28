@@ -2,6 +2,7 @@
 USER: steam
 STEAMCMDDIR: /app/steamcmd
 GAMECONFIGDIR: /config/gamefiles/FactoryGame/Saved
+GAMESAVESDIR: /app/.config/Epic/FactoryGame/Saved/SaveGames
 AUTOSAVENUMBER: 5
 MAXOBJECTS: 2162688
 MAXTICKRATE: 120

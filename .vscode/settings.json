@@ -41,16 +41,22 @@
     "repositories": "database",
     "rook-ceph": "dump",
     "terraforms": "terraform",
-    "vars": "other"
+    "vars": "other",
+    "controlplane": "controller"
   },
   "vs-kubernetes": {
     "vs-kubernetes.knownKubeconfigs": [
       "./kubeconfig"
     ],
-    "vs-kubernetes.kubeconfig": "./kubeconfig"
+    "vs-kubernetes.kubeconfig": "./kubernetes/kubeconfig"
   },
   "yaml.customTags": [
     "!secret scalar",
     "!env_var scalar"
   ],
+  "yaml.schemas": {
+    "file:///Users/kilian/.vscode/extensions/atlassian.atlascode-3.0.10/resources/schemas/pipelines-schema.json": "bitbucket-pipelines.yml",
+    // This just lets this file not have random errors from the autoloaded schema
+    "https://json.schemastore.org/yamllint.json": "talos/patches/controlplane/cluster.yaml"
+  },
 }

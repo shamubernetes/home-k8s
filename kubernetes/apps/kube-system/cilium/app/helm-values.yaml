@@ -1,9 +1,17 @@
 # trunk-ignore-all(trunk-yls/no-yls)
 autoDirectNodeRoutes: true
+bandwidthManager:
+  enabled: true
+  bbr: true
 bgpControlPlane:
   enabled: true
 bpf:
-  masquerade: false
+  lbExternalClusterIP: false
+  masquerade: true
+  tproxy: true
+  vlanBypass:
+  - 0
+  - 100
 cgroup:
   automount:
     enabled: false
@@ -15,27 +23,31 @@ cni:
   exclusive: false
 containerRuntime:
   integration: containerd
-# NOTE: devices might need to be set if you have more than one active NIC on your hosts
-# devices: eno+ eth+
 endpointRoutes:
   enabled: true
+endpointStatus:
+  enabled: true
+  status: policy
+envoy:
+  enabled: false
 hubble:
   enabled: false
 ipam:
   mode: kubernetes
-ipv4NativeRoutingCIDR: "10.69.0.0/16"
+ipv4NativeRoutingCIDR: 10.69.0.0/16
 k8sServiceHost: 127.0.0.1
 k8sServicePort: 7445
 kubeProxyReplacement: true
 kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
 l2announcements:
   enabled: true
+l7proxy:
+  enabled: true
 loadBalancer:
   algorithm: maglev
-  mode: snat
+  mode: dsr
 localRedirectPolicy: true
 operator:
-  replicas: 1
   rollOutPods: true
 rollOutCiliumPods: true
 routingMode: native

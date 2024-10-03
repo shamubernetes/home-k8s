@@ -21,37 +21,6 @@ spec:
     remediation:
       retries: 3
   values:
-    autoDirectNodeRoutes: true
-    bgpControlPlane:
-      enabled: true
-    bandwidthManager:
-      enabled: true
-      bbr: true
-    bpf:
-      lbExternalClusterIP: false
-      masquerade: true
-      tproxy: true
-      vlanBypass:
-      - 0
-      - 100
-    cgroup:
-      automount:
-        enabled: false
-      hostRoot: /sys/fs/cgroup
-    cluster:
-      id: 1
-      name: titans
-    cni:
-      exclusive: false
-    containerRuntime:
-      integration: containerd
-    # NOTE: devices might need to be set if you have more than one active NIC on your hosts
-    # devices: eno+ eth+
-    endpointRoutes:
-      enabled: true
-    endpointStatus:
-      enabled: true
-      status: policy
     hubble:
       enabled: true
       metrics:
@@ -67,8 +36,6 @@ spec:
           enabled: true
         dashboards:
           enabled: true
-          annotations:
-            grafana_folder: Cilium
       relay:
         enabled: true
         rollOutPods: true
@@ -80,36 +47,17 @@ spec:
         rollOutPods: true
         ingress:
           enabled: true
-          className: internal
           annotations:
-            external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
-          hosts:
-          - "hubble.${SECRET_DOMAIN}"
-    ipam:
-      mode: kubernetes
-    ipv4NativeRoutingCIDR: "${CLUSTER_INTERNAL_CIDR}"
-    k8sServiceHost: 127.0.0.1
-    k8sServicePort: 7445
-    kubeProxyReplacement: true
-    kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
-    l2announcements:
-      enabled: true
-    l7proxy:
-      enabled: true
-    loadBalancer:
-      algorithm: maglev
-      mode: dsr
-    localRedirectPolicy: true
+            external-dns.alpha.kubernetes.io/target: internal.devbu.io
+          className: internal
+          hosts: ["hubble.devbu.io"]
     operator:
-      rollOutPods: true
       prometheus:
         enabled: true
         serviceMonitor:
           enabled: true
       dashboards:
         enabled: true
-        annotations:
-          grafana_folder: Cilium
     prometheus:
       enabled: true
       serviceMonitor:
@@ -117,25 +65,3 @@ spec:
         trustCRDsExist: true
     dashboards:
       enabled: true
-      annotations:
-        grafana_folder: Cilium
-    rollOutCiliumPods: true
-    routingMode: native
-    securityContext:
-      capabilities:
-        ciliumAgent:
-        - CHOWN
-        - KILL
-        - NET_ADMIN
-        - NET_RAW
-        - IPC_LOCK
-        - SYS_ADMIN
-        - SYS_RESOURCE
-        - DAC_OVERRIDE
-        - FOWNER
-        - SETGID
-        - SETUID
-        cleanCiliumState:
-        - NET_ADMIN
-        - SYS_ADMIN
-        - SYS_RESOURCE

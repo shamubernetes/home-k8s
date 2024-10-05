@@ -10,3 +10,4 @@ resources:
 - ./recyclarr/ks.yaml
 - ./overseerr/ks.yaml
 - ./bazarr/ks.yaml
+- ./wizarr/ks.yaml

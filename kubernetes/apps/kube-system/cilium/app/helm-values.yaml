@@ -9,6 +9,9 @@ bpf:
   lbExternalClusterIP: false
   masquerade: true
   tproxy: true
+  vlanBypass:
+  - 0
+  - 100
 cgroup:
   automount:
     enabled: false
@@ -16,7 +19,10 @@ cgroup:
 cluster:
   id: 1
   name: titans
-devices: enp+
+cni:
+  exclusive: false
+containerRuntime:
+  integration: containerd
 enableRuntimeDeviceDetection: true
 endpointRoutes:
   enabled: true
@@ -24,7 +30,7 @@ endpointStatus:
   enabled: true
   status: policy
 envoy:
-  enabled: false
+  enabled: true
 hubble:
   enabled: false
 ipam:

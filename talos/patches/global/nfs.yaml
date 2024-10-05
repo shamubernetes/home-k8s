@@ -1,0 +1,15 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+machine:
+  files:
+  - path: /etc/nfsmount.conf
+    permissions: 420
+    op: overwrite
+    content: |
+      [ NFSMount_Global_Options ]
+      nfsvers=4.2
+      hard=True
+      noatime=True
+      nodiratime=True
+      rsize=131072
+      wsize=131072
+      nconnect=8

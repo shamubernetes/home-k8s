@@ -1,0 +1,7 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+cluster:
+  etcd:
+    extraArgs:
+      listen-metrics-urls: http://0.0.0.0:2381
+    advertisedSubnets:
+    - "10.100.47.0/24"

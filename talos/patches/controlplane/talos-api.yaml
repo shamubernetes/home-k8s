@@ -1,0 +1,7 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+machine:
+  features:
+    kubernetesTalosAPIAccess:
+      enabled: true
+      allowedRoles: ["os:admin"]
+      allowedKubernetesNamespaces: ["system-upgrade"]

@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/budimanjojo/talhelper/master/pkg/config/schemas/talconfig.json
+# renovate: datasource=docker depName=ghcr.io/siderolabs/installer
+talosVersion: v1.8.0
+# renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
+kubernetesVersion: v1.30.2
+
+clusterName: &cluster titans
+endpoint: https://10.100.47.10:6443
+clusterPodNets:
+- &clusterPodNet "10.69.0.0/16"
+clusterSvcNets:
+- &clusterSvcNet "10.96.0.0/16"
+additionalApiServerCertSans: &sans
+- &kubeVIP "10.100.47.10"
+- 127.0.0.1 # KubePrism
+- "k8s.thezoo.house"
+- "titans.thezoo.house"
+- "pantheon.thezoo.house"
+additionalMachineCertSans: *sans
+cniConfig:
+  name: none
+
+nodes:
+- hostname: "k8s-oceanus"
+  ipAddress: "10.100.47.35"
+  installDisk: "/dev/nvme0n1"
+  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  controlPlane: true
+  networkInterfaces:
+  - deviceSelector:
+      hardwareAddr: "58:47:ca:75:7a:24"
+    dhcp: false
+    addresses:
+    - "10.100.47.35/24"
+    mtu: 1500
+    routes:
+    - network: 0.0.0.0/0
+      gateway: &gateway "10.100.47.1"
+    vip:
+      ip: *kubeVIP
+- hostname: "k8s-tethys"
+  ipAddress: "10.100.47.48"
+  installDisk: "/dev/nvme0n1"
+  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  controlPlane: true
+  networkInterfaces:
+  - deviceSelector:
+      hardwareAddr: "58:47:ca:75:52:38"
+    dhcp: false
+    addresses:
+    - "10.100.47.48/24"
+    mtu: 1500
+    routes:
+    - network: 0.0.0.0/0
+      gateway: *gateway
+    vip:
+      ip: *kubeVIP
+- hostname: "k8s-coeus"
+  ipAddress: "10.100.47.49"
+  installDisk: "/dev/nvme0n1"
+  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  controlPlane: true
+  networkInterfaces:
+  - deviceSelector:
+      hardwareAddr: "58:47:ca:75:7a:32"
+    dhcp: false
+    addresses:
+    - "10.100.47.49/24"
+    mtu: 1500
+    routes:
+    - network: 0.0.0.0/0
+      gateway: *gateway
+    vip:
+      ip: *kubeVIP
+- hostname: "k8s-chronos"
+  ipAddress: "10.100.47.50"
+  installDisk: "/dev/nvme0n1"
+  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  controlPlane: false
+  networkInterfaces:
+  - deviceSelector:
+      hardwareAddr: "18:31:bf:e0:3d:1e"
+    dhcp: false
+    addresses:
+    - "10.100.47.50/24"
+    mtu: 1500
+    routes:
+    - network: 0.0.0.0/0
+      gateway: *gateway
+- hostname: "k8s-rhea"
+  ipAddress: "10.100.47.51"
+  installDisk: "/dev/sdb"
+  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  controlPlane: false
+  networkInterfaces:
+  - deviceSelector:
+      hardwareAddr: "d8:bb:c1:1a:a0:85"
+    dhcp: false
+    addresses:
+    - "10.100.47.51/24"
+    mtu: 1500
+    routes:
+    - network: 0.0.0.0/0
+      gateway: *gateway
+
+patches:
+- "@./patches/global/containerd.yaml"
+- "@./patches/global/nfs.yaml"
+- "@./patches/global/search-domain.yaml"
+- "@./patches/global/kubelet.yaml"
+- "@./patches/global/cluster-discovery.yaml"
+- "@./patches/global/nameserver.yaml"
+- "@./patches/global/ntp.yaml"
+- "@./patches/global/sysctl.yaml"
+- "@./patches/global/openebs.yaml"
+
+controlPlane:
+  patches:
+  - "@./patches/controlplane/cluster.yaml"
+  - "@./patches/controlplane/etcd.yaml"
+  - "@./patches/controlplane/admission.yaml"
+  - "@./patches/controlplane/talos-api.yaml"

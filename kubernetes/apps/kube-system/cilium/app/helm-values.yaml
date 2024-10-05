@@ -21,8 +21,6 @@ cluster:
   name: titans
 cni:
   exclusive: false
-containerRuntime:
-  integration: containerd
 enableRuntimeDeviceDetection: true
 endpointRoutes:
   enabled: true

@@ -26,9 +26,6 @@ containerRuntime:
 enableRuntimeDeviceDetection: true
 endpointRoutes:
   enabled: true
-endpointStatus:
-  enabled: true
-  status: policy
 envoy:
   enabled: true
 hubble:

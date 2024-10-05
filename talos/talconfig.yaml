@@ -24,7 +24,7 @@ nodes:
 - hostname: "k8s-oceanus"
   ipAddress: "10.100.47.35"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
   controlPlane: true
   networkInterfaces:
   - deviceSelector:
@@ -41,7 +41,7 @@ nodes:
 - hostname: "k8s-tethys"
   ipAddress: "10.100.47.48"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
   controlPlane: true
   networkInterfaces:
   - deviceSelector:
@@ -58,7 +58,7 @@ nodes:
 - hostname: "k8s-coeus"
   ipAddress: "10.100.47.49"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
   controlPlane: true
   networkInterfaces:
   - deviceSelector:
@@ -75,7 +75,7 @@ nodes:
 - hostname: "k8s-chronos"
   ipAddress: "10.100.47.50"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
   controlPlane: false
   networkInterfaces:
   - deviceSelector:
@@ -90,7 +90,7 @@ nodes:
 - hostname: "k8s-rhea"
   ipAddress: "10.100.47.51"
   installDisk: "/dev/sdb"
-  talosImageURL: factory.talos.dev/installer/34c7eb2489a74735132dd60e5b7b010daa4e3535a03f5c69da96f64a4dbdcca6
+  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
   controlPlane: false
   networkInterfaces:
   - deviceSelector:

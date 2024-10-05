@@ -1,0 +1,5 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+machine:
+  network:
+    nameservers:
+    - 10.100.47.1

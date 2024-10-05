@@ -5,9 +5,11 @@ sops = "3.9.0"
 age = "1.2.0"
 task = "3.38.0"
 flux2 = "2.3.0"
+talhelper = "latest"
+talosctl = "1.8.0"
 
 [env]
 KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"
 SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
 K8S_AUTH_KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"
-TALOSCONFIG = "{{config_root}}/kubernetes/bootstrap/talos/clusterconfig/talosconfig"
+TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"

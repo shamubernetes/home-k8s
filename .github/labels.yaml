@@ -1,6 +1,5 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/shamubernetes/json-schemas/main/endbug.labelsync.schema.json
 # Area
-- {name: "area/bootstrap", color: "0e8a16"}
 - {name: "area/ci", color: "0e8a16"}
 - {name: "area/docs", color: "0e8a16"}
 - {name: "area/k8s", color: "0e8a16"}
@@ -15,6 +14,7 @@
 - {name: "renovate/dash", color: "027fa0"}
 - {name: "renovate/helm", color: "027fa0"}
 - {name: "renovate/pip", color: "027fa0"}
+- {name: "renovate/mise", color: "027fa0"}
 # Semantic Type
 - {name: "type/pin", color: "ffec19"}
 - {name: "type/digest", color: "ffec19"}

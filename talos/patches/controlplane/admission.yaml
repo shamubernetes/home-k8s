@@ -1,0 +1,3 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+- op: remove
+  path: /cluster/apiServer/admissionControl

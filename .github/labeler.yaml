@@ -1,15 +1,12 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/shamubernetes/json-schemas/main/actions.labeler.schema.json
-area/bootstrap:
+area/ci:
 - changed-files:
-  - any-glob-to-any-file: bootstrap/**/*
+  - any-glob-to-any-file: .github/**/*
 area/docs:
 - changed-files:
   - any-glob-to-any-file:
     - "docs/**/*"
     - "README.md"
-area/ci:
-- changed-files:
-  - any-glob-to-any-file: .github/**/*
 area/k8s:
 - changed-files:
   - any-glob-to-any-file: kubernetes/**/*
@@ -20,3 +17,6 @@ area/task:
 area/trunk:
 - changed-files:
   - any-glob-to-any-file: .trunk/**/*
+distro/talos:
+- changed-files:
+  - any-glob-to-any-file: talos/**/*

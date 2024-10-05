@@ -20,6 +20,9 @@ spec:
     cleanupOnFail: true
     remediation:
       retries: 3
+  valuesFrom:
+  - kind: ConfigMap
+    name: cilium-helm-values
   values:
     hubble:
       enabled: true
@@ -48,9 +51,9 @@ spec:
         ingress:
           enabled: true
           annotations:
-            external-dns.alpha.kubernetes.io/target: internal.devbu.io
+            external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
           className: internal
-          hosts: ["hubble.devbu.io"]
+          hosts: ["hubble.${SECRET_DOMAIN}"]
     operator:
       prometheus:
         enabled: true

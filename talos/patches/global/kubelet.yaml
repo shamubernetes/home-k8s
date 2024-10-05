@@ -1,0 +1,7 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+machine:
+  kubelet:
+    extraArgs:
+      rotate-server-certificates: true
+    nodeIP:
+      validSubnets: ["10.100.47.0/24"]

@@ -1,0 +1,5 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+machine:
+  time:
+    disabled: false
+    servers: ["time.cloudflare.com"]

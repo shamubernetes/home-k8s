@@ -28,6 +28,9 @@
     "./kubernetes/**/*.sops.toml": "plaintext",
     ".TODO": "markdown"
   },
+  "material-icon-theme.files.associations": {
+    "helmfile.yaml": "helm",
+  },
   "material-icon-theme.folders.associations": {
     ".taskfiles": "utils",
     "bootstrap": "import",
@@ -42,8 +45,17 @@
     "rook-ceph": "dump",
     "terraforms": "terraform",
     "vars": "other",
-    "controlplane": "controller"
+    "controlplane": "controller",
+    "clusterconfig": "clusterconfig"
   },
+  "material-icon-theme.folders.customClones": [
+    {
+      "name": "clusterconfig",
+      "base": "config",
+      "color": "blue-700",
+      "folderNames": [""]
+    },
+  ],
   "vs-kubernetes": {
     "vs-kubernetes.knownKubeconfigs": [
       "./kubeconfig"
@@ -55,7 +67,6 @@
     "!env_var scalar"
   ],
   "yaml.schemas": {
-    "file:///Users/kilian/.vscode/extensions/atlassian.atlascode-3.0.10/resources/schemas/pipelines-schema.json": "bitbucket-pipelines.yml",
     // This just lets this file not have random errors from the autoloaded schema
     "https://json.schemastore.org/yamllint.json": "talos/patches/controlplane/cluster.yaml"
   },

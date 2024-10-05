@@ -24,7 +24,7 @@ nodes:
 - hostname: "k8s-oceanus"
   ipAddress: "10.100.47.35"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
+  talosImageURL: &image factory.talos.dev/installer/249ad1b290b67328f476b9066d5c4e95fcf73dfa5f610e3e24e3f903766a7ce1
   controlPlane: true
   networkInterfaces:
   - deviceSelector:
@@ -41,7 +41,7 @@ nodes:
 - hostname: "k8s-tethys"
   ipAddress: "10.100.47.48"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
+  talosImageURL: *image
   controlPlane: true
   networkInterfaces:
   - deviceSelector:
@@ -58,7 +58,7 @@ nodes:
 - hostname: "k8s-coeus"
   ipAddress: "10.100.47.49"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
+  talosImageURL: *image
   controlPlane: true
   networkInterfaces:
   - deviceSelector:
@@ -75,7 +75,7 @@ nodes:
 - hostname: "k8s-chronos"
   ipAddress: "10.100.47.50"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
+  talosImageURL: *image
   controlPlane: false
   networkInterfaces:
   - deviceSelector:
@@ -90,7 +90,7 @@ nodes:
 - hostname: "k8s-rhea"
   ipAddress: "10.100.47.51"
   installDisk: "/dev/sdb"
-  talosImageURL: factory.talos.dev/installer/fb78835e6ce40eedfcea03c6442a72b386b2094edb2edb819933fda24758a4e2
+  talosImageURL: *image
   controlPlane: false
   networkInterfaces:
   - deviceSelector:
@@ -106,13 +106,13 @@ nodes:
 patches:
 - "@./patches/global/containerd.yaml"
 - "@./patches/global/nfs.yaml"
-- "@./patches/global/search-domain.yaml"
 - "@./patches/global/kubelet.yaml"
 - "@./patches/global/cluster-discovery.yaml"
 - "@./patches/global/nameserver.yaml"
 - "@./patches/global/ntp.yaml"
 - "@./patches/global/sysctl.yaml"
 - "@./patches/global/openebs.yaml"
+- "@./patches/global/dns-resolution.yaml"
 
 controlPlane:
   patches:

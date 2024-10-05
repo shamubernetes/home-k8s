@@ -1,0 +1,6 @@
+# trunk-ignore-all(trunk-yls/no-yls)
+machine:
+  features:
+    hostDNS:
+      enabled: true
+      forwardKubeDNSToHost: false

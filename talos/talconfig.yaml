@@ -104,20 +104,21 @@ nodes:
       gateway: *gateway
 
 patches:
+- "@./patches/global/cluster-discovery.yaml"
 - "@./patches/global/containerd.yaml"
 - "@./patches/global/coredns.yaml"
-- "@./patches/global/nfs.yaml"
-- "@./patches/global/kubelet.yaml"
-- "@./patches/global/cluster-discovery.yaml"
-- "@./patches/global/nameserver.yaml"
-- "@./patches/global/ntp.yaml"
-- "@./patches/global/sysctl.yaml"
-- "@./patches/global/openebs.yaml"
 - "@./patches/global/dns-resolution.yaml"
+- "@./patches/global/kubelet.yaml"
+- "@./patches/global/nameserver.yaml"
+- "@./patches/global/nfs.yaml"
+- "@./patches/global/nodeLabels.yaml"
+- "@./patches/global/ntp.yaml"
+- "@./patches/global/openebs.yaml"
+- "@./patches/global/sysctl.yaml"
 
 controlPlane:
   patches:
+  - "@./patches/controlplane/admission.yaml"
   - "@./patches/controlplane/cluster.yaml"
   - "@./patches/controlplane/etcd.yaml"
-  - "@./patches/controlplane/admission.yaml"
   - "@./patches/controlplane/talos-api.yaml"

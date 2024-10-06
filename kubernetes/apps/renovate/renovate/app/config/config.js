@@ -31,7 +31,7 @@ module.exports = {
   dependencyDashboardLabels: ["dash"],
   dependencyDashboardOSVVulnerabilitySummary: "unresolved",
   dependencyDashboardTitle: "Update Dashboard 🐳",
-  enabled: "true",
+  enabled: true,
   gitAuthor: "ShamuBot <148669015+shamubot[bot]@users.noreply.github.com>",
   pinDigests: true,
   prHourlyLimit: 0,

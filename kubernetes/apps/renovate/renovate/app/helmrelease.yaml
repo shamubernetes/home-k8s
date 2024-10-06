@@ -34,14 +34,23 @@ spec:
       renovate:
         annotations:
           reloader.stakater.com/auto: 'true'
+        initContainers:
+          init-db:
+            image:
+              repository: ghcr.io/onedr0p/postgres-init
+              tag: 16
+            envFrom: &envFrom
+            - secretRef:
+                name: &renovate-secret renovate-secret
         containers:
           app:
+
             image:
               repository: ghcr.io/mend/renovate-ce
               tag: '8.3.1-full@sha256:b9a88bd1b2ec90bae02b5383ce841d8524c36b17b673f46054d9d8eb9d1e2304'
             envFrom:
             - secretRef:
-                name: &renovate-secret renovate-secret
+                name: *renovate-secret
             env:
               TZ: ${TIMEZONE}
               MEND_RNV_SERVER_PORT: &port 8080

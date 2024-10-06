@@ -24,11 +24,11 @@ spec:
   dependsOn:
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  valuesFrom:
-  - targetPath: controllers.renovate.containers.app.env.RENOVATE_REPOSITORY_CACHE_TYPE
-    kind: ConfigMap
-    name: &cephBucket loki-bucket
-    valuesKey: BUCKET_NAME
+  # valuesFrom:
+  # - targetPath: controllers.renovate.containers.app.env.RENOVATE_REPOSITORY_CACHE_TYPE
+  #   kind: ConfigMap
+  #   name: &cephBucket renovate-bucket
+  #   valuesKey: BUCKET_NAME
   values:
     controllers:
       renovate:

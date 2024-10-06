@@ -38,19 +38,17 @@ spec:
           init-db:
             image:
               repository: ghcr.io/onedr0p/postgres-init
-              tag: 16
+              tag: 16@sha256:9cc2856e3bd5e6100dca9123aae7b6dc9c2f8b7d5a0eab00aad0c2fed5355c93
             envFrom: &envFrom
             - secretRef:
-                name: &renovate-secret renovate-secret
+                name: renovate-secret
         containers:
           app:
 
             image:
               repository: ghcr.io/mend/renovate-ce
               tag: '8.3.1-full@sha256:b9a88bd1b2ec90bae02b5383ce841d8524c36b17b673f46054d9d8eb9d1e2304'
-            envFrom:
-            - secretRef:
-                name: *renovate-secret
+            envFrom: *envFrom
             env:
               TZ: ${TIMEZONE}
               MEND_RNV_SERVER_PORT: &port 8080

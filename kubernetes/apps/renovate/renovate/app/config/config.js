@@ -17,7 +17,6 @@ module.exports = {
   onboardingPrTitle: "Configure ShamuBot",
   onboardingRebaseCheckbox: true,
   persistRepoData: true,
-  platform: "github",
   redisPrefix: "shamubot_",
   repositoryCache: "enabled",
 

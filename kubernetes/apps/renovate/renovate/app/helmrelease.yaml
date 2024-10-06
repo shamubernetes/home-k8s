@@ -1,0 +1,113 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: renovate
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.4.0
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  valuesFrom:
+  - targetPath: controllers.renovate.containers.app.env.RENOVATE_REPOSITORY_CACHE_TYPE
+    kind: ConfigMap
+    name: &cephBucket loki-bucket
+    valuesKey: BUCKET_NAME
+  values:
+    controllers:
+      renovate:
+        annotations:
+          reloader.stakater.com/auto: 'true'
+        containers:
+          app:
+            image:
+              repository: ghcr.io/mend/renovate-ce
+              tag: '8.3.1-full@sha256:b9a88bd1b2ec90bae02b5383ce841d8524c36b17b673f46054d9d8eb9d1e2304'
+            envFrom:
+            - secretRef:
+                name: &renovate-secret renovate-secret
+            env:
+              TZ: ${TIMEZONE}
+              MEND_RNV_SERVER_PORT: &port 8080
+              RENOVATE_REPOSITORY_CACHE: 'enabled'
+              # TODO: Get into ceph-bucket
+              # RENOVATE_REPOSITORY_CACHE_TYPE: 's3://renovate/cache/'
+              # RENOVATE_X_S3_PATH_STYLE: 'true'
+              RENOVATE_ONBOARDING_CONFIG:
+                configMapKeyRef:
+                  name: &renovate-config renovate-config
+                  key: onboardingConfig
+            probes:
+              liveness: &probe
+                type: HTTP
+                path: /health
+              readiness: *probe
+              startup: *probe
+            resources:
+              requests:
+                cpu: 100m
+                memory: 1Gi
+              limits:
+                cpu: 1000m
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        supplementalGroups: [44, 10000]
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: renovate
+        ports:
+          http:
+            port: *port
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
+          # nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+        className: internal
+        hosts:
+        - host: "{{ .Release.Name }}.${SECRET_DOMAIN}"
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    persistence:
+      config:
+        enabled: true
+        type: configMap
+        name: *renovate-config
+        globalMounts:
+        - path: /usr/src/app/config.js
+          readOnly: true
+          subPath: config.js
+      cache-persistence:
+        enabled: true
+        type: emptyDir
+        sizeLimit: 4Gi
+        globalMounts:
+        - path: '/tmp/renovate'
+      tmp:
+        enabled: true
+        type: emptyDir

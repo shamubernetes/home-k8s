@@ -27,8 +27,9 @@
       "groupName": "Actions Runner Controller",
       "matchPackagePatterns": ["gha-runner-scale-set"],
       "matchDatasources": ["docker", "helm"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -41,8 +42,9 @@
         "cilium",
       ],
       "matchDatasources": ["helm", "docker"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group",
+        "commitMessageTopic": "{{{groupName}}}",
       },
       "separateMinorPatch": true,
     },
@@ -51,8 +53,9 @@
       "groupName": "Dragonfly Operator",
       "matchPackagePatterns": ["dragonfly(?:db)?.operator"],
       "matchDatasources": ["docker", "github-releases"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -61,9 +64,10 @@
       "groupName": "Flux",
       "matchPackagePatterns": ["fluxcd"],
       "matchDatasources": ["docker", "github-tags"],
+      "semanticCommitScope": "group",
       "versioning": "semver",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -72,8 +76,9 @@
       "groupName": "Intel-Device-Plugins",
       "matchPackagePatterns": ["intel-device-plugins"],
       "matchDatasources": ["helm"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -82,8 +87,9 @@
       "groupName": "Rook-Ceph",
       "matchPackagePatterns": ["rook.ceph"],
       "matchDatasources": ["docker", "helm"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -92,8 +98,9 @@
       "groupName": "System Upgrade Controller",
       "matchPackagePatterns": ["system-upgrade-controller"],
       "matchDatasources": ["docker", "github-releases"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -105,8 +112,9 @@
         "siderolabs/installer"
       ],
       "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group"
+        "commitMessageTopic": "{{{groupName}}}"
       },
       "separateMinorPatch": true
     },
@@ -116,8 +124,9 @@
       "matchPackagePatterns": ["thanos"],
       "matchDatasources": ["docker", "github-releases", "helm"],
       "matchUpdateTypes": ["minor", "patch"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group",
+        "commitMessageTopic": "{{{groupName}}}",
       },
       "separateMinorPatch": false,
     },
@@ -127,8 +136,9 @@
       "matchPackagePatterns": ["vector"],
       "matchDatasources": ["docker", "github-releases", "helm"],
       "matchUpdateTypes": ["minor", "patch"],
+      "semanticCommitScope": "group",
       "group": {
-        "commitMessageTopic": "{{{groupName}}} group",
+        "commitMessageTopic": "{{{groupName}}}",
       },
       "separateMinorPatch": false,
     },

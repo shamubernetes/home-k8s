@@ -192,5 +192,12 @@
       "matchDepNames": ["reloader"],
       "ignoreTests": false,
     },
+    // Frequent updates are annoying
+    {
+      "description": ["Custom schedule for frequently updated packages"],
+      "matchDataSources": ["docker", "helm"],
+      "matchPackagePatterns": ["postgresql", "reloader"],
+      "schedule": ["on the first and fifteenth"]
+    },
   ],
 }

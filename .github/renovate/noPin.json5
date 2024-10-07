@@ -6,10 +6,5 @@
       matchDepNames: ["spegel"],
       pinDigests: false
     },
-    {
-      matchManagers: ["mise"],
-      matchDepNames: ["flux2"],
-      pinDigests: false
-    },
   ],
 }

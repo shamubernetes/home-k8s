@@ -2,6 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   extends: [
     "github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5",
-    "github>shamubernetes/home-k8s//.github/renovate/noPin.json5"
+    "github>shamubernetes/home-k8s//.github/renovate/noPin.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/customDatasources.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/customManagers.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
   ]
 }

@@ -1,0 +1,175 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    // Allowed Versions
+    {
+      "description": "PostgreSQL 16",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["postgresql"],
+      "allowedVersions": "<17"
+    },
+    // Versions
+    {
+      "description": ["Custom versioning for http-https-echo"],
+      "matchDatasources": ["docker"],
+      "versioning": "regex:^(?<major>\\d+)$",
+      "matchPackagePatterns": ["mendhak/http-https-echo"],
+    },
+    {
+      "description": ["Loose versioning for plex"],
+      "matchDatasources": ["docker"],
+      "versioning": "loose",
+      "matchPackagePatterns": ["plex"]
+    },
+    // Groups
+    {
+      "description": ["Actions Runner Controller Group"],
+      "groupName": "Actions Runner Controller",
+      "matchPackagePatterns": ["gha-runner-scale-set"],
+      "matchDatasources": ["docker", "helm"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Cilium image and chart",
+      "groupName": "cilium",
+      "matchDepNames": [
+        "quay.io/cilium/cilium",
+        "quay.io/cilium/operator-generic",
+        "cilium",
+      ],
+      "matchDatasources": ["helm", "docker"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group",
+      },
+      "separateMinorPatch": true,
+    },
+    {
+      "description": ["Dragonfly Operator Group"],
+      "groupName": "Dragonfly Operator",
+      "matchPackagePatterns": ["dragonfly(?:db)?.operator"],
+      "matchDatasources": ["docker", "github-releases"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": ["Flux Group"],
+      "groupName": "Flux",
+      "matchPackagePatterns": ["fluxcd"],
+      "matchDatasources": ["docker", "github-tags"],
+      "versioning": "semver",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": ["Intel Device Plugins Group"],
+      "groupName": "Intel-Device-Plugins",
+      "matchPackagePatterns": ["intel-device-plugins"],
+      "matchDatasources": ["helm"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": ["Rook-Ceph Group"],
+      "groupName": "Rook-Ceph",
+      "matchPackagePatterns": ["rook.ceph"],
+      "matchDatasources": ["docker", "helm"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": ["System Upgrade Controller Group"],
+      "groupName": "System Upgrade Controller",
+      "matchPackagePatterns": ["system-upgrade-controller"],
+      "matchDatasources": ["docker", "github-releases"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": ["Talos Group"],
+      "groupName": "Talos",
+      "matchPackagePatterns": [
+        "siderolabs/talosctl",
+        "siderolabs/installer"
+      ],
+      "matchDatasources": ["docker"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Thanos Group - mismatched versions",
+      "groupName": "Thanos",
+      "matchPackagePatterns": ["thanos"],
+      "matchDatasources": ["docker", "github-releases", "helm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group",
+      },
+      "separateMinorPatch": false,
+    },
+    {
+      "description": "Vector Group - mismatched versions",
+      "groupName": "Vector",
+      "matchPackagePatterns": ["vector"],
+      "matchDatasources": ["docker", "github-releases", "helm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "group": {
+        "commitMessageTopic": "{{{groupName}}} group",
+      },
+      "separateMinorPatch": false,
+    },
+    // Auto merge
+    {
+      "description": ["Auto-merge container patches and digests updates for trusted containers"],
+      "matchDatasources": ["docker"],
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+      "matchUpdateTypes": ["patch", "digest"],
+      "matchPackagePatterns": ["ghcr.io/bjw-s", "ghcr.io/onedr0p", "ghcr.io/tautulli/tautulli"],
+    },
+    {
+      "matchDatasources": ["custom.grafana-dashboards"],
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+      "matchUpdateTypes": ["major"],
+      "ignoreTests": true
+    },
+    {
+      "description": "Auto merge KPS minors and patches",
+      "matchDatasources": ["helm", "docker"],
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchPackagePatterns": ["kube-prometheus-stack"],
+      "ignoreTests": false,
+    },
+    {
+      "description": "Auto merge reloader minors and patches",
+      "matchDatasources": ["helm", "docker"],
+      "automerge": true,
+      "matchUpdateTypes": ["patch"],
+      "assigneesFromCodeOwners": false,
+      "reviewers": [],
+      "automergeType": "pr",
+      "matchDepNames": ["reloader"],
+      "ignoreTests": false,
+    },
+  ],
+}

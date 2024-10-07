@@ -7,7 +7,7 @@
       pinDigests: false
     },
     {
-      matchDatasources: ["mise"],
+      matchManagers: ["mise"],
       matchDepNames: ["flux2"],
       pinDigests: false
     },

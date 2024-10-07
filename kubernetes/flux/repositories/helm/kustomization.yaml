@@ -14,7 +14,6 @@ resources:
 - ./grafana.yaml
 - ./ingress-nginx.yaml
 - ./jetstack.yaml
-- ./k8s-gateway.yaml
 - ./metrics-server.yaml
 - ./node-feature-discovery.yaml
 - ./onepassword.yaml

@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   extends: [
-    "github>shamubernetes/home-ops:.github/renovate/fileMatch.json5"
+    "github>shamubernetes/home-ops:.github/renovate/fileMatch.json5",
     "github>shamubernetes/home-ops:.github/renovate/noPin.json5"
   ]
 }

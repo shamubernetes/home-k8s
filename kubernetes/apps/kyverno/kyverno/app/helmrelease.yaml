@@ -1,0 +1,131 @@
+# yaml-language-server: $schema=https://github.com/fluxcd-community/flux2-schemas/raw/main/helmrelease-helm-v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kyverno
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: kyverno
+      version: 3.2.7
+      sourceRef:
+        kind: HelmRepository
+        name: kyverno
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    crds:
+      install: true
+    grafana:
+      enabled: true
+      annotations:
+        grafana_folder: Infrastructure
+    backgroundController:
+      replicas: 2
+      serviceMonitor:
+        enabled: true
+      rbac:
+        clusterRole:
+          extraResources:
+          - apiGroups:
+            - ""
+            resources:
+            - pods
+            verbs:
+            - create
+            - update
+            - patch
+            - delete
+            - get
+            - list
+      nodeAffinity: &nodeAffinity
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+      tolerations: &tolerations
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      topologySpreadConstraints:
+      - &contraint maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: &key kyverno-background
+            app.kubernetes.io/component: *key
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 192Mi
+    cleanupController:
+      replicas: 2
+      serviceMonitor:
+        enabled: true
+      nodeAffinity: *nodeAffinity
+      tolerations: *tolerations
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: &key kyverno-cleanup
+            app.kubernetes.io/component: *key
+    reportsController:
+      replicas: 2
+      serviceMonitor:
+        enabled: true
+      nodeAffinity: *nodeAffinity
+      tolerations: *tolerations
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: &key kyverno-reports
+            app.kubernetes.io/component: *key
+    admissionController:
+      replicas: 3
+      serviceMonitor:
+        enabled: true
+      rbac:
+        clusterRole:
+          extraResources:
+          - apiGroups:
+            - ""
+            resources:
+            - pods
+            verbs:
+            - create
+            - update
+            - delete
+      container:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 384Mi
+          limits:
+            memory: 512Mi
+      nodeAffinity: *nodeAffinity
+      tolerations: *tolerations
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: &key kyverno-admission
+            app.kubernetes.io/component: *key

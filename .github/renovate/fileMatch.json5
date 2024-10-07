@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  pip_requirements: {
+    fileMatch: [
+      "(^|/)[\\w-]*requirements(-\\w+)?\\.(txt|pip)(?:\\.j2)?$"
+    ],
+  },
+  kustomize: {
+    fileMatch: [
+      "(^|/)kustomization\\.ya?ml(?:\\.j2)?$"
+    ],
+  },
+  kubernetes: {
+    fileMatch: [
+      "(^|/)\\.taskfiles/.+\\.ya?ml(?:\\.j2)?$",
+      "(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$"
+    ],
+  },
+  helm-values: {
+    fileMatch: [
+      "(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$"
+    ],
+  },
+}

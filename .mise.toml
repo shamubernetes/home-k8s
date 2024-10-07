@@ -1,7 +1,7 @@
 [tools]
 trunk = "1.22.3"
 kubectl = "1.31.1"
-sops = "3.9.0"
+sops = "3.9.1"
 age = "1.2.0"
 task = "3.38.0"
 flux2 = "2.4.0"

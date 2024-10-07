@@ -21,4 +21,9 @@
       "(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$"
     ],
   },
+  "flux": {
+    "fileMatch": [
+      "(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$"
+    ]
+  },
 }

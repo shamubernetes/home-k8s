@@ -406,7 +406,6 @@ extracted_values.yaml
 *.classpath
 *.settings
 .metadata
-bin/
 tmp/
 *.tmp
 *.bak
@@ -447,7 +446,6 @@ local.properties
 ##################################################
 
 .Python
-[Bb]in
 [Ii]nclude
 [Ll]ib
 [Ll]ib64
@@ -922,25 +920,41 @@ cython_debug/
 ##                                              ##
 ##################################################
 
-trunk/*out
-trunk/*logs
-trunk/*actions
-trunk/*notifications
-trunk/*tools
-trunk/plugins
-trunk/user_trunk.yaml
-trunk/user.yaml
-trunk/tmp
+.trunk/
+.trunk/plugins/
+!.trunk/config/
+!.trunk/trunk.yaml
 
 ##################################################
 ##                                              ##
-##                     TODO                     ##
+##                     Todo                     ##
 ##                                              ##
 ##################################################
 
-.TODO*
-*.TODO/
+# Ignore TODO folder
+.TODO/
 
+# Ignore TODO files
+*.TODO
+
+##################################################
+##                                              ##
+##                   Ansible                    ##
+##                                              ##
+##################################################
+
+!ansible/logs/
+ansible/logs/*
+!ansible/logs/.gitkeep
+ansible/collections/*
+!ansible/collections/.gitkeep
+ansible/facts/*
+!ansible/facts/.gitkeep
+!ansible/tmp/
+ansible/tmp/*
+!ansible/tmp/.gitkeep
+ansible/galaxy_cache/*
+!ansible/galaxy_cache/.gitkeep
 
 ##################################################
 ##                                              ##

@@ -20,7 +20,7 @@ metadata:
 spec:
   background: false
   rules:
-  - name: add-default-requests
+  - name: default-pod-resources
     match:
       any:
       - resources:

@@ -9,7 +9,7 @@ module.exports = {
   baseDir: "/tmp/renovate",
   inheritConfig: true,
   inheritConfigFileName: "renovate.json5",
-  inheritConfigRepoName: "renovate-config",
+  inheritConfigRepoName: "{{parentOrg}}/renovate-config",
   onboarding: true,
   onboardingBranch: "shamubot/configure",
   onboardingConfigFileName: ".github/renovate.json5",

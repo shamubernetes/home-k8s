@@ -46,7 +46,6 @@ spec:
             - -c
             args:
             - |
-              python3 kometa.py --run --read-only-config --run-libraries "Anime"
               python3 kometa.py --run --read-only-config --run-libraries "Movies"
             env:
               TZ: *timezone

@@ -46,8 +46,7 @@ spec:
             - -c
             args:
             - |
-              python3 kometa.py --run --read-only-config --run-libraries "Movies";
-              python3 kometa.py --run --read-only-config --run-libraries "TV Shows";
+              python3 kometa.py --run --read-only-config --run-libraries "Anime"
             env:
               TZ: *timeZone
             envFrom:
@@ -65,6 +64,10 @@ spec:
               capabilities:
                 drop:
                 - ALL
+            lifecycle:
+              postStart:
+                exec:
+                  command: ["/bin/bash", "-c", "mkdir -p /config"]
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true

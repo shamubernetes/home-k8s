@@ -9,6 +9,10 @@
     {
       matchDepNames: ["ghcr.io/fluxcd/flux-manifests"],
       pinDigests: false
-    }
+    },
+    {
+      matchDepNames: ["gha-runner-*"],
+      pinDigests: false
+    },
   ],
 }

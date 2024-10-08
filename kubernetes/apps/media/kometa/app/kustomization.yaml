@@ -9,6 +9,6 @@ resources:
 configMapGenerator:
 - name: kometa-configmap
   files:
-  - ./configs/config.yml
+  - ./configs/config.yaml
 generatorOptions:
   disableNameSuffixHash: true

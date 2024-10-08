@@ -31,8 +31,8 @@ spec:
         annotations:
           reloader.stakater.com/auto: "true"
         cronjob:
-          schedule: "@daily"
-          timeZone: &timeZone ${TIMEZONE}
+          schedule: "* * * */10 *"
+          timeZone: &timezone ${TIMEZONE}
           concurrencyPolicy: Forbid
           successfulJobsHistory: 1
           failedJobsHistory: 1
@@ -48,7 +48,8 @@ spec:
             - |
               python3 kometa.py --run --read-only-config --run-libraries "Anime"
             env:
-              TZ: *timeZone
+              TZ: *timezone
+              KOMETA_CONFIG: /config/config.yaml
             envFrom:
             - secretRef:
                 name: kometa-secret
@@ -76,14 +77,21 @@ spec:
         fsGroup: 568
         fsGroupChangePolicy: OnRootMismatch
     persistence:
+      assets:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 75Gi
+        storageClass: ceph-block
+        globalMounts:
+        - path: /config/assets
       config:
         existingClaim: *app
       config-file:
         type: configMap
         name: kometa-configmap
         globalMounts:
-        - path: /config/config.yml
-          subPath: config.yml
+        - path: /config/config.yaml
+          subPath: config.yaml
           readOnly: true
       logs:
         type: emptyDir

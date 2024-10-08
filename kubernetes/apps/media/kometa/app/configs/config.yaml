@@ -5,6 +5,12 @@ libraries:
     - default: basic
     - default: anilist
     sonarr_folder: /media/Anime
+  Movies:
+    collection_files:
+    - default: basic
+    - default: imdb
+    overlay_files:
+    - default: ribbon
 
 settings:
   cache: true

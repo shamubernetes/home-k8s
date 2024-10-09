@@ -5,15 +5,28 @@ libraries:
     - default: basic
     - default: imdb
     overlay_files:
+    - default: runtimes
+      template_variables:
+        vertical_offset: 37
+        horizontal_align: center
+        horizontal_offset: 140
+        text: ''
+        back_width: 205
+        back_color: '#00000000'
+    - remove_overlays: false
     - default: ribbon
-    asset_directory: /assets/Movies
+    settings:
+      asset_directory: /assets/Movies
+      prioritize_assets: true
+    operations:
+      assets_for_all: true
 
 settings:
   cache: true
   cache_expiration: 60
   asset_directory: /assets
   asset_folders: true
-  asset_depth: 0
+  asset_depth: 1
   create_asset_folders: true
   prioritize_assets: true
   dimensional_asset_rename: false
@@ -43,7 +56,7 @@ settings:
   playlist_exclude_user:
   playlist_report: false
   verify_ssl: true
-  custom_repo: https://github.com/shamubernetes/home-k8s/tree/main/kubernetes/apps/media/kometa/app/custom/
+  custom_repo: https://github.com/shamubernetes/home-k8s/tree/main/kubernetes/apps/media/kometa/app/configs/
   check_nightly: false
   show_unconfigured: true
   playlist_exclude_users:

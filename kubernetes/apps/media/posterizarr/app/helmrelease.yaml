@@ -39,7 +39,7 @@ spec:
         containers:
           app:
             image:
-              repository: shamubernetes/posterizarr
+              repository: ghcr.io/shamubernetes/posterizarr
               tag: 1.8.19@sha256:c777588b29bb0ee66046092098c148d58f30ad46d1c3d0e0a1f435d2006f61d5
             env:
               TZ: *timezone

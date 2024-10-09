@@ -81,7 +81,6 @@ spec:
         globalMounts:
         - path: /config/config.json
           subPath: config.json
-          readOnly: true
       logs:
         type: emptyDir
         globalMounts:

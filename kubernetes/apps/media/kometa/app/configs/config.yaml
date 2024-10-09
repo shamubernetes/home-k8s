@@ -4,6 +4,7 @@ libraries:
     collection_files:
     - default: basic
     - default: imdb
+    - repo: collections/movies_holiday.yaml
     overlay_files:
     - default: runtimes
       template_variables:

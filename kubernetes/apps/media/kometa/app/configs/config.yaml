@@ -15,7 +15,6 @@ libraries:
         back_width: 205
         back_color: '#00000000'
     - remove_overlays: false
-    - default: ribbon
     settings:
       asset_directory: /assets/Movies
       prioritize_assets: true

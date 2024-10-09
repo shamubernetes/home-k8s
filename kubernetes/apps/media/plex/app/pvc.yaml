@@ -23,3 +23,16 @@ spec:
     requests:
       storage: 75Gi
   storageClassName: ceph-block
+# yamllint disable rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/v1.30.2/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-posters
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 75Gi
+  storageClassName: ceph-filesystem

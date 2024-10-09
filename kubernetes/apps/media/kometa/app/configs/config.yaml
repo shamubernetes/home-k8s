@@ -1,25 +1,21 @@
 # trunk-ignore-all(trunk-yls/no-yls)
 libraries:
-  Anime:
-    collection_files:
-    - default: basic
-    - default: anilist
-    sonarr_folder: /media/Anime
   Movies:
     collection_files:
     - default: basic
     - default: imdb
     overlay_files:
     - default: ribbon
+    asset_directory: /assets/Movies
 
 settings:
   cache: true
   cache_expiration: 60
-  asset_directory: config/assets
-  asset_folders: false
+  asset_directory: /assets
+  asset_folders: true
   asset_depth: 0
-  create_asset_folders: false
-  prioritize_assets: false
+  create_asset_folders: true
+  prioritize_assets: true
   dimensional_asset_rename: false
   download_url_assets: true
   show_missing_season_assets: false

@@ -67,10 +67,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
     persistence:
       assets:
-        type: persistentVolumeClaim
-        accessMode: ReadWriteOnce
-        size: 20Gi
-        storageClass: ceph-block
+        existingClaim: plex-posters
         globalMounts:
         - path: /assets
       config:

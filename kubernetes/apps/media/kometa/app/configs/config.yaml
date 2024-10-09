@@ -4,7 +4,7 @@ libraries:
     collection_files:
     - default: basic
     - default: imdb
-    - repo: collections/movies_holiday.yaml
+    - repo: collections/movies/holiday.yaml
     overlay_files:
     - default: runtimes
       template_variables:
@@ -56,7 +56,7 @@ settings:
   playlist_exclude_user:
   playlist_report: false
   verify_ssl: true
-  custom_repo: https://github.com/shamubernetes/home-k8s/tree/main/kubernetes/apps/media/kometa/app/configs/
+  custom_repo: https://github.com/shamubernetes/kometa-config/tree/main/
   check_nightly: false
   show_unconfigured: true
   playlist_exclude_users:
@@ -111,3 +111,26 @@ tmdb:
   language: en
   cache_expiration: 60
   region:
+
+github:
+  token: <<GITHUB_TOKEN>>
+
+omdb:
+  apikey: <<OMDB_API_KEY>>
+  cache_expiration: 60
+
+mdblist:
+  apikey: <<MDBLIST_API_KEY>>
+  cache_expiration: 60
+
+trakt:
+  client_id: <<TRAKT_CLIENT_ID>>
+  client_secret: <<TRAKT_CLIENT_SECRET>>
+  authorization:
+    access_token: <<TRAKT_ACCESS_TOKEN>>
+    token_type: Bearer
+    expires_in: 7889238
+    refresh_token: <<TRAKT_REFRESH_TOKEN>>
+    scope: public
+    created_at: 1728515405
+  pin:

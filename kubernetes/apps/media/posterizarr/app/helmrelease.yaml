@@ -70,8 +70,6 @@ spec:
         existingClaim: plex-posters
         globalMounts:
         - path: /assets
-      config:
-        existingClaim: *app
       config-file:
         type: configMap
         name: ${APP}-configmap

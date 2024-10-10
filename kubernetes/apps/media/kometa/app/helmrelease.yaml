@@ -28,6 +28,12 @@ spec:
     controllers:
       kometa:
         type: cronjob
+        initContainers:
+          copy-config:
+            image:
+              repository: ghcr.io/shamubernetes/utils
+              tag: 1.0.0
+            args: ["gitclone", "-r", "shamubernetes/kometa-config", "-p", "/config"]
         annotations:
           reloader.stakater.com/auto: "true"
         cronjob:
@@ -81,15 +87,10 @@ spec:
         existingClaim: plex-posters
         globalMounts:
         - path: /assets
-      config:
+      config-data:
         existingClaim: *app
-      config-file:
-        type: configMap
-        name: kometa-configmap
         globalMounts:
-        - path: /config/config.yaml
-          subPath: config.yaml
-          readOnly: true
+        - path: /config
       logs:
         type: emptyDir
         globalMounts:

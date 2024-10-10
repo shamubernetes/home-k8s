@@ -5,10 +5,5 @@ resources:
 - ./pvc.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
-# - ../../../../templates/volsync
-configMapGenerator:
-- name: kometa-configmap
-  files:
-  - ./configs/config.yaml
 generatorOptions:
   disableNameSuffixHash: true

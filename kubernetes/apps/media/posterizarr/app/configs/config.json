@@ -69,7 +69,7 @@
   },
   "PosterOverlayPart": {
     "AddBorder": "false",
-    "AddOverlay": "true",
+    "AddOverlay": "false",
     "AddText": "false",
     "AddTextStroke": "false",
     "MaxHeight": "500",

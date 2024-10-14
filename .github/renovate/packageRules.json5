@@ -134,7 +134,6 @@
       "groupName": "Thanos",
       "matchPackagePatterns": ["thanos"],
       "matchDatasources": ["docker", "github-releases", "helm"],
-      "matchUpdateTypes": ["minor", "patch"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
@@ -146,7 +145,6 @@
       "groupName": "Vector",
       "matchPackagePatterns": ["vector"],
       "matchDatasources": ["docker", "github-releases", "helm"],
-      "matchUpdateTypes": ["minor", "patch"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
@@ -195,9 +193,9 @@
     // Frequent updates are annoying
     {
       "description": ["Custom schedule for frequently updated packages"],
-      "matchDataSources": ["docker", "helm"],
+      "matchDatasources": ["docker", "helm"],
       "matchPackagePatterns": ["postgresql", "reloader"],
-      "schedule": ["on the first day and fifteenth day of every month"]
+      "schedule": ["on the 1st and 15th days of the month"]
     },
   ],
 }

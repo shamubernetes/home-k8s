@@ -197,7 +197,7 @@
       "description": ["Custom schedule for frequently updated packages"],
       "matchDataSources": ["docker", "helm"],
       "matchPackagePatterns": ["postgresql", "reloader"],
-      "schedule": ["every month on the first and fifteenth"]
+      "schedule": ["every month on the first and fifteenth of the month"]
     },
   ],
 }

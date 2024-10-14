@@ -8,6 +8,7 @@ flux2 = "2.4.0"
 talhelper = "latest"
 talosctl = "1.8.0"
 krew = "0.4.4"
+"npm:renovate" = "latest"
 
 [env]
 KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"

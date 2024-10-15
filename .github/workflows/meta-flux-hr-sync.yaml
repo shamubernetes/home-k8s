@@ -21,14 +21,14 @@ jobs:
     runs-on: ["ghar-set-zoo"]
     steps:
     - name: Generate Token
-      uses: actions/create-github-app-token@v1
+      uses: actions/create-github-app-token@5d869da34e18e7287c1daad50e0b8ea0f506ce69 # v1
       id: app-token
       with:
         app-id: "${{ secrets.BOT_APP_ID }}"
         private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
       with:
         token: "${{ steps.app-token.outputs.token }}"
         fetch-depth: 0
@@ -42,7 +42,7 @@ jobs:
 
     - name: Write kubeconfig
       id: kubeconfig
-      uses: timheuer/base64-to-file@v1
+      uses: timheuer/base64-to-file@adaa40c0c581f276132199d4cf60afa07ce60eac # v1
       with:
         encodedString: "${{ secrets.KUBECONFIG }}"
         fileName: kubeconfig
@@ -50,7 +50,7 @@ jobs:
     - if: ${{ github.event.inputs.helmRepoNamespace == '' && github.event.inputs.helmRepoName == '' }}
       name: Get Changed Files
       id: changed-files
-      uses: tj-actions/changed-files@v45
+      uses: tj-actions/changed-files@c3a1bb2c992d77180ae65be6ae6c166cf40f857c # v45
       with:
         files: kubernetes/**/helmrelease.yaml
         safe_output: false

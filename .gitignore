@@ -920,10 +920,10 @@ cython_debug/
 ##                                              ##
 ##################################################
 
-.trunk/
-.trunk/plugins/
-!.trunk/config/
-!.trunk/trunk.yaml
+.trunk/tools
+.trunk/actions
+.trunk/plugins
+.trunk/notifications
 
 ##################################################
 ##                                              ##

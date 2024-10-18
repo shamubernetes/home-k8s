@@ -6,3 +6,7 @@ metadata:
   namespace: flux-system
 data:
   TIMEZONE: "America/New_York"
+  KS_NAMESPACE: "flux-system"
+  KS_RETRY_INTERVAL: "1m"
+  KS_GIT_REPO_NAME: "home-kubernetes"
+  REPO_NAMESPACE: "flux-system"

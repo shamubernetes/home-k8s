@@ -22,7 +22,6 @@ resources:
 - ./piraeus.yaml
 - ./postfinance.yaml
 - ./prometheus-community.yaml
-- ./robusta.yaml
 - ./rook-ceph.yaml
 - ./spegel.yaml
 - ./stakater.yaml

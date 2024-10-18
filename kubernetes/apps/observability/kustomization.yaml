@@ -13,4 +13,3 @@ resources:
 - ./grafana/ks.yaml
 - ./unpoller/ks.yaml
 - ./smartctl-exporter/ks.yaml
-- ./robusta/ks.yaml

@@ -46,7 +46,4 @@ spec:
     grafanaRenderer:
       enableContainer: true
     runner:
-      additional_env_vars:
-      - secretRef:
-          name: robusta-secret
       sendAdditionalTelemetry: false

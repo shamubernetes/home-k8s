@@ -49,7 +49,7 @@ spec:
               WHISPARR__BRANCH: develop
               WHISPARR__INSTANCE_NAME: Whisparr
               WHISPARR__LOG_LEVEL: info
-              WHISPARR__PORT: &port 6969
+              WHISPARR__PORT: &port 80
               TZ: ${TIMEZONE}
             envFrom: *envFrom
             probes:

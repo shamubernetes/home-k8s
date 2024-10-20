@@ -80,6 +80,9 @@ spec:
         type: emptyDir
       transcode:
         type: emptyDir
+        globalMounts:
+        - path: /transcode
+          readOnly: false
       media:
         type: nfs
         server: "${IPAM_IP_NFS}"

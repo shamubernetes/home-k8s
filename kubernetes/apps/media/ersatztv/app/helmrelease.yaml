@@ -78,6 +78,8 @@ spec:
         type: emptyDir
       tmp:
         type: emptyDir
+      transcode:
+        type: emptyDir
       media:
         type: nfs
         server: "${IPAM_IP_NFS}"

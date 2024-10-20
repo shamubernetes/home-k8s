@@ -11,3 +11,4 @@ resources:
 - ./overseerr/ks.yaml
 - ./bazarr/ks.yaml
 - ./wizarr/ks.yaml
+- ./whisparr/ks.yaml

@@ -8,3 +8,4 @@ resources:
 - ./posterizarr/ks.yaml
 - ./metube/ks.yaml
 - ./ersatztv/ks.yaml
+- ./stash/ks.yaml

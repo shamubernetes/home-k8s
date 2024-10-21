@@ -26,7 +26,7 @@ spec:
     namespace: rook-ceph
   values:
     controllers:
-      ersatztv:
+      ${APP}:
         annotations:
           reloader.stakater.com/auto: "true"
         containers:

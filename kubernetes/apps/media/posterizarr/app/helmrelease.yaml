@@ -40,7 +40,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/posterizarr
-              tag: 1.8.26@sha256:1cc8a6b7ec011bcfba7c282765725cfb65dc66bda3e068e0a915ec82c24c80de
+              tag: 1.8.27@sha256:e6174b5e6140c9991716e6d3577a6abb8f4bfd461e25075e861f9d21c8fba4d0
             env:
               TZ: *timezone
             envFrom:

@@ -89,7 +89,7 @@ spec:
     persistence:
       public:
         type: nfs
-        server: ${IPAM_IP_NFS}
+        server: "${IPAM_IP_NFS}"
         path: /mnt/user/public
         globalMounts:
         - path: /public

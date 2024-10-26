@@ -117,7 +117,7 @@ spec:
         type: emptyDir
       media:
         type: nfs
-        server: 10.0.10.100
+        server: "${IPAM_IP_NFS}"
         path: /mnt/user/Media
         globalMounts:
         - path: /media

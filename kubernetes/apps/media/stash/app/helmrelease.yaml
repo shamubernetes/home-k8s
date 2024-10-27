@@ -32,8 +32,8 @@ spec:
         containers:
           app:
             image:
-              repository: stashapp/stash
-              tag: v0.27.2
+              repository: ghcr.io/jfroy/stash
+              tag: v0.27.0-cudajellyfin.4
             env:
               HOME: /config
               STASH_BLOBS_PATH: /blobs
@@ -42,9 +42,11 @@ spec:
               STASH_CONFIG_FILE: /config/config.yml
               STASH_DATABASE: /config/stash-go.sqlite
               STASH_GENERATED: /generated
+              STASH_METADATA: /metadata
               STASH_PLUGINS_PATH: /plugins
               STASH_PORT: &port 80
               STASH_SCRAPERS_PATH: /scrapers
+              STASH_EXTERNAL_HOST: "https://stash.${SECRET_DOMAIN}"
               TZ: ${TIMEZONE}
             probes:
               liveness: &probe
@@ -55,15 +57,19 @@ spec:
                     path: /healthz
                     port: *port
               readiness: *probe
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            workingDir: /config
     defaultPodOptions:
-      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
-        supplementalGroups: [44, 10000]
+        supplementalGroups: [4000]
         seccompProfile: {type: RuntimeDefault}
     service:
       app:
@@ -99,6 +105,8 @@ spec:
           subPath: blobs
         - path: /generated
           subPath: generated
+        - path: /metadata
+          subPath: metadata
       plugins:
         type: persistentVolumeClaim
         storageClass: openebs-hostpath

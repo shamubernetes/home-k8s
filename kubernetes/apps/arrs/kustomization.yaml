@@ -6,7 +6,6 @@ resources:
 - ./sabnzbd/ks.yaml
 - ./radarr/ks.yaml
 - ./sonarr/ks.yaml
-- ./sonarr-anime/ks.yaml
 - ./prowlarr/ks.yaml
 - ./recyclarr/ks.yaml
 - ./overseerr/ks.yaml

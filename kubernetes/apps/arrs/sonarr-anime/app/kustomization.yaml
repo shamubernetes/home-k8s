@@ -7,7 +7,7 @@ resources:
 - ./helmrelease.yaml
 - ../../../../templates/gatus/guarded
 configMapGenerator:
-- name: ${APP}-configmap
+- name: sonarr-anime-configmap
   files:
   - pushover-notify.sh=./resources/pushover-notify.sh
 generatorOptions:

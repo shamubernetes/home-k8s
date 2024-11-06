@@ -39,3 +39,4 @@
 - {name: "question", color: "cc317c"}
 - {name: "community", color: "0e8a16"}
 - {name: "hold/upstream", color: "ee0701", aliases: ["hold", "upstream"], description: "Issue is blocked by an upstream dependency"}
+- {name: "dash", color: "00a3cd"}

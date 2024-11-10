@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "api": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9.]+$"
+      },
+      "version": {
+        "type": "string",
+        "pattern": "^v[0-9]+$"
+      },
+      "kind": {
+        "type": "string",
+        "pattern": "^[a-zA-Z]+$"
+      },
+      "replacePath": {
+        "type": "string",
+        "pattern": "^properties\\.(spec\\.)?properties\\.[a-zA-Z]+\\.pattern$"
+      },
+      "value": {
+        "type": "string"
+      }
+    },
+    "required": ["api", "version", "kind", "replacePath", "value"],
+    "additionalProperties": false
+  }
+}

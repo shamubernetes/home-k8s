@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/hacks/schemahacks.json
+- api: kustomize.toolkit.fluxcd.io
+  version: v1
+  kind: Kustomization
+  replacePath: properties.spec.properties.retryInterval.pattern
+  value: "\"^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$|^\\$\\{[A-Z_][A-Z0-9_]*\\}$\""
+- api: kustomize.toolkit.fluxcd.io
+  version: v1
+  kind: Kustomization
+  replacePath: properties.spec.properties.interval.pattern
+  value: "\"^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$|^\\$\\{[A-Z_][A-Z0-9_]*\\}$\""
+- api: kustomize.toolkit.fluxcd.io
+  version: v1
+  kind: Kustomization
+  replacePath: properties.spec.properties.timeout.pattern
+  value: "\"^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$|^\\$\\{[A-Z_][A-Z0-9_]*\\}$\""

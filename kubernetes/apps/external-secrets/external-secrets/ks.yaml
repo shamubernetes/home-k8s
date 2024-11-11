@@ -2,8 +2,8 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: external-secrets
-  namespace: flux-system
+  name: &app external-secrets
+  namespace: "${KS_NAMESPACE}"
 spec:
   dependsOn:
   - name: onepassword-connect
@@ -11,19 +11,23 @@ spec:
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: "${KS_GIT_REPO_NAME}"
   wait: true
-  interval: 10m
-  retryInterval: 1m
-  timeout: 5m
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+
 # yamllint disable-line rule:document-start
 ---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: external-secrets-secret-store
-  namespace: flux-system
+  name: &app external-secrets-secret-store
+  namespace: "${KS_NAMESPACE}"
 spec:
   dependsOn:
   - name: external-secrets
@@ -31,8 +35,11 @@ spec:
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: "${KS_GIT_REPO_NAME}"
   wait: true
-  interval: 10m
-  retryInterval: 1m
-  timeout: 5m
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app

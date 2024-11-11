@@ -29,7 +29,7 @@ spec:
   wait: false
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: "${KS_GIT_REPO_NAME}"
   decryption:
     provider: sops
     secretRef:

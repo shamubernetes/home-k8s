@@ -8,7 +8,7 @@ spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 100Gi
+      storage: 150Gi
   storageClassName: ceph-block
 # yamllint disable rule:document-start
 ---

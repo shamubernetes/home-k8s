@@ -92,7 +92,7 @@ spec:
           - name: data
             storageClass: ceph-block
             accessMode: ReadWriteOnce
-            size: 6Gi
+            size: 10Gi
             globalMounts:
             - path: /opt/adguardhome/conf
               subPath: conf

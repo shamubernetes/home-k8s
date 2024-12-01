@@ -7,7 +7,7 @@ on:
   - cron: "0 0 * * 0"
   pull_request:
     branches: ["main"]
-    paths: &paths
+    paths:
     - ".github/workflows/publish-schemas.yaml"
     - ".github/workflows/resources/k8s-schemas.sh"
     - ".github/workflows/resources/k8s-schema-hacks.sh"
@@ -15,8 +15,12 @@ on:
     - ".github/workflows/resources/schemas/*"
   push:
     branches: ["main"]
-    paths: *paths
-
+    paths:
+    - ".github/workflows/publish-schemas.yaml"
+    - ".github/workflows/resources/k8s-schemas.sh"
+    - ".github/workflows/resources/k8s-schema-hacks.sh"
+    - ".github/workflows/resources/schema-hacks/*"
+    - ".github/workflows/resources/schemas/*"
 jobs:
   publish-schemas:
     name: Publish Schemas

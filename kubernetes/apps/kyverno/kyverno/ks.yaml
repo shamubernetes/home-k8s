@@ -3,7 +3,7 @@ apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: &app kyverno
-  namespace: flux-system
+  namespace: "${KS_NAMESPACE}"
 spec:
   targetNamespace: kyverno
   commonMetadata:
@@ -13,11 +13,15 @@ spec:
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: "${KS_GIT_REPO_NAME}"
   wait: false
-  interval: 10m
-  retryInterval: 1m
-  timeout: 5m
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+
 # yamllint disable-line rule:document-start
 ---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
@@ -25,7 +29,7 @@ apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: &app kyverno-policies
-  namespace: flux-system
+  namespace: "${KS_NAMESPACE}"
 spec:
   targetNamespace: kyverno
   commonMetadata:
@@ -35,8 +39,11 @@ spec:
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: "${KS_GIT_REPO_NAME}"
   wait: false
-  interval: 10m
-  retryInterval: 1m
-  timeout: 5m
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app

@@ -5,9 +5,17 @@ on:
   workflow_dispatch:
   schedule:
   - cron: "0 0 * * 0"
+  pull_request:
+    branches: ["main"]
+    paths: &paths
+    - ".github/workflows/publish-schemas.yaml"
+    - ".github/workflows/resources/k8s-schemas.sh"
+    - ".github/workflows/resources/k8s-schema-hacks.sh"
+    - ".github/workflows/resources/schema-hacks/*"
+    - ".github/workflows/resources/schemas/*"
   push:
     branches: ["main"]
-    paths: [".github/workflows/publish-schemas.yaml", ".github/workflows/resources/k8s-schemas.sh"]
+    paths: *paths
 
 jobs:
   publish-schemas:
@@ -27,7 +35,7 @@ jobs:
 
     - name: Setup Workflow Tools
       shell: bash
-      run: brew install kubectl yq
+      run: brew install kubectl yq jq
 
     - name: Setup Python
       uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
@@ -60,11 +68,14 @@ jobs:
       shell: bash
       run: |
         mkdir -p /home/runner/schemas/kubernetes
+        mkdir -p /home/runner/schemas/hacks
         echo 'Cython < 3.0' > /tmp/constraint.txt
         PIP_CONSTRAINT=/tmp/constraint.txt python -m pip install pyyaml==5.4.1
         pip install openapi2jsonschema
         ./.github/workflows/resources/k8s-schemas.sh
+        ./.github/workflows/resources/k8s-schema-hacks.sh
         mv /home/runner/.datree/crdSchemas/* /home/runner/schemas
+        mv ./.github/workflows/resources/schemas/* /home/runner/schemas/hacks
 
     - name: Deploy to Cloudflare Pages
       uses: cloudflare/wrangler-action@6d58852c35a27e6034745c5d0bc373d739014f7f # v3.13.0

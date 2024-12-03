@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/satisfactory
-              tag: 16315817@sha256:71d00f22eccf66dbec8537907c04b6a22f159e2327293f8b9d84a8e0b29db772
+              tag: 16566519@sha256:a8be7f9ceba4162cc4919da3a2a2b36487ee03ee09602433c88950709deefae6
             envFrom:
             - configMapRef:
                 name: satisfactory-config

@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app radarr-3d
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: arrs
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: cloudnative-pg-cluster
+  - name: external-secrets-secret-store
+  path: ./kubernetes/apps/arrs/radarr-3d/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: false
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      VOLSYNC_CAPACITY: 15Gi

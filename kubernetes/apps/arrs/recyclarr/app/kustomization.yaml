@@ -11,5 +11,6 @@ configMapGenerator:
   - recyclarr.yaml=./resources/recyclarr.yaml
   - sonarr.yaml=./resources/sonarr.yaml
   - radarr.yaml=./resources/radarr.yaml
+  - radarr-3d.yaml=./resources/radarr-3d.yaml
 generatorOptions:
   disableNameSuffixHash: true

@@ -15,3 +15,8 @@ radarr:
     api_key: !env_var RADARR_API_KEY
     include:
     - config: /config/radarr.yaml
+  radarr-3d:
+    base_url: http://radarr-3d.arrs.svc.cluster.local
+    api_key: !env_var RADARR_3D_API_KEY
+    include:
+    - config: /config/radarr-3d.yaml

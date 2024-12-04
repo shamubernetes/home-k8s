@@ -81,3 +81,6 @@ spec:
         - path: /config/radarr.yaml
           subPath: radarr.yaml
           readOnly: true
+        - path: /config/radarr-3d.yaml
+          subPath: radarr-3d.yaml
+          readOnly: true

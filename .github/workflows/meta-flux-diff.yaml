@@ -20,7 +20,9 @@ jobs:
     strategy:
       matrix:
         paths: ["kubernetes"]
-        resources: ["helmrelease", "kustomization"]
+        resources:
+        - "helmrelease"
+        # - "kustomization" # TODO: Fix this, broken with variables in ks.yaml files
     steps:
     - name: Generate Token
       uses: actions/create-github-app-token@5d869da34e18e7287c1daad50e0b8ea0f506ce69 # v1

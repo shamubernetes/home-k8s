@@ -72,6 +72,12 @@ spec:
         type: configMap
         name: recyclarr-configmap
         globalMounts:
-        - path: /config/recyclarr.yml
-          subPath: recyclarr.yml
+        - path: /config/recyclarr.yaml
+          subPath: recyclarr.yaml
+          readOnly: true
+        - path: /config/sonarr.yaml
+          subPath: sonarr.yaml
+          readOnly: true
+        - path: /config/radarr.yaml
+          subPath: radarr.yaml
           readOnly: true

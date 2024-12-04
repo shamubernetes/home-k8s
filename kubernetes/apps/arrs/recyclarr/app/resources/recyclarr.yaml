@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
+
+# Configuration specific to Sonarr
+sonarr:
+  sonarr:
+    base_url: http://sonarr.arrs.svc.cluster.local
+    api_key: !env_var SONARR_API_KEY
+    include:
+    - config: sonarr.yml
+
+# Configuration specific to Radarr.
+radarr:
+  radarr:
+    base_url: http://radarr.arrs.svc.cluster.local
+    api_key: !env_var RADARR_API_KEY
+    include:
+    - config: radarr.yml

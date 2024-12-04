@@ -10,7 +10,7 @@
       },
       "version": {
         "type": "string",
-        "pattern": "^v[0-9]+$"
+        "pattern": "^v[a-zA-Z0-9.]+$"
       },
       "kind": {
         "type": "string",
@@ -18,7 +18,7 @@
       },
       "replacePath": {
         "type": "string",
-        "pattern": "^properties\\.(spec\\.)?properties\\.[a-zA-Z]+\\.pattern$"
+        "pattern": "^[a-zA-Z0-9].+$"
       },
       "value": {
         "type": "string"

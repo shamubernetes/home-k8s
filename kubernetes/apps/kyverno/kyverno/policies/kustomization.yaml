@@ -5,3 +5,4 @@ resources:
 - ./defaultPodResources.yaml
 - ./disallowEmptyIngress.yaml
 - ./safeToEvict.yaml
+- ./volsync-movers.yaml

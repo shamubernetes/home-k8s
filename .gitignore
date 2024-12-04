@@ -20,6 +20,7 @@ talosconfig
 
 # Private
 .private
+.archive
 
 # Bootstrap
 .config.yaml

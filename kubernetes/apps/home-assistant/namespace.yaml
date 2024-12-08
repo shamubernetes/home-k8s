@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/namespace-v1.json
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: home-assistant
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    volsync.backube/privileged-movers: "true"

@@ -39,6 +39,20 @@ spec:
             envFrom: &envFrom
             - secretRef:
                 name: home-assistant-secret
+          install-hacs:
+            image:
+              repository: busybox
+              tag: 1.37.0@sha256:db142d433cdde11f10ae479dbf92f3b13d693fd1c91053da9979728cceb1dc68
+            command:
+            - "/bin/sh"
+            - -c
+            args:
+            - |
+              # renovate: github-release depName=hacs/integration
+              HACS_VERSION="2.0.1"
+              mkdir -p /config/custom_components/hacs
+              rm -rf /config/custom_components/hacs
+              busybox wget -qO- "https://github.com/hacs/integration/releases/download/$${HACS_VERSION}/hacs.zip"  | busybox unzip -d /config/custom_components/hacs -
         containers:
           app:
             image:

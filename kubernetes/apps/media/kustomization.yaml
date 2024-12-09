@@ -5,7 +5,7 @@ resources:
 - ./namespace.yaml
 - ./plex/ks.yaml
 - ./kometa/ks.yaml
-- ./posterizarr/ks.yaml
+# - ./posterizarr/ks.yaml
 - ./metube/ks.yaml
 - ./ersatztv/ks.yaml
 - ./stash/ks.yaml

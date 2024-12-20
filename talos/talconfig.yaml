@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/budimanjojo/talhelper/master/pkg/config/schemas/talconfig.json
 # renovate: datasource=docker depName=ghcr.io/siderolabs/installer
-talosVersion: v1.8.0
+talosVersion: v1.9.0
 # renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
-kubernetesVersion: v1.31.1
+kubernetesVersion: v1.32.0
 
 clusterName: &cluster titans
 endpoint: https://10.100.47.10:6443
@@ -24,7 +24,7 @@ nodes:
 - hostname: "k8s-oceanus"
   ipAddress: "10.100.47.35"
   installDisk: "/dev/nvme0n1"
-  talosImageURL: &image factory.talos.dev/installer/249ad1b290b67328f476b9066d5c4e95fcf73dfa5f610e3e24e3f903766a7ce1
+  talosImageURL: &image factory.talos.dev/installer/5b3717ebb1bc80ddea39bb8ae3cfd3294bfcfb13e05dcd6f1aa54b8e8f9dbcc1
   controlPlane: true
   networkInterfaces:
   - deviceSelector:

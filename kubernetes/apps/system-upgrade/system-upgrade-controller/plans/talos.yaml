@@ -33,7 +33,7 @@ spec:
     operator: Exists
     effect: NoSchedule
   prepare: &prepare
-    image: ghcr.io/siderolabs/talosctl@sha256:71d8059d2d1a81143b9e165697e00af323298a037c3a6b7bf209983482d764c8:${TALOS_VERSION}
+    image: ghcr.io/siderolabs/talosctl@sha256:30350452597c7191098f1ed788b9b0affef99a1a3698fc166a765f7ea7d5d067:${TALOS_VERSION}
     envs:
     - name: NODE_IP
       valueFrom:

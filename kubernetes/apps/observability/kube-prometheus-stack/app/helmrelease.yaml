@@ -78,6 +78,7 @@ spec:
         pathType: Prefix
         hosts: ["prometheus.${SECRET_DOMAIN}"]
       prometheusSpec:
+        replicas: 2
         podMonitorSelectorNilUsesHelmValues: false
         probeSelectorNilUsesHelmValues: false
         ruleSelectorNilUsesHelmValues: false

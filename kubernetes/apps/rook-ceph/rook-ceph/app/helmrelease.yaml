@@ -26,7 +26,11 @@ spec:
   - name: snapshot-controller
     namespace: volsync-system
   values:
+    image:
+      tag: v1.16.0-4.g6da8ef89d # Until 1.16.1 is released
     csi:
+      snapshotter:
+        tag: v8.2.0 # Until 1.16.1 is released
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true
       serviceMonitor:

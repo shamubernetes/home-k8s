@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: jasongdove/ersatztv
-              tag: v0.8.8-vaapi
+              tag: v25.1.0-vaapi
             env:
               XDG_DATA_HOME: /config
             probes:

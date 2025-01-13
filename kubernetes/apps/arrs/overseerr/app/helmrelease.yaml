@@ -79,10 +79,10 @@ spec:
     ingress:
       app:
         annotations:
-          external-dns.alpha.kubernetes.io/target: external.${SECRET_DOMAIN}
+          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
         className: external
         hosts:
-        - host: requests.${SECRET_DOMAIN}
+        - host: requests.${HOME_DOMAIN}
           paths:
           - path: /
             service:

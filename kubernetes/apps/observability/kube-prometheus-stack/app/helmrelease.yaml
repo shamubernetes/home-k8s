@@ -37,17 +37,17 @@ spec:
       ingress:
         enabled: true
         annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
         pathType: Prefix
         ingressClassName: internal
-        hosts: ["alertmanager.${SECRET_DOMAIN}"]
+        hosts: ["alertmanager.${HOME_DOMAIN}"]
       alertmanagerSpec:
         replicas: 2
         alertmanagerConfiguration:
           name: alertmanager
           global:
             resolveTimeout: 5m
-        externalUrl: https://alertmanager.${SECRET_DOMAIN}
+        externalUrl: https://alertmanager.${HOME_DOMAIN}
         storage:
           volumeClaimTemplate:
             spec:
@@ -76,7 +76,7 @@ spec:
         enabled: true
         ingressClassName: internal
         pathType: Prefix
-        hosts: ["prometheus.${SECRET_DOMAIN}"]
+        hosts: ["prometheus.${HOME_DOMAIN}"]
       prometheusSpec:
         replicas: 2
         podMonitorSelectorNilUsesHelmValues: false

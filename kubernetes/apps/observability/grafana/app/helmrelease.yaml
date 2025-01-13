@@ -45,7 +45,7 @@ spec:
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: natel-discrete-panel,pr0ps-trackmap-panel,panodata-map-panel
       GF_SECURITY_ANGULAR_SUPPORT_ENABLED: true
       GF_SECURITY_COOKIE_SAMESITE: grafana
-      GF_SERVER_ROOT_URL: https://grafana.${SECRET_DOMAIN}
+      GF_SERVER_ROOT_URL: https://grafana.${HOME_DOMAIN}
     envFromSecrets:
     - name: *secret
     grafana.ini:
@@ -412,9 +412,9 @@ spec:
     ingress:
       enabled: true
       annotations:
-        external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
+        external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
       ingressClassName: internal
-      hosts: ["grafana.${SECRET_DOMAIN}"]
+      hosts: ["grafana.${HOME_DOMAIN}"]
     persistence:
       enabled: false
     testFramework:

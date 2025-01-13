@@ -35,7 +35,7 @@ spec:
       replicaCount: 2
       service:
         annotations:
-          external-dns.alpha.kubernetes.io/hostname: "external.${SECRET_DOMAIN}"
+          external-dns.alpha.kubernetes.io/hostname: "external.${HOME_DOMAIN}"
           io.cilium/lb-ipam-ips: "${IPAM_IP_NGINX_EXTERNAL}"
         externalTrafficPolicy: Cluster
       ingressClassResource:
@@ -79,7 +79,7 @@ spec:
           namespaceSelector:
             any: true
       extraArgs:
-        default-ssl-certificate: "network/${SECRET_DOMAIN/./-}-production-tls"
+        default-ssl-certificate: "network/${HOME_DOMAIN/./-}-production-tls"
       terminationGracePeriodSeconds: 120
       topologySpreadConstraints:
       - maxSkew: 1

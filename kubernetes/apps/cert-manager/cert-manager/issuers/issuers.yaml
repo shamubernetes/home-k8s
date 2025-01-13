@@ -17,7 +17,9 @@ spec:
             key: CLOUDFLARE_API_TOKEN
       selector:
         dnsZones:
-        - "${SECRET_DOMAIN}"
+        - "${HOME_DOMAIN}"
+        - "${GAME_DOMAIN}"
+        - "${DEV_DOMAIN}"
 # yamllint disable-line rule:document-start
 ---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/clusterissuer_v1.json
@@ -39,4 +41,6 @@ spec:
             key: api-token
       selector:
         dnsZones:
-        - "${SECRET_DOMAIN}"
+        - "${HOME_DOMAIN}"
+        - "${GAME_DOMAIN}"
+        - "${DEV_DOMAIN}"

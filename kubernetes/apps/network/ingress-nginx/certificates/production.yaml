@@ -2,18 +2,50 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: "${SECRET_DOMAIN/./-}-production"
+  name: "${HOME_DOMAIN/./-}-production"
 spec:
-  secretName: "${SECRET_DOMAIN/./-}-production-tls"
+  secretName: "${HOME_DOMAIN/./-}-production-tls"
   issuerRef:
     name: letsencrypt-production
     kind: ClusterIssuer
-  commonName: "${SECRET_DOMAIN}"
+  commonName: "${HOME_DOMAIN}"
   dnsNames:
-  - "${SECRET_DOMAIN}"
-  - "*.${SECRET_DOMAIN}"
-  - "*.ha.${SECRET_DOMAIN}"
+  - "${HOME_DOMAIN}"
+  - "*.${HOME_DOMAIN}"
+  - "*.ha.${HOME_DOMAIN}"
   secretTemplate:
     annotations:
       reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
       reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "adguard-home"
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/certificate_v1.json
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "${GAME_DOMAIN/./-}-production"
+spec:
+  secretName: "${GAME_DOMAIN/./-}-production-tls"
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  commonName: "${GAME_DOMAIN}"
+  dnsNames:
+  - "${GAME_DOMAIN}"
+  - "*.${GAME_DOMAIN}"
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/certificate_v1.json
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "${DEV_DOMAIN/./-}-production"
+spec:
+  secretName: "${DEV_DOMAIN/./-}-production-tls"
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  commonName: "${DEV_DOMAIN}"
+  dnsNames:
+  - "${DEV_DOMAIN}"
+  - "*.${DEV_DOMAIN}"

@@ -4,7 +4,7 @@ kind: Service
 metadata:
   name: postgres-lb
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: postgres.${SECRET_DOMAIN}
+    external-dns.alpha.kubernetes.io/hostname: postgres.${HOME_DOMAIN}
     io.cilium/lb-ipam-ips: "${IPAM_IP_POSTGRES}"
     ignore-check.kube-linter.io/dangling-service: "Selector is added by the controller"
     ignore-check.kube-linter.io/exposed-services: "This service is exposed to the intranet"

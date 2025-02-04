@@ -35,7 +35,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/plex
-              tag: 1.41.3.9314-a0bfb8370@sha256:1b07f06c3c57d8c18075f75388e64568a2c0486b4c01b76ad19d9629fce0addc
+              tag: 1.41.3.9314-a0bfb8370@sha256:b3b7c9e862f49a610a27d3679ce114aab8f0dc43fc06fe3ed35490954edbef8d
             env:
               TZ: America/New_York
               PLEX_ADVERTISE_URL: https://plex.${HOME_DOMAIN}:443,http://${IPAM_IP_PLEX}:32400

@@ -41,7 +41,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/whisparr-nightly
-              tag: 2.0.0.787@sha256:b3e7dd639e0714ee77da3f8ecd8b5a057506dc895b04e236dc072ce2c7165e6c
+              tag: 2.0.0.787@sha256:37379b69b5b2072a13c6645274a9e175edba7957be949c454a2318b6061241e1
             env:
               WHISPARR__ANALYTICS_ENABLED: "False"
               WHISPARR__AUTHENTICATION_METHOD: External

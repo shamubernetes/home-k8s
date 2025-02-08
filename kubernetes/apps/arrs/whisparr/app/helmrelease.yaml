@@ -40,8 +40,8 @@ spec:
         containers:
           app:
             image:
-              repository: ghcr.io/shamubernetes/whisparr-nightly
-              tag: 2.0.0.787@sha256:e9787f1dbebd049419fdd2f4a847fe86a970003b03245e6cc964b620e936e43a
+              repository: ghcr.io/shamubernetes/whisparr-eros
+              tag: 3.0.0.786
             env:
               WHISPARR__ANALYTICS_ENABLED: "False"
               WHISPARR__AUTHENTICATION_METHOD: External

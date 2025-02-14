@@ -57,7 +57,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/home-assistant
-              tag: 2025.2.3@sha256:011c21a5d641197bffe79d1336e1d7116e53aaf104b3dca1dab8777c23146514
+              tag: 2025.2.4@sha256:5f714b70c8d1816cf74d28e4b6528772d53bb0ffc09b4e799e1426ce59c11099
             env:
               TZ: America/New_York
             envFrom: *envFrom

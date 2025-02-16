@@ -1,12 +1,12 @@
 [tools]
-trunk = "1.22.3"
+trunk = "1.22.10"
 kubectl = "1.32.2"
 sops = "3.9.4"
-age = "1.2.0"
-task = "3.38.0"
+age = "1.2.1"
+task = "3.41.0"
 flux2 = "2.4.0"
 talhelper = "latest"
-talosctl = "1.8.0"
+talosctl = "1.9.4"
 krew = "0.4.4"
 "npm:renovate" = "latest"
 

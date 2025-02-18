@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
 - ./objectbucketclaim.yaml
 - ./helmrelease.yaml
+- ../../../../templates/gatus/guarded

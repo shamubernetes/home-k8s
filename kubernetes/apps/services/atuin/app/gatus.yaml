@@ -10,7 +10,7 @@ data:
     endpoints:
       - name: "atuin frontend"
         group: app
-        url: "http://atuin.services.svc.cluster.local:8080"
+        url: "http://atuin.services.svc.cluster.local"
         interval: 1m
         conditions:
           - "[STATUS] == 200"

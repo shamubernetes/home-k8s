@@ -17,7 +17,8 @@
     "editor.fontLigatures": false
   },
   "[yaml]": {
-    "editor.fontLigatures": false
+    "editor.fontLigatures": false,
+    "editor.defaultFormatter": "trunk.io"
   },
   // Extension Settings
   "files.associations": {
@@ -53,7 +54,9 @@
       "name": "clusterconfig",
       "base": "config",
       "color": "blue-700",
-      "folderNames": [""]
+      "folderNames": [
+        ""
+      ]
     },
   ],
   "vs-kubernetes": {

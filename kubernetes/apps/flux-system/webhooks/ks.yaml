@@ -24,7 +24,6 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
-      GATUS_APP_NAME: Flux Webhook
+      GATUS_APP_NAME: Flux (Webhook)
       GATUS_SUBDOMAIN: flux-webhook
-      GATUS_PATH: "/hook"
-      GATUS_STATUS: "301"
+      GATUS_STATUS: "404"

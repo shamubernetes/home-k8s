@@ -2,21 +2,23 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: "${APP}-gatus-ep"
+  name: "${APP}-dns-gatus-ep"
   labels:
     gatus.io/enabled: "true"
+# This checks if the DNS record is available publically
+# These records should NOT be available publically for guarded apps
 data:
   config.yaml: |
     endpoints:
-      - name: "${APP}"
-        group: guarded
+      - name: "${APP^} DNS"
+        group: External DNS
         url: 1.1.1.1
         interval: 1m
         ui:
           hide-hostname: true
           hide-url: true
         dns:
-          query-name: "${GATUS_SUBDOMAIN:-${APP}}.${HOME_DOMAIN}"
+          query-name: "${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}"
           query-type: A
         conditions:
           - "len([BODY]) == 0"

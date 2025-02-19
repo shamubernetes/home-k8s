@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "${APP}-dns-gatus-ep"
+  labels:
+    gatus.io/enabled: "true"
+# This checks if the DNS record is available publically
+# These records SHOULD be available publically for external apps
+data:
+  config.yaml: |
+    endpoints:
+      - name: "${APP^} DNS"
+        group: External DNS
+        url: 1.1.1.1
+        interval: 1m
+        ui:
+          hide-hostname: true
+          hide-url: true
+        dns:
+          query-name: "${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}"
+          query-type: A
+        conditions:
+          - "len([BODY]) >= 1"
+        alerts:
+          - type: pushover

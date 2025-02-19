@@ -55,3 +55,4 @@ spec:
       NAMESPACE: *namespace
       GATUS_INFRA_PORT: "6379"
       GATUS_INFRA_NAME: "Dragonfly (Redis)"
+      GATUS_INFRA_APP: "dragonfly"

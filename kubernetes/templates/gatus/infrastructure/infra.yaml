@@ -10,7 +10,7 @@ data:
     endpoints:
     - name: "${GATUS_INFRA_NAME:-${APP^}}"
       group: "Infrastructure"
-      url: "${GATUS_INFRA_URL:-tcp://${APP}.${NAMESPACE}.svc.cluster.local:${GATUS_INFRA_PORT:-80}}"
+      url: "${GATUS_INFRA_URL:-tcp://${GATUS_INFRA_APP:-${APP}}.${NAMESPACE}.svc.cluster.local:${GATUS_INFRA_PORT:-80}}"
       interval: 1m
       ui:
         hide-hostname: true

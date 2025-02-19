@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "${APP}-app-gatus-ep"
+  labels:
+    gatus.io/enabled: "true"
+data:
+  config.yaml: |
+    endpoints:
+    - name: "${APP^}"
+      group: "External Apps"
+      url: "https://${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}${GATUS_PATH:-/}"
+      interval: 1m
+      client:
+        dns-resolver: tcp://1.1.1.1:53
+      conditions:
+      - "[STATUS] == ${GATUS_STATUS:-200}"
+      alerts:
+      - type: pushover

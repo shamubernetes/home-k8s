@@ -8,7 +8,7 @@ metadata:
 data:
   config.yaml: |
     endpoints:
-    - name: "${APP^}"
+    - name: "${GATUS_APP_NAME:-${APP^}}"
       group: "External Apps"
       url: "https://${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}${GATUS_PATH:-/}"
       interval: 1m

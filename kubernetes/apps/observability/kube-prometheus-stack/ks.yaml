@@ -5,7 +5,7 @@ metadata:
   name: &app kube-prometheus-stack
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: observability
+  targetNamespace: &namespace observability
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -23,5 +23,6 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
       # renovate: datasource=docker depName=quay.io/thanos/thanos
       THANOS_VERSION: v0.35.1

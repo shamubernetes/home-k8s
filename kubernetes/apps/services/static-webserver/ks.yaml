@@ -5,7 +5,7 @@ metadata:
   name: &app static-webserver
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: services
+  targetNamespace: &namespace services
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,4 +21,5 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
       GATUS_SUBDOMAIN: static

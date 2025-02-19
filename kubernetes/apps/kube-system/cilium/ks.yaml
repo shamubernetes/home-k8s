@@ -5,7 +5,7 @@ metadata:
   name: &app cilium
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kube-system
+  targetNamespace: &namespace kube-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,6 +21,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 # yamllint disable-line rule:document-start
 ---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
@@ -30,7 +31,7 @@ metadata:
   name: &app cilium-config
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kube-system
+  targetNamespace: &namespace kube-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -48,3 +49,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

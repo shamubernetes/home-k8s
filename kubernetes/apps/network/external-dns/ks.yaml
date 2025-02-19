@@ -5,7 +5,7 @@ metadata:
   name: &app external-dns-cloudflare
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: network
+  targetNamespace: &namespace network
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -23,6 +23,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # trunk-ignore(yamllint/document-start)
 ---
@@ -33,7 +34,7 @@ metadata:
   name: &app external-dns-unifi
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: network
+  targetNamespace: &namespace network
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -51,3 +52,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

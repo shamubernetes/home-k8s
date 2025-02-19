@@ -5,7 +5,7 @@ metadata:
   name: &app renovate
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: renovate
+  targetNamespace: &namespace renovate
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -23,3 +23,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

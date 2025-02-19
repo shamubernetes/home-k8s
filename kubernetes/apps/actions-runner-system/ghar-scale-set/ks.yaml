@@ -5,7 +5,7 @@ metadata:
   name: &app ghar-zoo
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: actions-runner-system
+  targetNamespace: &namespace actions-runner-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app

@@ -5,7 +5,7 @@ metadata:
   name: &app node-feature-discovery
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kube-system
+  targetNamespace: &namespace kube-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,6 +21,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # yamllint disable rule:document-start
 ---
@@ -31,7 +32,7 @@ metadata:
   name: &app node-feature-discovery-rules
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kube-system
+  targetNamespace: &namespace kube-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -49,3 +50,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

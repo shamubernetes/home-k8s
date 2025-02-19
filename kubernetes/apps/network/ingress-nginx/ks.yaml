@@ -5,7 +5,7 @@ metadata:
   name: &app ingress-nginx-certificates
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: network
+  targetNamespace: &namespace network
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -23,6 +23,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # yamllint disable-line rule:document-start
 ---
@@ -33,7 +34,7 @@ metadata:
   name: &app ingress-nginx-internal
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: network
+  targetNamespace: &namespace network
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -51,6 +52,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # yamllint disable-line rule:document-start
 ---
@@ -61,7 +63,7 @@ metadata:
   name: &app ingress-nginx-external
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: network
+  targetNamespace: &namespace network
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -79,3 +81,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

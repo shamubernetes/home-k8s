@@ -5,7 +5,7 @@ metadata:
   name: &app home-assistant
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: home-assistant
+  targetNamespace: &namespace home-assistant
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -23,4 +23,5 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
       VOLSYNC_CAPACITY: 10Gi

@@ -5,6 +5,7 @@ metadata:
   name: &app external-secrets
   namespace: "${KS_NAMESPACE}"
 spec:
+  targetNamespace: &namespace external-secrets
   dependsOn:
   - name: onepassword-connect
   path: ./kubernetes/apps/external-secrets/external-secrets/app
@@ -19,6 +20,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # yamllint disable-line rule:document-start
 ---
@@ -29,6 +31,7 @@ metadata:
   name: &app external-secrets-secret-store
   namespace: "${KS_NAMESPACE}"
 spec:
+  targetNamespace: &namespace external-secrets
   dependsOn:
   - name: external-secrets
   path: ./kubernetes/apps/external-secrets/external-secrets/secretstore
@@ -43,3 +46,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

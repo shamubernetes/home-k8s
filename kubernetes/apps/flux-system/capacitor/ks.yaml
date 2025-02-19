@@ -5,7 +5,7 @@ metadata:
   name: &app capacitor
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: flux-system
+  targetNamespace: &namespace flux-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,3 +21,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

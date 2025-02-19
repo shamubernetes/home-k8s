@@ -5,7 +5,7 @@ metadata:
   name: &app tautulli
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: observability
+  targetNamespace: &namespace observability
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,4 +21,5 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
       VOLSYNC_CAPACITY: 5Gi

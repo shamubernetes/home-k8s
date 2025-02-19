@@ -5,7 +5,7 @@ metadata:
   name: &app metrics-server
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kube-system
+  targetNamespace: &namespace kube-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,3 +21,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

@@ -5,7 +5,7 @@ metadata:
   name: &app radarr-3d
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: arrs
+  targetNamespace: &namespace arrs
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -24,4 +24,5 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
       VOLSYNC_CAPACITY: 15Gi

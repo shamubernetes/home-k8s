@@ -5,7 +5,7 @@ metadata:
   name: &app kyverno
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kyverno
+  targetNamespace: &namespace kyverno
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,6 +21,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # yamllint disable-line rule:document-start
 ---
@@ -31,7 +32,7 @@ metadata:
   name: &app kyverno-policies
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: kyverno
+  targetNamespace: &namespace kyverno
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -47,3 +48,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

@@ -5,7 +5,7 @@ metadata:
   name: &app cert-manager
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: cert-manager
+  targetNamespace: &namespace cert-manager
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -21,6 +21,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
 
 # yamllint disable-line rule:document-start
 ---
@@ -31,7 +32,7 @@ metadata:
   name: &app cert-manager-issuers
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: cert-manager
+  targetNamespace: &namespace cert-manager
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
@@ -50,3 +51,4 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace

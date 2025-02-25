@@ -32,7 +32,7 @@ spec:
           copy-config:
             image:
               repository: ghcr.io/shamubernetes/utils
-              tag: 1.0.0@sha256:8c5e80209a3cffabc5977bddf2ad7d94e3d84b52f7c12ef6acc21198f63b3f85
+              tag: 1.0.0@sha256:d219b1ce37e8e51b1534eb7b2cc7ff1d4b5b365fb19cd8e91b2f81f9bd6ef19d
             args: ["gitclone", "-r", "shamubernetes/kometa-config", "-p", "/config"]
         annotations:
           reloader.stakater.com/auto: "true"

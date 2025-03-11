@@ -41,7 +41,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/whisparr-eros
-              tag: 3.0.0.826@sha256:988c2c76ee08c734743728417412c9976b8a069b9eb0bb91a898272401cd771d
+              tag: 3.0.0.828@sha256:0c50ebd5aec385c9f65b7e5c81842a09b64e8452f5a03eb73410dbd41d04640e
             env:
               WHISPARR__ANALYTICS_ENABLED: "False"
               WHISPARR__AUTHENTICATION_METHOD: External

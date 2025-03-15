@@ -1,6 +1,6 @@
 [tools]
 trunk = "1.22.10"
-kubectl = "1.32.2"
+kubectl = "1.32.3"
 sops = "3.9.4"
 age = "1.2.1"
 task = "3.41.0"

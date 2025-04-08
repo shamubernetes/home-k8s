@@ -5,11 +5,7 @@ metadata:
   name: postgres16
 spec:
   instances: 3
-  imageCatalogRef:
-    apiGroup: postgresql.cnpg.io
-    kind: ClusterImageCatalog
-    name: postgresql
-    major: 16
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.8-8
   primaryUpdateStrategy: unsupervised
   storage:
     size: 20Gi

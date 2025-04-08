@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/postgresql.cnpg.io/clusterimagecatalog_v1.json
+apiVersion: postgresql.cnpg.io/v1
+kind: ClusterImageCatalog
+metadata:
+  name: postgresql
+spec:
+  images:
+  - major: 16
+    image: ghcr.io/cloudnative-pg/postgresql:16.8-8
+  - major: 17
+    image: ghcr.io/cloudnative-pg/postgresql:17.4-9

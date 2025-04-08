@@ -4,8 +4,5 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./plex/ks.yaml
-- ./kometa/ks.yaml
-# - ./posterizarr/ks.yaml
-# - ./metube/ks.yaml
-# - ./ersatztv/ks.yaml
+# - ./kometa/ks.yaml
 - ./stash/ks.yaml

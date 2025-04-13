@@ -41,7 +41,7 @@ spec:
               readiness: *probes
             securityContext:
               allowPrivilegeEscalation: false
-              readOnlyRootFilesystem: true
+              readOnlyRootFilesystem: false
               capabilities: {drop: ["ALL"]}
             resources:
               requests:
@@ -82,7 +82,3 @@ spec:
         type: emptyDir
         globalMounts:
         - path: /nonexistent
-      home:
-        existingClaim: cs2-home
-        globalMounts:
-        - path: /home/steam

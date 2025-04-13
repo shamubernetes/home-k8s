@@ -74,3 +74,7 @@ spec:
         existingClaim: cs2
         globalMounts:
         - path: /home/steam/cs2/cs2-dedicated
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

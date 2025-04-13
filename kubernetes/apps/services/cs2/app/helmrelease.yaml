@@ -35,10 +35,6 @@ spec:
             envFrom:
             - secretRef:
                 name: cs2-secret
-            probes:
-              liveness: &probes
-                enabled: false
-              readiness: *probes
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: false
@@ -46,15 +42,18 @@ spec:
             resources:
               requests:
                 cpu: 10m
-    defaultPodOptions:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534
-        runAsGroup: 65534
-        seccompProfile: {type: RuntimeDefault}
+    # defaultPodOptions:
+    #   securityContext:
+    #     runAsNonRoot: true
+    #     runAsUser: 65534
+    #     runAsGroup: 65534
+    #     seccompProfile: {type: RuntimeDefault}
     service:
       app:
         controller: cs2
+        type: LoadBalancer
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_CS2}"
         ports:
           game-tcp:
             primary: true
@@ -74,11 +73,3 @@ spec:
         existingClaim: cs2
         globalMounts:
         - path: /home/steam/cs2/cs2-dedicated
-      tmp:
-        type: emptyDir
-        globalMounts:
-        - path: /tmp
-      nonexistent:
-        type: emptyDir
-        globalMounts:
-        - path: /nonexistent

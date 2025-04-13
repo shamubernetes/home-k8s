@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app cs2
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      cs2:
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: joedwards32/cs2
+              tag: 3.0.4
+            envFrom:
+            - secretRef:
+                name: cs2-secret
+            probes:
+              liveness: &probes
+                enabled: false
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 10m
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: cs2
+        ports:
+          game-tcp:
+            primary: true
+            enabled: true
+            port: 27015
+            protocol: TCP
+          game-udp:
+            enabled: true
+            port: 27015
+            protocol: UDP
+          rcon:
+            enabled: true
+            port: 27020
+            protocol: UDP
+    persistence:
+      config:
+        existingClaim: cs2
+        globalMounts:
+        - path: /home/steam/cs2/cs2-dedicated

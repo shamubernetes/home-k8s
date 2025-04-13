@@ -24,7 +24,7 @@ spec:
   values:
     controllers:
       cs2:
-        strategy: RollingUpdate
+        strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
         containers:

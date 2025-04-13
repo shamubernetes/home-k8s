@@ -78,3 +78,7 @@ spec:
         type: emptyDir
         globalMounts:
         - path: /tmp
+      nonexistent:
+        type: emptyDir
+        globalMounts:
+        - path: /nonexistent

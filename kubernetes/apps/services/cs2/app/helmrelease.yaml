@@ -82,3 +82,7 @@ spec:
         type: emptyDir
         globalMounts:
         - path: /nonexistent
+      home:
+        existingClaim: cs2-home
+        globalMounts:
+        - path: /home/steam

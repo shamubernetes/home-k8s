@@ -31,7 +31,7 @@ spec:
           app:
             image:
               repository: joedwards32/cs2
-              tag: 3.0.4
+              tag: 3.0.4@sha256:a51b5b6e90ac15df10a13a78ba080e44852146c3217c22757bf844a357f42b5b
             envFrom:
             - secretRef:
                 name: cs2-secret

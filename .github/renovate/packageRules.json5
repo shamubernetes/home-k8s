@@ -159,7 +159,7 @@
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
       "matchUpdateTypes": ["patch", "digest"],
-      "matchPackagePatterns": ["ghcr.io/bjw-s", "ghcr.io/onedr0p", "ghcr.io/tautulli/tautulli"],
+      "matchPackagePatterns": ["ghcr.io/bjw-s", "ghcr.io/onedr0p", "ghcr.io/tautulli/tautulli", "ghcr.io/home-operations"],
     },
     {
       "matchDatasources": ["custom.grafana-dashboards"],

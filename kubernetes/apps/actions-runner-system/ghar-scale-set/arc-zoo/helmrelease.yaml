@@ -39,7 +39,7 @@ spec:
       spec:
         containers:
         - name: runner
-          image: ghcr.io/shamubernetes/actions-runner:2.323.0@sha256:087d120f1c5ffcc7412a58f3ff12acf66f48bd060b5726c8b86166e0f2a0aeda
+          image: ghcr.io/shamubernetes/actions-runner:2.324.0@sha256:5865463b501d3b64109fc288e163358cbe56f0008f6e7559b53b2692e84d384a
           command: ["/home/runner/run.sh"]
     controllerServiceAccount:
       name: ghar-controller

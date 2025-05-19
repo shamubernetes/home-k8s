@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: ghcr.io/jfroy/stash
-              tag: v0.27.0-cudajellyfin.4@sha256:26190e92c55f39304bfc5871dca7f77a67982673b08fb7afd66fe6f67c539b65
+              tag: v0.28.1-cudajellyfin.4@sha256:0e4b5eb7971ddadc0e482fd9799a5fd621160359ce67da4bdda990ccc67e06c2
             env:
               HOME: /config
               STASH_BLOBS_PATH: /blobs

@@ -118,8 +118,6 @@ spec:
         storageClass: openebs-hostpath
     gateway:
       replicas: 2
-      image:
-        registry: ghcr.io
       ingress:
         enabled: true
         ingressClassName: internal

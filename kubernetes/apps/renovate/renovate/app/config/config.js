@@ -5,7 +5,7 @@ module.exports = {
   allowScripts: true,
   assigneesFromCodeOwners: true,
   autodiscover: true,
-  autodiscoverFilter: ["shamubernetes/*", "kiliantyler/*", "zshplugins/*"],
+  autodiscoverFilter: ["shamubernetes/*", "kiliantyler/*"],
   baseDir: "/tmp/renovate",
   inheritConfig: true,
   inheritConfigFileName: "renovate.json5",

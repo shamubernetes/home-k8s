@@ -24,31 +24,19 @@ spec:
   dependsOn:
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  # valuesFrom:
-  # - targetPath: controllers.renovate.containers.app.env.RENOVATE_REPOSITORY_CACHE_TYPE
-  #   kind: ConfigMap
-  #   name: &cephBucket renovate-bucket
-  #   valuesKey: BUCKET_NAME
   values:
     controllers:
       renovate:
         annotations:
           reloader.stakater.com/auto: 'true'
-        initContainers:
-          init-db:
-            image:
-              repository: ghcr.io/onedr0p/postgres-init
-              tag: 16@sha256:217c47c886965474f5c234b5a35ed008f53b39ea90a3088b31c0da98e1f9284d
-            envFrom: &envFrom
-            - secretRef:
-                name: renovate-secret
         containers:
           app:
-
             image:
               repository: ghcr.io/mend/renovate-ce
               tag: '10.1.0-full@sha256:c94fea65783a98c52de61bf37634ad5be342f4a0840f14043103819de25dc2d7'
-            envFrom: *envFrom
+            envFrom:
+            - secretRef:
+                name: renovate-secret
             env:
               TZ: ${TIMEZONE}
               MEND_RNV_SERVER_PORT: &port 8080
@@ -91,7 +79,6 @@ spec:
       app:
         annotations:
           external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-          # nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
         className: external
         hosts:
         - host: "{{ .Release.Name }}.${HOME_DOMAIN}"

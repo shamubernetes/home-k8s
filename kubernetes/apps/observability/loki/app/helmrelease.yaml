@@ -135,7 +135,7 @@ spec:
         storageClass: openebs-hostpath
     sidecar:
       image:
-        repository: ghcr.io/kiwigrid/k8s-sidecar
+        repository: ghcr.io/home-operations/k8s-sidecar
       rules:
         searchNamespace: ALL
         folder: /rules/fake

@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: ghcr.io/mend/renovate-ce
-              tag: '10.1.0-full@sha256:c94fea65783a98c52de61bf37634ad5be342f4a0840f14043103819de25dc2d7'
+              tag: '10.3.0-full@sha256:cd10d6e8f83c78a7196bc8c3b6748b0a9c369fcc294e4cbd7218e7e279c0f934'
             envFrom:
             - secretRef:
                 name: renovate-secret

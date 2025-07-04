@@ -59,7 +59,10 @@ jobs:
         fileName: kubeconfig
 
     - name: Install Python Dependencies
-      run: pip install pyyaml
+      run: |
+        echo 'Cython < 3.0' > /tmp/constraint.txt
+        PIP_CONSTRAINT=/tmp/constraint.txt python -m pip install pyyaml==5.4.1
+        pip install openapi2jsonschema
 
     - name: Download and run crd-extractor
       env:
@@ -76,9 +79,6 @@ jobs:
       run: |
         mkdir -p /home/runner/schemas/kubernetes
         mkdir -p /home/runner/schemas/hacks
-        echo 'Cython < 3.0' > /tmp/constraint.txt
-        PIP_CONSTRAINT=/tmp/constraint.txt python -m pip install pyyaml==5.4.1
-        pip install openapi2jsonschema
         ./.github/workflows/resources/k8s-schemas.sh
         ./.github/workflows/resources/k8s-schema-hacks.sh
         mv /home/runner/.datree/crdSchemas/* /home/runner/schemas

@@ -59,7 +59,7 @@ jobs:
         fileName: kubeconfig
 
     - name: Install Python Dependencies
-      run: uv pip install pyyaml
+      run: pip install pyyaml
 
     - name: Download and run crd-extractor
       env:

@@ -58,6 +58,9 @@ jobs:
         encodedString: "${{ secrets.KUBECONFIG }}"
         fileName: kubeconfig
 
+    - name: Install Python Dependencies
+      run: uv pip install pyyaml
+
     - name: Download and run crd-extractor
       env:
         KUBECONFIG: "${{ steps.kubeconfig.outputs.filePath }}"

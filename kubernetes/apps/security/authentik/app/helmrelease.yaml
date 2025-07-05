@@ -25,12 +25,14 @@ spec:
   values:
     global:
       podAnnotations:
-        secret.reloader.stakater.com/reload: &secret authentik-secret
+        secret.reloader.stakater.com/reload: authentik-secret,authentik-ceph-compat
       deploymentStrategy:
         type: RollingUpdate
       envFrom:
       - secretRef:
-          name: *secret
+          name: &secret authentik-secret
+      - secretRef:
+          name: authentik-ceph-compat
     authentik:
       redis:
         enabled: true

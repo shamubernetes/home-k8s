@@ -23,6 +23,14 @@ spec:
       strategy: rollback
       retries: 3
   values:
+    global:
+      podAnnotations:
+        secret.reloader.stakater.com/reload: &secret authentik-secret
+      deploymentStrategy:
+        type: RollingUpdate
+      envFrom:
+      - secretRef:
+          name: *secret
     authentik:
       redis:
         enabled: true
@@ -33,4 +41,4 @@ spec:
         image: ghcr.io/onedr0p/postgres-init:16@sha256:217c47c886965474f5c234b5a35ed008f53b39ea90a3088b31c0da98e1f9284d
         envFrom:
         - secretRef:
-            name: authentik-config-secret
+            name: *secret

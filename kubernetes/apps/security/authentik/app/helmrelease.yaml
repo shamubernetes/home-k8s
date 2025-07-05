@@ -35,7 +35,8 @@ spec:
           name: authentik-ceph-compat
     authentik:
       redis:
-        enabled: true
+        host: dragonfly.database.svc.cluster.local
+        db: 2
     server:
       replicas: 3
       initContainers:

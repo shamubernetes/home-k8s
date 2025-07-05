@@ -45,3 +45,11 @@ spec:
         envFrom:
         - secretRef:
             name: *secret
+      ingress:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+        ingressClassName: external
+        hosts:
+        - "{{ .Release.Name }}.${HOME_DOMAIN}"
+        - "sso.${HOME_DOMAIN}"

@@ -23,7 +23,7 @@ spec:
   postBuild:
     substitute:
       APP: *app
-      NAMESPACE: ${KS_NAMESPACE}
+      NAMESPACE: *namespace
 
 # yamllint disable-line rule:document-start
 ---

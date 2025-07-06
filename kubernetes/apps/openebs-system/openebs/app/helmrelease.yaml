@@ -21,6 +21,10 @@ spec:
     remediation:
       retries: 3
   values:
+    loki:
+      enabled: false
+    minio:
+      enabled: false
     localpv-provisioner:
       localpv:
         image:

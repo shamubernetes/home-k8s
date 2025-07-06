@@ -25,11 +25,12 @@ spec:
       localpv:
         image:
           registry: quay.io/
+        basePath: &hostPath /var/openebs/local
       hostpathClass:
         enabled: true
         name: openebs-hostpath
         isDefaultClass: false
-        basePath: /var/openebs/local
+        basePath: *hostPath
     openebs-crds:
       csi:
         volumeSnapshots:

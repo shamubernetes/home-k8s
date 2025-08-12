@@ -3,6 +3,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: &name ghar-set-zoo
+  namespace: actions-runner-system
 spec:
   interval: 10m
   chart:
@@ -48,15 +49,6 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: status.hostIP
-            volumeMounts:
-              - mountPath: /var/run/secrets/talos.dev
-                name: talos
-                readOnly: true
-        serviceAccountName: *name
-        volumes:
-          - name: talos
-            secret:
-              secretName: *name
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

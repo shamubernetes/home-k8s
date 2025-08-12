@@ -31,11 +31,40 @@ spec:
       plex:
         annotations:
           reloader.stakater.com/auto: "true"
+        initContainers:
+          hamass:
+            image:
+              repository: curlimages/curl
+              tag: 8.8.0
+            command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "Installing HAMA..."
+              mkdir -p "/config/Library/Application Support/Plex Media Server/Plug-ins"
+              curl -sL https://github.com/ZeroQI/Hama.bundle/archive/refs/heads/master.zip -o /tmp/hama.zip
+              unzip -qo /tmp/hama.zip -d "/config/Library/Application Support/Plex Media Server/Plug-ins"
+              mv "/config/Library/Application Support/Plex Media Server/Plug-ins/Hama.bundle-master" \
+                "/config/Library/Application Support/Plex Media Server/Plug-ins/Hama.bundle"
+
+              echo "Installing Absolute Series Scanner..."
+              mkdir -p "/config/Library/Application Support/Plex Media Server/Scanners/Series"
+              curl -sL https://github.com/ZeroQI/Absolute-Series-Scanner/archive/refs/heads/master.zip -o /tmp/ass.zip
+              unzip -qo /tmp/ass.zip -d /tmp
+              cp -r /tmp/Absolute-Series-Scanner-master/* \
+                "/config/Library/Application Support/Plex Media Server/Scanners/Series/"
+
+              echo "Plugins installed."
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
         containers:
           app:
             image:
-              repository: ghcr.io/shamubernetes/plex
-              tag: 1.42.1.10060-4e8b05daf@sha256:4de2843d17d3d3f58dcbfd9b96139e3ccd303532a686f1f0cdf144a3c6282734
+              repository: ghcr.io/home-operations/plex
+              tag: 1.42.1.10060@sha256:04563be281364ba2462285aacb2ca13d7ef7e1d0b19e1203f4c19b4a56840c5c
             env:
               TZ: America/New_York
               PLEX_ADVERTISE_URL: https://plex.${HOME_DOMAIN}:443,http://${IPAM_IP_PLEX}:32400

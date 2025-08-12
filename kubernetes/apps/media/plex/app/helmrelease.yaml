@@ -35,7 +35,7 @@ spec:
           hamass:
             image:
               repository: curlimages/curl
-              tag: 8.8.0@sha256:73e4d532ea62d7505c5865b517d3704966ffe916609bedc22af6833dc9969bcd
+              tag: 8.15.0@sha256:4026b29997dc7c823b51c164b71e2b51e0fd95cce4601f78202c513d97da2922
             command:
             - sh
             - -c

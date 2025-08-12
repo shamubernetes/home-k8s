@@ -40,22 +40,47 @@ spec:
             - sh
             - -c
             - |
+              #!/bin/sh
               set -e
-              echo "Installing HAMA..."
-              mkdir -p "/config/Library/Application Support/Plex Media Server/Plug-ins"
-              curl -sL https://github.com/ZeroQI/Hama.bundle/archive/refs/heads/master.zip -o /tmp/hama.zip
-              unzip -qo /tmp/hama.zip -d "/config/Library/Application Support/Plex Media Server/Plug-ins"
-              mv "/config/Library/Application Support/Plex Media Server/Plug-ins/Hama.bundle-master" \
-                "/config/Library/Application Support/Plex Media Server/Plug-ins/Hama.bundle"
+              PLEX_CONFIG="/config/Library/Application Support/Plex Media Server"
 
-              echo "Installing Absolute Series Scanner..."
-              mkdir -p "/config/Library/Application Support/Plex Media Server/Scanners/Series"
-              curl -sL https://github.com/ZeroQI/Absolute-Series-Scanner/archive/refs/heads/master.zip -o /tmp/ass.zip
-              unzip -qo /tmp/ass.zip -d /tmp
-              cp -r /tmp/Absolute-Series-Scanner-master/* \
-                "/config/Library/Application Support/Plex Media Server/Scanners/Series/"
+              install_or_update() {
+                NAME="$1"
+                REPO="$2"
+                TARGET_DIR="$3"
 
-              echo "Plugins installed."
+                echo "--- Checking $NAME ---"
+
+                LATEST_COMMIT=$(curl -s "https://api.github.com/repos/$REPO/commits/master" \
+                  | grep '"sha"' | head -n 1 | cut -d '"' -f 4)
+
+                COMMIT_FILE="$TARGET_DIR/.commit"
+
+                if [ ! -f "$COMMIT_FILE" ] || [ "$(cat "$COMMIT_FILE")" != "$LATEST_COMMIT" ]; then
+                  echo "Updating $NAME to commit $LATEST_COMMIT ..."
+                  rm -rf "$TARGET_DIR" /tmp/tmpdir
+                  mkdir -p "$TARGET_DIR" /tmp/tmpdir
+
+                  ZIP_URL="https://github.com/$REPO/archive/refs/heads/master.zip"
+                  curl -sL "$ZIP_URL" -o /tmp/plugin.zip
+
+                  unzip -qo /tmp/plugin.zip -d /tmp/tmpdir
+                  mv /tmp/tmpdir/*/* "$TARGET_DIR" || mv /tmp/tmpdir/* "$TARGET_DIR"
+
+                  echo "$LATEST_COMMIT" > "$COMMIT_FILE"
+                  echo "$NAME updated."
+                else
+                  echo "$NAME is already up-to-date (commit $LATEST_COMMIT)."
+                fi
+              }
+
+              install_or_update "HAMA" "ZeroQI/Hama.bundle" \
+                "$PLEX_CONFIG/Plug-ins/Hama.bundle"
+
+              install_or_update "Absolute Series Scanner" "ZeroQI/Absolute-Series-Scanner" \
+                "$PLEX_CONFIG/Scanners/Series/Absolute Series Scanner"
+
+              echo "--- All plugins processed ---"
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true

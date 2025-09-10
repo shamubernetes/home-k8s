@@ -30,7 +30,7 @@ spec:
         containers:
           app:
             image:
-              repository: ghcr.io/danixu/project-zomboid-server-docker
+              repository: danixu86/project-zomboid-dedicated-server
               tag: 41.78.16
             env:
               SERVERNAME: Zomboid

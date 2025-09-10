@@ -15,10 +15,10 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: "${APP}-home"
+  name: "${APP}-mods"
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 75Gi
+      storage: 40Gi
   storageClassName: ceph-block

@@ -31,7 +31,7 @@ spec:
           app:
             image:
               repository: danixu86/project-zomboid-dedicated-server
-              tag: 41.78.16
+              tag: 41.78.16@sha256:502e5e98a5393a98f9d1a20ded09a041f5f9b62c6f7fba8932794e8ea8aa3cd2
             env:
               SERVERNAME: Zomboid
               SERVERPRESET: Beginner

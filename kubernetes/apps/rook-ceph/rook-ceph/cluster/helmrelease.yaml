@@ -54,6 +54,9 @@ spec:
       csi:
         readAffinity:
           enabled: true
+          crushLocationLabels:
+          - "topology.kubernetes.io/zone"
+          - "topology.kubernetes.io/region"
       crashCollector:
         disable: false
       dashboard:

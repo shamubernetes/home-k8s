@@ -37,7 +37,7 @@ spec:
           app:
             image:
               repository: adguard/adguardhome
-              tag: v0.107.64@sha256:23243d0004d9398cf9c83bdfce3dd92005df72aef010f537e7325a021f31a6f5
+              tag: v0.107.66@sha256:cc8757742e547c722bb0bd9a3b11fce22771a75a5b0e07ce9a789ad62a2bfd37
               pullPolicy: IfNotPresent
             env:
               TZ: America/New_York

@@ -70,3 +70,7 @@ spec:
     persistence:
       config:
         existingClaim: *app
+      home:
+        type: emptyDir
+        globalMounts:
+        - path: /home/appuser

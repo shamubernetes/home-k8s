@@ -1,0 +1,12 @@
+---
+globs: **/*.sops.yaml,**/*.sops.yml
+---
+
+### SOPS and secret handling
+
+- **File naming**: Use the `.sops.yaml` (or `.sops.yml`) suffix for encrypted manifests.
+- **Age setup**: Flux uses the `sops-age` secret for decryption; see the aggregator Kustomization [kubernetes/flux/apps.yaml](mdc:kubernetes/flux/apps.yaml).
+- **Variable substitution**: Secrets can still use `${...}` values when combined with Flux `postBuild.substituteFrom` (e.g., `cluster-secrets`).
+- **Do not inline secrets**: Reference them via `valuesFrom` in HelmReleases or as separate Secret manifests; never commit plain-text sensitive values.
+- **Editing**: Use `sops` CLI to edit (`sops <file>`), keeping indentation and key order stable.
+- **Git hygiene**: Commit only encrypted files; avoid leaking plaintext in diffs or commit messages.

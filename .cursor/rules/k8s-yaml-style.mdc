@@ -1,0 +1,26 @@
+---
+globs: kubernetes/**/*.yaml,kubernetes/**/*.yml,talos/**/*.yaml,talos/**/*.yml
+---
+
+### Kubernetes YAML style conventions
+
+- **Indentation**: 2 spaces; never use tabs. Preserve existing indentation width.
+- **Top-level key order**: `apiVersion`, `kind`, `metadata`, `spec`.
+- **Quoting**: Use double quotes when a value includes special characters or variable substitutions (e.g., `${HOME_DOMAIN}`).
+- **Lists**: Hyphens align under their parent key; avoid trailing spaces.
+- **Schema headers**: Add a first-line `yaml-language-server` schema comment for strong validation.
+  - **HelmRelease (Flux v2 CRD)**:
+    ```
+    # yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+    ```
+  - **Flux Kustomization (CRD)**:
+    ```
+    # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+    ```
+  - **Plain Kustomize files** (`kustomization.yaml`):
+    ```
+    # yaml-language-server: $schema=https://json.schemastore.org/kustomization
+    ```
+- **Durations**: Use short Go duration strings (e.g., `10m`, `15m`).
+- **Anchors**: Prefer YAML anchors/aliases for repeated values (e.g., `&probes` / `*probes`, `&cephBucket` / `*cephBucket`).
+- **Newlines**: End files with a single newline; no extra blank lines at EOF.

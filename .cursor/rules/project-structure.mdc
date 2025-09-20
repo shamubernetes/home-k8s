@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+### Home-K8s project structure and entry points
+
+- **Primary aggregator**: Flux applies everything from `kubernetes/apps` via [kubernetes/flux/apps.yaml](mdc:kubernetes/flux/apps.yaml). This Kustomization performs SOPS decryption and substitutes cluster variables from `cluster-settings`, `cluster-secrets`, and `cluster-ipam`.
+- **App layout**: Each app lives under `kubernetes/apps/<category>/<app>/` with a `kustomization.yaml`, a `namespace.yaml` (per category), and usually an `app/helmrelease.yaml`.
+  - Example: [kubernetes/apps/observability/loki/app/helmrelease.yaml](mdc:kubernetes/apps/observability/loki/app/helmrelease.yaml) with its kustomization [kubernetes/apps/observability/loki/app/kustomization.yaml](mdc:kubernetes/apps/observability/loki/app/kustomization.yaml)
+  - Example: [kubernetes/apps/media/plex/app/helmrelease.yaml](mdc:kubernetes/apps/media/plex/app/helmrelease.yaml)
+- **Repositories (sources)**: Defined under `kubernetes/flux/repositories/` (helm, oci, git). See [kubernetes/flux/repositories/helm/kustomization.yaml](mdc:kubernetes/flux/repositories/helm/kustomization.yaml).
+- **Reusable templates**: Stored in `kubernetes/templates/` and referenced by app-level kustomizations (e.g., `templates/gatus/guarded`).
+- **Talos cluster OS**: `talos/` contains the cluster bootstrapping and patch model. See [talos/helmfile.yaml](mdc:talos/helmfile.yaml) and [talos/talconfig.yaml](mdc:talos/talconfig.yaml).
+- **Automation**: [Taskfile.yaml](mdc:Taskfile.yaml) provides common tasks.
+
+### General conventions
+
+- **YAML schemas**: Add a `yaml-language-server` `$schema` comment on the first line for better IDE validation. See specific schema guidance in the style rules.
+- **Variable substitution**: Rely on Flux `postBuild.substituteFrom` for `${HOME_DOMAIN}`, `${IPAM_*}`, etc., not Helm values hardcoding.
+- **Security & compliance**: Secrets live as SOPS-encrypted files (`*.sops.yaml`); Flux decrypts using the `sops-age` secret.

@@ -5,3 +5,4 @@ resources:
 - ./helmrelease.yaml
 - ./gatus-rook.yaml
 - ./gatus-rwg.yaml
+- ./fs-fuse.yaml

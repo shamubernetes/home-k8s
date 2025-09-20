@@ -1,0 +1,27 @@
+---
+globs: kubernetes/**/helmrelease.yaml
+---
+
+### HelmRelease guidelines
+
+- **Schema header**: First line should be the Flux CRD schema:
+  ```
+  # yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+  ```
+- **Common spec defaults**:
+  - `spec.interval: 10m`
+  - `spec.install.remediation.retries: 3`
+  - `spec.upgrade.cleanupOnFail: true`
+  - `spec.upgrade.remediation.strategy: rollback` and `retries: 3`
+  - Set `install.crds` / `upgrade.crds` to `Skip` unless the chart must manage CRDs
+- **Dependencies**: Use `spec.dependsOn` for storage (e.g., OpenEBS, Rook), secrets operators, or CRD stacks the release requires.
+- **valuesFrom**: Load sensitive or dynamic values from ConfigMaps/Secrets rather than inlining. Prefer YAML anchors for reuse (e.g., `&cephBucket` then `*cephBucket`).
+- **App Template (bjw-s) pattern**: When using `app-template` charts, prefer:
+  - `controllers` → per-controller `initContainers`/`containers`, probes (anchor `&probes`), and `securityContext` with `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, and `capabilities.drop: ["ALL"]`.
+  - `defaultPodOptions.securityContext` → `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: { type: RuntimeDefault }`.
+  - `service` and `ingress` blocks → external ingress uses class `external` with `external-dns` target; internal ingress uses `ingressClassName: internal`.
+  - `persistence` → use `existingClaim` where applicable; mount media or cache volumes under `globalMounts`.
+- **Loki/Grafana style**: For Loki, use `deploymentMode`, `loki.structuredConfig`, and S3 storage via `valuesFrom` with path-style and insecure flags as needed.
+- **Networking**: For LoadBalancers, specify static IPs via Cilium annotation `io.cilium/lb-ipam-ips: "${IPAM_IP_*}"`.
+- **Resources**: Set minimal `requests` and appropriate `limits` for memory/cpu on critical workloads.
+- **Telemetry**: Disable analytics/telemetry where charts allow (e.g., Loki `analytics.reporting_enabled: false`).

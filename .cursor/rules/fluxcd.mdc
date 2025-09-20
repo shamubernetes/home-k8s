@@ -1,0 +1,16 @@
+---
+globs: kubernetes/flux/**/*.yaml,kubernetes/apps/**/kustomization.yaml
+---
+
+### FluxCD conventions
+
+- **Cluster aggregator**: [kubernetes/flux/apps.yaml](mdc:kubernetes/flux/apps.yaml) applies `./kubernetes/apps` with:
+  - `prune: true`
+  - SOPS `decryption.provider: sops` and `secretRef.name: sops-age`
+  - `postBuild.substituteFrom` for `cluster-settings` (ConfigMap), `cluster-secrets` (Secret), and `cluster-ipam` (ConfigMap)
+  - A patch to propagate the same `decryption` and `postBuild.substituteFrom` to child `Kustomization` objects unless explicitly opted out
+- **Opt-out of substitution**: Add label `substitution.flux.home.arpa/disabled: "true"` to a `Kustomization` to skip variable substitution (the aggregator targets those where this is not set to `true`).
+- **Intervals**: Default `interval: 10m` for Kustomizations and HelmReleases unless a component needs faster changes.
+- **Repositories**: Define upstream sources under `kubernetes/flux/repositories/` (helm/git/oci). Keep one resource per file where practical; group by provider.
+- **App kustomizations**: In `kubernetes/apps/**/kustomization.yaml`, list resources concisely and reference shared templates (e.g., `../../../../templates/gatus/guarded`). Use the plain Kustomize schema header.
+- **Order**: Use `dependsOn` at the HelmRelease level to orchestrate storage/network/bootstrap dependencies instead of cross-Kustomization coupling when possible.

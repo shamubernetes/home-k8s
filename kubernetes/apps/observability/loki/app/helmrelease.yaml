@@ -126,12 +126,6 @@ spec:
         storageClass: openebs-hostpath
     gateway:
       replicas: 2
-      extraVolumes:
-      - name: tmp
-        emptyDir: {}
-      extraVolumeMounts:
-      - name: tmp
-        mountPath: /tmp
       ingress:
         enabled: true
         ingressClassName: internal
@@ -140,6 +134,13 @@ spec:
           paths:
           - path: /
             pathType: Prefix
+    global:
+      extraVolumes:
+      - name: tmp
+        emptyDir: {}
+      extraVolumeMounts:
+      - name: tmp
+        mountPath: /tmp
     read:
       replicas: 2
     write:

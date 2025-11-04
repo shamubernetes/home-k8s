@@ -124,14 +124,14 @@ spec:
       persistence:
         size: 20Gi
         storageClass: openebs-hostpath
+    gateway:
+      replicas: 2
       extraVolumes:
       - name: tmp
         emptyDir: {}
       extraVolumeMounts:
       - name: tmp
         mountPath: /tmp
-    gateway:
-      replicas: 2
       ingress:
         enabled: true
         ingressClassName: internal

@@ -20,7 +20,7 @@ spec:
   wait: false
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
-  timeout: "${KS_TIMEOUT}"
+  timeout: 10m
   postBuild:
     substitute:
       APP: *app

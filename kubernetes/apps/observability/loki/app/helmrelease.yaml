@@ -134,13 +134,6 @@ spec:
           paths:
           - path: /
             pathType: Prefix
-    global:
-      extraVolumes:
-      - name: tmp
-        emptyDir: {}
-      extraVolumeMounts:
-      - name: tmp
-        mountPath: /tmp
     read:
       replicas: 2
     write:
@@ -148,9 +141,3 @@ spec:
       persistence:
         size: 20Gi
         storageClass: openebs-hostpath
-    sidecar:
-      image:
-        repository: ghcr.io/home-operations/k8s-sidecar
-        tag: 2.0.3@sha256:7978b5a757b1cb4f1b0d1c61cf135030b9353a9841457d81c8106eb1cdfe3b4b
-      rules:
-        searchNamespace: ALL

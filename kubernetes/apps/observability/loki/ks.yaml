@@ -24,3 +24,14 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+  patches:
+  # Add /tmp volume mount to sidecar container for Python multiprocessing
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/1/volumeMounts/-
+        value:
+          name: tmp
+          mountPath: /tmp
+    target:
+      kind: Deployment
+      name: loki-backend

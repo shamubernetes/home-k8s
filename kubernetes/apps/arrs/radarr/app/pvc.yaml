@@ -5,8 +5,8 @@ metadata:
   name: radarr
   namespace: arrs
 spec:
-  accessModes: ["ReadWriteMany"]
+  accessModes: ["ReadWriteOnce"]
   resources:
     requests:
       storage: 15Gi
-  storageClassName: ceph-fs-fuse
+  storageClassName: ceph-block

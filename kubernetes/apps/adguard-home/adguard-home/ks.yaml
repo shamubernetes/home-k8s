@@ -15,7 +15,7 @@ spec:
   prune: true
   sourceRef:
     kind: GitRepository
-    name: ${KS_GIT_REPO_NAME}
+    name: "${KS_GIT_REPO_NAME}"
   wait: false
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"

@@ -9,8 +9,7 @@ data:
   NODE_CIDR: "10.100.47.0/32"
   # Cluster
   CLUSTER_INTERNAL_CIDR: "10.69.0.0/16"
-  # Outside of the IPAM Range
-  IPAM_IP_NFS: 10.50.0.50
+  IPAM_IP_NFS: 10.100.47.100
   IPAM_IP_GATEWAY: 10.100.47.1
   IPAM_RANGE: "24"
   # IPAM Range

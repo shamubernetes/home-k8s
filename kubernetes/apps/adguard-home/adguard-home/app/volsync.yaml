@@ -25,7 +25,7 @@ kind: ReplicationSource
 metadata:
   name: adguard-home
 spec:
-  sourcePVC: data-adguard-home-adguard-home-0
+  sourcePVC: data-adguard-home-0
   trigger:
     schedule: "0 * * * *"
   restic:

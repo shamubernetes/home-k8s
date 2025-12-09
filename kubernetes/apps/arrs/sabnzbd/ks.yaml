@@ -25,3 +25,4 @@ spec:
       APP: *app
       NAMESPACE: *namespace
       GATUS_SUBDOMAIN: sab
+      VOLSYNC_CAPACITY: 3Gi

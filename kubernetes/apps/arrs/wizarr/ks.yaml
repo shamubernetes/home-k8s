@@ -23,3 +23,4 @@ spec:
       APP: *app
       NAMESPACE: *namespace
       GATUS_SUBDOMAIN: "join"
+      VOLSYNC_CAPACITY: 2Gi

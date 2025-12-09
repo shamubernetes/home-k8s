@@ -24,8 +24,8 @@ spec:
   dependsOn:
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  # - name: volsync #TODO: Enable when volsync is ready
-  #   namespace: storage
+  - name: volsync
+    namespace: volsync-system
   values:
     controllers:
       wizarr:

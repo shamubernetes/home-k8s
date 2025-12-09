@@ -49,6 +49,15 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: status.hostIP
+            volumeMounts:
+              - mountPath: /var/run/secrets/talos.dev
+                name: talos
+                readOnly: true
+        serviceAccountName: *name
+        volumes:
+          - name: talos
+            secret:
+              secretName: *name
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

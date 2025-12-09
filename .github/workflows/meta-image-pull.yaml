@@ -116,7 +116,9 @@ jobs:
         run: curl -fsSL https://talos.dev/install | sh
 
       - name: Pull Image
-        run: talosctl --nodes "${{ secrets.TALOS_NODES }}" image pull "${{ matrix.image }}"
+        env:
+          TALOSCONFIG: /var/run/secrets/talos.dev/talosconfig
+        run: talosctl --nodes "$NODE" image pull "${{ matrix.image }}"
 
   success:
     if: ${{ !cancelled() }}

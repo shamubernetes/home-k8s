@@ -22,3 +22,4 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      VOLSYNC_CAPACITY: 2Gi

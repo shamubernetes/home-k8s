@@ -1,18 +1,4 @@
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
-# TODO: Move to volsync template
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: overseerr
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: ${VOLSYNC_CAPACITY}
-  storageClassName: ceph-block
-# yamllint disable rule:document-start
----
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

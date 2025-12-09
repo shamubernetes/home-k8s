@@ -7,7 +7,6 @@ spec:
   configuration:
     destinationPath: s3://cloudnative-pg/
     endpointURL: ${R2_ENDPOINT}
-    serverName: postgres17-v1
     s3Credentials:
       accessKeyId:
         name: cloudnative-pg-secret

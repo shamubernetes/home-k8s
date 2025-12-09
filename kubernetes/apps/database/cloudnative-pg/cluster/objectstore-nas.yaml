@@ -7,7 +7,6 @@ spec:
   configuration:
     destinationPath: s3://cnpg-backups/
     endpointURL: http://garage.storage.svc.cluster.local:3900
-    serverName: postgres17-v1
     s3Credentials:
       accessKeyId:
         name: cnpg-garage-secret

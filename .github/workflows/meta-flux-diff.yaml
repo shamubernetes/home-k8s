@@ -15,7 +15,7 @@ permissions:
 jobs:
   filter:
     name: Flux Local - Filter
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     outputs:
       changed-files: ${{ steps.changed-files.outputs.changed_files }}
     steps:
@@ -136,7 +136,7 @@ jobs:
       - test
       - diff
     name: Flux Local - Success
-    runs-on: ubuntu-latest
+    runs-on: ["ghar-set-zoo"]
     steps:
       - name: Any jobs failed?
         if: ${{ contains(needs.*.result, 'failure') }}

@@ -3,8 +3,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./clusterimagecatalog.yaml
-- ./cluster17.yaml
 - ./garage-externalsecret.yaml
+- ./objectstore-r2.yaml
+- ./objectstore-nas.yaml
+- ./cluster17.yaml
 - ./scheduledbackup.yaml
 - ./prometheusrule.yaml
 - ./service.yaml

@@ -31,7 +31,7 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app cloudnative-pg-cluster
+  name: &app cloudnative-pg-plugin
   namespace: "${KS_NAMESPACE}"
 spec:
   targetNamespace: &namespace database
@@ -40,6 +40,31 @@ spec:
       app.kubernetes.io/name: *app
   dependsOn:
   - name: cloudnative-pg
+  - name: cert-manager
+  path: ./kubernetes/apps/database/cloudnative-pg/plugin
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app cloudnative-pg-cluster
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace database
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: cloudnative-pg-plugin
   path: ./kubernetes/apps/database/cloudnative-pg/cluster
   prune: true
   sourceRef:

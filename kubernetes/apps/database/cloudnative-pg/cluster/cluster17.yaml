@@ -31,38 +31,30 @@ spec:
       hugepages-2Mi: 2Gi # Requires sysctl set on the host
   monitoring:
     enablePodMonitor: true
+  # Using the barman-cloud plugin for backups (required for CNPG 1.26+)
+  plugins:
+  - name: barman-cloud.cloudnative-pg.io
+    isWALArchiver: true
+    parameters:
+      barmanObjectName: r2
+  - name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: nas
   backup:
-    retentionPolicy: 30d
-    barmanObjectStore: &barmanObjectStore
-      data:
-        compression: bzip2
-      wal:
-        compression: bzip2
-        maxParallel: 8
-      destinationPath: s3://cloudnative-pg/
-      endpointURL: ${R2_ENDPOINT}
-      # Note: serverName version needs to be incremented
-      # when recovering from an existing cnpg cluster
-      serverName: &currentCluster postgres17-v1
-      s3Credentials:
-        accessKeyId:
-          name: cloudnative-pg-secret
-          key: aws-access-key-id
-        secretAccessKey:
-          name: cloudnative-pg-secret
-          key: aws-secret-access-key
     volumeSnapshot:
       className: csi-ceph-blockpool
       walClassName: csi-ceph-blockpool
       snapshotOwnerReference: cluster
-  # Note: Uncomment bootstrap section to recover from postgres16 backup
-  # After successful migration, comment this out and increment serverName
+  # Note: Uncomment bootstrap section to recover from backup
+  # After successful migration, comment this out and increment serverName in ObjectStore
   # bootstrap:
   #   recovery:
-  #     source: &previousCluster postgres16-v1
+  #     source: &previousCluster postgres17-v1
   # Note: externalClusters is needed when recovering from an existing cnpg cluster
   # externalClusters:
   # - name: *previousCluster
-  #   barmanObjectStore:
-  #     <<: *barmanObjectStore
-  #     serverName: *previousCluster
+  #   plugin:
+  #     name: barman-cloud.cloudnative-pg.io
+  #     parameters:
+  #       barmanObjectName: r2
+  #       serverName: *previousCluster

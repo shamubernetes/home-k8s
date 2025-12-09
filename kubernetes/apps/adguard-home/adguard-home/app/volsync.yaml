@@ -19,7 +19,7 @@ spec:
       key: volsync-template
 ---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
-# Only backup the primary (pod-0) since AdGuard syncs between replicas
+# Hourly backup to NAS - only primary (pod-0) since AdGuard syncs between replicas
 apiVersion: volsync.backube/v1alpha1
 kind: ReplicationSource
 metadata:
@@ -45,4 +45,56 @@ spec:
     retain:
       hourly: 24
       daily: 7
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1beta1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: adguard-home-volsync-r2
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: adguard-home-volsync-r2-secret
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: "s3:${R2_ENDPOINT}/storage-backup/volsync/adguard-home"
+        RESTIC_PASSWORD: "{{ .RESTIC_PASSWORD }}"
+        AWS_ACCESS_KEY_ID: "{{ .CLOUDFLARE_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "{{ .CLOUDFLARE_SECRET_ACCESS_KEY }}"
+  dataFrom:
+  - extract:
+      key: volsync-template
+  - extract:
+      key: cloudnative-pg
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
+# Daily backup to R2 for offsite redundancy
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: adguard-home-r2
+spec:
+  sourcePVC: data-adguard-home-0
+  trigger:
+    schedule: "0 3 * * *"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 14
+    repository: adguard-home-volsync-r2-secret
+    volumeSnapshotClassName: csi-ceph-blockpool
+    cacheCapacity: 2Gi
+    cacheStorageClassName: ceph-block
+    cacheAccessModes: ["ReadWriteOnce"]
+    storageClassName: ceph-block
+    accessModes: ["ReadWriteOnce"]
+    moverSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    retain:
+      daily: 7
+      weekly: 4
 

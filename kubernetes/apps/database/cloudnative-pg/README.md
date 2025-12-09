@@ -22,7 +22,7 @@ The cluster uses a multi-layer backup strategy:
 
 A PgBouncer pooler is deployed for better connection handling during failovers:
 
-- **`postgres17-pooler-rw`**: **Use this for all applications** - Handles failover gracefully
+- **`postgres17-pooler`**: **Use this for all applications** - Handles failover gracefully
 - `postgres17-rw`: Direct connection to primary (use only for admin/monitoring)
 - `postgres17-ro`: Read-only service (replicas)
 - `postgres17-r`: Any instance (for reads that can tolerate stale data)

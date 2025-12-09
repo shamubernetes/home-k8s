@@ -7,6 +7,11 @@ spec:
   instances: 3
   imageName: ghcr.io/cloudnative-pg/postgresql:17.4-9
   primaryUpdateStrategy: unsupervised
+  # Use switchover (not restart) for faster, cleaner failovers
+  primaryUpdateMethod: switchover
+  # Shorter delays for faster failover
+  switchoverDelay: 60
+  failoverDelay: 0
   storage:
     size: 20Gi
     storageClass: ceph-block

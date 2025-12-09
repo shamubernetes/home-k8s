@@ -34,6 +34,8 @@ spec:
             image:
               repository: dxflrs/garage
               tag: v1.0.1@sha256:a5706cf1f3d7b349ac5133ec59ad8181b709270b75e5f2fa7b3e1a5c07d67137
+            command:
+            - /garage
             args:
             - -c
             - /etc/garage/garage.toml

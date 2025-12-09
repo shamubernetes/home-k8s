@@ -62,13 +62,11 @@ spec:
       data:
         RESTIC_REPOSITORY: "s3:${R2_ENDPOINT}/storage-backup/volsync/adguard-home"
         RESTIC_PASSWORD: "{{ .RESTIC_PASSWORD }}"
-        AWS_ACCESS_KEY_ID: "{{ .CLOUDFLARE_ACCESS_KEY_ID }}"
-        AWS_SECRET_ACCESS_KEY: "{{ .CLOUDFLARE_SECRET_ACCESS_KEY }}"
+        AWS_ACCESS_KEY_ID: "{{ .VOLSYNC_R2_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "{{ .VOLSYNC_R2_SECRET_ACCESS_KEY }}"
   dataFrom:
   - extract:
       key: volsync-template
-  - extract:
-      key: cloudnative-pg
 ---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
 # Daily backup to R2 for offsite redundancy

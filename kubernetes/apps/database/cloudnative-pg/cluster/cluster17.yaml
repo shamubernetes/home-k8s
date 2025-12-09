@@ -33,8 +33,7 @@ spec:
     enablePodMonitor: true
   backup:
     retentionPolicy: 30d
-    barmanObjectStore:
-    - name: r2
+    barmanObjectStore: &barmanObjectStore
       data:
         compression: bzip2
       wal:
@@ -52,22 +51,6 @@ spec:
         secretAccessKey:
           name: cloudnative-pg-secret
           key: aws-secret-access-key
-    - name: nas
-      data:
-        compression: bzip2
-      wal:
-        compression: bzip2
-        maxParallel: 4
-      destinationPath: s3://cnpg-backups/
-      endpointURL: http://garage.storage.svc.cluster.local:3900
-      serverName: *currentCluster
-      s3Credentials:
-        accessKeyId:
-          name: cnpg-garage-secret
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: cnpg-garage-secret
-          key: ACCESS_SECRET_KEY
     volumeSnapshot:
       className: csi-ceph-blockpool
       walClassName: csi-ceph-blockpool

@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: dxflrs/garage
-              tag: v1.0.1@sha256:a5706cf1f3d7b349ac5133ec59ad8181b709270b75e5f2fa7b3e1a5c07d67137
+              tag: v1.3.0@sha256:7263ef1e45d7418fbb415d03e495939f70b68c27dc6b9d1f61b697c473c68cdc
             command:
             - /garage
             args:

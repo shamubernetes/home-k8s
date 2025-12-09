@@ -6,9 +6,11 @@ PostgreSQL cluster managed by CloudNative-PG operator with ceph-block storage an
 
 The cluster uses a multi-layer backup strategy:
 
-1. **Continuous WAL Archiving**: All Write-Ahead Logs are continuously streamed to R2 (S3-compatible storage)
-2. **Scheduled Base Backups**: Daily volume snapshots at 2:00 AM using ceph-block snapshots
-3. **Point-in-Time Recovery (PITR)**: Can restore to any point in time using WAL logs + base backups
+1. **Continuous WAL Archiving**: All Write-Ahead Logs are continuously streamed to R2 (offsite)
+2. **Scheduled R2 Backups**: Daily base backups to R2 at 3:00 AM
+3. **Scheduled NAS Backups**: Base backups to local NAS (via Garage) every 12 hours
+4. **Volume Snapshots**: Daily Ceph block snapshots at 2:00 AM
+5. **Point-in-Time Recovery (PITR)**: Can restore to any point in time using WAL logs + base backups
 
 ## Storage
 
@@ -16,28 +18,47 @@ The cluster uses a multi-layer backup strategy:
 - **WAL Storage**: `ceph-block` - Separate volume for write-ahead logs
 - **Snapshot Class**: `csi-ceph-blockpool` - For volume snapshots
 
+## Connection Pooler (PgBouncer)
+
+A PgBouncer pooler is deployed for better connection handling during failovers:
+
+- **`postgres17-pooler-rw`**: **Use this for all applications** - Handles failover gracefully
+- `postgres17-rw`: Direct connection to primary (use only for admin/monitoring)
+- `postgres17-ro`: Read-only service (replicas)
+- `postgres17-r`: Any instance (for reads that can tolerate stale data)
+- `postgres-lb`: LoadBalancer service for external access
+
+The pooler:
+- Keeps client connections alive during primary switchovers
+- Uses transaction pooling mode for optimal failover handling
+- Automatically reconnects to the new primary without dropping client connections
+
 ## Recovery Procedures
 
 ### Recover from a Catastrophic Failure
 
-If the entire cluster is lost, create a new cluster that recovers from the latest backup:
+If the entire cluster is lost, create a new cluster that recovers from the latest R2 backup:
 
 1. Update `cluster17.yaml` to include the bootstrap recovery section:
 
 ```yaml
 bootstrap:
   recovery:
-    source: postgres17-v1
+    source: &previousCluster postgres17-v1
 externalClusters:
-- name: postgres17-v1
-  barmanObjectStore:
-    # ... (copy from existing barmanObjectStore config)
-    serverName: postgres17-v1
+- name: *previousCluster
+  plugin:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: r2
+      serverName: *previousCluster
 ```
 
-2. Increment the `serverName` in the new cluster (e.g., `postgres17-v2`)
+2. Increment the `serverName` in the ObjectStore (e.g., `postgres17-v2`)
 
 3. Apply the changes and wait for the cluster to recover
+
+4. After successful recovery, comment out the `bootstrap` section
 
 ### Point-in-Time Recovery
 
@@ -66,10 +87,3 @@ When upgrading major PostgreSQL versions (e.g., 16 → 17):
 - Pod monitors enabled for Prometheus metrics
 - Grafana dashboard installed via operator
 - PrometheusRule for alerting
-
-## Services
-
-- `postgres17-rw`: Read-write service (primary)
-- `postgres17-ro`: Read-only service (replicas)
-- `postgres17-r`: Any instance (for reads that can tolerate stale data)
-- `postgres-lb`: LoadBalancer service for external access

@@ -1,7 +1,0 @@
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/namespace-v1.json
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: storage
-  labels:
-    kustomize.toolkit.fluxcd.io/prune: disabled

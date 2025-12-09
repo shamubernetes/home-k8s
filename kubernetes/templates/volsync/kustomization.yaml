@@ -3,6 +3,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./pvc.yaml
+# NFS backup (hourly, for fast local restore)
 - ./nfs-externalsecret.yaml
 - ./nfs-replicationsource.yaml
 - ./nfs-replicationdestination.yaml
+# R2 backup (daily, for offsite redundancy)
+- ./r2-externalsecret.yaml
+- ./r2-replicationsource.yaml

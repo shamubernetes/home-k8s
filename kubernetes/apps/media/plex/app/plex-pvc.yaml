@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+# Main Plex config PVC - managed separately from volsync template during migration
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 150Gi
+  storageClassName: ceph-block
+

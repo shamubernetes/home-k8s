@@ -3,8 +3,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./clusterimagecatalog.yaml
-- ./cluster16.yaml
-# - ./scheduledbackup.yaml # TODO: Uncomment this line
+- ./cluster17.yaml
+- ./scheduledbackup.yaml
 - ./prometheusrule.yaml
 - ./service.yaml
 - ../../../../templates/gatus/infrastructure

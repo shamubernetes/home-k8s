@@ -54,5 +54,5 @@ spec:
       APP: *app
       NAMESPACE: *namespace
       GATUS_INFRA_PORT: "5432"
-      GATUS_INFRA_NAME: "Postgres 16"
-      GATUS_INFRA_APP: "postgres16-rw"
+      GATUS_INFRA_NAME: "Postgres 17"
+      GATUS_INFRA_APP: "postgres17-rw"

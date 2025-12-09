@@ -4,8 +4,9 @@ kind: ScheduledBackup
 metadata:
   name: postgres
 spec:
-  schedule: "@daily"
+  schedule: "0 2 * * *"
   immediate: true
   backupOwnerReference: self
   cluster:
-    name: postgres16
+    name: postgres17
+  method: volumeSnapshot

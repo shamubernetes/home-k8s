@@ -4,7 +4,7 @@ kind: ScheduledBackup
 metadata:
   name: postgres-snapshot
 spec:
-  schedule: "0 2 * * *"
+  schedule: "0 2 * * *" # Daily at 2 AM
   immediate: true
   backupOwnerReference: self
   cluster:
@@ -17,7 +17,7 @@ kind: ScheduledBackup
 metadata:
   name: postgres-r2
 spec:
-  schedule: "0 3 * * *"
+  schedule: "0 */12 * * *" # Every 12 hours
   immediate: true
   backupOwnerReference: self
   cluster:
@@ -27,20 +27,3 @@ spec:
     name: barman-cloud.cloudnative-pg.io
     parameters:
       barmanObjectName: r2
----
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/postgresql.cnpg.io/scheduledbackup_v1.json
-apiVersion: postgresql.cnpg.io/v1
-kind: ScheduledBackup
-metadata:
-  name: postgres-nas
-spec:
-  schedule: "0 */12 * * *"
-  immediate: true
-  backupOwnerReference: self
-  cluster:
-    name: postgres17
-  method: plugin
-  pluginConfiguration:
-    name: barman-cloud.cloudnative-pg.io
-    parameters:
-      barmanObjectName: nas

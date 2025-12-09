@@ -7,10 +7,9 @@ PostgreSQL cluster managed by CloudNative-PG operator with ceph-block storage an
 The cluster uses a multi-layer backup strategy:
 
 1. **Continuous WAL Archiving**: All Write-Ahead Logs are continuously streamed to R2 (offsite)
-2. **Scheduled R2 Backups**: Daily base backups to R2 at 3:00 AM
-3. **Scheduled NAS Backups**: Base backups to local NAS (via Garage) every 12 hours
-4. **Volume Snapshots**: Daily Ceph block snapshots at 2:00 AM
-5. **Point-in-Time Recovery (PITR)**: Can restore to any point in time using WAL logs + base backups
+2. **Scheduled R2 Backups**: Base backups to R2 every 12 hours
+3. **Volume Snapshots**: Daily Ceph block snapshots at 2:00 AM
+4. **Point-in-Time Recovery (PITR)**: Can restore to any point in time using WAL logs + base backups
 
 ## Storage
 

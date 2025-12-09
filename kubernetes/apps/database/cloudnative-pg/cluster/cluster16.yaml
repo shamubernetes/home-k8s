@@ -38,9 +38,9 @@ spec:
         maxParallel: 8
       destinationPath: s3://cloudnative-pg/
       endpointURL: ${R2_ENDPOINT}
-      # Note: serverName version needs to be inclemented
+      # Note: serverName version needs to be incremented
       # when recovering from an existing cnpg cluster
-      serverName: &currentCluster postgres16-v1
+      serverName: &currentCluster postgres16-v2
       s3Credentials:
         accessKeyId:
           name: cloudnative-pg-secret
@@ -50,12 +50,12 @@ spec:
           key: aws-secret-access-key
   # Note: previousCluster needs to be set to the name of the previous
   # cluster when recovering from an existing cnpg cluster
-  # bootstrap:
-  #   recovery:
-  #     source: &previousCluster postgres16-v1
-  # # Note: externalClusters is needed when recovering from an existing cnpg cluster
-  # externalClusters:
-  # - name: *previousCluster
-  #   barmanObjectStore:
-  #     <<: *barmanObjectStore
-  #     serverName: *previousCluster
+  bootstrap:
+    recovery:
+      source: &previousCluster postgres16-v1
+  # Note: externalClusters is needed when recovering from an existing cnpg cluster
+  externalClusters:
+    - name: *previousCluster
+      barmanObjectStore:
+        <<: *barmanObjectStore
+        serverName: *previousCluster

@@ -20,8 +20,6 @@ spec:
   dependsOn:
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  - name: external-secrets-stores
-    namespace: external-secrets
   values:
     controllers:
       garage:

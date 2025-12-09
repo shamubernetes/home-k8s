@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+# Template for adding VolSync to apps with EXISTING PVCs
+# Use this instead of ../volsync when the app already has a PVC created
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ./nfs-externalsecret.yaml
+- ./nfs-replicationsource.yaml

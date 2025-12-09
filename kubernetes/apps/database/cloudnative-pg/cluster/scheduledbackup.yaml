@@ -10,3 +10,17 @@ spec:
   cluster:
     name: postgres17
   method: volumeSnapshot
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/postgresql.cnpg.io/scheduledbackup_v1.json
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-nas
+spec:
+  schedule: "0 */12 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: postgres17
+  method: barmanObjectStore
+  target: nas

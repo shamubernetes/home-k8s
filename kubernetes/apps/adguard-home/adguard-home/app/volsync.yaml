@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1beta1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: adguard-home-volsync
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: adguard-home-volsync-secret
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: "/repository/adguard-home"
+        RESTIC_PASSWORD: "{{ .RESTIC_PASSWORD }}"
+  dataFrom:
+  - extract:
+      key: volsync-template
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
+# Only backup the primary (pod-0) since AdGuard syncs between replicas
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: adguard-home
+spec:
+  sourcePVC: data-adguard-home-adguard-home-0
+  trigger:
+    schedule: "0 * * * *"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 14
+    repository: adguard-home-volsync-secret
+    volumeSnapshotClassName: csi-ceph-blockpool
+    cacheCapacity: 2Gi
+    cacheStorageClassName: ceph-block
+    cacheAccessModes: ["ReadWriteOnce"]
+    storageClassName: ceph-block
+    accessModes: ["ReadWriteOnce"]
+    moverSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    retain:
+      hourly: 24
+      daily: 7
+

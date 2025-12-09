@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1beta1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: stash-data-volsync
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: stash-data-volsync-secret
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: "/repository/stash-data"
+        RESTIC_PASSWORD: "{{ .RESTIC_PASSWORD }}"
+  dataFrom:
+  - extract:
+      key: volsync-template
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: stash-data
+spec:
+  sourcePVC: stash-data
+  trigger:
+    schedule: "0 * * * *"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 14
+    repository: stash-data-volsync-secret
+    volumeSnapshotClassName: csi-ceph-blockpool
+    cacheCapacity: 2Gi
+    cacheStorageClassName: ceph-block
+    cacheAccessModes: ["ReadWriteOnce"]
+    storageClassName: ceph-block
+    accessModes: ["ReadWriteOnce"]
+    moverSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    retain:
+      hourly: 24
+      daily: 7
+

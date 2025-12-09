@@ -38,7 +38,8 @@ spec:
     enablePodMonitor: true
   # Using the barman-cloud plugin for backups (required for CNPG 1.26+)
   # Note: serverName version needs to be incremented when recovering from an existing cnpg cluster
-  # WALs stream to both R2 (offsite) and NAS (local) for redundancy
+  # WALs stream to R2 (offsite) for continuous DR; NAS receives scheduled backups only
+  # (CNPG only allows one WAL archiver)
   plugins:
   - name: barman-cloud.cloudnative-pg.io
     isWALArchiver: true
@@ -46,7 +47,6 @@ spec:
       barmanObjectName: r2
       serverName: postgres17-v1
   - name: barman-cloud.cloudnative-pg.io
-    isWALArchiver: true
     parameters:
       barmanObjectName: nas
       serverName: postgres17-v1

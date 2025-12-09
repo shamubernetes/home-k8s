@@ -32,14 +32,17 @@ spec:
   monitoring:
     enablePodMonitor: true
   # Using the barman-cloud plugin for backups (required for CNPG 1.26+)
+  # Note: serverName version needs to be incremented when recovering from an existing cnpg cluster
   plugins:
   - name: barman-cloud.cloudnative-pg.io
     isWALArchiver: true
     parameters:
       barmanObjectName: r2
+      serverName: postgres17-v1
   - name: barman-cloud.cloudnative-pg.io
     parameters:
       barmanObjectName: nas
+      serverName: postgres17-v1
   backup:
     volumeSnapshot:
       className: csi-ceph-blockpool

@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - provider.yaml
   - alert.yaml
+

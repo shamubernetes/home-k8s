@@ -8,3 +8,4 @@ spec:
   address: https://github.com/shamubernetes/home-k8s
   secretRef:
     name: github-token-secret
+

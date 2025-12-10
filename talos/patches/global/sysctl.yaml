@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 machine:
   sysctls:
     fs.inotify.max_user_watches: 1048576 # Watchdog

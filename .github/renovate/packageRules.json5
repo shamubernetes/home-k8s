@@ -3,10 +3,10 @@
   "packageRules": [
     // Allowed Versions
     {
-      "description": "PostgreSQL 16",
+      "description": "PostgreSQL 17",
       "matchDatasources": ["docker"],
       "matchPackagePatterns": ["postgresql"],
-      "allowedVersions": "<17"
+      "allowedVersions": "<18"
     },
     // Versions
     {

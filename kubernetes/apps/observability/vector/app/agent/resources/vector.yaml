@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 data_dir: /vector-data-dir
 
 sources:

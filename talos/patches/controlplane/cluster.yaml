@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 cluster:
   allowSchedulingOnControlPlanes: true
   controllerManager:

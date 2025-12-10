@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 # Note: Gatus vars should be escaped with $${VAR_NAME} to avoid interpolation by Flux
 web:
   port: $${WEB_PORT}

@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 fullnameOverride: coredns
 replicaCount: 3
 k8sAppLabelOverride: kube-dns

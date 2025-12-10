@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 spegel:
   appendMirrors: true
   containerdSock: /run/containerd/containerd.sock

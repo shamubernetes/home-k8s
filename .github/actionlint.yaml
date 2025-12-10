@@ -1,4 +1,3 @@
-# trunk-ignore-all(trunk-yls/no-yls)
 self-hosted-runner:
   # Labels of self-hosted runner in array of strings.
   labels:

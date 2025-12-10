@@ -190,6 +190,14 @@
       "matchDepNames": ["reloader"],
       "ignoreTests": false,
     },
+    {
+      "description": "Auto merge mise tool updates",
+      "matchManagers": ["mise"],
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+      "matchUpdateTypes": ["minor", "patch"],
+    },
     // Frequent updates are annoying
     {
       "description": ["Custom schedule for frequently updated packages"],

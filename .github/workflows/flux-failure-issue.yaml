@@ -1,0 +1,150 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Flux - Create Issue on Failure"
+
+on:
+  repository_dispatch: {}
+
+jobs:
+  create-issue:
+    name: Create Failure Issue
+    runs-on: ["ghar-set-zoo"]
+    # Only run on Flux error events (types are like "Kustomization/name.namespace" or "HelmRelease/name.namespace")
+    if: |
+      github.event.client_payload.severity == 'error' &&
+      (startsWith(github.event.action, 'Kustomization/') || startsWith(github.event.action, 'HelmRelease/'))
+    steps:
+      - name: Generate Token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        id: app-token
+        with:
+          app-id: "${{ secrets.BOT_APP_ID }}"
+          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
+
+      - name: Extract Event Details
+        id: extract
+        run: |
+          # Extract information from the Flux event payload
+          KIND="${{ github.event.client_payload.involvedObject.kind }}"
+          NAME="${{ github.event.client_payload.involvedObject.name }}"
+          NAMESPACE="${{ github.event.client_payload.involvedObject.namespace }}"
+          MESSAGE="${{ github.event.client_payload.message }}"
+          REASON="${{ github.event.client_payload.reason }}"
+          TIMESTAMP="${{ github.event.client_payload.timestamp }}"
+
+          # Try to extract the Git revision that caused the failure
+          REVISION="${{ github.event.client_payload.metadata['kustomize.toolkit.fluxcd.io/revision'] }}"
+          if [ -z "$REVISION" ]; then
+            REVISION="${{ github.event.client_payload.metadata['helm.toolkit.fluxcd.io/revision'] }}"
+          fi
+
+          # Create a unique issue title to prevent duplicates
+          ISSUE_TITLE="🚨 Flux Deployment Failed: ${KIND}/${NAME}"
+
+          echo "kind=$KIND" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "namespace=$NAMESPACE" >> $GITHUB_OUTPUT
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "revision=$REVISION" >> $GITHUB_OUTPUT
+          echo "issue_title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
+
+      - name: Check for Existing Issue
+        id: check-issue
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # Search for an existing open issue with the same title
+          EXISTING=$(gh issue list \
+            --state open \
+            --label "flux/failure" \
+            --search "${{ steps.extract.outputs.issue_title }} in:title" \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            echo "existing_issue=$EXISTING" >> $GITHUB_OUTPUT
+            echo "Found existing issue: #$EXISTING"
+          else
+            echo "existing_issue=" >> $GITHUB_OUTPUT
+            echo "No existing issue found"
+          fi
+
+      - name: Update Existing Issue
+        if: steps.check-issue.outputs.existing_issue != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh issue comment ${{ steps.check-issue.outputs.existing_issue }} --body "$(cat <<'EOF'
+          ## 🔄 Failure Recurred
+
+          **Timestamp:** ${{ steps.extract.outputs.timestamp }}
+          **Reason:** `${{ steps.extract.outputs.reason }}`
+
+          ```
+          ${{ steps.extract.outputs.message }}
+          ```
+
+          ---
+          _This is an automated update from Flux._
+          EOF
+          )"
+
+      - name: Create New Issue
+        if: steps.check-issue.outputs.existing_issue == ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh issue create \
+            --title "${{ steps.extract.outputs.issue_title }}" \
+            --label "flux/failure" \
+            --body "$(cat <<'EOF'
+          ## 🚨 Flux Deployment Failure
+
+          A Flux reconciliation has failed and requires attention.
+
+          ### Details
+
+          | Field | Value |
+          |-------|-------|
+          | **Kind** | `${{ steps.extract.outputs.kind }}` |
+          | **Name** | `${{ steps.extract.outputs.name }}` |
+          | **Namespace** | `${{ steps.extract.outputs.namespace }}` |
+          | **Reason** | `${{ steps.extract.outputs.reason }}` |
+          | **Timestamp** | ${{ steps.extract.outputs.timestamp }} |
+          | **Revision** | `${{ steps.extract.outputs.revision }}` |
+
+          ### Error Message
+
+          ```
+          ${{ steps.extract.outputs.message }}
+          ```
+
+          ### Debugging Steps
+
+          1. Check the Flux logs:
+             ```bash
+             kubectl logs -n flux-system deploy/kustomize-controller
+             kubectl logs -n flux-system deploy/helm-controller
+             ```
+
+          2. Describe the failed resource:
+             ```bash
+             kubectl describe ${{ steps.extract.outputs.kind }} ${{ steps.extract.outputs.name }} -n ${{ steps.extract.outputs.namespace }}
+             ```
+
+          3. Check events:
+             ```bash
+             kubectl events -n ${{ steps.extract.outputs.namespace }} --for=${{ steps.extract.outputs.kind }}/${{ steps.extract.outputs.name }}
+             ```
+
+          ### Resolution
+
+          - [ ] Investigate the root cause
+          - [ ] Fix the issue in the repository
+          - [ ] Verify the deployment succeeds
+
+          ---
+          _This issue was automatically created by the Flux failure notification system._
+          EOF
+          )"

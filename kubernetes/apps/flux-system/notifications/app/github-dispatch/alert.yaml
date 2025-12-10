@@ -12,3 +12,4 @@ spec:
       name: "*"
     - kind: HelmRelease
       name: "*"
+

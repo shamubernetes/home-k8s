@@ -1,5 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  rebaseWhen: "behind-base-branch",
   extends: [
     "github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5",
     "github>shamubernetes/home-k8s//.github/renovate/noPin.json5",

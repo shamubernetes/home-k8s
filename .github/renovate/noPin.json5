@@ -13,6 +13,13 @@
       pinDigests: false
     },
     {
+      description: "Bootstrap templates use latest tag intentionally",
+      matchDatasources: ["docker"],
+      matchDepNames: ["docker.io/library/alpine"],
+      matchFileNames: [".taskfiles/Bootstrap/resources/**"],
+      pinDigests: false
+    },
+    {
       matchDepNames: ["ghcr.io/fluxcd/flux-manifests"],
       pinDigests: false
     },

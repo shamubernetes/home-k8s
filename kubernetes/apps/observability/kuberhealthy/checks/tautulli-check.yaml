@@ -22,16 +22,16 @@ spec:
       - |
         set -e
         # Query Tautulli for active streams
-        RESPONSE=$(curl -sf "http://tautulli.observability.svc.cluster.local/api/v2?apikey=${TAUTULLI_API_KEY}&cmd=get_activity")
+        RESPONSE=$(curl -sf "http://tautulli.observability.svc.cluster.local/api/v2?apikey=$${TAUTULLI_API_KEY}&cmd=get_activity")
 
         # Extract stream count from response
-        STREAM_COUNT=$(echo "$RESPONSE" | grep -o '"stream_count":[0-9]*' | grep -o '[0-9]*' || echo "0")
+        STREAM_COUNT=$(echo "$${RESPONSE}" | grep -o '"stream_count":[0-9]*' | grep -o '[0-9]*' || echo "0")
 
         if [ "$STREAM_COUNT" = "0" ] || [ -z "$STREAM_COUNT" ]; then
-          echo "OK: No active Plex streams (count: ${STREAM_COUNT:-0})"
+          echo "OK: No active Plex streams (count: $${STREAM_COUNT:-0})"
           exit 0
         else
-          echo "FAIL: ${STREAM_COUNT} active Plex stream(s) detected - blocking upgrades"
+          echo "FAIL: $${STREAM_COUNT} active Plex stream(s) detected - blocking upgrades"
           exit 1
         fi
       resources:

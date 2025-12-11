@@ -7,6 +7,12 @@
       pinDigests: false
     },
     {
+      description: "OCI Helm charts cannot be pinned with digests",
+      matchDatasources: ["docker"],
+      matchDepNames: ["ghcr.io/home-operations/charts/tuppr"],
+      pinDigests: false
+    },
+    {
       matchDepNames: ["ghcr.io/fluxcd/flux-manifests"],
       pinDigests: false
     },

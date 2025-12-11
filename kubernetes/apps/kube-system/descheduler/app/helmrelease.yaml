@@ -24,21 +24,23 @@ spec:
     kind: Deployment
     deschedulerPolicyAPIVersion: descheduler/v1alpha2
     deschedulerPolicy:
+      metricsProviders:
+        - source: KubernetesMetrics
       profiles:
         - name: Default
           pluginConfig:
             - name: DefaultEvictor
               args:
                 evictLocalStoragePods: true
-            - name: RemovePodsViolatingInterPodAntiAffinity
-            - name: RemovePodsViolatingNodeAffinity
-              args:
-                nodeAffinityType:
-                  - requiredDuringSchedulingIgnoredDuringExecution
-            - name: RemovePodsViolatingNodeTaints
-            - name: RemovePodsViolatingTopologySpreadConstraint
+                podProtections:
+                  defaultDisabled:
+                    - FailedBarePods
+                    - PodsWithLocalStorage
+                    - SystemCriticalPods
             - name: LowNodeUtilization
               args:
+                metricsUtilization:
+                  source: KubernetesMetrics
                 thresholds:
                   cpu: 20
                   memory: 20
@@ -47,6 +49,7 @@ spec:
                   cpu: 50
                   memory: 50
                   pods: 50
+            - name: RemoveDuplicates
             - name: RemoveFailedPods
               args:
                 reasons:
@@ -59,10 +62,18 @@ spec:
                 excludeOwnerKinds:
                   - Job
                 minPodLifetimeSeconds: 1800
+            - name: RemovePodsViolatingInterPodAntiAffinity
+            - name: RemovePodsViolatingNodeAffinity
+              args:
+                nodeAffinityType:
+                  - requiredDuringSchedulingIgnoredDuringExecution
+            - name: RemovePodsViolatingNodeTaints
+            - name: RemovePodsViolatingTopologySpreadConstraint
           plugins:
             balance:
               enabled:
                 - LowNodeUtilization
+                - RemoveDuplicates
                 - RemovePodsViolatingTopologySpreadConstraint
             deschedule:
               enabled:

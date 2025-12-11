@@ -9,9 +9,35 @@ spec:
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
-  dependsOn:
-  - name: tautulli
   path: ./kubernetes/apps/observability/kuberhealthy/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kuberhealthy-checks
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: observability
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: kuberhealthy
+  dependsOn:
+  - name: kuberhealthy
+  - name: tautulli
+  path: ./kubernetes/apps/observability/kuberhealthy/checks
   prune: true
   sourceRef:
     kind: GitRepository
@@ -20,7 +46,3 @@ spec:
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"
-  postBuild:
-    substitute:
-      APP: *app
-      NAMESPACE: *namespace

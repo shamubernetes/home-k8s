@@ -8,6 +8,9 @@ spec:
   sourcePVC: "${APP}"
   trigger:
     schedule: "0 3 * * *"  # Daily at 3 AM
+  moverPodOptions:
+    securityContext:
+      fsGroupChangePolicy: OnRootMismatch
   restic:
     copyMethod: "${VOLSYNC_COPYMETHOD:-Snapshot}"
     pruneIntervalDays: 14
@@ -25,4 +28,3 @@ spec:
     retain:
       daily: 7
       weekly: 4
-

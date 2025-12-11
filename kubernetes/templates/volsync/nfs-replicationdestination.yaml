@@ -8,6 +8,9 @@ metadata:
 spec:
   trigger:
     manual: restore-once
+  moverPodOptions:
+    securityContext:
+      fsGroupChangePolicy: OnRootMismatch
   restic:
     repository: "${APP}-volsync-secret"
     copyMethod: Snapshot

@@ -3,6 +3,7 @@
   dependencyDashboard: true,
   pruneStaleBranches: true,
   rebaseWhen: "behind-base-branch",
+  platformAutomerge: true,
   extends: [
     "config:best-practices",
     "github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5",

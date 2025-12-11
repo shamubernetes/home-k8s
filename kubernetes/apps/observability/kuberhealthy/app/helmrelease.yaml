@@ -9,7 +9,7 @@ spec:
     spec:
       chart: kuberhealthy
       # renovate: registryUrl=https://kuberhealthy.github.io/kuberhealthy/helm-repos
-      version: 64.0.0
+      version: "104"
       sourceRef:
         kind: HelmRepository
         name: kuberhealthy

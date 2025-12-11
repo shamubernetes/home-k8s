@@ -2,5 +2,9 @@ machine:
   kubelet:
     extraArgs:
       rotate-server-certificates: true
+    extraConfig:
+      imageGCHighThresholdPercent: 55
+      imageGCLowThresholdPercent: 50
+      imageMinimumGCAge: 2m
     nodeIP:
       validSubnets: ["10.100.47.0/24"]

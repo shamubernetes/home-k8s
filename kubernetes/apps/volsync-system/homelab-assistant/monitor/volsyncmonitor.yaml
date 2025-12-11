@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/homelab.rafaribe.com/volsyncmonitor_v1alpha1.json
+apiVersion: homelab.rafaribe.com/v1alpha1
+kind: VolSyncMonitor
+metadata:
+  name: volsync-monitor
+spec:
+  # Enable the monitor
+  enabled: true
+  # Scan for failed jobs every 30 seconds
+  scanInterval: 30s
+  # Monitor ALL namespaces for VolSync jobs (namePrefix matches job names)
+  jobSelector:
+    namePrefix: "volsync-"
+  # Remove failed jobs after creating unlock jobs
+  removeFailedJobs: true
+  # Cleanup unlock jobs after 1 hour
+  ttlSecondsAfterFinished: 3600
+  # Unlock job template - inherits environment variables, volumes, and mounts from failed job
+  unlockJobTemplate:
+    image: restic/restic:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo "Unlocking repository for failed job: $FAILED_JOB_NAME"
+      echo "Lock error detected: $LOCK_ERROR"
+      restic unlock --remove-all
+      echo "Repository unlocked successfully"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi

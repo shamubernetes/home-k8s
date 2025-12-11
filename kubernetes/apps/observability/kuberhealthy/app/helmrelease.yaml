@@ -28,8 +28,10 @@ spec:
     # Clean up completed/failed checker pods
     checkReaper:
       enabled: true
-      maxPodsThreshold: 2  # Keep last 4 pods per check
-      jobCleanupDuration: 5m  # Delete pods older than 15 minutes
+      maxCompletedPodCount: 2
+      maxErrorPodCount: 2
+      maxCheckPodAge: 5m
+      maxKHJobAge: 5m
     prometheus:
       enabled: true
       serviceMonitor:

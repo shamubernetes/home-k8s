@@ -31,7 +31,6 @@ spec:
           pluginConfig:
             - name: DefaultEvictor
               args:
-                evictLocalStoragePods: true
                 podProtections:
                   defaultDisabled:
                     - FailedBarePods

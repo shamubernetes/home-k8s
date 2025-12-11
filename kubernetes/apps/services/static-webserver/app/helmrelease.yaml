@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: joseluisq/static-web-server
-              tag: 2.40.0-alpine@sha256:63d1b42c29a5abf3c6137b66fe965daf09da4dfa77e69deb4053c9572f48c2fa
+              tag: 2.40.1-alpine@sha256:bec211dd5a6a2c57284a1d7ffd21b68f2a5e3fcc621614a0c070350d39ea154c
             env:
               SERVER_PORT: &port 80
               SERVER_ROOT: /public

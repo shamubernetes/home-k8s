@@ -224,6 +224,16 @@
       "assigneesFromCodeOwners": false,
       "matchUpdateTypes": ["minor", "patch"],
     },
+    // Schedules for critical infrastructure
+    {
+      "description": "Talos and Kubernetes upgrades only on 2nd Saturday of month (2-6am)",
+      "matchDepNames": [
+        "ghcr.io/siderolabs/installer",
+        "ghcr.io/siderolabs/kubelet"
+      ],
+      "matchDatasources": ["docker"],
+      "schedule": ["* 2-5 8-14 * 6"]
+    },
     // Frequent updates are annoying
     {
       "description": ["Custom schedule for frequently updated packages"],

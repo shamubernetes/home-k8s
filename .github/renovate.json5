@@ -1,5 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  timezone: "America/New_York",
   dependencyDashboard: true,
   pruneStaleBranches: true,
   rebaseWhen: "behind-base-branch",

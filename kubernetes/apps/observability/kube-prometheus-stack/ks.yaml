@@ -24,3 +24,5 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      GATUS_INTERNAL_APP: kube-prometheus-stack-prometheus
+      GATUS_INTERNAL_PORT: "9090"

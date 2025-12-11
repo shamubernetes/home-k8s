@@ -25,6 +25,11 @@ spec:
       strategy: rollback
       retries: 3
   values:
+    # Clean up completed/failed checker pods
+    checkReaper:
+      enabled: true
+      maxPodsThreshold: 2  # Keep last 4 pods per check
+      jobCleanupDuration: 5m  # Delete pods older than 15 minutes
     prometheus:
       enabled: true
       serviceMonitor:

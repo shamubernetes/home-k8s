@@ -2,8 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   packageRules: [
     {
+      description: "Spegel OCI Helm chart cannot be pinned with digests",
       matchDatasources: ["helmfile", "docker"],
-      matchDepNames: ["spegel"],
+      matchDepNames: ["spegel", "ghcr.io/spegel-org/helm-charts/spegel"],
       pinDigests: false
     },
     {

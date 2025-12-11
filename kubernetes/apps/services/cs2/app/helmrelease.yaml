@@ -42,12 +42,9 @@ spec:
             resources:
               requests:
                 cpu: 10m
-    # defaultPodOptions:
-    #   securityContext:
-    #     runAsNonRoot: true
-    #     runAsUser: 65534
-    #     runAsGroup: 65534
-    #     seccompProfile: {type: RuntimeDefault}
+    defaultPodOptions:
+      annotations:
+        descheduler.alpha.kubernetes.io/evict: "false"
     service:
       app:
         controller: cs2

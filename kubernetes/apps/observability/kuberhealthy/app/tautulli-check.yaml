@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/comcast.github.io/khcheck_v1.json
+apiVersion: comcast.github.io/v1
+kind: KuberhealthyCheck
+metadata:
+  name: plex-no-streams
+spec:
+  runInterval: 1m
+  timeout: 2m
+  podSpec:
+    containers:
+    - name: check
+      image: curlimages/curl:8.11.1
+      env:
+      - name: TAUTULLI_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: kuberhealthy-tautulli
+            key: TAUTULLI_API_KEY
+      command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        # Query Tautulli for active streams
+        RESPONSE=$(curl -sf "http://tautulli.observability.svc.cluster.local/api/v2?apikey=${TAUTULLI_API_KEY}&cmd=get_activity")
+
+        # Extract stream count from response
+        STREAM_COUNT=$(echo "$RESPONSE" | grep -o '"stream_count":[0-9]*' | grep -o '[0-9]*' || echo "0")
+
+        if [ "$STREAM_COUNT" = "0" ] || [ -z "$STREAM_COUNT" ]; then
+          echo "OK: No active Plex streams (count: ${STREAM_COUNT:-0})"
+          exit 0
+        else
+          echo "FAIL: ${STREAM_COUNT} active Plex stream(s) detected - blocking upgrades"
+          exit 1
+        fi
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 1000
+        capabilities:
+          drop: ["ALL"]
+    securityContext:
+      seccompProfile:
+        type: RuntimeDefault

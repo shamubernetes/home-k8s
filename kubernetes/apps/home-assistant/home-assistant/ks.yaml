@@ -25,3 +25,4 @@ spec:
       APP: *app
       NAMESPACE: *namespace
       VOLSYNC_CAPACITY: 10Gi
+      GATUS_INTERNAL_PORT: "8123"

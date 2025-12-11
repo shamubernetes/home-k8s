@@ -24,4 +24,6 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      GATUS_INTERNAL_APP: adguard-home-origin
+      GATUS_INTERNAL_PORT: "3000"
       GATUS_PATH: /

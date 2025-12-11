@@ -24,3 +24,4 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      GATUS_INTERNAL_APP: loki-gateway

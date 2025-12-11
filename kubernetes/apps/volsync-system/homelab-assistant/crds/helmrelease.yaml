@@ -5,14 +5,9 @@ metadata:
   name: homelab-assistant-crds
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: homelab-assistant-crds
-      version: 0.2.0
-      sourceRef:
-        kind: HelmRepository
-        name: homelab-assistant
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: homelab-assistant-crds
   install:
     createNamespace: true
     remediation:

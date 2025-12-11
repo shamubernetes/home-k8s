@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: homelab-assistant-crds
+  namespace: flux-system
+spec:
+  interval: 30m
+  url: oci://ghcr.io/rafaribe/homelab-assistant-crds
+  ref:
+    # renovate: datasource=docker depName=ghcr.io/rafaribe/homelab-assistant-crds versioning=semver
+    semver: "0.2.x"

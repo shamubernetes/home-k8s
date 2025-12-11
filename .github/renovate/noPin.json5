@@ -11,7 +11,7 @@
       pinDigests: false
     },
     {
-      matchDepNames: ["gha-runner-*"],
+      matchPackagePatterns: ["gha-runner-scale-set"],
       pinDigests: false
     },
   ],

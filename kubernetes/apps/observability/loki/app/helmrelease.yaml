@@ -46,10 +46,11 @@ spec:
     kind: ConfigMap
     name: *cephBucket
     valuesKey: BUCKET_NAME
-  - targetPath: loki.storage.s3.endpoint
-    kind: ConfigMap
-    name: *cephBucket
-    valuesKey: BUCKET_HOST
+  # NOTE: BUCKET_HOST from OBC doesn't include protocol, but Loki requires a valid URI
+  # - targetPath: loki.storage.s3.endpoint
+  #   kind: ConfigMap
+  #   name: *cephBucket
+  #   valuesKey: BUCKET_HOST
   - targetPath: loki.storage.s3.region
     kind: ConfigMap
     name: *cephBucket
@@ -73,6 +74,7 @@ spec:
       storage:
         type: s3
         s3:
+          endpoint: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc:80
           s3ForcePathStyle: true
           insecure: true
       schemaConfig:

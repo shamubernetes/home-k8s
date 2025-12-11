@@ -10,7 +10,10 @@
     {
       description: "OCI Helm charts cannot be pinned with digests",
       matchDatasources: ["docker"],
-      matchDepNames: ["ghcr.io/home-operations/charts/tuppr"],
+      matchDepNames: [
+        "ghcr.io/home-operations/charts/tuppr",
+        "ghcr.io/rafaribe/homelab-assistant-crds",
+      ],
       pinDigests: false
     },
     {

@@ -118,6 +118,8 @@ spec:
       tmp:
         type: emptyDir
       media:
-        existingClaim: media-nfs
+        type: nfs
+        server: "${IPAM_IP_NFS}"
+        path: /mnt/user/Media
         globalMounts:
         - path: /media

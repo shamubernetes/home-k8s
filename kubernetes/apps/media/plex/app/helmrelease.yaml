@@ -122,6 +122,8 @@ spec:
               limits:
                 memory: 16Gi
     defaultPodOptions:
+      annotations:
+        descheduler.alpha.kubernetes.io/evict: "false"
       securityContext:
         runAsNonRoot: true
         runAsUser: 568

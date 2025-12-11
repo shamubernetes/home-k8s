@@ -7,9 +7,6 @@ spec:
   sourcePVC: "${APP}"
   trigger:
     schedule: "0 * * * *"
-  moverPodOptions:
-    securityContext:
-      fsGroupChangePolicy: OnRootMismatch
   restic:
     copyMethod: "${VOLSYNC_COPYMETHOD:-Snapshot}"
     pruneIntervalDays: 14
@@ -24,6 +21,7 @@ spec:
       runAsUser: ${VOLSYNC_PUID:-568}
       runAsGroup: ${VOLSYNC_PGID:-568}
       fsGroup: ${VOLSYNC_PGID:-568}
+      fsGroupChangePolicy: OnRootMismatch
     retain:
       hourly: 24
       daily: 7

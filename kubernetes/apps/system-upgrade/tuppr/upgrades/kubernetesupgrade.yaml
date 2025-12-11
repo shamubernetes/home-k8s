@@ -16,3 +16,10 @@ spec:
     kind: CephCluster
     expr: |-
       status.ceph.health in ['HEALTH_OK']
+  - apiVersion: comcast.github.io/v1
+    kind: KuberhealthyState
+    name: plex-no-streams
+    namespace: observability
+    description: No active Plex streams
+    expr: |-
+      status.OK == true

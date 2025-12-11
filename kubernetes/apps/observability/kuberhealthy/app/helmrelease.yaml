@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kuberhealthy
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: kuberhealthy
+      version: 104.0.0
+      sourceRef:
+        kind: HelmRepository
+        name: kuberhealthy
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    crds: CreateReplace
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+        namespace: observability
+    # Disable default checks - we'll create our own
+    check:
+      daemonset:
+        enabled: false
+      deployment:
+        enabled: false
+      dnsInternal:
+        enabled: false
+      dnsExternal:
+        enabled: false
+      podRestarts:
+        enabled: false
+      podStatus:
+        enabled: false
+      networkConnection:
+        enabled: false
+      storage:
+        enabled: false

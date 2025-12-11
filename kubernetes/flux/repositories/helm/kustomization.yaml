@@ -16,6 +16,7 @@ resources:
 - ./grafana.yaml
 - ./ingress-nginx.yaml
 - ./jetstack.yaml
+- ./kuberhealthy.yaml
 - ./kyverno.yaml
 - ./metrics-server.yaml
 - ./node-feature-discovery.yaml

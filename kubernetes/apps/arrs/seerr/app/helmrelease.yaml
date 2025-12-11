@@ -2,7 +2,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: overseerr
+  name: seerr
 spec:
   interval: 10m
   chart:
@@ -28,14 +28,14 @@ spec:
     namespace: volsync-system
   values:
     controllers:
-      overseerr:
+      seerr:
         annotations:
           reloader.stakater.com/auto: "true"
         containers:
           app:
             image:
-              repository: ghcr.io/sct/overseerr
-              tag: 1.34.0@sha256:4f38f58d68555004d3f487a4c5cbe2823e6a0942d946a25a2d9391d8492240a4
+              repository: ghcr.io/seerr-team/seerr
+              tag: develop
             env:
               TZ: America/New_York
               LOG_LEVEL: "info"
@@ -72,7 +72,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
     service:
       app:
-        controller: overseerr
+        controller: seerr
         ports:
           http:
             port: *port
@@ -90,11 +90,11 @@ spec:
               port: http
     persistence:
       config:
-        existingClaim: overseerr
+        existingClaim: seerr
         globalMounts:
         - path: /app/config
       cache:
-        existingClaim: overseerr-cache
+        existingClaim: seerr-cache
         globalMounts:
         - path: /app/config/cache
       logs:

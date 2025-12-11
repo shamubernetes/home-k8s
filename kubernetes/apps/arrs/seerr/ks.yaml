@@ -2,14 +2,14 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app overseerr
+  name: &app seerr
   namespace: "${KS_NAMESPACE}"
 spec:
   targetNamespace: &namespace arrs
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
-  path: ./kubernetes/apps/arrs/overseerr/app
+  path: ./kubernetes/apps/arrs/seerr/app
   prune: true
   sourceRef:
     kind: GitRepository

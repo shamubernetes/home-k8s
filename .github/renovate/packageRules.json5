@@ -153,12 +153,19 @@
     },
     // Auto merge
     {
-      "description": ["Auto-merge container patches and digests updates for trusted containers"],
+      "description": "Auto-merge all patch updates",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+    },
+    {
+      "description": ["Auto-merge container digests updates for trusted containers"],
       "matchDatasources": ["docker"],
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
-      "matchUpdateTypes": ["patch", "digest"],
+      "matchUpdateTypes": ["digest"],
       "matchPackagePatterns": ["ghcr.io/bjw-s", "ghcr.io/onedr0p", "ghcr.io/tautulli/tautulli", "ghcr.io/home-operations"],
     },
     {
@@ -170,25 +177,13 @@
       "ignoreTests": true
     },
     {
-      "description": "Auto merge KPS minors and patches",
+      "description": "Auto merge KPS minors and digests",
       "matchDatasources": ["helm", "docker"],
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
-      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchUpdateTypes": ["minor", "digest"],
       "matchPackagePatterns": ["kube-prometheus-stack"],
-      "ignoreTests": false,
-    },
-    {
-      "description": "Auto merge reloader minors and patches",
-      "matchDatasources": ["helm", "docker"],
-      "automerge": true,
-      "matchUpdateTypes": ["patch"],
-      "assigneesFromCodeOwners": false,
-      "reviewers": [],
-      "automergeType": "pr",
-      "matchDepNames": ["reloader"],
-      "ignoreTests": false,
     },
     {
       "description": "Auto merge mise tool updates",

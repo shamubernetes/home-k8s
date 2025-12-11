@@ -9,7 +9,7 @@ resources:
 - ./sonarr/ks.yaml
 - ./profilarr/ks.yaml
 - ./prowlarr/ks.yaml
-- ./overseerr/ks.yaml
+- ./seerr/ks.yaml
 - ./bazarr/ks.yaml
 - ./wizarr/ks.yaml
 - ./whisparr/ks.yaml

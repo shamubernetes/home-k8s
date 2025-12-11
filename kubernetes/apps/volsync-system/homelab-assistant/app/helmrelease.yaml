@@ -28,8 +28,8 @@ spec:
     controllers:
       homelab-assistant:
         type: deployment
-        replicas: 1
-        strategy: Recreate
+        replicas: 2
+        strategy: RollingUpdate
         serviceAccount:
           identifier: homelab-assistant
         containers:

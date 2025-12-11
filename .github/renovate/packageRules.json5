@@ -182,6 +182,15 @@
       "assigneesFromCodeOwners": false,
     },
     {
+      "description": "Auto-merge minor updates with 7 days stability",
+      "matchUpdateTypes": ["minor"],
+      "matchDatasources": ["helm", "docker", "helmfile"],
+      "minimumReleaseAge": "7 days",
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+    },
+    {
       "description": ["Auto-merge container digests updates for trusted containers"],
       "matchDatasources": ["docker"],
       "automerge": true,

@@ -23,8 +23,8 @@ spec:
         # Query Tautulli for active streams
         RESPONSE=$(curl -sf "http://tautulli.observability.svc.cluster.local/api/v2?apikey=$${TAUTULLI_API_KEY}&cmd=get_activity" || echo "")
 
-        # Extract stream count from response
-        STREAM_COUNT=$(echo "$${RESPONSE}" | grep -o '"stream_count":[0-9]*' | grep -o '[0-9]*' || echo "0")
+        # Extract stream count from response (handles "stream_count": "N" format)
+        STREAM_COUNT=$(echo "$${RESPONSE}" | grep -o '"stream_count": *"[0-9]*"' | grep -o '[0-9]*' || echo "0")
 
         if [ "$${STREAM_COUNT}" = "0" ] || [ -z "$${STREAM_COUNT}" ]; then
           echo "OK: No active Plex streams (count: $${STREAM_COUNT:-0})"

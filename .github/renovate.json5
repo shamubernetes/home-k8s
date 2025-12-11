@@ -1,11 +1,19 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  dependencyDashboard: true,
+  pruneStaleBranches: true,
   rebaseWhen: "behind-base-branch",
   extends: [
+    "config:best-practices",
     "github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5",
     "github>shamubernetes/home-k8s//.github/renovate/noPin.json5",
     "github>shamubernetes/home-k8s//.github/renovate/customDatasources.json5",
     "github>shamubernetes/home-k8s//.github/renovate/customManagers.json5",
     "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
-  ]
+  ],
+  labels: ["renovate"],
+  vulnerabilityAlerts: {
+    enabled: true,
+    labels: ["security"],
+  },
 }

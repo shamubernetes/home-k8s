@@ -41,12 +41,34 @@
         "quay.io/cilium/operator-generic",
         "cilium",
       ],
-      "matchDatasources": ["helm", "docker"],
+      "matchDatasources": ["helm", "docker", "helmfile"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
       "separateMinorPatch": true,
+    },
+    {
+      "description": ["CoreDNS Group"],
+      "groupName": "coredns",
+      "matchPackagePatterns": ["coredns"],
+      "matchDatasources": ["helm", "docker", "helmfile"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}"
+      },
+      "separateMinorPatch": true
+    },
+    {
+      "description": ["Kubelet CSR Approver Group"],
+      "groupName": "kubelet-csr-approver",
+      "matchPackagePatterns": ["kubelet-csr-approver"],
+      "matchDatasources": ["helm", "helmfile"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}"
+      },
+      "separateMinorPatch": true
     },
     {
       "description": ["Dragonfly Operator Group"],
@@ -86,7 +108,7 @@
       "description": ["Spegel Group"],
       "groupName": "spegel",
       "matchPackagePatterns": ["spegel"],
-      "matchDatasources": ["helm", "docker"],
+      "matchDatasources": ["helm", "docker", "helmfile"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
@@ -199,6 +221,11 @@
       "matchDatasources": ["docker", "helm"],
       "matchPackagePatterns": ["postgresql", "reloader"],
       "schedule": ["on the 1st and 15th days of the month"]
+    },
+    {
+      "description": "Wait 3 days before updating critical infrastructure",
+      "matchPackagePatterns": ["cilium", "rook.ceph"],
+      "minimumReleaseAge": "3 days"
     },
   ],
 }

@@ -10,8 +10,8 @@ graph TB
         OCIRepo["`**OCIRepository**
         flux-manifests
         (OCI)`"]
-        HelmRepos["`**26 HelmRepositories**
-        (authentik, bjw-s, cilium, etc.)`"]
+        HelmRepos["`**25 HelmRepositories**
+        (bjw-s, cilium, etc.)`"]
     end
 
     %% Root Kustomizations Layer
@@ -126,8 +126,6 @@ graph TB
         TV manager`"]
         HomeAssistant["`**home-assistant**
         Home automation`"]
-        AuthentikApp["`**authentik**
-        Auth provider`"]
     end
 
     %% Flux System Layer
@@ -205,7 +203,6 @@ graph TB
     CNPGCluster --> Sonarr
     SecretStore --> Sonarr
     SecretStore --> HomeAssistant
-    SecretStore --> AuthentikApp
 
     %% Flux System Dependencies
     ClusterApps --> FluxMonitoring
@@ -221,7 +218,7 @@ graph TB
     class GitRepo,OCIRepo,HelmRepos sourceStyle
     class Cluster,ClusterApps,FluxKust rootStyle
     class OPConnect,ExternalSecrets,SecretStore,CertManager,CertIssuers,Cilium,CiliumConfig,NFD,NFDRules,ExternalDNS,ExternalDNSUnifi,RookCeph,RookCluster,VolSync,SnapshotCtrl,CNPG,CNPGCluster,Dragonfly,DragonflyCluster,IngressCerts,IngressExt,IngressInt,Cloudflared infraStyle
-    class AdGuard,Plex,Radarr,Sonarr,HomeAssistant,AuthentikApp,GHARController,GHARZoo,KubePromStack,Loki,Vector,Gatus,Grafana,FluxMonitoring,FluxNotifications,FluxWebhooks appStyle
+    class AdGuard,Plex,Radarr,Sonarr,HomeAssistant,GHARController,GHARZoo,KubePromStack,Loki,Vector,Gatus,Grafana,FluxMonitoring,FluxNotifications,FluxWebhooks appStyle
 ```
 
 ## Dependency Flow Summary
@@ -230,7 +227,7 @@ graph TB
 
 - **GitRepository** (`home-kubernetes`) - Main GitOps repository
 - **OCIRepository** (`flux-manifests`) - Flux manifests from OCI
-- **26 HelmRepositories** - External Helm chart sources
+- **25 HelmRepositories** - External Helm chart sources
 
 ### Level 2: Root Kustomizations
 

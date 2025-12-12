@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app minecraft-stoneblock4
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: minecraft
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        namespace: flux-system
+        name: minecraft-server-charts
+      version: 4.26.3
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: mc-router
+    namespace: games
+  values:
+    resources:
+      requests:
+        memory: &memory 12Gi
+        cpu: 4
+      limits:
+        memory: *memory
+        cpu: 4
+    readinessProbe: &probe
+      initialDelaySeconds: 120
+    livenessProbe: *probe
+    # Ensure that the old pod is completely terminated before the new one is started
+    workloadAsStatefulSet: true
+    strategyType: OnDelete
+    minecraftServer:
+      eula: "TRUE"
+      type: AUTO_CURSEFORGE
+      difficulty: normal
+      motd: "FTB StoneBlock 4"
+      pvp: true
+      # Heap size settings
+      memory: 10G
+      autoCurseForge:
+        apiKey:
+          existingSecret: minecraft-stoneblock4-credentials
+          existingSecretKey: CURSEFORGE_API_KEY
+        slug: ftb-stoneblock-4
+      rcon:
+        enabled: true
+        existingSecret: minecraft-stoneblock4-credentials
+        existingSecretKey: RCON_PASSWORD
+    persistence:
+      storageClass: ceph-block
+      dataDir:
+        enabled: true
+        Size: 50Gi
+    podLabels:
+      endpoints.netpols.home.arpa/minecraft-server: "true"
+    serviceAnnotations:
+      mc-router.itzg.me/externalServerName: sb4.mc.${GAME_DOMAIN}
+    mcbackup:
+      enabled: true
+      pauseIfNoPlayers: "true"
+      compressMethod: zstd
+      initialDelay: 5m
+      persistence:
+        storageClass: ceph-block
+        backupDir:
+          enabled: true
+          Size: 100Gi
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "1"

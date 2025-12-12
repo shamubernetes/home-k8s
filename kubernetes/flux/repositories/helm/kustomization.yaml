@@ -19,6 +19,7 @@ resources:
 - ./kuberhealthy.yaml
 - ./kyverno.yaml
 - ./metrics-server.yaml
+- ./minecraft-server-charts.yaml
 - ./node-feature-discovery.yaml
 - ./onepassword.yaml
 - ./openebs.yaml

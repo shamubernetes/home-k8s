@@ -40,7 +40,7 @@
     {
       description: "Talos kubelet managed via talconfig",
       matchDatasources: ["docker"],
-      matchDepNames: ["ghcr.io/siderolabs/kubelet"],
+      matchDepNames: ["ghcr.io/siderolabs/kubelet", "ghcr.io/siderolabs/installer"],
       pinDigests: false
     },
   ],

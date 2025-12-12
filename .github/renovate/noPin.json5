@@ -37,5 +37,11 @@
       matchDepNames: ["ghcr.io/cloudnative-pg/postgresql"],
       pinDigests: false
     },
+    {
+      description: "Talos kubelet managed via talconfig",
+      matchDatasources: ["docker"],
+      matchDepNames: ["ghcr.io/siderolabs/kubelet"],
+      pinDigests: false
+    },
   ],
 }

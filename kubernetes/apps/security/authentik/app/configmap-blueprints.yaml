@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/v1/configmap.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+data:
+  plex-source.yaml: |
+    version: 1
+    metadata:
+      name: Plex Source
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+      - model: authentik_sources_plex.plexsource
+        id: plex-source
+        identifiers:
+          slug: plex
+        state: present
+        attrs:
+          name: Plex
+          slug: plex
+          enabled: true
+          authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+          enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+          # Important: do not auto-create users from Plex.
+          # Only existing authentik users can log in via Plex.
+          create_users: false
+          user_matching_mode: email
+          client_id: !Env PLEX_CLIENT_ID
+          allow_friends: false
+
+  user-kilian.yaml: |
+    version: 1
+    metadata:
+      name: User: Kilian
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+      # Create a user that can be matched by Plex login.
+      # Set AK_ARR_ALLOWED_EMAIL (or ARR_ALLOWED_EMAIL in 1Password) to your Plex account email.
+      - model: authentik_core.user
+        id: kilian-user
+        identifiers:
+          username: !Env [AK_AUTHENTIK_USER_USERNAME, kilian]
+        state: present
+        attrs:
+          username: !Env [AK_AUTHENTIK_USER_USERNAME, kilian]
+          email: !Env AK_ARR_ALLOWED_EMAIL
+          is_active: true
+          is_staff: false
+          is_superuser: false
+
+  arr-proxy-provider.yaml: |
+    version: 1
+    metadata:
+      name: Arr Stack Forward-Auth
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+      - model: authentik_providers_proxy.proxyprovider
+        id: arr-proxy-provider
+        identifiers:
+          name: Arr Stack Proxy
+        state: present
+        attrs:
+          name: Arr Stack Proxy
+          authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://auth.${HOME_DOMAIN}"
+
+      - model: authentik_core.application
+        id: arr-application
+        identifiers:
+          slug: arr-stack
+        state: present
+        attrs:
+          name: Arr Stack
+          slug: arr-stack
+          provider: !KeyOf arr-proxy-provider
+          meta_launch_url: blank://blank
+          policy_engine_mode: any
+
+      # Hard allow-list: only the configured email may access the Arr app.
+      - model: authentik_policies_expression.expressionpolicy
+        id: arr-allow-only-email
+        identifiers:
+          name: Arr: allow only one email
+        state: present
+        attrs:
+          name: Arr: allow only one email
+          expression: |
+            import os
+            allowed = (os.environ.get("AK_ARR_ALLOWED_EMAIL") or "").strip().lower()
+            if not allowed:
+                return False
+            user_email = (getattr(request.user, "email", "") or "").strip().lower()
+            return user_email == allowed
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !Find [authentik_core.application, [slug, arr-stack]]
+          order: 0
+        state: present
+        attrs:
+          policy: !KeyOf arr-allow-only-email

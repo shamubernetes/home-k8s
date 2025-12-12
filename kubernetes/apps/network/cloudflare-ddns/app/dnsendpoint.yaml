@@ -10,12 +10,12 @@ spec:
     targets:
     - "external.${GAME_DOMAIN}"
     providerSpecific:
-    - name: proxied
+    - name: cloudflare/proxied
       value: "false"
   - dnsName: "sb4.mc.${GAME_DOMAIN}"
     recordType: CNAME
     targets:
     - "external.${GAME_DOMAIN}"
     providerSpecific:
-    - name: proxied
+    - name: cloudflare/proxied
       value: "false"

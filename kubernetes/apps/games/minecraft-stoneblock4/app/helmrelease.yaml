@@ -54,11 +54,20 @@ spec:
         enabled: true
         existingSecret: minecraft-stoneblock4-credentials
         existingSecretKey: rcon-password
+    extraEnv:
+      ENABLE_WHITELIST: "true"
+      WHITELIST:
+        valueFrom:
+          secretKeyRef:
+            name: minecraft-stoneblock4-credentials
+            key: whitelist
     persistence:
       storageClass: ceph-block
       dataDir:
         enabled: true
         Size: 50Gi
+    podAnnotations:
+      secret.reloader.stakater.com/reload: minecraft-stoneblock4-credentials
     podLabels:
       endpoints.netpols.home.arpa/minecraft-server: "true"
     serviceAnnotations:

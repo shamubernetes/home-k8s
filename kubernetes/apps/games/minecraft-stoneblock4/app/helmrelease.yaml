@@ -50,12 +50,12 @@ spec:
       autoCurseForge:
         apiKey:
           existingSecret: minecraft-stoneblock4-credentials
-          existingSecretKey: CURSEFORGE_API_KEY
+          existingSecretKey: cf-api-key
         slug: ftb-stoneblock-4
       rcon:
         enabled: true
         existingSecret: minecraft-stoneblock4-credentials
-        existingSecretKey: RCON_PASSWORD
+        existingSecretKey: rcon-password
     persistence:
       storageClass: ceph-block
       dataDir:

@@ -41,18 +41,15 @@ spec:
     strategyType: OnDelete
     minecraftServer:
       eula: "TRUE"
-      type: AUTO_CURSEFORGE
+      type: FTBA
       difficulty: normal
       motd: "FTB StoneBlock 4"
       pvp: true
       # Heap size settings
       memory: 10G
-      autoCurseForge:
-        apiKey:
-          existingSecret: minecraft-stoneblock4-credentials
-          existingSecretKey: cf-api-key
-        slug: ftb-stoneblock-4
-        fileId: "100159"
+      # FTB modpack settings
+      ftbModpackId: 130
+      ftbModpackVersionId: 100159
       rcon:
         enabled: true
         existingSecret: minecraft-stoneblock4-credentials

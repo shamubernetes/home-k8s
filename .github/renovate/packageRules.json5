@@ -182,10 +182,10 @@
       "assigneesFromCodeOwners": false,
     },
     {
-      "description": "Auto-merge minor updates with 7 days stability",
+      "description": "Auto-merge minor updates with 6 hours stability",
       "matchUpdateTypes": ["minor"],
       "matchDatasources": ["helm", "docker", "helmfile"],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "6 hours",
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
@@ -233,13 +233,6 @@
       ],
       "matchDatasources": ["docker"],
       "schedule": ["* 2-5 8-14 * 6"]
-    },
-    // Frequent updates are annoying
-    {
-      "description": ["Custom schedule for frequently updated packages"],
-      "matchDatasources": ["docker", "helm"],
-      "matchPackagePatterns": ["postgresql", "reloader"],
-      "schedule": ["on the 1st and 15th days of the month"]
     },
     {
       "description": "Wait 3 days before updating critical infrastructure",

@@ -17,7 +17,7 @@ spec:
   ttlSecondsAfterFinished: 3600
   # Unlock job template - inherits environment variables, volumes, and mounts from failed job
   unlockJobTemplate:
-    image: restic/restic:latest
+    image: restic/restic:latest@sha256:63e86f6726e2afcd49c882d2fc67ae483a38a1ffcb50cbf5f474bd11f5129217
     command: ["/bin/sh"]
     args:
     - "-c"

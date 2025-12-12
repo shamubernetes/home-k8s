@@ -9,3 +9,6 @@ spec:
     recordType: CNAME
     targets:
     - "external.${GAME_DOMAIN}"
+    providerSpecific:
+    - name: cloudflare-proxied
+      value: "false"

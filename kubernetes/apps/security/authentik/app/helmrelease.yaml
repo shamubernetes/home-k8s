@@ -26,6 +26,7 @@ spec:
     global:
       podAnnotations:
         secret.reloader.stakater.com/reload: authentik-secret,authentik-ceph-compat
+        configmap.reloader.stakater.com/reload: authentik-blueprints
       deploymentStrategy:
         type: RollingUpdate
       envFrom:
@@ -33,6 +34,9 @@ spec:
           name: &secret authentik-secret
       - secretRef:
           name: authentik-ceph-compat
+    blueprints:
+      configMaps:
+      - name: authentik-blueprints
     authentik:
       redis:
         host: dragonfly.database.svc.cluster.local

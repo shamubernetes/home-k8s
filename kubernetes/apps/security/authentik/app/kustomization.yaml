@@ -6,4 +6,6 @@ resources:
 - ./secretstore.yaml
 - ./objectbucketclaim.yaml
 - ./externalsecret.yaml
+- ./configmap-blueprints.yaml
+- ./ingress-outpost.yaml
 - ./helmrelease.yaml

@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/externaldns.k8s.io/dnsendpoint_v1alpha1.json
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: game-domain-cnames
+spec:
+  endpoints:
+  - dnsName: "mc.${GAME_DOMAIN}"
+    recordType: CNAME
+    targets:
+    - "external.${GAME_DOMAIN}"

@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app cloudflare-ddns
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.5.0
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      cloudflare-ddns:
+        containers:
+          app:
+            image:
+              repository: favonia/cloudflare-ddns
+              tag: 1.15.0@sha256:9a768ca13483dfa527e456ef1756b4acc8b5c072c0ecb81aef7a1640e06de350
+            env:
+              # Domains to update (comma-separated)
+              DOMAINS: "external.${GAME_DOMAIN}"
+              # Use Cloudflare API token
+              CF_API_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudflare-ddns-secret
+                    key: CF_API_TOKEN
+              # Update interval (every 5 minutes)
+              UPDATE_CRON: "*/5 * * * *"
+              # Enable IPv4, disable IPv6
+              IP6_PROVIDER: none
+              # Proxied through Cloudflare? Set to false for Minecraft (TCP)
+              PROXIED: "false"
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 1000
+              runAsGroup: 1000
+              capabilities:
+                drop:
+                  - ALL
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 64Mi
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}

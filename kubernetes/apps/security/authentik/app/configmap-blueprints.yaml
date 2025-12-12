@@ -7,7 +7,7 @@ data:
   plex-source.yaml: |
     version: 1
     metadata:
-      name: Plex Source
+      name: "Plex Source"
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
@@ -27,12 +27,13 @@ data:
           create_users: false
           user_matching_mode: email_link
           client_id: !Env PLEX_CLIENT_ID
+          plex_token: !Env PLEX_TOKEN
           allow_friends: false
 
   user-kilian.yaml: |
     version: 1
     metadata:
-      name: User: Kilian
+      name: "User: Kilian"
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
@@ -53,7 +54,7 @@ data:
   arr-proxy-provider.yaml: |
     version: 1
     metadata:
-      name: Arr Stack Forward-Auth
+      name: "Arr Stack Forward-Auth"
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
@@ -86,10 +87,10 @@ data:
       - model: authentik_policies_expression.expressionpolicy
         id: arr-allow-only-email
         identifiers:
-          name: Arr: allow only one email
+          name: "Arr: allow only one email"
         state: present
         attrs:
-          name: Arr: allow only one email
+          name: "Arr: allow only one email"
           expression: |
             import os
             allowed = (os.environ.get("AK_ARR_ALLOWED_EMAIL") or "").strip().lower()

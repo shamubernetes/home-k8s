@@ -26,6 +26,8 @@ spec:
       mc-router:
         replicas: 1
         strategy: RollingUpdate
+        serviceAccount:
+          identifier: *app
         containers:
           app:
             image:
@@ -65,7 +67,7 @@ spec:
           - name: ndots
             value: "1"
     serviceAccount:
-      create: true
+      mc-router: {}
     rbac:
       roles:
         mc-router:
@@ -82,9 +84,13 @@ spec:
         mc-router:
           type: ClusterRoleBinding
           roleRef:
-            identifier: mc-router
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: mc-router
           subjects:
-            - identifier: default
+          - kind: ServiceAccount
+            name: mc-router
+            namespace: games
     service:
       app:
         controller: *app

@@ -31,5 +31,11 @@
       matchPackagePatterns: ["gha-runner-scale-set"],
       pinDigests: false
     },
+    {
+      description: "CNPG cluster uses imageName without digest",
+      matchDatasources: ["docker"],
+      matchDepNames: ["ghcr.io/cloudnative-pg/postgresql"],
+      pinDigests: false
+    },
   ],
 }

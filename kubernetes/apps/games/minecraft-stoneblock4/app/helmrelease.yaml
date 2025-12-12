@@ -52,7 +52,7 @@ spec:
           existingSecret: minecraft-stoneblock4-credentials
           existingSecretKey: cf-api-key
         slug: ftb-stoneblock-4
-        fileId: 100159
+        fileId: "100159"
       rcon:
         enabled: true
         existingSecret: minecraft-stoneblock4-credentials

@@ -11,6 +11,9 @@ spec:
       app.kubernetes.io/name: *app
   dependsOn:
   - name: external-secrets-secret-store
+  # Authentik uses an ObjectBucketClaim; this depends on the rook-ceph stack CRDs.
+  - name: rook-ceph
+  - name: rook-ceph-cluster
   path: ./kubernetes/apps/security/authentik/app
   prune: false # never should be deleted
   sourceRef:

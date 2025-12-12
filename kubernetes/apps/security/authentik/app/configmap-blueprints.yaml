@@ -25,7 +25,7 @@ data:
           # Important: do not auto-create users from Plex.
           # Only existing authentik users can log in via Plex.
           create_users: false
-          user_matching_mode: email
+          user_matching_mode: email_link
           client_id: !Env PLEX_CLIENT_ID
           allow_friends: false
 

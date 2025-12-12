@@ -35,8 +35,9 @@ spec:
       - secretRef:
           name: authentik-ceph-compat
     blueprints:
+      # Chart expects a list of ConfigMap names (strings), not objects.
       configMaps:
-      - name: authentik-blueprints
+      - authentik-blueprints
     authentik:
       redis:
         host: dragonfly.database.svc.cluster.local

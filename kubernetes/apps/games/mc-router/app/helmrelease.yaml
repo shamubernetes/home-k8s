@@ -1,0 +1,100 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app mc-router
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.5.0
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      mc-router:
+        replicas: 1
+        strategy: RollingUpdate
+        containers:
+          app:
+            image:
+              repository: itzg/mc-router
+              tag: 1.30.1@sha256:e88a3100f8f6cc76db6217a3a6aab71dab6bd8b0cf2a04e1d51d37d7a50f96a2
+            env:
+              API_BINDING: 0.0.0.0:8080
+              IN_KUBE_CLUSTER: "true"
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              runAsUser: 1000
+              runAsGroup: 1000
+              capabilities:
+                drop:
+                  - ALL
+            probes:
+              startup:
+                enabled: true
+              readiness:
+                enabled: true
+              liveness:
+                enabled: true
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 128Mi
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+    serviceAccount:
+      create: true
+    rbac:
+      roles:
+        mc-router:
+          type: ClusterRole
+          rules:
+            - apiGroups:
+                - ""
+              resources:
+                - services
+              verbs:
+                - list
+                - watch
+      bindings:
+        mc-router:
+          type: ClusterRoleBinding
+          roleRef:
+            identifier: mc-router
+          subjects:
+            - identifier: default
+    service:
+      app:
+        controller: *app
+        type: LoadBalancer
+        annotations:
+          external-dns.alpha.kubernetes.io/hostname: "mc.${GAME_DOMAIN}"
+          io.cilium/lb-ipam-ips: "${IPAM_IP_MC_ROUTER}"
+        ports:
+          api:
+            port: 8080
+          minecraft:
+            port: 25565
+            protocol: TCP

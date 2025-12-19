@@ -124,6 +124,13 @@ spec:
     defaultPodOptions:
       annotations:
         descheduler.alpha.kubernetes.io/evict: "false"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
       securityContext:
         runAsNonRoot: true
         runAsUser: 568

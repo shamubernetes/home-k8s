@@ -58,19 +58,6 @@ spec:
               HLTB_API_ENABLED: "true"
               TZ: America/New_York
             envFrom: *envFrom
-            probes:
-              liveness: &probes
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /api/heartbeat
-                    port: &port 8080
-                  initialDelaySeconds: 30
-                  periodSeconds: 10
-                  timeoutSeconds: 5
-                  failureThreshold: 3
-              readiness: *probes
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true

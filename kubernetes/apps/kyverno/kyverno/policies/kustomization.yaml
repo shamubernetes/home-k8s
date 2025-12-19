@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
 - ./defaultPodResources.yaml
 - ./disallowEmptyIngress.yaml
+- ./externalsecret-usage-tracking.yaml
 - ./safeToEvict.yaml
 - ./volsync-movers.yaml

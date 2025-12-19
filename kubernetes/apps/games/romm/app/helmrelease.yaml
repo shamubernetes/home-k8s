@@ -48,6 +48,7 @@ spec:
               ROMM_DB_DRIVER: postgresql
               REDIS_HOST: dragonfly.database.svc.cluster.local
               REDIS_PORT: "6379"
+              ROMM_PORT: &port 8080
               ENABLE_SCHEDULED_RESCAN: "true"
               SCHEDULED_RESCAN_CRON: "0 3 * * *"
               ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB: "false"
@@ -74,14 +75,13 @@ spec:
         runAsGroup: 568
         fsGroup: 568
         fsGroupChangePolicy: OnRootMismatch
-        supplementalGroups: [10000]
         seccompProfile: {type: RuntimeDefault}
     service:
       app:
         controller: *app
         ports:
           http:
-            port: 8080
+            port: *port
     ingress:
       app:
         annotations:

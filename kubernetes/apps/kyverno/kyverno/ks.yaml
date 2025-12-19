@@ -37,6 +37,9 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   path: ./kubernetes/apps/kyverno/kyverno/policies
+  # Needed to roll out changes to Kyverno generate rules (Kyverno treats parts of
+  # generate rules as immutable and its validating webhook will deny patching).
+  force: true
   prune: true
   sourceRef:
     kind: GitRepository

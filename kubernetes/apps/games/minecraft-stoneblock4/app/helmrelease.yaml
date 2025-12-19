@@ -77,6 +77,7 @@ spec:
       pauseIfNoPlayers: "true"
       compressMethod: zstd
       initialDelay: 5m
+      rconHost: 127.0.0.1
       persistence:
         storageClass: ceph-block
         backupDir:

@@ -5,6 +5,7 @@ resources:
 - ./objectstore-r2.yaml
 - ./cluster17.yaml
 - ./pooler.yaml
+- ./pooler-session.yaml
 - ./scheduledbackup.yaml
 - ./prometheusrule.yaml
 - ./service.yaml

@@ -17,20 +17,32 @@ The cluster uses a multi-layer backup strategy:
 - **WAL Storage**: `ceph-block` - Separate volume for write-ahead logs
 - **Snapshot Class**: `csi-ceph-blockpool` - For volume snapshots
 
-## Connection Pooler (PgBouncer)
+## Connection Poolers (PgBouncer)
 
-A PgBouncer pooler is deployed for better connection handling during failovers:
+Two PgBouncer poolers are deployed for better connection handling during failovers:
 
-- **`postgres17-pooler`**: **Use this for all applications** - Handles failover gracefully
+| Service                         | Pool Mode   | Use Case                                     |
+| ------------------------------- | ----------- | -------------------------------------------- |
+| **`postgres17-pooler`**         | transaction | Most applications (arr apps, simple queries) |
+| **`postgres17-pooler-session`** | session     | Apps requiring prepared statements (Grafana) |
+
+### Which pooler should I use?
+
+- **Transaction mode** (`postgres17-pooler`): More efficient, shares connections between clients. Use for apps that don't rely on prepared statements or session-specific features.
+- **Session mode** (`postgres17-pooler-session`): 1:1 client-server mapping. Required for apps using PostgreSQL prepared statements (Grafana, some ORMs).
+
+### Direct services (avoid in production)
+
 - `postgres17-rw`: Direct connection to primary (use only for admin/monitoring)
 - `postgres17-ro`: Read-only service (replicas)
 - `postgres17-r`: Any instance (for reads that can tolerate stale data)
 - `postgres-lb`: LoadBalancer service for external access
 
-The pooler:
-- Keeps client connections alive during primary switchovers
-- Uses transaction pooling mode for optimal failover handling
-- Automatically reconnects to the new primary without dropping client connections
+### Pooler benefits
+
+- Keep client connections alive during primary switchovers
+- Automatically reconnect to the new primary without dropping client connections
+- Limit connection count to PostgreSQL backend
 
 ## Recovery Procedures
 
@@ -45,12 +57,12 @@ bootstrap:
   recovery:
     source: &previousCluster postgres17-v1
 externalClusters:
-- name: *previousCluster
-  plugin:
-    name: barman-cloud.cloudnative-pg.io
-    parameters:
-      barmanObjectName: r2
-      serverName: *previousCluster
+  - name: *previousCluster
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: r2
+        serverName: *previousCluster
 ```
 
 2. Increment the `serverName` in the ObjectStore (e.g., `postgres17-v2`)

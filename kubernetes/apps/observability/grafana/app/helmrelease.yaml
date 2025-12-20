@@ -97,14 +97,6 @@ spec:
           editable: true
           options:
             path: /var/lib/grafana/dashboards/ceph-folder
-        - name: emqx
-          orgId: 1
-          folder: EMQX
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/emqx-folder
         - name: flux
           orgId: 1
           folder: Flux
@@ -186,12 +178,6 @@ spec:
           gnetId: 15038
           revision: 3
           datasource: Prometheus
-        minio:
-          # renovate: depName="MinIO Dashboard"
-          gnetId: 13502
-          revision: 26
-          datasource:
-          - {name: DS_PROMETHEUS, value: Prometheus}
         node-exporter-full:
           # renovate: depName="Node Exporter Full"
           gnetId: 1860
@@ -206,12 +192,6 @@ spec:
         spegel:
           # renovate: depName="Spegel"
           gnetId: 18089
-          revision: 1
-          datasource:
-          - {name: DS_PROMETHEUS, value: Prometheus}
-        unpackerr:
-          # renovate: depName="Unpackerr"
-          gnetId: 18817
           revision: 1
           datasource:
           - {name: DS_PROMETHEUS, value: Prometheus}
@@ -232,9 +212,6 @@ spec:
         node-feature-discovery:
           url: https://raw.githubusercontent.com/kubernetes-sigs/node-feature-discovery/master/examples/grafana-dashboard.json
           datasource: Prometheus
-        miniflux:
-          url: https://raw.githubusercontent.com/miniflux/v2/main/contrib/grafana/dashboard.json
-          datasource: Prometheus
       ceph:
         ceph-cluster:
           # renovate: depName="Ceph Cluster"
@@ -250,28 +227,6 @@ spec:
           # renovate: depName="Ceph - Pools"
           gnetId: 5342
           revision: 9
-          datasource: Prometheus
-      emqx:
-        emqx-authentication:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/authentication.json
-          datasource: Prometheus
-        emqx-authorization:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/authorization.json
-          datasource: Prometheus
-        emqx-client-events:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/client-events.json
-          datasource: Prometheus
-        emqx-messages:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/messages.json
-          datasource: Prometheus
-        emqx-overview:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/overview.json
-          datasource: Prometheus
-        emqx-rule-engine-count:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/rule-engine-count.json
-          datasource: Prometheus
-        emqx-rule-engine-rate:
-          url: https://raw.githubusercontent.com/emqx/emqx-exporter/main/grafana-dashboard/template/emqx-5/rule-engine-rate.json
           datasource: Prometheus
       flux:
         flux-cluster:

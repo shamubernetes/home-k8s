@@ -122,7 +122,7 @@ spec:
         server: "${IPAM_IP_NFS}"
         path: /mnt/user/Media
         globalMounts:
-        - path: /mnt/Media
+        - path: /media
       scripts:
         enabled: true
         type: configMap

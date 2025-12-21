@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: itzg/mc-router
-              tag: 1.38.0@sha256:9998c45520fa5670e4ed9c8d0c65b26be7d361f3aff797a2cd56b30ee30d8fe0
+              tag: 1.38.1@sha256:40dc82eae5c018f1d63aebd01b6b3df1e1af2e64d0fbc5d38dc69ec4fb45b535
             env:
               API_BINDING: 0.0.0.0:8080
               IN_KUBE_CLUSTER: "true"

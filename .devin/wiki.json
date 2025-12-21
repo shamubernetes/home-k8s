@@ -33,22 +33,12 @@
       ]
     },
     {
-      "title": "Development Environment",
-      "purpose": "Detailed explanation of the mise toolchain, required tools (kubectl, flux, talos, sops), and environment configuration",
+      "title": "Development Environment & Bootstrap",
+      "purpose": "Detailed explanation of the mise toolchain, required tools, and step-by-step bootstrap process for the cluster",
       "parent": "Getting Started",
       "page_notes": [
         {
-          "content": "Document .mise.toml tool versions: kubectl 1.35.0, sops 3.11.0, age 1.2.1, task 3.44.0, flux2 2.7.5, talhelper latest, talosctl 1.11.6, krew 0.4.5, npm:renovate. Environment paths point to kubernetes/kubeconfig, age.key at project root, talos/clusterconfig/talosconfig. Explain how mise activates the environment automatically."
-        }
-      ]
-    },
-    {
-      "title": "Bootstrap Process",
-      "purpose": "Step-by-step guide for bootstrapping the cluster, covering Talos installation, Helmfile initialization, and Flux CD setup",
-      "parent": "Getting Started",
-      "page_notes": [
-        {
-          "content": "Bootstrap order: 1) Generate Talos configs with talhelper (talconfig.yaml + patches/). 2) Apply Talos configs to nodes. 3) Run helmfile (talos/helmfile.yaml) to install prometheus-operator-crds, cilium, coredns, kubelet-csr-approver, spegel in order. 4) Bootstrap Flux with sops-age secret. 5) Flux applies kubernetes/flux/config/ then kubernetes/flux/apps.yaml which applies all apps. Critical: Cilium must be up before pods can communicate."
+          "content": "Tools in .mise.toml: kubectl 1.35.0, sops 3.11.0, age 1.2.1, task 3.44.0, flux2 2.7.5, talhelper latest, talosctl 1.11.6. Environment paths: kubernetes/kubeconfig, age.key at root, talos/clusterconfig/talosconfig. Bootstrap order: 1) Generate Talos configs with talhelper. 2) Apply configs to nodes. 3) Run helmfile (talos/helmfile.yaml) for cilium, coredns, kubelet-csr-approver, spegel. 4) Bootstrap Flux with sops-age secret. 5) Flux applies kubernetes/flux/config/ then apps.yaml."
         }
       ]
     },
@@ -58,7 +48,7 @@
       "parent": "Getting Started",
       "page_notes": [
         {
-          "content": "Two secret mechanisms: 1) SOPS with Age encryption for in-repo secrets (*.sops.yaml files). The .sops.yaml defines regex patterns - kubernetes/ encrypts data/stringData fields, talos/ encrypts entire files. Age public key: age1tk7tw0625mspavxe8lvv348p58ydqw6r04sxcjq76m98nan2lsnq3dhvxd. 2) ExternalSecrets operator with ClusterSecretStore pointing to 1Password Connect (http://onepassword-connect.op:8080) for runtime secrets. Apps use ExternalSecret resources referencing 1Password vault items."
+          "content": "Two secret mechanisms: 1) SOPS with Age encryption for in-repo secrets (*.sops.yaml files). The .sops.yaml defines regex patterns - kubernetes/ encrypts data/stringData fields, talos/ encrypts entire files. Age public key: age1tk7tw0625mspavxe8lvv348p58ydqw6r04sxcjq76m98nan2lsnq3dhvxd. 2) ExternalSecrets operator with ClusterSecretStore pointing to 1Password Connect (http://onepassword-connect.op:8080). Apps use ExternalSecret resources referencing 1Password vault items."
         }
       ]
     },
@@ -77,85 +67,75 @@
       "parent": "Architecture",
       "page_notes": [
         {
-          "content": "Flux structure: kubernetes/flux/config/ (cluster.yaml, flux.yaml), kubernetes/flux/repositories/ (helm, git, oci sources), kubernetes/flux/vars/ (cluster-settings, cluster-secrets, cluster-ipam ConfigMaps/Secrets). The apps.yaml Kustomization patches all child Kustomizations with decryption and postBuild.substituteFrom unless labeled substitution.flux.home.arpa/disabled: true. GitHub Actions: meta-flux-diff.yaml runs flux-local test and diff on PRs, flux-failure-issue.yaml creates issues on Flux errors. Renovate handles dependency updates via kubernetes/apps/renovate/."
+          "content": "Flux structure: kubernetes/flux/config/ (cluster.yaml, flux.yaml), kubernetes/flux/repositories/ (helm, git, oci sources), kubernetes/flux/vars/ (cluster-settings, cluster-secrets, cluster-ipam). The apps.yaml Kustomization patches all child Kustomizations with decryption and postBuild.substituteFrom unless labeled substitution.flux.home.arpa/disabled: true. GitHub Actions: meta-flux-diff.yaml runs flux-local test and diff on PRs, flux-failure-issue.yaml creates issues on Flux errors. Renovate handles dependency updates."
         }
       ]
     },
     {
       "title": "Infrastructure Components",
-      "purpose": "Documentation of core infrastructure services: Talos Linux, Cilium CNI, CoreDNS, certificate management, and registry mirroring",
+      "purpose": "Documentation of core infrastructure: Talos Linux, Cilium CNI, CoreDNS, cert-manager, Spegel registry mirroring, and system upgrades via TUPPR",
       "parent": "Architecture",
       "page_notes": [
         {
-          "content": "Talos Linux: talconfig.yaml defines nodes with static IPs, VIP on control-plane nodes, factory image with extensions. Patches in talos/patches/global/ (containerd, coredns, kubelet, nfs, openebs, sysctl) and patches/controlplane/ (admission, etcd, talos-api). Cilium: Host networking, L2 announcements via CiliumL2AnnouncementPolicy, LoadBalancer IPs via CiliumLoadBalancerIPPool. CoreDNS with custom Corefile. Spegel for P2P container image distribution. Kubelet-csr-approver for automatic certificate approval."
+          "content": "Talos: talconfig.yaml defines nodes with static IPs, VIP on control-plane. Patches in talos/patches/global/ and patches/controlplane/. Cilium: Host networking, L2 announcements, LoadBalancer IPs. CoreDNS with custom Corefile. Spegel for P2P container images. Kubelet-csr-approver for cert approval. System upgrades via TUPPR (system-upgrade/tuppr/) with TalosUpgrade and KubernetesUpgrade CRs coordinated with Renovate."
         }
       ]
     },
     {
       "title": "Storage",
-      "purpose": "Overview of the storage architecture including Rook-Ceph distributed storage and OpenEBS local volumes",
+      "purpose": "Overview of the storage architecture including Rook-Ceph distributed storage, OpenEBS local volumes, and VolSync backups",
       "page_notes": [
         {
-          "content": "Primary storage: Rook-Ceph on /dev/sda devices across nodes. OpenEBS hostpath for local volumes. VolSync for backup/restore with restic to NFS (${IPAM_IP_NFS}=/10.100.47.100) and Cloudflare R2. Snapshot-controller enables CSI snapshots. Storage dependencies: most apps dependsOn rook-ceph-cluster and volsync."
+          "content": "Primary storage: Rook-Ceph on /dev/sda devices across nodes. OpenEBS hostpath for local volumes. VolSync for backup/restore with restic to NFS (10.100.47.100) and Cloudflare R2. Snapshot-controller enables CSI snapshots. Storage dependencies: most apps dependsOn rook-ceph-cluster and volsync."
         }
       ]
     },
     {
       "title": "Rook-Ceph Cluster",
-      "purpose": "Comprehensive guide to the Rook-Ceph distributed storage: operator deployment, cluster configuration, pools, and monitoring",
+      "purpose": "Comprehensive guide to Rook-Ceph: operator deployment, cluster configuration, storage classes, pools, snapshots, and monitoring",
       "parent": "Storage",
       "page_notes": [
         {
-          "content": "Rook-Ceph in kubernetes/apps/rook-ceph/: operator (rook-ceph/) and cluster (rook-ceph/cluster/). Cluster uses host networking, deviceFilter: sda, 3x replicated pools. MGR/MON placed on control-plane nodes. Dashboard at rook.${HOME_DOMAIN}. Object store gateway at rgw.${HOME_DOMAIN}. Resources: MGR 512Mi-2Gi, MON 512Mi-1Gi, OSD 2Gi-6Gi. Prometheus monitoring enabled with built-in rules."
+          "content": "Rook-Ceph in kubernetes/apps/rook-ceph/: operator and cluster. Cluster uses host networking, deviceFilter: sda, 3x replicated pools. MGR/MON on control-plane. Dashboard at rook.${HOME_DOMAIN}. StorageClasses: ceph-block (default, RWO), ceph-filesystem (RWX), ceph-bucket (S3 via ObjectBucketClaim). VolumeSnapshotClasses: csi-ceph-blockpool, csi-ceph-filesystem. Object store gateway at rgw.${HOME_DOMAIN}. Prometheus monitoring enabled."
         }
       ]
     },
     {
-      "title": "Storage Classes & Volumes",
-      "purpose": "Documentation of available StorageClasses, their use cases, volume snapshots, and backup strategies with VolSync",
+      "title": "Backup & Disaster Recovery",
+      "purpose": "Guide to VolSync backup strategies, Ceph snapshots, PostgreSQL PITR with barman-cloud, and recovery procedures",
       "parent": "Storage",
       "page_notes": [
         {
-          "content": "StorageClasses: ceph-block (default, RWO, ext4), ceph-filesystem (RWX), ceph-bucket (S3-compatible via ObjectBucketClaim). VolumeSnapshotClasses: csi-ceph-blockpool, csi-ceph-filesystem. OpenEBS provides openebs-hostpath for local node storage. VolSync templates in kubernetes/templates/volsync/: nfs-replicationsource.yaml (backup to NFS), r2-replicationsource.yaml (backup to R2), nfs-replicationdestination.yaml (restore). Apps reference templates via kustomization.yaml."
+          "content": "Backup strategies: 1) VolSync ReplicationSource to NFS and R2 for PVCs - templates in kubernetes/templates/volsync/. 2) Ceph VolumeSnapshots. 3) CNPG continuous backup to R2 via barman-cloud with PITR. Recovery: VolSync ReplicationDestination restores PVCs, CNPG bootstrap.recovery section for database. Apps include volsync.yaml referencing templates."
         }
       ]
     },
     {
       "title": "Networking",
-      "purpose": "Overview of network architecture including CNI, load balancing, DNS, and external access patterns",
+      "purpose": "Overview of network architecture including Cilium CNI, load balancing, DNS, and external access patterns",
       "page_notes": [
         {
-          "content": "Network topology: Node network 10.100.47.0/24, gateway 10.100.47.1. Pod CIDR 10.69.0.0/16, Service CIDR 10.96.0.0/16. LoadBalancer pool 10.100.47.200-250 assigned via Cilium L2. Key IPs: Plex .230, NGINX external .249, NGINX internal .250, AdGuard .200-.202, Postgres .220, Vector .214. Ingress split: internal (default) vs external (Cloudflare Tunnel)."
+          "content": "Network topology: Node network 10.100.47.0/24, gateway 10.100.47.1. Pod CIDR 10.69.0.0/16, Service CIDR 10.96.0.0/16. LoadBalancer pool 10.100.47.200-250 via Cilium L2. Key IPs: Plex .230, NGINX external .249, internal .250, AdGuard .200-.202, Postgres .220. Ingress split: internal (default) vs external (Cloudflare Tunnel)."
         }
       ]
     },
     {
       "title": "CNI & Load Balancing",
-      "purpose": "Detailed documentation of Cilium CNI configuration, L2 announcements, IPAM, and LoadBalancer implementation",
+      "purpose": "Detailed documentation of Cilium CNI, L2 announcements, IPAM, LoadBalancer implementation, and network policies",
       "parent": "Networking",
       "page_notes": [
         {
-          "content": "Cilium in kubernetes/apps/kube-system/cilium/: app/ (helmrelease, helm-values), config/ (l2announcementpolicy, loadbalancerippool, localredirectpolicy, peeringpolicy). CNI mode: none in Talos (Cilium takes over). Features: L2 announcements for LoadBalancer services, host networking for Ceph. CiliumLoadBalancerIPPool defines 10.100.47.200-250 range. Services request specific IPs via io.cilium/lb-ipam-ips annotation. Hubble UI available with Gatus monitoring."
+          "content": "Cilium in kube-system/cilium/: app/ (helmrelease, helm-values), config/ (l2announcementpolicy, loadbalancerippool, localredirectpolicy, peeringpolicy). CNI mode: none in Talos (Cilium takes over). CiliumLoadBalancerIPPool defines 10.100.47.200-250. Services request IPs via io.cilium/lb-ipam-ips annotation. Hubble UI for observability. Kyverno policies for pod security in kubernetes/apps/kyverno/policies/."
         }
       ]
     },
     {
-      "title": "DNS & Service Discovery",
-      "purpose": "Documentation of AdGuard Home HA setup, CoreDNS cluster DNS, and External DNS automation for Cloudflare and UniFi",
+      "title": "DNS & Ingress",
+      "purpose": "Documentation of AdGuard Home HA, CoreDNS, External-DNS (Cloudflare/UniFi), ingress-nginx internal/external, Cloudflare Tunnels, and cert-manager TLS",
       "parent": "Networking",
       "page_notes": [
         {
-          "content": "Three DNS layers: 1) AdGuard Home (kubernetes/apps/adguard-home/) - 3-replica HA setup at IPs .200, .201, .202 for network-wide ad blocking and DNS. 2) CoreDNS (kube-system/coredns/) - cluster DNS with custom Corefile patches. 3) External-DNS (network/external-dns/) with two providers: Cloudflare (public DNS for ${HOME_DOMAIN}) and UniFi (internal DNS records). Apps use external-dns.alpha.kubernetes.io/target annotation to specify internal.${HOME_DOMAIN} or external.${HOME_DOMAIN}."
-        }
-      ]
-    },
-    {
-      "title": "Ingress & External Access",
-      "purpose": "Guide to ingress-nginx configuration, Cloudflare Tunnels for zero-trust access, TLS with cert-manager, internal vs external patterns",
-      "parent": "Networking",
-      "page_notes": [
-        {
-          "content": "Ingress in kubernetes/apps/network/ingress-nginx/: internal/ (default class, IP .250) and external/ (class 'external', IP .249). Both use ingress-nginx helm chart with TLS termination. Default SSL cert from network/${HOME_DOMAIN/./-}-production-tls. Cloudflared (network/cloudflared/) creates tunnels for external access without port forwarding - config.yaml maps hostnames to internal services. Cert-manager (cert-manager/) with Let's Encrypt ClusterIssuers (staging, production) in certificates/. Pattern: internal apps use className: internal, external use Cloudflare tunnel."
+          "content": "DNS layers: 1) AdGuard Home 3 replicas at .200-.202 for ad blocking. 2) CoreDNS cluster DNS. 3) External-DNS with Cloudflare + UniFi providers. Ingress: ingress-nginx internal (default, .250) and external (.249). Cloudflared tunnels for zero-trust external access. Cert-manager with Let's Encrypt ClusterIssuers. Apps use external-dns.alpha.kubernetes.io/target annotation and className: internal or tunnel via cloudflared."
         }
       ]
     },
@@ -164,17 +144,17 @@
       "purpose": "Overview of database and caching services: PostgreSQL (CloudNative-PG) and Dragonfly (Redis-compatible)",
       "page_notes": [
         {
-          "content": "Database namespace (kubernetes/apps/database/): cloudnative-pg/ (PostgreSQL operator + cluster), dragonfly/ (Redis-compatible operator + cluster). Both provide HA with automatic failover. Apps use init containers (ghcr.io/home-operations/postgres-init) to create databases. Pooler (PgBouncer) available for connection pooling. LoadBalancer service at ${IPAM_IP_POSTGRES}=10.100.47.220 for external access."
+          "content": "Database namespace: cloudnative-pg/ (PostgreSQL operator + cluster), dragonfly/ (Redis-compatible). Both provide HA with automatic failover. Apps use init containers (ghcr.io/home-operations/postgres-init). Pooler (PgBouncer) available. LoadBalancer at ${IPAM_IP_POSTGRES}=10.100.47.220."
         }
       ]
     },
     {
       "title": "PostgreSQL (CloudNative-PG)",
-      "purpose": "Documentation of CloudNative-PG operator, PostgreSQL 17 cluster with HA, backup to R2, recovery procedures",
+      "purpose": "Documentation of CloudNative-PG operator, PostgreSQL 17 cluster with HA, backup to R2, pooler, and recovery procedures",
       "parent": "Data Services",
       "page_notes": [
         {
-          "content": "CNPG in kubernetes/apps/database/cloudnative-pg/: app/ (operator), cluster/ (cluster17.yaml, pooler.yaml, scheduledbackup.yaml, objectstore-r2.yaml), plugin/ (barman-cloud). Cluster: 3 instances, PostgreSQL 17.4, 20Gi storage + 5Gi WAL on ceph-block. Backup via barman-cloud plugin to R2 (serverName: postgres17-v1). Features: hugepages-2Mi, max_connections 250, PodMonitor. Recovery: uncomment bootstrap.recovery section, set externalClusters to previous serverName. See README.md for recovery steps."
+          "content": "CNPG in database/cloudnative-pg/: app/ (operator), cluster/ (cluster17.yaml, pooler.yaml, scheduledbackup.yaml, objectstore-r2.yaml). Cluster: 3 instances, PostgreSQL 17.4, 20Gi storage + 5Gi WAL on ceph-block. Backup via barman-cloud to R2 (serverName: postgres17-v1). Features: hugepages-2Mi, max_connections 250, PodMonitor. Recovery: uncomment bootstrap.recovery, set externalClusters. See README.md."
         }
       ]
     },
@@ -184,95 +164,55 @@
       "parent": "Data Services",
       "page_notes": [
         {
-          "content": "Dragonfly in kubernetes/apps/database/dragonfly/: app/ (operator via app-template with RBAC), cluster/ (Dragonfly CR, PodMonitor). Cluster: 3 replicas, 512Mi memory limit, emulated cluster mode with lock_on_hashtags. Operator manages StatefulSet, Service, PDB. Apps connect via dragonfly.database.svc.cluster.local:6379. Used by apps needing Redis-compatible caching (sessions, queues)."
+          "content": "Dragonfly in database/dragonfly/: app/ (operator via app-template with RBAC), cluster/ (Dragonfly CR, PodMonitor). Cluster: 3 replicas, 512Mi memory, emulated cluster mode with lock_on_hashtags. Apps connect via dragonfly.database.svc.cluster.local:6379 for Redis-compatible caching."
         }
       ]
     },
     {
       "title": "Observability",
-      "purpose": "Overview of the comprehensive observability stack: Prometheus metrics, Loki logs, Grafana dashboards, alerting",
+      "purpose": "Overview of the observability stack: Prometheus, Alertmanager, Loki, Vector, Grafana, Gatus, and exporters",
       "page_notes": [
         {
-          "content": "Observability namespace (kubernetes/apps/observability/): prometheus-operator-crds, kube-prometheus-stack (Prometheus, Alertmanager), loki, vector (log collection), grafana, gatus (health checks), smartctl-exporter, unpoller (UniFi metrics), tautulli (Plex stats), kuberhealthy. All components have ServiceMonitors for self-monitoring. Logs flow: containers → Vector agent → Vector aggregator → Loki. Metrics scraped by Prometheus."
+          "content": "Observability namespace: prometheus-operator-crds, kube-prometheus-stack, loki, vector, grafana, gatus, smartctl-exporter, unpoller, tautulli, kuberhealthy. Logs: containers → Vector agent → aggregator → Loki. Metrics: Prometheus scrapes ServiceMonitors. Alerts via Alertmanager to Pushover. Gatus for health checks with templates in kubernetes/templates/gatus/."
         }
       ]
     },
     {
-      "title": "Prometheus & Metrics",
-      "purpose": "Detailed documentation of kube-prometheus-stack: Prometheus configuration, ServiceMonitors, PrometheusRules, recording rules",
+      "title": "Metrics & Alerting",
+      "purpose": "Detailed documentation of kube-prometheus-stack, Prometheus, Alertmanager with Pushover, PrometheusRules, and heartbeat monitoring",
       "parent": "Observability",
       "page_notes": [
         {
-          "content": "kube-prometheus-stack in observability/kube-prometheus-stack/: helmrelease.yaml deploys Prometheus, Alertmanager, node-exporter, kube-state-metrics. ServiceMonitors auto-discover services with monitoring labels. PrometheusRules for alerts (smartctl-exporter/prometheusrule.yaml, cnpg prometheusrule.yaml). Prometheus connects to Ceph dashboard at prometheus-operated.observability.svc.cluster.local:9090. Additional exporters: smartctl-exporter (disk health), unpoller (UniFi)."
+          "content": "kube-prometheus-stack deploys Prometheus, Alertmanager, node-exporter, kube-state-metrics. ServiceMonitors auto-discover. PrometheusRules for alerts. Alertmanager config: routes by severity, receivers for null, heartbeat (Watchdog), pushover (critical). Pushover uses ALERTMANAGER_PUSHOVER_TOKEN. Heartbeat every 5m. Additional exporters: smartctl-exporter, unpoller."
         }
       ]
     },
     {
-      "title": "Loki & Log Aggregation",
-      "purpose": "Guide to Loki deployment with S3 backend, Vector agent/aggregator log pipeline, retention policies",
+      "title": "Logging & Visualization",
+      "purpose": "Guide to Loki with S3 backend, Vector agent/aggregator pipeline, Grafana dashboards, and Gatus status monitoring",
       "parent": "Observability",
       "page_notes": [
         {
-          "content": "Loki in observability/loki/: helmrelease.yaml, objectbucketclaim.yaml (ceph-bucket for storage). Vector in observability/vector/: agent/ (DaemonSet collecting container logs), aggregator/ (StatefulSet processing and forwarding to Loki). Pipeline: Vector agent on each node → Vector aggregator (LoadBalancer at .214) → Loki. Custom transforms in resources/vector.yaml. Plex has dedicated LokiRule (media/plex/app/resources/lokirule.yaml)."
-        }
-      ]
-    },
-    {
-      "title": "Grafana Dashboards",
-      "purpose": "Documentation of Grafana deployment, datasource configuration (Prometheus, Loki), dashboard provisioning",
-      "parent": "Observability",
-      "page_notes": [
-        {
-          "content": "Grafana in observability/grafana/: helmrelease.yaml with datasources (Prometheus, Loki, Alertmanager), dashboard provisioning from ConfigMaps. Ingress at grafana.${HOME_DOMAIN}. Dashboards organized by folders. Auth via externalsecret.yaml. Connects to Prometheus (prometheus-operated:9090), Loki (loki-gateway:80), Alertmanager. Ceph dashboard available at rook.${HOME_DOMAIN} with Prometheus integration."
-        }
-      ]
-    },
-    {
-      "title": "Alerting & Notifications",
-      "purpose": "Guide to Alertmanager configuration, alert routing, Pushover integration, heartbeat/watchdog monitoring",
-      "parent": "Observability",
-      "page_notes": [
-        {
-          "content": "Alertmanager configured via alertmanagerconfig.yaml: routes by severity, receivers for null (silenced), heartbeat (Watchdog to external service), pushover (critical alerts). Pushover integration uses ALERTMANAGER_PUSHOVER_TOKEN and PUSHOVER_USER_KEY from alertmanager-secret. Heartbeat receiver posts to ALERTMANAGER_HEARTBEAT_URL every 5m. Alert grouping by alertname+job, 12h repeat interval. Inhibit rules: critical suppresses warning for same alertname+namespace."
-        }
-      ]
-    },
-    {
-      "title": "Status Monitoring (Gatus)",
-      "purpose": "Documentation of Gatus health check system, endpoint configuration templates, and status page",
-      "parent": "Observability",
-      "page_notes": [
-        {
-          "content": "Gatus in observability/gatus/: helmrelease.yaml, rbac.yaml (for K8s discovery), resources/config.yaml. Templates in kubernetes/templates/gatus/: external/ (public endpoints), guarded/ (internal apps with auth), infrastructure/ (infra components). Apps include Gatus templates via kustomization.yaml. ConfigMaps labeled gatus.io/enabled: true are auto-discovered. Endpoints use Pushover alerts. Variables: ${APP}, ${NAMESPACE}, ${GATUS_PATH}, ${GATUS_STATUS}."
+          "content": "Loki in observability/loki/ with ObjectBucketClaim for S3 storage. Vector: agent DaemonSet → aggregator StatefulSet (LB at .214) → Loki. Grafana at grafana.${HOME_DOMAIN} with Prometheus, Loki, Alertmanager datasources. Gatus health checks: templates in kubernetes/templates/gatus/ (external, guarded, infrastructure). ConfigMaps with gatus.io/enabled: true auto-discovered."
         }
       ]
     },
     {
       "title": "Applications",
-      "purpose": "Overview of user-facing applications organized by category: media, home automation, games, services",
+      "purpose": "Overview of user-facing applications organized by category with common deployment patterns",
       "page_notes": [
         {
-          "content": "Application categories in kubernetes/apps/: arrs/ (media automation), media/ (Plex, Stash), home-assistant/ (home automation), games/ (Minecraft, RomM), services/ (Atuin, static-webserver), renovate/ (dependency updates). Common patterns: app-template helm chart from bjw-s, dependsOn rook-ceph-cluster + volsync, init-db container for Postgres, reloader.stakater.com/auto annotation, NFS mounts for media at /mnt/user/Media."
+          "content": "Categories: arrs/ (media automation), media/ (Plex, Stash), home-assistant/, games/ (Minecraft, RomM), services/ (Atuin, static-webserver), renovate/. Common patterns: app-template helm chart, dependsOn rook-ceph-cluster + volsync, postgres-init container, reloader.stakater.com/auto annotation, NFS at /mnt/user/Media."
         }
       ]
     },
     {
-      "title": "Media Management (Arrs)",
-      "purpose": "Comprehensive guide to the Arrs ecosystem: Prowlarr (indexers), Sonarr (TV), Radarr/Radarr-3D (movies), Whisparr, Bazarr (subtitles)",
+      "title": "Media Stack",
+      "purpose": "Comprehensive guide to the Arrs ecosystem (Prowlarr, Sonarr, Radarr, Bazarr, SABnzbd, Seerr) and media servers (Plex, Stash, Tautulli)",
       "parent": "Applications",
       "page_notes": [
         {
-          "content": "Arrs in kubernetes/apps/arrs/: prowlarr (indexer manager), sonarr (TV), radarr + radarr-3d (movies), whisparr, bazarr (subtitles with subcleaner git-sync), sabnzbd (downloads), seerr (requests, replaces Overseerr), wizarr (invitations), profilarr (quality profiles). All use app-template, PostgreSQL init containers, NFS media mount at ${IPAM_IP_NFS}:/mnt/user/Media. Pushover notifications via scripts in resources/pushover-notify.sh. Internal ingress at <app>.${HOME_DOMAIN}."
-        }
-      ]
-    },
-    {
-      "title": "Media Servers",
-      "purpose": "Documentation of Plex Media Server with hardware transcoding, Tautulli statistics, Stash media organizer",
-      "parent": "Applications",
-      "page_notes": [
-        {
-          "content": "Media in kubernetes/apps/media/: plex/ (Plex Media Server with dedicated LoadBalancer at .230, PVC for config, NFS for media, LokiRule for log parsing), stash/ (media organizer with VolSync backup), tautulli (in observability/ - Plex statistics with Kuberhealthy check). Plex uses hostNetwork or dedicated IP for remote access. Descheduler eviction disabled (descheduler.alpha.kubernetes.io/evict: false) for stateful apps."
+          "content": "Arrs in kubernetes/apps/arrs/: prowlarr, sonarr, radarr, radarr-3d, whisparr, bazarr (with subcleaner), sabnzbd, seerr, wizarr, profilarr. All use app-template, PostgreSQL, NFS media at ${IPAM_IP_NFS}:/mnt/user/Media. Pushover notifications. Media servers: plex (LB at .230, LokiRule), stash (VolSync backup), tautulli (Kuberhealthy check). Internal ingress at <app>.${HOME_DOMAIN}."
         }
       ]
     },
@@ -282,64 +222,36 @@
       "parent": "Applications",
       "page_notes": [
         {
-          "content": "Home Assistant in kubernetes/apps/home-assistant/: helmrelease.yaml with init containers for postgres-init and HACS installation (busybox wget/unzip). Main container: ghcr.io/home-operations/home-assistant. Sidecar: code-server for config editing at code.ha.${HOME_DOMAIN}. Persistence: config PVC (VolSync backup), emptyDir for logs/tts/tmp. Ingress at ha.${HOME_DOMAIN}. Descheduler eviction disabled for stability."
+          "content": "Home Assistant in home-assistant/: init containers for postgres-init and HACS. Main: ghcr.io/home-operations/home-assistant. Sidecar: code-server at code.ha.${HOME_DOMAIN}. Persistence: config PVC with VolSync, emptyDir for logs/tts/tmp. Ingress at ha.${HOME_DOMAIN}. Descheduler eviction disabled."
         }
       ]
     },
     {
       "title": "Network Services",
-      "purpose": "Documentation of AdGuard Home DNS filtering with HA, Cloudflared tunnels, External-DNS, SMTP relay",
+      "purpose": "Documentation of AdGuard Home HA DNS, Cloudflared tunnels, DDNS, SMTP relay, and UniFi monitoring",
       "parent": "Applications",
       "page_notes": [
         {
-          "content": "Network services in kubernetes/apps/network/ and adguard-home/: AdGuard Home (3 replicas at .200-.202 for HA DNS), cloudflared (2 replicas with QUIC transport, post-quantum crypto), cloudflare-ddns, external-dns (Cloudflare + UniFi providers), smtp-relay (Maddy for outbound email). In kubernetes/apps/observability/: unpoller (UniFi metrics to Prometheus). Echo-server for testing."
+          "content": "AdGuard Home (3 replicas at .200-.202 for HA DNS filtering). Cloudflared (2 replicas, QUIC, post-quantum). Cloudflare-ddns for dynamic DNS. SMTP-relay with Maddy. Unpoller in observability/ for UniFi metrics. Echo-server for testing."
         }
       ]
     },
     {
       "title": "Developer Tools",
-      "purpose": "Guide to self-hosted Renovate for dependency updates, Atuin shell history sync, GitHub Actions Runner Controller",
+      "purpose": "Guide to self-hosted Renovate, Atuin shell history, GitHub Actions Runner Controller, and game servers",
       "parent": "Applications",
       "page_notes": [
         {
-          "content": "Developer tools: renovate/ (self-hosted Renovate with S3 cache via ObjectBucketClaim, config in app/config/), services/atuin/ (shell history sync server), actions-runner-system/ (GitHub Actions Runner Controller with ghar-scale-set for self-hosted runners named 'ghar-set-zoo'). Runners execute CI workflows locally. Static-webserver for serving static content."
-        }
-      ]
-    },
-    {
-      "title": "Games",
-      "purpose": "Documentation of game servers: Minecraft with mc-router proxy, RomM ROM manager",
-      "parent": "Applications",
-      "page_notes": [
-        {
-          "content": "Games in kubernetes/apps/games/: mc-router (Minecraft proxy at .211 for multiple servers), minecraft-stoneblock4 (modded server), romm (ROM manager with PostgreSQL backend, custom config.yml). Mc-router routes based on hostname to backend Minecraft servers. Game servers use ExternalSecrets for sensitive config (RCON passwords, etc.)."
-        }
-      ]
-    },
-    {
-      "title": "Backup & Disaster Recovery",
-      "purpose": "Guide to VolSync backup strategies, Ceph snapshots, PostgreSQL PITR with barman-cloud, recovery procedures",
-      "page_notes": [
-        {
-          "content": "Backup strategies: 1) VolSync ReplicationSource to NFS (restic) and R2 for PVCs - templates in kubernetes/templates/volsync/. 2) Ceph VolumeSnapshots via csi-ceph-blockpool/csi-ceph-filesystem classes. 3) CNPG continuous backup to R2 via barman-cloud plugin with PITR capability. Recovery: VolSync ReplicationDestination restores PVCs, CNPG bootstrap.recovery section for database restore. Apps include volsync.yaml resources referencing templates."
+          "content": "Renovate in renovate/ with S3 cache via ObjectBucketClaim, config in app/config/. Atuin in services/atuin/ for shell history sync. GitHub Actions Runner Controller in actions-runner-system/ with ghar-scale-set (runners named 'ghar-set-zoo'). Games: mc-router (Minecraft proxy at .211), minecraft-stoneblock4, romm (ROM manager with PostgreSQL)."
         }
       ]
     },
     {
       "title": "Security & RBAC",
-      "purpose": "Documentation of Kyverno policies, pod security contexts, network policies, RBAC patterns",
+      "purpose": "Documentation of Kyverno policies, pod security contexts, RBAC patterns, and Reflector for secret mirroring",
       "page_notes": [
         {
-          "content": "Security in kubernetes/apps/kyverno/: Kyverno operator with policies in policies/ (defaultPodResources, disallowEmptyIngress, externalsecret-usage-tracking, safeToEvict, volsync-movers). All apps use restrictive securityContext: runAsNonRoot, readOnlyRootFilesystem, drop ALL capabilities, seccompProfile RuntimeDefault. Pod security: runAsUser/runAsGroup 568 (common), fsGroupChangePolicy OnRootMismatch. Reflector (tools/reflector/) mirrors secrets across namespaces."
-        }
-      ]
-    },
-    {
-      "title": "System Upgrades",
-      "purpose": "Guide to Talos and Kubernetes upgrades via TUPPR (Talos Upgrade Planner and Performer for Renovate)",
-      "page_notes": [
-        {
-          "content": "Upgrades in kubernetes/apps/system-upgrade/tuppr/: OCIRepository pulls tuppr chart, upgrades/ contains TalosUpgrade and KubernetesUpgrade CRs. TUPPR coordinates with Renovate to update talos/talconfig.yaml versions, then applies upgrades node-by-node. Talos version in talconfig.yaml (talosVersion), Kubernetes version (kubernetesVersion). Node-feature-discovery (kube-system/) labels nodes with hardware capabilities."
+          "content": "Kyverno in kubernetes/apps/kyverno/ with policies: defaultPodResources, disallowEmptyIngress, externalsecret-usage-tracking, safeToEvict, volsync-movers. All apps use: runAsNonRoot, readOnlyRootFilesystem, drop ALL capabilities, seccompProfile RuntimeDefault, runAsUser/runAsGroup 568. Reflector (tools/reflector/) mirrors secrets across namespaces."
         }
       ]
     }

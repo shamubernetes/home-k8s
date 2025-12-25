@@ -21,9 +21,6 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
-  dependsOn:
-  - name: cloudnative-pg-cluster
-    namespace: database
   values:
     controllers:
       tracearr:

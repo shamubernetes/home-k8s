@@ -13,3 +13,4 @@ resources:
 - ./kuberhealthy/ks.yaml
 - ./unpoller/ks.yaml
 - ./smartctl-exporter/ks.yaml
+- ./tracearr/ks.yaml

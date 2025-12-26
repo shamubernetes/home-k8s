@@ -48,27 +48,36 @@ spec:
         key: ALERTMANAGER_HEARTBEAT_URL
   - name: pagerduty
     pagerdutyConfigs:
-    - description: |-
-        {{- range .Alerts }}
-          {{- if ne .Annotations.description "" }}
-            {{ .Annotations.description }}
-          {{- else if ne .Annotations.summary "" }}
-            {{ .Annotations.summary }}
-          {{- else if ne .Annotations.message "" }}
-            {{ .Annotations.message }}
-          {{- else }}
-            Alert description not available
-          {{- end }}
-          {{- if gt (len .Labels.SortedPairs) 0 }}
-            Labels:
-            {{- range .Labels.SortedPairs }}
-              {{ .Name }}: {{ .Value }}
-            {{- end }}
-          {{- end }}
-        {{- end }}
-      sendResolved: true
-      severity: |-
-        {{ if eq .Status "firing" }}critical{{ else }}info{{ end }}
-      routingKey:
+    - routingKey:
         name: *secret
         key: PD_ALERTMANAGER_INTEGRATION_KEY
+      sendResolved: true
+      # Clean title: [STATUS] AlertName (N firing)
+      description: >-
+        {{ .CommonAnnotations.summary | default .CommonLabels.alertname }}
+      # Map severity from alert label, default to warning
+      severity: >-
+        {{ if eq .CommonLabels.severity "critical" }}critical{{ else if eq .CommonLabels.severity "warning" }}warning{{ else }}error{{ end }}
+      # PagerDuty event classification
+      class: "{{ .CommonLabels.alertname }}"
+      component: "{{ .CommonLabels.namespace | default \"cluster\" }}"
+      group: "{{ .CommonLabels.job | default \"prometheus\" }}"
+      source: "titans-k8s"
+      client: "Alertmanager"
+      clientURL: "https://alertmanager.${HOME_DOMAIN}"
+      # Structured details instead of raw JSON
+      details:
+      - key: alertname
+        value: "{{ .CommonLabels.alertname }}"
+      - key: namespace
+        value: "{{ .CommonLabels.namespace }}"
+      - key: severity
+        value: "{{ .CommonLabels.severity }}"
+      - key: description
+        value: "{{ .CommonAnnotations.description | default .CommonAnnotations.summary | default \"No description\" }}"
+      - key: runbook_url
+        value: "{{ .CommonAnnotations.runbook_url | default \"N/A\" }}"
+      - key: firing
+        value: "{{ .Alerts.Firing | len }}"
+      - key: resolved
+        value: "{{ .Alerts.Resolved | len }}"

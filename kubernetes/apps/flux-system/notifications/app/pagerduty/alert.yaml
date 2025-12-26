@@ -17,3 +17,17 @@ spec:
     name: "*"
   - kind: GitRepository
     name: "*"
+  - kind: HelmRepository
+    name: "*"
+  - kind: OCIRepository
+    name: "*"
+  - kind: HelmChart
+    name: "*"
+  - kind: Bucket
+    name: "*"
+  - kind: ImageRepository
+    name: "*"
+  - kind: ImagePolicy
+    name: "*"
+  - kind: ImageUpdateAutomation
+    name: "*"

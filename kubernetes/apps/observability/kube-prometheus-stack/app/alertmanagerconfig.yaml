@@ -52,20 +52,20 @@ spec:
         name: *secret
         key: PD_ALERTMANAGER_INTEGRATION_KEY
       sendResolved: true
-      # Clean title: [STATUS] AlertName (N firing)
+      # Clean title from summary or alertname
       description: >-
-        {{ .CommonAnnotations.summary | default .CommonLabels.alertname }}
-      # Map severity from alert label, default to warning
+        {{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ .CommonLabels.alertname }}{{ end }}
+      # Map severity from alert label
       severity: >-
         {{ if eq .CommonLabels.severity "critical" }}critical{{ else if eq .CommonLabels.severity "warning" }}warning{{ else }}error{{ end }}
       # PagerDuty event classification
       class: "{{ .CommonLabels.alertname }}"
-      component: "{{ .CommonLabels.namespace | default \"cluster\" }}"
-      group: "{{ .CommonLabels.job | default \"prometheus\" }}"
+      component: "{{ if .CommonLabels.namespace }}{{ .CommonLabels.namespace }}{{ else }}cluster{{ end }}"
+      group: "{{ if .CommonLabels.job }}{{ .CommonLabels.job }}{{ else }}prometheus{{ end }}"
       source: "titans-k8s"
       client: "Alertmanager"
       clientURL: "https://alertmanager.${HOME_DOMAIN}"
-      # Structured details instead of raw JSON
+      # Structured details
       details:
       - key: alertname
         value: "{{ .CommonLabels.alertname }}"
@@ -74,9 +74,9 @@ spec:
       - key: severity
         value: "{{ .CommonLabels.severity }}"
       - key: description
-        value: "{{ .CommonAnnotations.description | default .CommonAnnotations.summary | default \"No description\" }}"
+        value: "{{ if .CommonAnnotations.description }}{{ .CommonAnnotations.description }}{{ else if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}No description{{ end }}"
       - key: runbook_url
-        value: "{{ .CommonAnnotations.runbook_url | default \"N/A\" }}"
+        value: "{{ if .CommonAnnotations.runbook_url }}{{ .CommonAnnotations.runbook_url }}{{ else }}N/A{{ end }}"
       - key: firing
         value: "{{ .Alerts.Firing | len }}"
       - key: resolved

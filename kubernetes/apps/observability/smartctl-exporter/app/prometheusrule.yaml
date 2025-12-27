@@ -10,7 +10,7 @@ spec:
     - alert: SmartDeviceHighTemperature
       annotations:
         summary: Drive {{ $labels.device }} on node {{ $labels.kubernetes_node }} has a temperature higher than 65°C.
-      expr: smartctl_device_temperature > 65
+      expr: smartctl_device_temperature{kubernetes_node!=""} > 65
       for: 15m
       labels:
         severity: critical
@@ -19,9 +19,9 @@ spec:
         summary: Drive {{ $labels.device }} on node {{ $labels.kubernetes_node }} did not pass its SMART test.
       expr: |
         (
-          smartctl_device_smart_status != 1
+          smartctl_device_smart_status{kubernetes_node!=""} != 1
         or
-          smartctl_device_status != 1
+          smartctl_device_status{kubernetes_node!=""} != 1
         )
       for: 15m
       labels:
@@ -29,7 +29,7 @@ spec:
     - alert: SmartDeviceCriticalWarning
       annotations:
         summary: Drive {{ $labels.device }} on node {{ $labels.kubernetes_node }} is in a critical state.
-      expr: smartctl_device_critical_warning != 0
+      expr: smartctl_device_critical_warning{kubernetes_node!=""} != 0
       for: 15m
       labels:
         severity: critical
@@ -39,14 +39,15 @@ spec:
     - alert: SmartDeviceMediaErrors
       annotations:
         summary: Drive {{ $labels.device }} on node {{ $labels.kubernetes_node }} has media errors.
-      expr: smartctl_device_media_errors != 0
+      expr: smartctl_device_media_errors{kubernetes_node!=""} != 0
       for: 15m
       labels:
         severity: critical
     - alert: SmartDeviceAvailableSpareUnderThreshold
       annotations:
         summary: Drive {{ $labels.device }} on node {{ $labels.kubernetes_node }} is under available spare threshold.
-      expr: smartctl_device_available_spare_threshold > smartctl_device_available_spare
+      expr: |
+        smartctl_device_available_spare_threshold{kubernetes_node!=""} > smartctl_device_available_spare{kubernetes_node!=""}
       for: 15m
       labels:
         severity: critical
@@ -54,7 +55,7 @@ spec:
       annotations:
         summary: Device {{ $labels.device }} on node {{ $labels.kubernetes_node }} interface is slower than it should be.
       expr: |
-        smartctl_device_interface_speed{speed_type="current"} != on(device, instance, namespace, pod) smartctl_device_interface_speed{speed_type="max"}
+        smartctl_device_interface_speed{speed_type="current", kubernetes_node!=""} != on(device, instance, namespace, pod, kubernetes_node) smartctl_device_interface_speed{speed_type="max", kubernetes_node!=""}
       for: 15m
       labels:
         severity: critical

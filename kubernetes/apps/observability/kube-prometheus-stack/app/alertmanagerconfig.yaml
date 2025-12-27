@@ -63,8 +63,8 @@ spec:
       component: "{{ if .CommonLabels.namespace }}{{ .CommonLabels.namespace }}{{ else }}cluster{{ end }}"
       group: "{{ if .CommonLabels.job }}{{ .CommonLabels.job }}{{ else }}prometheus{{ end }}"
       source: "titans-k8s"
-      client: "Alertmanager"
-      clientURL: "https://alertmanager.${HOME_DOMAIN}"
+      client: "Siren"
+      clientURL: "https://siren.${HOME_DOMAIN}/a/{{ (index .Alerts 0).Fingerprint }}"
       # Structured details
       details:
       - key: alertname

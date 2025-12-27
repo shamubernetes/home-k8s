@@ -10,6 +10,7 @@ data:
 
     # etcd Defragmentation Script for Talos Linux
     # Discovers nodes and Talos version dynamically
+    # Exits with error if it cannot properly check etcd status
 
     # Configuration
     FRAG_THRESHOLD=35  # Defrag if fragmentation exceeds this percentage
@@ -69,62 +70,75 @@ data:
     CRT_DATA=$(cat "$SECRETS_DIR/crt")
     KEY_DATA=$(cat "$SECRETS_DIR/key")
 
-    # Build endpoints list for talosconfig
-    ENDPOINTS_YAML=""
-    for node in $CONTROL_PLANE_NODES; do
-        NODE_IP=$(echo "$node" | cut -d: -f1)
-        ENDPOINTS_YAML="$ENDPOINTS_YAML      - $NODE_IP
-    "
-    done
-
-    cat > "$TALOSCONFIG" << TALOSEOF
-    context: kubernetes
-    contexts:
-      kubernetes:
-        endpoints:
-    $ENDPOINTS_YAML      ca: $CA_DATA
-        crt: $CRT_DATA
-        key: $KEY_DATA
-    TALOSEOF
+    # Build talosconfig YAML properly
+    {
+        echo "context: kubernetes"
+        echo "contexts:"
+        echo "  kubernetes:"
+        echo "    endpoints:"
+        for node in $CONTROL_PLANE_NODES; do
+            NODE_IP=$(echo "$node" | cut -d: -f1)
+            echo "      - $NODE_IP"
+        done
+        echo "    ca: $CA_DATA"
+        echo "    crt: $CRT_DATA"
+        echo "    key: $KEY_DATA"
+    } > "$TALOSCONFIG"
 
     echo "Talosconfig created"
     echo ""
 
-    # Get Talos version from cluster and install matching talosctl
-    echo "Detecting Talos version from cluster..."
-
-    # Download a bootstrap talosctl to query the cluster
+    # Download talosctl
+    echo "Downloading talosctl..."
     curl -sLo /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
     chmod +x /usr/local/bin/talosctl
 
-    # Get the actual Talos version running on the cluster
-    TALOS_VERSION=$(talosctl -n "$FIRST_NODE_IP" version --short 2>/dev/null | grep "Tag:" | head -1 | awk '{print $2}')
+    # Test connection - FAIL if we can't connect
+    echo "Testing connection to cluster..."
+    if ! talosctl -n "$FIRST_NODE_IP" version --short; then
+        echo "ERROR: Failed to connect to Talos API on $FIRST_NODE_IP"
+        echo "Please check talosconfig credentials are correct"
+        exit 1
+    fi
 
-    if [ -z "$TALOS_VERSION" ]; then
-        echo "WARNING: Could not detect Talos version, using latest talosctl"
-    else
+    # Get and install matching Talos version
+    TALOS_VERSION=$(talosctl -n "$FIRST_NODE_IP" version --short 2>/dev/null | grep "Tag:" | head -1 | awk '{print $2}')
+    if [ -n "$TALOS_VERSION" ]; then
         echo "Detected Talos version: $TALOS_VERSION"
-        echo "Downloading talosctl $TALOS_VERSION..."
+        echo "Downloading matching talosctl $TALOS_VERSION..."
         curl -sLo /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
         chmod +x /usr/local/bin/talosctl
     fi
     echo ""
 
     # Function to get fragmentation percentage for a node
+    # Returns empty string on failure (caller must handle)
     get_fragmentation() {
         NODE="$1"
-        STATUS=$(talosctl -n "$NODE" etcd status 2>/dev/null || echo "")
+        STATUS=$(talosctl -n "$NODE" etcd status 2>&1) || {
+            echo "ERROR: Failed to get etcd status from $NODE" >&2
+            echo "$STATUS" >&2
+            return 1
+        }
+
         if [ -z "$STATUS" ]; then
-            echo "0"
-            return
+            echo "ERROR: Empty response from etcd status on $NODE" >&2
+            return 1
         fi
-        IN_USE_PCT=$(echo "$STATUS" | tail -1 | grep -oE '\([0-9.]+%\)' | tr -d '()%')
-        if [ -n "$IN_USE_PCT" ]; then
-            FRAG=$(awk "BEGIN {printf \"%.0f\", 100 - $IN_USE_PCT}")
-            echo "$FRAG"
-        else
-            echo "0"
+
+        # Extract the percentage from the IN USE column (e.g., "29.62" from "(29.62%)")
+        IN_USE_PCT=$(echo "$STATUS" | grep -v "^NODE" | grep -oE '\([0-9.]+%\)' | tr -d '()%')
+
+        if [ -z "$IN_USE_PCT" ]; then
+            echo "ERROR: Could not parse IN USE percentage from etcd status on $NODE" >&2
+            echo "Raw output:" >&2
+            echo "$STATUS" >&2
+            return 1
         fi
+
+        # Fragmentation = 100 - in_use_percentage
+        FRAG=$(awk "BEGIN {printf \"%.0f\", 100 - $IN_USE_PCT}")
+        echo "$FRAG"
     }
 
     # Function to defrag a single node
@@ -147,16 +161,30 @@ data:
     echo "Checking fragmentation levels..."
     echo ""
 
-    # Check if any node needs defrag
+    FAILED=false
     for node in $CONTROL_PLANE_NODES; do
         NODE_IP=$(echo "$node" | cut -d: -f1)
         NODE_NAME=$(echo "$node" | cut -d: -f2)
-        FRAG=$(get_fragmentation "$NODE_IP")
+
+        FRAG=$(get_fragmentation "$NODE_IP") || {
+            echo "ERROR: Failed to get fragmentation for $NODE_NAME ($NODE_IP)"
+            FAILED=true
+            continue
+        }
+
         echo "$NODE_NAME ($NODE_IP): $FRAG% fragmentation"
+
         if [ "$FRAG" -gt "$FRAG_THRESHOLD" ] 2>/dev/null; then
             touch /tmp/needs_defrag
         fi
     done
+
+    # Fail if we couldn't check any node
+    if [ "$FAILED" = "true" ]; then
+        echo ""
+        echo "ERROR: Failed to check fragmentation on one or more nodes"
+        exit 1
+    fi
 
     echo ""
     echo "Threshold: $FRAG_THRESHOLD%"
@@ -173,13 +201,21 @@ data:
         echo ""
 
         # Defragment each node sequentially
+        DEFRAG_FAILED=false
         for node in $CONTROL_PLANE_NODES; do
             NODE_IP=$(echo "$node" | cut -d: -f1)
             NODE_NAME=$(echo "$node" | cut -d: -f2)
-            defrag_node "$NODE_IP" "$NODE_NAME"
+            if ! defrag_node "$NODE_IP" "$NODE_NAME"; then
+                DEFRAG_FAILED=true
+            fi
             echo "Waiting 10 seconds before next node..."
             sleep 10
         done
+
+        if [ "$DEFRAG_FAILED" = "true" ]; then
+            echo "ERROR: Defragmentation failed on one or more nodes"
+            exit 1
+        fi
 
         echo "=========================================="
         echo "Defragmentation Complete!"

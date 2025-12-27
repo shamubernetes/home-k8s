@@ -4,7 +4,7 @@ kind: HelmRelease
 metadata:
   name: csi-driver-nfs
 spec:
-  interval: 10m
+  interval: 30m
   chart:
     spec:
       chart: csi-driver-nfs

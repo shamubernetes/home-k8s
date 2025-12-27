@@ -1,0 +1,179 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: etcd-defrag-script
+data:
+  defrag.sh: |
+    #!/bin/sh
+    set -eu
+
+    # etcd Defragmentation Script for Talos Linux
+    # Checks fragmentation level and only defrags if threshold exceeded
+
+    # Configuration
+    FRAG_THRESHOLD=35  # Defrag if fragmentation exceeds this percentage
+
+    echo "=========================================="
+    echo "etcd Fragmentation Check & Defrag Script"
+    echo "=========================================="
+    echo "Start time: $(date)"
+    echo "Fragmentation threshold: ${FRAG_THRESHOLD}%"
+    echo ""
+
+    # Control plane nodes (from talconfig.yaml)
+    NODE1="10.100.47.35"
+    NODE2="10.100.47.48"
+    NODE3="10.100.47.49"
+
+    NODE1_NAME="k8s-oceanus"
+    NODE2_NAME="k8s-tethys"
+    NODE3_NAME="k8s-coeus"
+
+    # Check if talosctl is available
+    if ! command -v talosctl > /dev/null 2>&1; then
+        echo "ERROR: talosctl not found in PATH"
+        exit 1
+    fi
+
+    # Build talosconfig from certificate components
+    echo "Building talosconfig from certificate components..."
+
+    SECRETS_DIR="/var/run/secrets/talos"
+    if [ ! -f "$SECRETS_DIR/ca" ] || [ ! -f "$SECRETS_DIR/crt" ] || [ ! -f "$SECRETS_DIR/key" ]; then
+        echo "ERROR: Required certificate files not found in $SECRETS_DIR"
+        exit 1
+    fi
+
+    export TALOSCONFIG="/tmp/talosconfig"
+
+    CA_DATA=$(cat "$SECRETS_DIR/ca")
+    CRT_DATA=$(cat "$SECRETS_DIR/crt")
+    KEY_DATA=$(cat "$SECRETS_DIR/key")
+
+    printf '%s\n' \
+        "context: kubernetes" \
+        "contexts:" \
+        "  kubernetes:" \
+        "    endpoints:" \
+        "      - ${NODE1}" \
+        "      - ${NODE2}" \
+        "      - ${NODE3}" \
+        "    ca: ${CA_DATA}" \
+        "    crt: ${CRT_DATA}" \
+        "    key: ${KEY_DATA}" \
+        > "$TALOSCONFIG"
+
+    echo "✓ Talosconfig created"
+    echo ""
+
+    # Function to get fragmentation percentage for a node
+    get_fragmentation() {
+        NODE="$1"
+
+        # Get etcd status and parse the in-use percentage
+        STATUS=$(talosctl -n "$NODE" etcd status 2>/dev/null || echo "")
+
+        if [ -z "$STATUS" ]; then
+            echo "0"
+            return
+        fi
+
+        # Format: NODE MEMBER DB SIZE IN USE (with percentage) LEADER ...
+        # Example: 10.32.8.80 1d675283eb33137b 316 MB 164 MB (51.84%) ...
+        # Extract the percentage directly from the IN USE column (e.g., "51.84" from "(51.84%)")
+        IN_USE_PCT=$(echo "$STATUS" | tail -1 | grep -oE '\([0-9.]+%\)' | tr -d '()%')
+
+        if [ -n "$IN_USE_PCT" ]; then
+            # Fragmentation = 100 - in_use_percentage
+            FRAG=$(awk "BEGIN {printf \"%.0f\", 100 - $IN_USE_PCT}")
+            echo "$FRAG"
+        else
+            echo "0"
+        fi
+    }
+
+    # Function to defrag a single node
+    defrag_node() {
+        NODE="$1"
+        NODE_NAME="$2"
+
+        echo "----------------------------------------"
+        echo "Defragmenting $NODE_NAME ($NODE)..."
+        echo "----------------------------------------"
+
+        if talosctl -n "$NODE" etcd defrag; then
+            echo "✓ Defragmentation completed successfully"
+        else
+            echo "✗ Defragmentation failed on $NODE_NAME"
+            return 1
+        fi
+        echo ""
+    }
+
+    # Check fragmentation on all nodes and collect stats
+    echo "Checking fragmentation levels..."
+    echo ""
+
+    NEEDS_DEFRAG=false
+    MAX_FRAG=0
+
+    for NODE_INFO in "$NODE1:$NODE1_NAME" "$NODE2:$NODE2_NAME" "$NODE3:$NODE3_NAME"; do
+        NODE=$(echo "$NODE_INFO" | cut -d: -f1)
+        NODE_NAME=$(echo "$NODE_INFO" | cut -d: -f2)
+
+        FRAG=$(get_fragmentation "$NODE")
+        echo "$NODE_NAME ($NODE): ${FRAG}% fragmentation"
+
+        if [ "$FRAG" -gt "$MAX_FRAG" ] 2>/dev/null; then
+            MAX_FRAG="$FRAG"
+        fi
+
+        if [ "$FRAG" -gt "$FRAG_THRESHOLD" ] 2>/dev/null; then
+            NEEDS_DEFRAG=true
+        fi
+    done
+
+    echo ""
+    echo "Maximum fragmentation: ${MAX_FRAG}%"
+    echo "Threshold: ${FRAG_THRESHOLD}%"
+    echo ""
+
+    if [ "$NEEDS_DEFRAG" = "true" ]; then
+        echo "=========================================="
+        echo "Fragmentation exceeds threshold - DEFRAGMENTING"
+        echo "=========================================="
+        echo ""
+
+        # Get current etcd status
+        echo "Current etcd status:"
+        talosctl -n "$NODE1" etcd status || true
+        echo ""
+
+        # Defragment each node sequentially
+        defrag_node "$NODE1" "$NODE1_NAME"
+        echo "Waiting 10 seconds before next node..."
+        sleep 10
+
+        defrag_node "$NODE2" "$NODE2_NAME"
+        echo "Waiting 10 seconds before next node..."
+        sleep 10
+
+        defrag_node "$NODE3" "$NODE3_NAME"
+
+        echo "=========================================="
+        echo "Defragmentation Complete!"
+        echo "=========================================="
+
+        # Show final status
+        echo ""
+        echo "Final etcd status:"
+        talosctl -n "$NODE1" etcd status || true
+    else
+        echo "=========================================="
+        echo "Fragmentation within limits - NO ACTION NEEDED"
+        echo "=========================================="
+    fi
+
+    echo ""
+    echo "End time: $(date)"

@@ -2,7 +2,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: etcd-defrag
+  name: &app etcd-defrag
 spec:
   interval: 10m
   chart:
@@ -32,11 +32,13 @@ spec:
           concurrencyPolicy: Forbid
           successfulJobsHistory: 1
           failedJobsHistory: 1
+        serviceAccount:
+          identifier: *app
         containers:
           app:
             image:
               repository: alpine
-              tag: "3.21@sha256:5405e8f36ce1878720f71217d664aa3dea32e5e5df11acbf07fc78ef5661465b"
+              tag: "3.21"
             command:
               - /bin/sh
               - /scripts/defrag.sh
@@ -55,11 +57,31 @@ spec:
                 drop:
                   - ALL
         pod:
-          serviceAccountName: etcd-defrag
           securityContext:
             runAsNonRoot: false
             runAsUser: 0
             fsGroup: 0
+    serviceAccount:
+      etcd-defrag: {}
+    rbac:
+      roles:
+        etcd-defrag:
+          type: ClusterRole
+          rules:
+            - apiGroups: [""]
+              resources: ["nodes"]
+              verbs: ["list"]
+      bindings:
+        etcd-defrag:
+          type: ClusterRoleBinding
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: etcd-defrag
+          subjects:
+            - kind: ServiceAccount
+              name: etcd-defrag
+              namespace: kube-system
     persistence:
       script:
         type: configMap

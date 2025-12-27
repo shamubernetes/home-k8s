@@ -175,6 +175,14 @@
     },
     // Auto merge
     {
+      "description": "Auto-merge Pins",
+      "matchUpdateTypes": ["pin", "pinDigest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "assigneesFromCodeOwners": false,
+      "ignoreTests": true,
+    },
+    {
       "description": "Auto-merge all patch updates",
       "matchUpdateTypes": ["patch"],
       "automerge": true,
@@ -184,20 +192,19 @@
     {
       "description": "Auto-merge minor updates with 6 hours stability",
       "matchUpdateTypes": ["minor"],
-      "matchDatasources": ["helm", "docker", "helmfile"],
+      "matchDatasources": ["helm", "helmfile"],
       "minimumReleaseAge": "6 hours",
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
     },
     {
-      "description": ["Auto-merge container digests updates for trusted containers"],
+      "description": "Auto-merge minor Docker updates (no minimumReleaseAge due to missing registry timestamps)",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
       "matchDatasources": ["docker"],
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
-      "matchUpdateTypes": ["digest"],
-      "matchPackagePatterns": ["ghcr.io/bjw-s", "ghcr.io/onedr0p", "ghcr.io/tautulli/tautulli", "ghcr.io/home-operations"],
     },
     {
       "matchDatasources": ["custom.grafana-dashboards"],

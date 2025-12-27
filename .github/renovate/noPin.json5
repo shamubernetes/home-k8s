@@ -43,5 +43,9 @@
       matchDepNames: ["ghcr.io/siderolabs/kubelet", "ghcr.io/siderolabs/installer"],
       pinDigests: false
     },
+    {
+      matchManagers: ["mise"],
+      pinDigests: false
+    },
   ],
 }

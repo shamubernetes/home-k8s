@@ -39,6 +39,15 @@ spec:
     - name: severity
       value: warning
       matchType: "="
+  - equal: ["namespace"]
+    sourceMatch:
+    - name: alertname
+      value: InfoInhibitor
+      matchType: "="
+    targetMatch:
+    - name: severity
+      value: info
+      matchType: "="
   receivers:
   - name: "null"
   - name: heartbeat

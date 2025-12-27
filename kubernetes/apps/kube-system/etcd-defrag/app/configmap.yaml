@@ -41,7 +41,6 @@ data:
         --ca-certificate="$KUBE_CA" \
         "$KUBE_API/api/v1/nodes?labelSelector=node-role.kubernetes.io/control-plane")
 
-    # Extract node IPs and names using basic tools (no jq in alpine by default)
     # Install jq for proper JSON parsing
     apk add --no-cache jq >/dev/null 2>&1
 
@@ -62,39 +61,37 @@ data:
     done
     echo ""
 
-    # Create initial talosconfig with first node
+    # Create talosconfig
     export TALOSCONFIG="/tmp/talosconfig"
     CA_DATA=$(cat "$SECRETS_DIR/ca")
     CRT_DATA=$(cat "$SECRETS_DIR/crt")
     KEY_DATA=$(cat "$SECRETS_DIR/key")
 
-    # Build endpoints list
-    ENDPOINTS=""
-    echo "$CONTROL_PLANE_NODES" | while read -r line; do
-        NODE_IP=$(echo "$line" | cut -d: -f1)
-        ENDPOINTS="$ENDPOINTS      - $NODE_IP
-"
+    # Build endpoints list for talosconfig
+    ENDPOINTS_YAML=""
+    for node in $CONTROL_PLANE_NODES; do
+        NODE_IP=$(echo "$node" | cut -d: -f1)
+        ENDPOINTS_YAML="${ENDPOINTS_YAML}      - ${NODE_IP}
+    "
     done
 
-    cat > "$TALOSCONFIG" <<EOF
+    cat > "$TALOSCONFIG" << TALOSEOF
     context: kubernetes
     contexts:
       kubernetes:
         endpoints:
-    $(echo "$CONTROL_PLANE_NODES" | while read -r line; do echo "      - $(echo "$line" | cut -d: -f1)"; done)
-        ca: ${CA_DATA}
+    ${ENDPOINTS_YAML}      ca: ${CA_DATA}
         crt: ${CRT_DATA}
         key: ${KEY_DATA}
-    EOF
+    TALOSEOF
 
-    echo "✓ Talosconfig created"
+    echo "Talosconfig created"
     echo ""
 
     # Get Talos version from cluster and install matching talosctl
     echo "Detecting Talos version from cluster..."
 
     # Download a bootstrap talosctl to query the cluster
-    # Use latest for initial query - it's backwards compatible for version check
     wget -qO /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
     chmod +x /usr/local/bin/talosctl
 
@@ -105,7 +102,6 @@ data:
         echo "WARNING: Could not detect Talos version, using latest talosctl"
     else
         echo "Detected Talos version: $TALOS_VERSION"
-        # Download matching talosctl version
         echo "Downloading talosctl $TALOS_VERSION..."
         wget -qO /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/talosctl-linux-amd64"
         chmod +x /usr/local/bin/talosctl
@@ -115,20 +111,13 @@ data:
     # Function to get fragmentation percentage for a node
     get_fragmentation() {
         NODE="$1"
-
-        # Get etcd status and parse the in-use percentage
         STATUS=$(talosctl -n "$NODE" etcd status 2>/dev/null || echo "")
-
         if [ -z "$STATUS" ]; then
             echo "0"
             return
         fi
-
-        # Extract the percentage from the IN USE column (e.g., "51.84" from "(51.84%)")
         IN_USE_PCT=$(echo "$STATUS" | tail -1 | grep -oE '\([0-9.]+%\)' | tr -d '()%')
-
         if [ -n "$IN_USE_PCT" ]; then
-            # Fragmentation = 100 - in_use_percentage
             FRAG=$(awk "BEGIN {printf \"%.0f\", 100 - $IN_USE_PCT}")
             echo "$FRAG"
         else
@@ -140,40 +129,30 @@ data:
     defrag_node() {
         NODE="$1"
         NODE_NAME="$2"
-
         echo "----------------------------------------"
         echo "Defragmenting $NODE_NAME ($NODE)..."
         echo "----------------------------------------"
-
         if talosctl -n "$NODE" etcd defrag; then
-            echo "✓ Defragmentation completed successfully"
+            echo "Defragmentation completed successfully"
         else
-            echo "✗ Defragmentation failed on $NODE_NAME"
+            echo "Defragmentation failed on $NODE_NAME"
             return 1
         fi
         echo ""
     }
 
-    # Check fragmentation on all nodes and collect stats
+    # Check fragmentation on all nodes
     echo "Checking fragmentation levels..."
     echo ""
 
-    NEEDS_DEFRAG=false
-    MAX_FRAG=0
-
-    echo "$CONTROL_PLANE_NODES" | while read -r line; do
-        NODE_IP=$(echo "$line" | cut -d: -f1)
-        NODE_NAME=$(echo "$line" | cut -d: -f2)
-
+    # Check if any node needs defrag
+    for node in $CONTROL_PLANE_NODES; do
+        NODE_IP=$(echo "$node" | cut -d: -f1)
+        NODE_NAME=$(echo "$node" | cut -d: -f2)
         FRAG=$(get_fragmentation "$NODE_IP")
         echo "$NODE_NAME ($NODE_IP): ${FRAG}% fragmentation"
-
-        if [ "$FRAG" -gt "$MAX_FRAG" ] 2>/dev/null; then
-            MAX_FRAG="$FRAG"
-        fi
-
         if [ "$FRAG" -gt "$FRAG_THRESHOLD" ] 2>/dev/null; then
-            NEEDS_DEFRAG=true
+            touch /tmp/needs_defrag
         fi
     done
 
@@ -181,32 +160,20 @@ data:
     echo "Threshold: ${FRAG_THRESHOLD}%"
     echo ""
 
-    # Re-check if defrag is needed (while loop runs in subshell)
-    NEEDS_DEFRAG=false
-    echo "$CONTROL_PLANE_NODES" | while read -r line; do
-        NODE_IP=$(echo "$line" | cut -d: -f1)
-        FRAG=$(get_fragmentation "$NODE_IP")
-        if [ "$FRAG" -gt "$FRAG_THRESHOLD" ] 2>/dev/null; then
-            echo "DEFRAG_NEEDED" > /tmp/needs_defrag
-        fi
-    done
-
     if [ -f /tmp/needs_defrag ]; then
         echo "=========================================="
         echo "Fragmentation exceeds threshold - DEFRAGMENTING"
         echo "=========================================="
         echo ""
 
-        # Get current etcd status
         echo "Current etcd status:"
         talosctl -n "$FIRST_NODE_IP" etcd status || true
         echo ""
 
         # Defragment each node sequentially
-        echo "$CONTROL_PLANE_NODES" | while read -r line; do
-            NODE_IP=$(echo "$line" | cut -d: -f1)
-            NODE_NAME=$(echo "$line" | cut -d: -f2)
-
+        for node in $CONTROL_PLANE_NODES; do
+            NODE_IP=$(echo "$node" | cut -d: -f1)
+            NODE_NAME=$(echo "$node" | cut -d: -f2)
             defrag_node "$NODE_IP" "$NODE_NAME"
             echo "Waiting 10 seconds before next node..."
             sleep 10
@@ -216,7 +183,6 @@ data:
         echo "Defragmentation Complete!"
         echo "=========================================="
 
-        # Show final status
         echo ""
         echo "Final etcd status:"
         talosctl -n "$FIRST_NODE_IP" etcd status || true

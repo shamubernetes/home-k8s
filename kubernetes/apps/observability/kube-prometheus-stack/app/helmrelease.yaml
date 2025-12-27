@@ -55,6 +55,10 @@ spec:
               resources:
                 requests:
                   storage: 1Gi
+    defaultRules:
+      rules:
+        kubeApiserverAvailability: false
+        kubeApiserverBurnrate: false
     kubeApiServer:
       serviceMonitor:
         selector:
@@ -94,7 +98,7 @@ spec:
           requests:
             cpu: 100m
           limits:
-            memory: 2000Mi
+            memory: 3000Mi
         storageSpec:
           volumeClaimTemplate:
             spec:

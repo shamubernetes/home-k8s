@@ -8,11 +8,8 @@ storage:
 metrics: true
 debug: false
 alerting:
-  pushover:
-    title: Gatus (Kubernetes)
-    application-token: $${PUSHOVER_TOKEN}
-    user-key: $${PUSHOVER_USER_KEY}
-    priority: 1
+  pagerduty:
+    integration-key: $${PD_GATUS_INTEGRATION_KEY}
     default-alert:
       description: health-check failed
       send-on-resolved: true

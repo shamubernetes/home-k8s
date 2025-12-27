@@ -14,6 +14,7 @@
     "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
   ],
   labels: ["renovate"],
+  prCreation: "immediate",
   vulnerabilityAlerts: {
     enabled: true,
     labels: ["security"],

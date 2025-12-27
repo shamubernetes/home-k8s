@@ -7,7 +7,7 @@ metadata:
 data:
   TIMEZONE: "America/New_York"
   KS_NAMESPACE: "flux-system"
-  KS_INTERVAL: "10m"
+  KS_INTERVAL: "30m"
   KS_RETRY_INTERVAL: "1m"
   KS_TIMEOUT: "5m"
   KS_GIT_REPO_NAME: "home-kubernetes"

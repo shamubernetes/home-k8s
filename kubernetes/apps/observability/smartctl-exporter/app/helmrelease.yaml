@@ -32,5 +32,11 @@ spec:
       - /dev/nvme0n1
     serviceMonitor:
       enabled: true
+      relabelings:
+      - action: replace
+        regex: (.*)
+        replacement: $1
+        sourceLabels: ["__meta_kubernetes_pod_node_name"]
+        targetLabel: kubernetes_node
     prometheusRules:
       enabled: false

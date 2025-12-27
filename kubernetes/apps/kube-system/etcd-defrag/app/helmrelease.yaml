@@ -35,20 +35,19 @@ spec:
         containers:
           app:
             image:
-              repository: ghcr.io/siderolabs/talosctl
-              tag: v1.11.5
+              repository: alpine
+              tag: "3.21"
             command:
               - /bin/sh
-              - -c
-              - sh /scripts/defrag.sh
+              - /scripts/defrag.sh
             env:
-              TZ: America/New_York
+              TZ: "${TIMEZONE}"
             resources:
               requests:
                 cpu: 25m
-                memory: 64Mi
-              limits:
                 memory: 128Mi
+              limits:
+                memory: 256Mi
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: false
@@ -56,6 +55,7 @@ spec:
                 drop:
                   - ALL
         pod:
+          serviceAccountName: etcd-defrag
           securityContext:
             runAsNonRoot: false
             runAsUser: 0

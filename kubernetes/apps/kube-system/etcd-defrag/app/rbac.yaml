@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: etcd-defrag
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: etcd-defrag
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: etcd-defrag
+subjects:
+  - kind: ServiceAccount
+    name: etcd-defrag
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: etcd-defrag
+  apiGroup: rbac.authorization.k8s.io

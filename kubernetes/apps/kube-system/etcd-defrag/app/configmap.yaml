@@ -9,7 +9,7 @@ data:
     set -eu
 
     # etcd Defragmentation Script for Talos Linux
-    # Checks fragmentation level and only defrags if threshold exceeded
+    # Discovers nodes and Talos version dynamically
 
     # Configuration
     FRAG_THRESHOLD=35  # Defrag if fragmentation exceeds this percentage
@@ -21,21 +21,6 @@ data:
     echo "Fragmentation threshold: ${FRAG_THRESHOLD}%"
     echo ""
 
-    # Control plane nodes (from talconfig.yaml)
-    NODE1="10.100.47.35"
-    NODE2="10.100.47.48"
-    NODE3="10.100.47.49"
-
-    NODE1_NAME="k8s-oceanus"
-    NODE2_NAME="k8s-tethys"
-    NODE3_NAME="k8s-coeus"
-
-    # Check if talosctl is available
-    if ! command -v talosctl > /dev/null 2>&1; then
-        echo "ERROR: talosctl not found in PATH"
-        exit 1
-    fi
-
     # Build talosconfig from certificate components
     echo "Building talosconfig from certificate components..."
 
@@ -45,26 +30,86 @@ data:
         exit 1
     fi
 
-    export TALOSCONFIG="/tmp/talosconfig"
+    # Get control plane node IPs from Kubernetes API
+    echo "Discovering control plane nodes..."
+    KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    KUBE_CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    KUBE_API="https://kubernetes.default.svc"
 
+    # Get nodes with control-plane role
+    NODES_JSON=$(wget -qO- --header="Authorization: Bearer $KUBE_TOKEN" \
+        --ca-certificate="$KUBE_CA" \
+        "$KUBE_API/api/v1/nodes?labelSelector=node-role.kubernetes.io/control-plane")
+
+    # Extract node IPs and names using basic tools (no jq in alpine by default)
+    # Install jq for proper JSON parsing
+    apk add --no-cache jq >/dev/null 2>&1
+
+    CONTROL_PLANE_NODES=$(echo "$NODES_JSON" | jq -r '.items[] | "\(.status.addresses[] | select(.type=="InternalIP") | .address):\(.metadata.name)"')
+
+    if [ -z "$CONTROL_PLANE_NODES" ]; then
+        echo "ERROR: No control plane nodes found"
+        exit 1
+    fi
+
+    # Get first node IP for initial talosctl commands
+    FIRST_NODE_IP=$(echo "$CONTROL_PLANE_NODES" | head -1 | cut -d: -f1)
+    echo "Found control plane nodes:"
+    echo "$CONTROL_PLANE_NODES" | while read -r line; do
+        NODE_IP=$(echo "$line" | cut -d: -f1)
+        NODE_NAME=$(echo "$line" | cut -d: -f2)
+        echo "  - $NODE_NAME ($NODE_IP)"
+    done
+    echo ""
+
+    # Create initial talosconfig with first node
+    export TALOSCONFIG="/tmp/talosconfig"
     CA_DATA=$(cat "$SECRETS_DIR/ca")
     CRT_DATA=$(cat "$SECRETS_DIR/crt")
     KEY_DATA=$(cat "$SECRETS_DIR/key")
 
-    printf '%s\n' \
-        "context: kubernetes" \
-        "contexts:" \
-        "  kubernetes:" \
-        "    endpoints:" \
-        "      - ${NODE1}" \
-        "      - ${NODE2}" \
-        "      - ${NODE3}" \
-        "    ca: ${CA_DATA}" \
-        "    crt: ${CRT_DATA}" \
-        "    key: ${KEY_DATA}" \
-        > "$TALOSCONFIG"
+    # Build endpoints list
+    ENDPOINTS=""
+    echo "$CONTROL_PLANE_NODES" | while read -r line; do
+        NODE_IP=$(echo "$line" | cut -d: -f1)
+        ENDPOINTS="$ENDPOINTS      - $NODE_IP
+"
+    done
+
+    cat > "$TALOSCONFIG" <<EOF
+    context: kubernetes
+    contexts:
+      kubernetes:
+        endpoints:
+    $(echo "$CONTROL_PLANE_NODES" | while read -r line; do echo "      - $(echo "$line" | cut -d: -f1)"; done)
+        ca: ${CA_DATA}
+        crt: ${CRT_DATA}
+        key: ${KEY_DATA}
+    EOF
 
     echo "✓ Talosconfig created"
+    echo ""
+
+    # Get Talos version from cluster and install matching talosctl
+    echo "Detecting Talos version from cluster..."
+
+    # Download a bootstrap talosctl to query the cluster
+    # Use latest for initial query - it's backwards compatible for version check
+    wget -qO /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
+    chmod +x /usr/local/bin/talosctl
+
+    # Get the actual Talos version running on the cluster
+    TALOS_VERSION=$(talosctl -n "$FIRST_NODE_IP" version --short 2>/dev/null | grep "Tag:" | head -1 | awk '{print $2}')
+
+    if [ -z "$TALOS_VERSION" ]; then
+        echo "WARNING: Could not detect Talos version, using latest talosctl"
+    else
+        echo "Detected Talos version: $TALOS_VERSION"
+        # Download matching talosctl version
+        echo "Downloading talosctl $TALOS_VERSION..."
+        wget -qO /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/talosctl-linux-amd64"
+        chmod +x /usr/local/bin/talosctl
+    fi
     echo ""
 
     # Function to get fragmentation percentage for a node
@@ -79,9 +124,7 @@ data:
             return
         fi
 
-        # Format: NODE MEMBER DB SIZE IN USE (with percentage) LEADER ...
-        # Example: 10.32.8.80 1d675283eb33137b 316 MB 164 MB (51.84%) ...
-        # Extract the percentage directly from the IN USE column (e.g., "51.84" from "(51.84%)")
+        # Extract the percentage from the IN USE column (e.g., "51.84" from "(51.84%)")
         IN_USE_PCT=$(echo "$STATUS" | tail -1 | grep -oE '\([0-9.]+%\)' | tr -d '()%')
 
         if [ -n "$IN_USE_PCT" ]; then
@@ -118,12 +161,12 @@ data:
     NEEDS_DEFRAG=false
     MAX_FRAG=0
 
-    for NODE_INFO in "$NODE1:$NODE1_NAME" "$NODE2:$NODE2_NAME" "$NODE3:$NODE3_NAME"; do
-        NODE=$(echo "$NODE_INFO" | cut -d: -f1)
-        NODE_NAME=$(echo "$NODE_INFO" | cut -d: -f2)
+    echo "$CONTROL_PLANE_NODES" | while read -r line; do
+        NODE_IP=$(echo "$line" | cut -d: -f1)
+        NODE_NAME=$(echo "$line" | cut -d: -f2)
 
-        FRAG=$(get_fragmentation "$NODE")
-        echo "$NODE_NAME ($NODE): ${FRAG}% fragmentation"
+        FRAG=$(get_fragmentation "$NODE_IP")
+        echo "$NODE_NAME ($NODE_IP): ${FRAG}% fragmentation"
 
         if [ "$FRAG" -gt "$MAX_FRAG" ] 2>/dev/null; then
             MAX_FRAG="$FRAG"
@@ -135,11 +178,20 @@ data:
     done
 
     echo ""
-    echo "Maximum fragmentation: ${MAX_FRAG}%"
     echo "Threshold: ${FRAG_THRESHOLD}%"
     echo ""
 
-    if [ "$NEEDS_DEFRAG" = "true" ]; then
+    # Re-check if defrag is needed (while loop runs in subshell)
+    NEEDS_DEFRAG=false
+    echo "$CONTROL_PLANE_NODES" | while read -r line; do
+        NODE_IP=$(echo "$line" | cut -d: -f1)
+        FRAG=$(get_fragmentation "$NODE_IP")
+        if [ "$FRAG" -gt "$FRAG_THRESHOLD" ] 2>/dev/null; then
+            echo "DEFRAG_NEEDED" > /tmp/needs_defrag
+        fi
+    done
+
+    if [ -f /tmp/needs_defrag ]; then
         echo "=========================================="
         echo "Fragmentation exceeds threshold - DEFRAGMENTING"
         echo "=========================================="
@@ -147,19 +199,18 @@ data:
 
         # Get current etcd status
         echo "Current etcd status:"
-        talosctl -n "$NODE1" etcd status || true
+        talosctl -n "$FIRST_NODE_IP" etcd status || true
         echo ""
 
         # Defragment each node sequentially
-        defrag_node "$NODE1" "$NODE1_NAME"
-        echo "Waiting 10 seconds before next node..."
-        sleep 10
+        echo "$CONTROL_PLANE_NODES" | while read -r line; do
+            NODE_IP=$(echo "$line" | cut -d: -f1)
+            NODE_NAME=$(echo "$line" | cut -d: -f2)
 
-        defrag_node "$NODE2" "$NODE2_NAME"
-        echo "Waiting 10 seconds before next node..."
-        sleep 10
-
-        defrag_node "$NODE3" "$NODE3_NAME"
+            defrag_node "$NODE_IP" "$NODE_NAME"
+            echo "Waiting 10 seconds before next node..."
+            sleep 10
+        done
 
         echo "=========================================="
         echo "Defragmentation Complete!"
@@ -168,7 +219,9 @@ data:
         # Show final status
         echo ""
         echo "Final etcd status:"
-        talosctl -n "$NODE1" etcd status || true
+        talosctl -n "$FIRST_NODE_IP" etcd status || true
+
+        rm -f /tmp/needs_defrag
     else
         echo "=========================================="
         echo "Fragmentation within limits - NO ACTION NEEDED"

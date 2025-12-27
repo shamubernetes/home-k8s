@@ -18,7 +18,12 @@ data:
     echo "etcd Fragmentation Check & Defrag Script"
     echo "=========================================="
     echo "Start time: $(date)"
-    echo "Fragmentation threshold: ${FRAG_THRESHOLD}%"
+    echo "Fragmentation threshold: $FRAG_THRESHOLD%"
+    echo ""
+
+    # Install required tools
+    echo "Installing required tools..."
+    apk add --no-cache curl jq >/dev/null 2>&1
     echo ""
 
     # Build talosconfig from certificate components
@@ -36,13 +41,10 @@ data:
     KUBE_CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
     KUBE_API="https://kubernetes.default.svc"
 
-    # Get nodes with control-plane role
-    NODES_JSON=$(wget -qO- --header="Authorization: Bearer $KUBE_TOKEN" \
-        --ca-certificate="$KUBE_CA" \
+    # Get nodes with control-plane role using curl
+    NODES_JSON=$(curl -sS --cacert "$KUBE_CA" \
+        -H "Authorization: Bearer $KUBE_TOKEN" \
         "$KUBE_API/api/v1/nodes?labelSelector=node-role.kubernetes.io/control-plane")
-
-    # Install jq for proper JSON parsing
-    apk add --no-cache jq >/dev/null 2>&1
 
     CONTROL_PLANE_NODES=$(echo "$NODES_JSON" | jq -r '.items[] | "\(.status.addresses[] | select(.type=="InternalIP") | .address):\(.metadata.name)"')
 
@@ -71,7 +73,7 @@ data:
     ENDPOINTS_YAML=""
     for node in $CONTROL_PLANE_NODES; do
         NODE_IP=$(echo "$node" | cut -d: -f1)
-        ENDPOINTS_YAML="${ENDPOINTS_YAML}      - ${NODE_IP}
+        ENDPOINTS_YAML="$ENDPOINTS_YAML      - $NODE_IP
     "
     done
 
@@ -80,9 +82,9 @@ data:
     contexts:
       kubernetes:
         endpoints:
-    ${ENDPOINTS_YAML}      ca: ${CA_DATA}
-        crt: ${CRT_DATA}
-        key: ${KEY_DATA}
+    $ENDPOINTS_YAML      ca: $CA_DATA
+        crt: $CRT_DATA
+        key: $KEY_DATA
     TALOSEOF
 
     echo "Talosconfig created"
@@ -92,7 +94,7 @@ data:
     echo "Detecting Talos version from cluster..."
 
     # Download a bootstrap talosctl to query the cluster
-    wget -qO /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
+    curl -sLo /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
     chmod +x /usr/local/bin/talosctl
 
     # Get the actual Talos version running on the cluster
@@ -103,7 +105,7 @@ data:
     else
         echo "Detected Talos version: $TALOS_VERSION"
         echo "Downloading talosctl $TALOS_VERSION..."
-        wget -qO /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/talosctl-linux-amd64"
+        curl -sLo /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
         chmod +x /usr/local/bin/talosctl
     fi
     echo ""
@@ -150,14 +152,14 @@ data:
         NODE_IP=$(echo "$node" | cut -d: -f1)
         NODE_NAME=$(echo "$node" | cut -d: -f2)
         FRAG=$(get_fragmentation "$NODE_IP")
-        echo "$NODE_NAME ($NODE_IP): ${FRAG}% fragmentation"
+        echo "$NODE_NAME ($NODE_IP): $FRAG% fragmentation"
         if [ "$FRAG" -gt "$FRAG_THRESHOLD" ] 2>/dev/null; then
             touch /tmp/needs_defrag
         fi
     done
 
     echo ""
-    echo "Threshold: ${FRAG_THRESHOLD}%"
+    echo "Threshold: $FRAG_THRESHOLD%"
     echo ""
 
     if [ -f /tmp/needs_defrag ]; then

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "*"
+      ],
+      "semanticCommitType": "❓"
+    },
+    {
+      "matchDepTypes": [
+        "dependencies",
+        "require"
+      ],
+      "semanticCommitType": "🛠️"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "semanticCommitType": "⏫",
+      "commitMessagePrefix": "{{semanticCommitType}}({{semanticCommitScope}})!:",
+      "commitMessageExtra": "( {{currentVersion}} → {{newVersion}} )",
+      "commitMessageAction": ""
+    },
+    {
+      "matchUpdateTypes": ["minor"],
+      "semanticCommitType": "⏫",
+      "commitMessageExtra": "( {{currentVersion}} → {{newVersion}} )",
+      "commitMessageAction": ""
+    },
+    {
+      "matchUpdateTypes": ["patch"],
+      "semanticCommitType": "⬆",
+      "commitMessageExtra": "( {{currentVersion}} → {{newVersion}} )",
+      "commitMessageAction": ""
+    },
+    {
+      "matchUpdateTypes": ["digest"],
+      "semanticCommitType": "🔄",
+      "commitMessageExtra": "( {{currentDigestShort}} → {{newDigestShort}} )",
+      "commitMessageAction": ""
+    },
+    {
+      "matchUpdateTypes": ["pin", "pinDigest"],
+      "semanticCommitType": "📌",
+      "commitMessageAction": ""
+    },
+    {
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "cont",
+      "commitMessageTopic": "image {{depName}}"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "semanticCommitScope": "ci"
+    },
+    {
+      "addLabels": ["renovate/dash"],
+      "matchDatasources": ["custom.grafana-dashboards"],
+      "matchUpdateTypes": ["major"],
+      "semanticCommitType": "🔄",
+      "semanticCommitScope": "dash",
+      "commitMessageTopic": "dashboard {{depName}}",
+      "commitMessageExtra": "( {{currentVersion}} → {{newVersion}} )"
+    },
+    {
+      "matchDatasources": ["helm"],
+      "semanticCommitScope": "helm",
+      "commitMessageTopic": "chart {{depName}}"
+    },
+    {
+      "matchDatasources": ["pip_requirements", "pypi"],
+      "semanticCommitScope": "pip"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "addLabels": ["renovate/container"]
+    },
+    {
+      "matchDatasources": ["helm"],
+      "addLabels": ["renovate/helm"]
+    },
+    {
+      "matchDatasources": ["github-releases", "github-tags"],
+      "addLabels": ["renovate/gh-r"]
+    },
+    {
+      "matchManagers": ["mise"],
+      "semanticCommitScope": "mise",
+      "commitMessageTopic": "mise {{depName}}",
+      "commitMessageExtra": "( {{currentVersion}} → {{newVersion}} )",
+      "addLabels": ["renovate/mise"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "addLabels": ["renovate/ci"]
+    },
+    {
+      "matchDatasources": ["pypi"],
+      "addLabels": ["renovate/pip"]
+    },
+    {
+      matchDatasources: ["custom.grafana-dashboards"],
+      addLabels: ["renovate/dash"]
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "labels": ["type/major"]
+    },
+    {
+      "matchUpdateTypes": ["minor"],
+      "labels": ["type/minor"]
+    },
+    {
+      "matchUpdateTypes": ["patch"],
+      "labels": ["type/patch"]
+    },
+    {
+      "matchUpdateTypes": ["digest"],
+      "labels": ["type/digest"]
+    }
+  ]
+}

@@ -12,6 +12,7 @@
     "github>shamubernetes/home-k8s//.github/renovate/customDatasources.json5",
     "github>shamubernetes/home-k8s//.github/renovate/customManagers.json5",
     "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5",
   ],
   labels: ["renovate"],
   prCreation: "immediate",

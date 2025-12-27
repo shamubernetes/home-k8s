@@ -7,9 +7,6 @@ storage:
   caching: true
 metrics: true
 debug: false
-ui:
-  title: Status | Gatus
-  header: Status
 alerting:
   pushover:
     title: Gatus (Kubernetes)
@@ -25,3 +22,32 @@ connectivity:
   checker:
     target: 1.1.1.1:53
     interval: 1m
+endpoints:
+- name: Cloudflare
+  group: connectivity
+  url: icmp://1.1.1.1
+  interval: 1m
+  conditions:
+  - "[CONNECTED] == true"
+- name: Google
+  group: connectivity
+  url: icmp://8.8.8.8
+  interval: 1m
+  conditions:
+  - "[CONNECTED] == true"
+- name: Quad9
+  group: connectivity
+  url: icmp://9.9.9.9
+  interval: 1m
+  conditions:
+  - "[CONNECTED] == true"
+ui:
+  title: TheZoo Status
+  header: TheZoo Status
+  logo: https://avatars.githubusercontent.com/u/77519984
+  link: https://github.com/shamubernetes
+  buttons:
+    - name: Github
+      link: https://github.com/shamubernetes
+    - name: Homelab
+      link: https://github.com/shamubernetes/home-k8s

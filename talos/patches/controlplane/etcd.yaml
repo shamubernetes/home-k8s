@@ -2,5 +2,6 @@ cluster:
   etcd:
     extraArgs:
       listen-metrics-urls: http://0.0.0.0:2381
+      quota-backend-bytes: "4294967296"  # 4 GiB (default is 2 GiB)
     advertisedSubnets:
     - "10.100.47.0/24"

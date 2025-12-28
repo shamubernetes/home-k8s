@@ -119,6 +119,7 @@ patches:
 controlPlane:
   patches:
   - "@./patches/controlplane/admission.yaml"
+  - "@./patches/controlplane/apiserver.yaml"
   - "@./patches/controlplane/cluster.yaml"
   - "@./patches/controlplane/etcd.yaml"
   - "@./patches/controlplane/talos-api.yaml"

@@ -1,0 +1,4 @@
+cluster:
+  apiServer:
+    extraArgs:
+      event-ttl: "30m"  # Default is 1h - reduces event storage by 50%

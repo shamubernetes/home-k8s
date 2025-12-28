@@ -2,6 +2,7 @@ machine:
   kubelet:
     extraArgs:
       rotate-server-certificates: true
+      node-status-update-frequency: "30s"  # Default is 10s - reduces writes by 66%
     extraConfig:
       imageGCHighThresholdPercent: 55
       imageGCLowThresholdPercent: 50

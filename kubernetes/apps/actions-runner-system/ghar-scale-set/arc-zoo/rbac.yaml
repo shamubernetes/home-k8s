@@ -15,10 +15,3 @@ subjects:
   - kind: ServiceAccount
     name: ghar-set-zoo
     namespace: actions-runner-system
----
-apiVersion: talos.dev/v1alpha1
-kind: ServiceAccount
-metadata:
-  name: ghar-set-zoo
-spec:
-  roles: ["os:admin"]

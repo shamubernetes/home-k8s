@@ -24,7 +24,7 @@ spec:
   values:
     controllers:
       hypermind:
-        replicas: 1
+        type: daemonset
         strategy: RollingUpdate
         annotations:
           reloader.stakater.com/auto: "true"

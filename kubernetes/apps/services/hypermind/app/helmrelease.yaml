@@ -84,3 +84,14 @@ spec:
             service:
               identifier: app
               port: http
+      external:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+        className: external
+        hosts:
+        - host: hypermind.gg
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http

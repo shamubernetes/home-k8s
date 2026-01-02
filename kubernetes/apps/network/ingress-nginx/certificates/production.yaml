@@ -64,4 +64,3 @@ spec:
   commonName: "hypermind.gg"
   dnsNames:
   - "hypermind.gg"
-  - "*.hypermind.gg"

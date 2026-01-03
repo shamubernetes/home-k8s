@@ -24,8 +24,7 @@ spec:
   values:
     controllers:
       hypermind:
-        type: daemonset
-        strategy: RollingUpdate
+        replicas: 2
         annotations:
           reloader.stakater.com/auto: "true"
         containers:

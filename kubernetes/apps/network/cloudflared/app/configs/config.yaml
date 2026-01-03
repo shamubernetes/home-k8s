@@ -6,8 +6,4 @@ ingress:
   service: https://ingress-nginx-external-controller.network.svc.cluster.local:443
 - hostname: "*.${HOME_DOMAIN}"
   service: https://ingress-nginx-external-controller.network.svc.cluster.local:443
-- hostname: "hypermind.gg"
-  service: https://ingress-nginx-external-controller.network.svc.cluster.local:443
-- hostname: "*.hypermind.gg"
-  service: https://ingress-nginx-external-controller.network.svc.cluster.local:443
 - service: http_status:404

@@ -4,5 +4,4 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./atuin/ks.yaml
-- ./hypermind/ks.yaml
 - ./static-webserver/ks.yaml

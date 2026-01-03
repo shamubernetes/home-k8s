@@ -8,6 +8,3 @@ spec:
   - dnsName: "external.${HOME_DOMAIN}"
     recordType: CNAME
     targets: ["${SECRET_CLOUDFLARE_TUNNEL_ID}.cfargotunnel.com"]
-  - dnsName: "hypermind.gg"
-    recordType: CNAME
-    targets: ["${SECRET_CLOUDFLARE_TUNNEL_ID}.cfargotunnel.com"]

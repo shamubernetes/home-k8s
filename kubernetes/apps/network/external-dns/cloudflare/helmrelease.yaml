@@ -45,7 +45,7 @@ spec:
     sources: ["crd", "ingress"]
     txtPrefix: k8s.
     txtOwnerId: default
-    domainFilters: ["${HOME_DOMAIN}", "${GAME_DOMAIN}", "${DEV_DOMAIN}", "hypermind.gg"]
+    domainFilters: ["${HOME_DOMAIN}", "${GAME_DOMAIN}", "${DEV_DOMAIN}"]
     serviceMonitor:
       enabled: true
     podAnnotations:

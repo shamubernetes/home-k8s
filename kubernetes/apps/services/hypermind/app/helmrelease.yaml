@@ -31,7 +31,7 @@ spec:
           app:
             image:
               repository: ghcr.io/lklynet/hypermind
-              tag: latest@sha256:259da37d6c1d6bda5ce32a926a3140a8f66306553d84c5daf180303dda71fbc6
+              tag: latest@sha256:5d6f39aa6aefe95ba898a17669b8dabd34ef69616463acd4b1119ed28cdb0b2a
             env:
               PORT: &port 3000
             probes:

@@ -25,3 +25,5 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_WHISPARR}"
+      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_WHISPARR}"

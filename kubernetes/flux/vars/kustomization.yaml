@@ -5,5 +5,6 @@ resources:
 - ./cluster-settings.yaml
 - ./cluster-ipam.yaml
 - ./cluster-secrets.sops.yaml
+- ./volsync-schedules.yaml
 - ./op-credentials.sops.yaml
 - ./op-connect-token.sops.yaml

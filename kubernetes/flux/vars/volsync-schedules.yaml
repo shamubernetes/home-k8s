@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: volsync-schedules
+  namespace: flux-system
+data:
+  # ============================================================================
+  # VolSync Backup Schedules
+  # Staggered to prevent I/O storms on Ceph cluster
+  # ============================================================================
+
+  # --- Hourly NFS Backups (spread across the hour, ~3min apart) ---
+  VOLSYNC_SCHEDULE_ADGUARD_HOME: "0 * * * *"
+  VOLSYNC_SCHEDULE_HOME_ASSISTANT: "3 * * * *"
+  VOLSYNC_SCHEDULE_SABNZBD: "6 * * * *"
+  VOLSYNC_SCHEDULE_WIZARR: "9 * * * *"
+  VOLSYNC_SCHEDULE_WHISPARR: "12 * * * *"
+  VOLSYNC_SCHEDULE_PROFILARR: "15 * * * *"
+  VOLSYNC_SCHEDULE_SEERR: "18 * * * *"
+  VOLSYNC_SCHEDULE_RADARR_3D: "21 * * * *"
+  VOLSYNC_SCHEDULE_ROMM: "24 * * * *"
+  VOLSYNC_SCHEDULE_SONARR: "27 * * * *"
+  VOLSYNC_SCHEDULE_STASH: "30 * * * *"
+  VOLSYNC_SCHEDULE_STASH_DATA: "33 * * * *"
+  VOLSYNC_SCHEDULE_BAZARR: "36 * * * *"
+  VOLSYNC_SCHEDULE_RADARR: "39 * * * *"
+  VOLSYNC_SCHEDULE_TAUTULLI: "42 * * * *"
+  # Plex is large (~77GiB) - daily only at 4 AM
+  VOLSYNC_SCHEDULE_PLEX: "0 4 * * *"
+
+  # --- Daily R2 Backups (offsite, at 3:45-4:59 AM) ---
+  # Uses minutes :45-:59 to avoid clashing with hourly NFS backups (:00-:42)
+  VOLSYNC_R2_SCHEDULE_ADGUARD_HOME: "45 3 * * *"
+  VOLSYNC_R2_SCHEDULE_SABNZBD: "46 3 * * *"
+  VOLSYNC_R2_SCHEDULE_WIZARR: "47 3 * * *"
+  VOLSYNC_R2_SCHEDULE_WHISPARR: "48 3 * * *"
+  VOLSYNC_R2_SCHEDULE_PROFILARR: "49 3 * * *"
+  VOLSYNC_R2_SCHEDULE_SEERR: "50 3 * * *"
+  VOLSYNC_R2_SCHEDULE_RADARR_3D: "51 3 * * *"
+  VOLSYNC_R2_SCHEDULE_ROMM: "52 3 * * *"
+  VOLSYNC_R2_SCHEDULE_HOME_ASSISTANT: "53 3 * * *"
+  VOLSYNC_R2_SCHEDULE_SONARR: "54 3 * * *"
+  VOLSYNC_R2_SCHEDULE_STASH: "55 3 * * *"
+  VOLSYNC_R2_SCHEDULE_STASH_DATA: "56 3 * * *"
+  VOLSYNC_R2_SCHEDULE_BAZARR: "57 3 * * *"
+  VOLSYNC_R2_SCHEDULE_RADARR: "58 3 * * *"
+  VOLSYNC_R2_SCHEDULE_TAUTULLI: "59 3 * * *"
+  # Plex R2 runs last (large backup)- after Plex NFS completes at 4:00
+  VOLSYNC_R2_SCHEDULE_PLEX: "30 4 * * *"

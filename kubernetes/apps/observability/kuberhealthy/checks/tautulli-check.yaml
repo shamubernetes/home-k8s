@@ -11,32 +11,18 @@ spec:
     - name: check
       image: curlimages/curl:8.17.0@sha256:935d9100e9ba842cdb060de42472c7ca90cfe9a7c96e4dacb55e79e560b3ff40
       env:
+      - name: TZ
+        value: America/New_York
       - name: TAUTULLI_API_KEY
         valueFrom:
           secretKeyRef:
             name: kuberhealthy-tautulli
             key: TAUTULLI_API_KEY
-      command:
-      - /bin/sh
-      - -c
-      - |
-        # Query Tautulli for active streams
-        RESPONSE=$(curl -sf "http://tautulli.observability.svc.cluster.local/api/v2?apikey=$${TAUTULLI_API_KEY}&cmd=get_activity" || echo "")
-
-        # Extract stream count from response (handles "stream_count": "N" format)
-        STREAM_COUNT=$(echo "$${RESPONSE}" | grep -o '"stream_count": *"[0-9]*"' | grep -o '[0-9]*' || echo "0")
-
-        if [ "$${STREAM_COUNT}" = "0" ] || [ -z "$${STREAM_COUNT}" ]; then
-          echo "OK: No active Plex streams (count: $${STREAM_COUNT:-0})"
-          curl -sf -X POST -H "Content-Type: application/json" \
-            -d '{"Errors":[],"OK":true}' \
-            "$${KH_REPORTING_URL}"
-        else
-          echo "FAIL: $${STREAM_COUNT} active Plex stream(s) detected - blocking upgrades"
-          curl -sf -X POST -H "Content-Type: application/json" \
-            -d "{\"Errors\":[\"$${STREAM_COUNT} active Plex stream(s) detected\"],\"OK\":false}" \
-            "$${KH_REPORTING_URL}"
-        fi
+      command: ["/bin/sh", "/scripts/plex-check.sh"]
+      volumeMounts:
+      - name: scripts
+        mountPath: /scripts
+        readOnly: true
       resources:
         requests:
           cpu: 10m
@@ -50,6 +36,11 @@ spec:
         runAsUser: 1000
         capabilities:
           drop: ["ALL"]
+    volumes:
+    - name: scripts
+      configMap:
+        name: plex-check-script
+        defaultMode: 0755
     securityContext:
       seccompProfile:
         type: RuntimeDefault

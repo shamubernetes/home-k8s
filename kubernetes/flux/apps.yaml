@@ -23,6 +23,8 @@ spec:
       name: cluster-secrets
     - kind: ConfigMap
       name: cluster-ipam
+    - kind: ConfigMap
+      name: volsync-schedules
   patches:
   - patch: |-
       apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -42,6 +44,8 @@ spec:
               name: cluster-secrets
             - kind: ConfigMap
               name: cluster-ipam
+            - kind: ConfigMap
+              name: volsync-schedules
     target:
       group: kustomize.toolkit.fluxcd.io
       kind: Kustomization

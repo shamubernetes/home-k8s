@@ -27,7 +27,7 @@ metadata:
 spec:
   sourcePVC: data-adguard-home-0
   trigger:
-    schedule: "0 * * * *"
+    schedule: "${VOLSYNC_SCHEDULE}"
   restic:
     copyMethod: Snapshot
     pruneIntervalDays: 14
@@ -77,7 +77,7 @@ metadata:
 spec:
   sourcePVC: data-adguard-home-0
   trigger:
-    schedule: "0 3 * * *"
+    schedule: "${VOLSYNC_R2_SCHEDULE}"
   restic:
     copyMethod: Snapshot
     pruneIntervalDays: 14
@@ -95,4 +95,3 @@ spec:
     retain:
       daily: 7
       weekly: 4
-

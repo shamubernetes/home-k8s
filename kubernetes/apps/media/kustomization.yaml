@@ -6,3 +6,4 @@ resources:
 - ./plex/ks.yaml
 # - ./kometa/ks.yaml
 - ./stash/ks.yaml
+- ./calibre-web-automated/ks.yaml

@@ -96,17 +96,14 @@ spec:
     persistence:
       config:
         existingClaim: *app
-      library:
-        type: persistentVolumeClaim
-        storageClass: ceph-block
-        accessMode: ReadWriteOnce
-        retain: true
-        size: 100Gi
         globalMounts:
+        - path: /config
         - path: /calibre-library
-      ingest:
+          subPath: calibre-library
+      media:
         type: nfs
         server: "${IPAM_IP_NFS}"
-        path: /mnt/user/Media/Books/ingest
+        path: /mnt/user/Media
         globalMounts:
         - path: /cwa-book-ingest
+          subPath: Books/ingest

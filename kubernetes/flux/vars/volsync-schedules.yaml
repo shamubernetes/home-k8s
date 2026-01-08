@@ -26,6 +26,7 @@ data:
   VOLSYNC_SCHEDULE_BAZARR: "36 * * * *"
   VOLSYNC_SCHEDULE_RADARR: "39 * * * *"
   VOLSYNC_SCHEDULE_TAUTULLI: "42 * * * *"
+  VOLSYNC_SCHEDULE_CALIBRE_WEB_AUTOMATED: "45 * * * *"
   # Plex is large (~77GiB) - daily only at 4 AM
   VOLSYNC_SCHEDULE_PLEX: "0 4 * * *"
 
@@ -46,5 +47,6 @@ data:
   VOLSYNC_R2_SCHEDULE_BAZARR: "57 3 * * *"
   VOLSYNC_R2_SCHEDULE_RADARR: "58 3 * * *"
   VOLSYNC_R2_SCHEDULE_TAUTULLI: "59 3 * * *"
+  VOLSYNC_R2_SCHEDULE_CALIBRE_WEB_AUTOMATED: "0 4 * * *"
   # Plex R2 runs last (large backup)- after Plex NFS completes at 4:00
   VOLSYNC_R2_SCHEDULE_PLEX: "30 4 * * *"

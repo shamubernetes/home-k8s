@@ -14,3 +14,4 @@ resources:
 - ./bazarr/ks.yaml
 - ./wizarr/ks.yaml
 - ./whisparr/ks.yaml
+- ./cwa-bdl/ks.yaml

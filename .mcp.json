@@ -1,0 +1,70 @@
+{
+  "mcpServers": {
+    "flux-operator-mcp": {
+      "command": "flux-operator-mcp",
+      "args": [
+        "serve"
+      ],
+      "env": {
+        "KUBECONFIG": "./kubernetes/kubeconfig"
+      }
+    },
+    "kubernetes-mcp-server": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "kubernetes-mcp-server@latest"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "dotenv-cli",
+        "-e",
+        "./.env.local",
+        "--",
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ]
+    },
+    "unifi": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "dotenv-cli",
+        "-e",
+        "./.env.local",
+        "--",
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "UNIFI_HOST",
+        "-e",
+        "UNIFI_USERNAME",
+        "-e",
+        "UNIFI_PASSWORD",
+        "-e",
+        "UNIFI_PORT",
+        "-e",
+        "UNIFI_SITE",
+        "-e",
+        "UNIFI_VERIFY_SSL",
+        "ghcr.io/sirkirby/unifi-network-mcp:latest"
+      ],
+      "env": {
+        "UNIFI_HOST": "10.0.10.1",
+        "UNIFI_PORT": "443",
+        "UNIFI_SITE": "default",
+        "UNIFI_VERIFY_SSL": "False"
+      }
+    }
+  }
+}

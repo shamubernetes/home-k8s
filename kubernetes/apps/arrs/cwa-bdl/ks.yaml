@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app cwa-bdl
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace arrs
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  path: ./kubernetes/apps/arrs/cwa-bdl/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: false
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace
+      VOLSYNC_CAPACITY: 5Gi
+      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_CWA_BDL}"
+      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_CWA_BDL}"

@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/siren
-              tag: v1.3.25@sha256:188dfc0d7be3878d4dc6677766bbcf4d1ff3e307ae471f7ad717da61ed464370
+              tag: v1.3.26@sha256:6eeb9252c824b48ebb586ab9dde9991a64601a41048185b9b3b242b14249b1c4
             env:
               TZ: ${TIMEZONE}
               ALERTMANAGER_BASE_URL: http://alertmanager-operated.observability.svc.cluster.local:9093

@@ -38,7 +38,7 @@ spec:
           app:
             image:
               repository: ghcr.io/connorgallopo/tracearr
-              tag: 1.4.3@sha256:87eb8e3f480c050bba6fa753488f5e8998735a5e87cf0d6b5c0547170cd30d71
+              tag: 1.4.4@sha256:f021198dd0aa1de13305f9bed22a23e6fb1c89522ea54c3dcf5c9e4bc9022521
             env:
               TZ: America/New_York
               CORS_ORIGIN: "https://tracearr.${HOME_DOMAIN}"

@@ -94,18 +94,14 @@ spec:
     persistence:
       config:
         existingClaim: *app
+        globalMounts:
+        - path: /config
+        - path: /metadata
+          subPath: metadata
       cache:
         type: emptyDir
         globalMounts:
         - path: /.npm
-      metadata:
-        type: persistentVolumeClaim
-        storageClass: ceph-block
-        accessMode: ReadWriteOnce
-        retain: true
-        size: 5Gi
-        globalMounts:
-        - path: /metadata
       audiobooks:
         type: nfs
         server: "${IPAM_IP_NFS}"

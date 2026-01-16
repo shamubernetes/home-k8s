@@ -40,17 +40,28 @@ spec:
               TZ: America/New_York
               LISTENARR_LOG_LEVEL: info
               LISTENARR_PUBLIC_URL: https://listenarr.${HOME_DOMAIN}
+              ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
             probes:
-              liveness: &probes
+              startup:
                 enabled: true
                 custom: true
                 spec:
                   httpGet:
                     path: /
                     port: &port 4545
-                  initialDelaySeconds: 0
+                  initialDelaySeconds: 10
                   periodSeconds: 10
-                  timeoutSeconds: 1
+                  timeoutSeconds: 5
+                  failureThreshold: 30
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 5
                   failureThreshold: 3
               readiness: *probes
             resources:

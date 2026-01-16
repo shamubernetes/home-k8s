@@ -39,6 +39,7 @@ spec:
             env:
               TZ: America/New_York
               LISTENARR_LOG_LEVEL: info
+              LISTENARR_PUBLIC_URL: https://listenarr.${HOME_DOMAIN}
             probes:
               liveness: &probes
                 enabled: true

@@ -15,3 +15,4 @@ resources:
 - ./wizarr/ks.yaml
 - ./whisparr/ks.yaml
 - ./cwa-bdl/ks.yaml
+- ./listenarr/ks.yaml

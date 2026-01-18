@@ -5,11 +5,11 @@ metadata:
   name: snikket
 spec:
   endpoints:
-    # Main XMPP domain - NO PROXY (gray cloud)
+    # Main XMPP domain - CNAME to DDNS (no proxy)
     - dnsName: "snikket.${HOME_DOMAIN}"
-      recordType: A
+      recordType: CNAME
       targets:
-        - "${IPAM_IP_SNIKKET}"
+        - "ddns.${HOME_DOMAIN}"
       providerSpecific:
         - name: external-dns.alpha.kubernetes.io/cloudflare-proxied
           value: "false"

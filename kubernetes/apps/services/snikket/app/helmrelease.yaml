@@ -29,6 +29,19 @@ spec:
         annotations:
           reloader.stakater.com/auto: "true"
         containers:
+          # Certificate manager (must run alongside server)
+          certs:
+            image:
+              repository: snikket/snikket-cert-manager
+              tag: stable
+            env:
+              SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
+              SNIKKET_ADMIN_EMAIL: "admin@${HOME_DOMAIN}"
+            probes:
+              liveness:
+                enabled: false
+              readiness:
+                enabled: false
           # Main XMPP server
           server:
             image:
@@ -40,14 +53,14 @@ spec:
               SNIKKET_TWEAK_TURNSERVER_MIN_PORT: "60000"
               SNIKKET_TWEAK_TURNSERVER_MAX_PORT: "60100"
             probes:
-              # Use TCP probe on XMPP port since Snikket doesn't have HTTP health endpoint
+              # Use TCP probe on XMPP port
               liveness:
                 enabled: true
                 custom: true
                 spec:
                   tcpSocket:
                     port: 5222
-                  initialDelaySeconds: 60
+                  initialDelaySeconds: 120
                   periodSeconds: 30
                   timeoutSeconds: 5
                   failureThreshold: 5
@@ -57,7 +70,7 @@ spec:
                 spec:
                   tcpSocket:
                     port: 5222
-                  initialDelaySeconds: 30
+                  initialDelaySeconds: 90
                   periodSeconds: 10
                   timeoutSeconds: 5
               startup:
@@ -66,7 +79,7 @@ spec:
                 spec:
                   tcpSocket:
                     port: 5222
-                  initialDelaySeconds: 10
+                  initialDelaySeconds: 30
                   periodSeconds: 10
                   failureThreshold: 30
           # Web portal
@@ -100,6 +113,8 @@ spec:
         runAsNonRoot: false
         runAsUser: 0
         runAsGroup: 0
+      # Allow host network for cert manager ACME challenges
+      hostNetwork: false
     persistence:
       data:
         type: persistentVolumeClaim
@@ -107,6 +122,11 @@ spec:
         size: 10Gi
         globalMounts:
           - path: /snikket
+      # ACME challenge directory shared between containers
+      acme:
+        type: emptyDir
+        globalMounts:
+          - path: /var/www/html/.well-known/acme-challenge
     service:
       # Web UI (proxied through ingress)
       web:
@@ -114,6 +134,12 @@ spec:
         ports:
           http:
             port: 5765
+      # HTTP for ACME challenges
+      acme:
+        controller: snikket
+        ports:
+          http:
+            port: 80
       # XMPP services (LoadBalancer - no Cloudflare proxy)
       xmpp:
         controller: snikket
@@ -131,6 +157,9 @@ spec:
             protocol: TCP
           proxy65:
             port: 5000
+            protocol: TCP
+          https:
+            port: 443
             protocol: TCP
       # STUN/TURN (LoadBalancer - same IP)
       turn:
@@ -175,7 +204,6 @@ spec:
         className: internal
         annotations:
           external-dns.alpha.kubernetes.io/target: "internal.${HOME_DOMAIN}"
-          cert-manager.io/cluster-issuer: letsencrypt-production
         hosts:
           - host: "snikket.${HOME_DOMAIN}"
             paths:
@@ -183,7 +211,3 @@ spec:
                 service:
                   identifier: web
                   port: http
-        tls:
-          - hosts:
-              - "snikket.${HOME_DOMAIN}"
-            secretName: snikket-tls

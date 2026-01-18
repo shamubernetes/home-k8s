@@ -1,0 +1,169 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: snikket
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  driftDetection:
+    mode: enabled
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      snikket:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          # Main XMPP server
+          server:
+            image:
+              repository: snikket/snikket-server
+              tag: stable
+            env:
+              SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
+              SNIKKET_ADMIN_EMAIL: "admin@${HOME_DOMAIN}"
+              # Disable internal cert manager - we use cert-manager
+              SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE: "0.0.0.0"
+              SNIKKET_TWEAK_INTERNAL_HTTP_PORT: "5280"
+              SNIKKET_TWEAK_TURNSERVER_MIN_PORT: "60000"
+              SNIKKET_TWEAK_TURNSERVER_MAX_PORT: "60100"
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 5280
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 5280
+                  initialDelaySeconds: 10
+                  periodSeconds: 5
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+          # Web portal
+          portal:
+            image:
+              repository: snikket/snikket-web-portal
+              tag: stable
+            env:
+              SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
+              SNIKKET_WEB_AVATAR_CACHE_TTL: "86400"
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: false  # Snikket needs root for some operations
+        seccompProfile: {type: RuntimeDefault}
+    persistence:
+      data:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        globalMounts:
+          - path: /snikket
+    service:
+      # Web UI (proxied through ingress)
+      web:
+        controller: snikket
+        ports:
+          http:
+            port: 5280
+      # XMPP services (LoadBalancer - no Cloudflare proxy)
+      xmpp:
+        controller: snikket
+        type: LoadBalancer
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_SNIKKET}"
+          external-dns.alpha.kubernetes.io/hostname: "snikket.${HOME_DOMAIN}"
+          external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+        ports:
+          c2s:
+            port: 5222
+            protocol: TCP
+          s2s:
+            port: 5269
+            protocol: TCP
+          proxy65:
+            port: 5000
+            protocol: TCP
+      # STUN/TURN (LoadBalancer - same IP)
+      turn:
+        controller: snikket
+        type: LoadBalancer
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_SNIKKET}"
+        ports:
+          stun-tcp:
+            port: 3478
+            protocol: TCP
+          stun-udp:
+            port: 3478
+            protocol: UDP
+          stuns-tcp:
+            port: 5349
+            protocol: TCP
+          stuns-udp:
+            port: 5349
+            protocol: UDP
+      # TURN relay UDP range (reduced from default)
+      turn-relay:
+        controller: snikket
+        type: LoadBalancer
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_SNIKKET}"
+        ports:
+          relay-1:
+            port: 60000
+            protocol: UDP
+          relay-2:
+            port: 60001
+            protocol: UDP
+          relay-3:
+            port: 60002
+            protocol: UDP
+          relay-4:
+            port: 60003
+            protocol: UDP
+          # ... add more as needed, keeping range small for now
+    ingress:
+      web:
+        className: internal
+        annotations:
+          external-dns.alpha.kubernetes.io/target: "internal.${HOME_DOMAIN}"
+          cert-manager.io/cluster-issuer: letsencrypt-production
+        hosts:
+          - host: "snikket.${HOME_DOMAIN}"
+            paths:
+              - path: /
+                service:
+                  identifier: web
+                  port: http
+        tls:
+          - hosts:
+              - "snikket.${HOME_DOMAIN}"
+            secretName: snikket-tls

@@ -37,33 +37,38 @@ spec:
             env:
               SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
               SNIKKET_ADMIN_EMAIL: "admin@${HOME_DOMAIN}"
-              # Disable internal cert manager - we use cert-manager
-              SNIKKET_TWEAK_INTERNAL_HTTP_INTERFACE: "0.0.0.0"
-              SNIKKET_TWEAK_INTERNAL_HTTP_PORT: "5280"
               SNIKKET_TWEAK_TURNSERVER_MIN_PORT: "60000"
               SNIKKET_TWEAK_TURNSERVER_MAX_PORT: "60100"
             probes:
+              # Use TCP probe on XMPP port since Snikket doesn't have HTTP health endpoint
               liveness:
                 enabled: true
                 custom: true
                 spec:
-                  httpGet:
-                    path: /health
-                    port: 5280
-                  initialDelaySeconds: 30
-                  periodSeconds: 10
+                  tcpSocket:
+                    port: 5222
+                  initialDelaySeconds: 60
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
               readiness:
                 enabled: true
                 custom: true
                 spec:
-                  httpGet:
-                    path: /health
-                    port: 5280
+                  tcpSocket:
+                    port: 5222
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 5222
                   initialDelaySeconds: 10
-                  periodSeconds: 5
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities: {drop: ["ALL"]}
+                  periodSeconds: 10
+                  failureThreshold: 30
           # Web portal
           portal:
             image:
@@ -72,13 +77,29 @@ spec:
             env:
               SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
               SNIKKET_WEB_AVATAR_CACHE_TTL: "86400"
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities: {drop: ["ALL"]}
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 5765
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 5765
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+    # Snikket requires running as root and full capabilities
     defaultPodOptions:
       securityContext:
-        runAsNonRoot: false  # Snikket needs root for some operations
-        seccompProfile: {type: RuntimeDefault}
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
     persistence:
       data:
         type: persistentVolumeClaim
@@ -92,7 +113,7 @@ spec:
         controller: snikket
         ports:
           http:
-            port: 5280
+            port: 5765
       # XMPP services (LoadBalancer - no Cloudflare proxy)
       xmpp:
         controller: snikket
@@ -149,7 +170,6 @@ spec:
           relay-4:
             port: 60003
             protocol: UDP
-          # ... add more as needed, keeping range small for now
     ingress:
       web:
         className: internal

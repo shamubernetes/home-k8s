@@ -31,7 +31,7 @@ spec:
               tag: edge-alpine@sha256:832f9844ba524e57658fc77ec3e1371371c942b495bb24e34fbfddd652d80caf
             env:
               # Domains to update (comma-separated)
-              DOMAINS: "external.${GAME_DOMAIN},ddns.${HOME_DOMAIN}"
+              DOMAINS: "external.${GAME_DOMAIN}"
               # Use Cloudflare API token
               CF_API_TOKEN:
                 valueFrom:

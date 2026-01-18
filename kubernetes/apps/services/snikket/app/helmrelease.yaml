@@ -33,7 +33,7 @@ spec:
           certs:
             image:
               repository: snikket/snikket-cert-manager
-              tag: stable
+              tag: stable@sha256:27e5db65ff6ea65663adeb786a965cd94fd38ec152cb63e84a8c23943da2e90f
             env:
               SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
               SNIKKET_ADMIN_EMAIL: "admin@${HOME_DOMAIN}"

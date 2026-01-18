@@ -38,13 +38,22 @@ spec:
               - sh
               - -c
               - |
-                # Copy certs to where Prosody expects them
-                cp /certs/tls.crt /etc/prosody/certs/snikket.thezoo.house.crt
-                cp /certs/tls.key /etc/prosody/certs/snikket.thezoo.house.key
-                # Set permissions for prosody user (uid 101)
-                chmod 640 /etc/prosody/certs/snikket.thezoo.house.*
-                chown 101:101 /etc/prosody/certs/snikket.thezoo.house.*
+                DOMAIN="snikket.thezoo.house"
+                # Create the Let's Encrypt directory structure that Snikket expects
+                mkdir -p /snikket/letsencrypt/live/${DOMAIN}
+                # Copy certs in Let's Encrypt format
+                cp /certs/tls.crt /snikket/letsencrypt/live/${DOMAIN}/fullchain.pem
+                cp /certs/tls.key /snikket/letsencrypt/live/${DOMAIN}/privkey.pem
+                # Also copy to prosody certs dir directly (in case import fails)
+                cp /certs/tls.crt /etc/prosody/certs/${DOMAIN}.crt
+                cp /certs/tls.key /etc/prosody/certs/${DOMAIN}.key
+                # Set permissions
+                chmod 640 /snikket/letsencrypt/live/${DOMAIN}/*
+                chmod 640 /etc/prosody/certs/${DOMAIN}.*
+                chown -R 101:101 /snikket/letsencrypt
+                chown 101:101 /etc/prosody/certs/${DOMAIN}.*
                 echo "Certificates copied successfully"
+                ls -la /snikket/letsencrypt/live/${DOMAIN}/
                 ls -la /etc/prosody/certs/
         containers:
           # Main XMPP server

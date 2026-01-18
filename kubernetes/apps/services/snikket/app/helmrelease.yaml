@@ -33,7 +33,7 @@ spec:
           server:
             image:
               repository: snikket/snikket-server
-              tag: stable
+              tag: stable@sha256:985cc33f42810d1f464d642d2b4018eea1df218683541ad8baa443669d217a7e
             env:
               SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
               SNIKKET_ADMIN_EMAIL: "admin@${HOME_DOMAIN}"
@@ -73,7 +73,7 @@ spec:
           portal:
             image:
               repository: snikket/snikket-web-portal
-              tag: stable
+              tag: stable@sha256:d06073a9bd9ef0ad6a3889d93964157ad139c40c01be3de433999f5281a60882
             env:
               SNIKKET_DOMAIN: "snikket.${HOME_DOMAIN}"
               SNIKKET_WEB_AVATAR_CACHE_TTL: "86400"

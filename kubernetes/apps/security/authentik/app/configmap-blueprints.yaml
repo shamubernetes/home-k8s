@@ -29,17 +29,18 @@ data:
         plex_token: !Env [PLEX_TOKEN, ""]
         allow_friends: true
 
-  # Forward Auth Providers - for protecting apps with ingress-nginx
-  forward-auth-provider.yaml: |
-    # Authentik Blueprint for Forward Auth Providers
+  # Forward Auth Providers + Outpost - for protecting apps with ingress-nginx
+  # Combined into single blueprint so !KeyOf references work
+  forward-auth.yaml: |
+    # Authentik Blueprint for Forward Auth Providers and Embedded Outpost
     version: 1
     metadata:
-      name: Forward Auth Providers
+      name: Forward Auth Setup
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
     # Policy: require Admins group membership
-    - model: authentik_policies.expression.expressionpolicy
+    - model: authentik_policies_expression.expressionpolicy
       id: admins-only-policy
       state: present
       identifiers:
@@ -58,6 +59,7 @@ data:
       attrs:
         name: Forward Auth Provider
         authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+        invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
         mode: forward_single
         external_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
         access_token_validity: hours=24
@@ -71,6 +73,7 @@ data:
       attrs:
         name: Forward Auth Admin Provider
         authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+        invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
         mode: forward_single
         external_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
         access_token_validity: hours=24
@@ -119,15 +122,7 @@ data:
         enabled: true
         timeout: 30
 
-  # Embedded Outpost for forward auth
-  outpost.yaml: |
-    # Authentik Blueprint for Embedded Outpost
-    version: 1
-    metadata:
-      name: Embedded Outpost
-      labels:
-        blueprints.goauthentik.io/instantiate: "true"
-    entries:
+    # Embedded Outpost - MUST be after providers so !KeyOf works
     - model: authentik_outposts.outpost
       id: embedded-outpost
       state: present
@@ -137,8 +132,8 @@ data:
         name: authentik Embedded Outpost
         type: proxy
         providers:
-        - !Find [authentik_providers_proxy.proxyprovider, [name, Forward Auth Provider]]
-        - !Find [authentik_providers_proxy.proxyprovider, [name, Forward Auth Admin Provider]]
+        - !KeyOf forward-auth-provider
+        - !KeyOf forward-auth-admin-provider
         config:
           authentik_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
           authentik_host_browser: ""

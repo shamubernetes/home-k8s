@@ -100,11 +100,6 @@ spec:
     postgresql:
       enabled: false
 
-    # Use embedded Redis
+    # Use external Redis (Dragonfly)
     redis:
-      enabled: true
-      master:
-        persistence:
-          enabled: false
-      replica:
-        replicaCount: 0
+      enabled: false

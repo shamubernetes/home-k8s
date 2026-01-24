@@ -1,0 +1,131 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+data:
+  # Plex OAuth Source - allows login via Plex
+  plex-source.yaml: |
+    # Authentik Blueprint for Plex OAuth Source
+    version: 1
+    metadata:
+      name: Plex OAuth Source
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+    - model: authentik_sources_plex.plexsource
+      id: plex-source
+      state: present
+      identifiers:
+        slug: plex
+      attrs:
+        name: Plex
+        slug: plex
+        enabled: true
+        authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+        enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+        user_matching_mode: email_deny
+        client_id: !Env [PLEX_CLIENT_ID, ""]
+        allow_friends: false
+        plex_token: ""
+
+  # Forward Auth Provider - for protecting apps with ingress-nginx
+  forward-auth-provider.yaml: |
+    # Authentik Blueprint for Forward Auth Provider
+    version: 1
+    metadata:
+      name: Forward Auth Provider
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+    # Create a provider for forward auth
+    - model: authentik_providers_proxy.proxyprovider
+      id: forward-auth-provider
+      state: present
+      identifiers:
+        name: Forward Auth Provider
+      attrs:
+        name: Forward Auth Provider
+        authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+        mode: forward_single
+        external_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
+        access_token_validity: hours=24
+
+    # Create the forward auth application
+    - model: authentik_core.application
+      id: forward-auth-app
+      state: present
+      identifiers:
+        slug: forward-auth
+      attrs:
+        name: Forward Auth
+        slug: forward-auth
+        provider: !KeyOf forward-auth-provider
+        policy_engine_mode: any
+        meta_launch_url: ""
+        open_in_new_tab: false
+
+  # Embedded Outpost for forward auth
+  outpost.yaml: |
+    # Authentik Blueprint for Embedded Outpost
+    version: 1
+    metadata:
+      name: Embedded Outpost
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+    - model: authentik_outposts.outpost
+      id: embedded-outpost
+      state: present
+      identifiers:
+        name: authentik Embedded Outpost
+      attrs:
+        name: authentik Embedded Outpost
+        type: proxy
+        providers:
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Forward Auth Provider]]
+        config:
+          authentik_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
+          authentik_host_browser: ""
+          authentik_host_insecure: false
+          log_level: info
+          object_naming_template: "ak-outpost-%(name)s"
+          docker_network: null
+          docker_map_ports: true
+          docker_labels: null
+          container_image: null
+          kubernetes_replicas: 1
+          kubernetes_namespace: security
+          kubernetes_ingress_annotations: {}
+          kubernetes_ingress_secret_name: ""
+          kubernetes_service_type: ClusterIP
+          kubernetes_disabled_components: []
+          kubernetes_json_patches: null
+          kubernetes_image_pull_secrets: []
+
+  # Admin group with full access
+  groups.yaml: |
+    # Authentik Blueprint for Groups
+    version: 1
+    metadata:
+      name: Default Groups
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+    - model: authentik_core.group
+      id: admins-group
+      state: present
+      identifiers:
+        name: Admins
+      attrs:
+        name: Admins
+        is_superuser: true
+
+    - model: authentik_core.group
+      id: users-group
+      state: present
+      identifiers:
+        name: Users
+      attrs:
+        name: Users
+        is_superuser: false

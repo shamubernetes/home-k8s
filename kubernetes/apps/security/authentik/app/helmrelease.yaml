@@ -39,6 +39,8 @@ spec:
       log_level: info
       error_reporting:
         enabled: false
+      redis:
+        host: dragonfly.database.svc.cluster.local
       # Disable email for now - can be configured later
       email:
         from: ""

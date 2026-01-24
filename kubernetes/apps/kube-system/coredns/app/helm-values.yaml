@@ -28,6 +28,12 @@ servers:
     configBlock: |-
       pods insecure
       fallthrough in-addr.arpa ip6.arpa
+  # Internal DNS entries for split-horizon DNS
+  # This allows internal services to resolve *.thezoo.house to the internal ingress
+  - name: hosts
+    configBlock: |-
+      10.100.47.250 auth.thezoo.house
+      fallthrough
   - name: forward
     parameters: . /etc/resolv.conf
   - name: cache

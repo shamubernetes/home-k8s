@@ -1,7 +1,0 @@
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: authentik-auth-headers
-data:
-  Host: "auth.thezoo.house"

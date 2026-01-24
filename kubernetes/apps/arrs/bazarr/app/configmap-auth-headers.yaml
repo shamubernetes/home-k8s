@@ -1,6 +1,4 @@
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
-# ConfigMap for nginx auth-proxy-set-headers annotation
-# This sets the Host header correctly for forward-auth requests
 apiVersion: v1
 kind: ConfigMap
 metadata:

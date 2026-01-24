@@ -26,8 +26,8 @@ data:
         enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
         user_matching_mode: email_deny
         client_id: !Env [PLEX_CLIENT_ID, ""]
-        allow_friends: false
-        plex_token: ""
+        plex_token: !Env [PLEX_TOKEN, ""]
+        allow_friends: true
 
   # Forward Auth Provider - for protecting apps with ingress-nginx
   forward-auth-provider.yaml: |

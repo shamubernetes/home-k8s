@@ -29,16 +29,27 @@ data:
         plex_token: !Env [PLEX_TOKEN, ""]
         allow_friends: true
 
-  # Forward Auth Provider - for protecting apps with ingress-nginx
+  # Forward Auth Providers - for protecting apps with ingress-nginx
   forward-auth-provider.yaml: |
-    # Authentik Blueprint for Forward Auth Provider
+    # Authentik Blueprint for Forward Auth Providers
     version: 1
     metadata:
-      name: Forward Auth Provider
+      name: Forward Auth Providers
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
-    # Create a provider for forward auth
+    # Policy: require Admins group membership
+    - model: authentik_policies.expression.expressionpolicy
+      id: admins-only-policy
+      state: present
+      identifiers:
+        name: Admins Only
+      attrs:
+        name: Admins Only
+        expression: |
+          return ak_is_group_member(request.user, name="Admins")
+
+    # Provider: forward auth for all authenticated users (Plex friends)
     - model: authentik_providers_proxy.proxyprovider
       id: forward-auth-provider
       state: present
@@ -51,7 +62,20 @@ data:
         external_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
         access_token_validity: hours=24
 
-    # Create the forward auth application
+    # Provider: forward auth for admins only
+    - model: authentik_providers_proxy.proxyprovider
+      id: forward-auth-admin-provider
+      state: present
+      identifiers:
+        name: Forward Auth Admin Provider
+      attrs:
+        name: Forward Auth Admin Provider
+        authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+        mode: forward_single
+        external_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
+        access_token_validity: hours=24
+
+    # Application: forward auth for all users
     - model: authentik_core.application
       id: forward-auth-app
       state: present
@@ -64,6 +88,36 @@ data:
         policy_engine_mode: any
         meta_launch_url: ""
         open_in_new_tab: false
+
+    # Application: forward auth for admins only
+    - model: authentik_core.application
+      id: forward-auth-admin-app
+      state: present
+      identifiers:
+        slug: forward-auth-admin
+      attrs:
+        name: Forward Auth (Admin)
+        slug: forward-auth-admin
+        provider: !KeyOf forward-auth-admin-provider
+        policy_engine_mode: all
+        meta_launch_url: ""
+        open_in_new_tab: false
+
+    # Bind the admins-only policy to the admin application
+    - model: authentik_policies.policybinding
+      id: admin-app-policy-binding
+      state: present
+      identifiers:
+        order: 0
+        target: !KeyOf forward-auth-admin-app
+        policy: !KeyOf admins-only-policy
+      attrs:
+        order: 0
+        target: !KeyOf forward-auth-admin-app
+        policy: !KeyOf admins-only-policy
+        negate: false
+        enabled: true
+        timeout: 30
 
   # Embedded Outpost for forward auth
   outpost.yaml: |
@@ -84,6 +138,7 @@ data:
         type: proxy
         providers:
         - !Find [authentik_providers_proxy.proxyprovider, [name, Forward Auth Provider]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Forward Auth Admin Provider]]
         config:
           authentik_host: !Format ["https://auth.%s", !Env [HOME_DOMAIN, localhost]]
           authentik_host_browser: ""

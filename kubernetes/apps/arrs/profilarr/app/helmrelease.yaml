@@ -35,7 +35,7 @@ spec:
           app:
             image:
               repository: santiagosayshey/profilarr
-              tag: v1.1.2@sha256:da7883be74c1b69ac1735ce4238b1a77e12117e94c64355704bf27bac0aa34de
+              tag: v1.1.4@sha256:8a514f8429cd33885166facc9eb6504fa9ded056c737609e5e8ef32ae0afb350
             env:
               TZ: ${TIMEZONE}
             resources:

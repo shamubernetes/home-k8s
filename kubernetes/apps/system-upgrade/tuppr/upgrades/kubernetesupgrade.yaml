@@ -22,4 +22,4 @@ spec:
     namespace: observability
     description: No active Plex streams
     expr: |-
-      status.OK == true
+      object.spec.OK == true

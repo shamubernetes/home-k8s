@@ -38,15 +38,20 @@ spec:
               tag: v1.1.4@sha256:8a514f8429cd33885166facc9eb6504fa9ded056c737609e5e8ef32ae0afb350
             env:
               TZ: ${TIMEZONE}
+              PUID: "568"
+              PGID: "568"
+              UMASK: "022"
             resources:
               requests:
                 cpu: 15m
                 memory: 180M
+            securityContext:
+              # profilarr entrypoint needs root to set up user/permissions
+              runAsNonRoot: false
+              runAsUser: 0
+              runAsGroup: 0
     defaultPodOptions:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 568
-        runAsGroup: 568
         fsGroup: 568
         fsGroupChangePolicy: OnRootMismatch
         supplementalGroups: [10000]

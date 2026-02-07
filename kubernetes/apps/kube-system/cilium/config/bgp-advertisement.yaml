@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumbgpadvertisement_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: bgp-advertisements
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+    # Advertise Pod CIDRs (equivalent to exportPodCIDR: true)
+    - advertisementType: "PodCIDR"
+    # Advertise LoadBalancer IPs for adguard-home services
+    - advertisementType: "Service"
+      service:
+        addresses:
+          - LoadBalancerIP
+      selector:
+        matchExpressions:
+          - key: "helm.toolkit.fluxcd.io/name"
+            operator: In
+            values: ["adguard-home"]

@@ -1,10 +1,11 @@
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumloadbalancerippool_v2alpha1.json
-apiVersion: cilium.io/v2alpha1
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumloadbalancerippool_v2.json
+# Updated from v2alpha1 to v2 per Cilium 1.19 upgrade notes
+apiVersion: cilium.io/v2
 kind: CiliumLoadBalancerIPPool
 metadata:
   name: l2-pool
 spec:
   allowFirstLastIPs: "Yes"
   blocks:
-  - start: "${IPAM_LB_RANGE_START}"
-    stop: "${IPAM_LB_RANGE_END}"
+    - start: "${IPAM_LB_RANGE_START}"
+      stop: "${IPAM_LB_RANGE_END}"

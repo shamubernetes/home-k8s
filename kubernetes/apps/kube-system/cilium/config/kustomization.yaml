@@ -2,7 +2,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ./l2announcementpolicy.yaml
-- ./loadbalancerippool.yaml
-- ./localredirectpolicy.yaml
-- ./peeringpolicy.yaml
+  - ./l2announcementpolicy.yaml
+  - ./loadbalancerippool.yaml
+  - ./localredirectpolicy.yaml
+  # BGPv2 resources (replacing deprecated peeringpolicy.yaml)
+  - ./bgp-cluster-config.yaml
+  - ./bgp-peer-config.yaml
+  - ./bgp-advertisement.yaml

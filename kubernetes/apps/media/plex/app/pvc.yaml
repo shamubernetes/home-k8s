@@ -10,3 +10,16 @@ spec:
     requests:
       storage: 75Gi
   storageClassName: ceph-block
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+# Separate PVC for video preview thumbnails (Media/) to avoid backing up regeneratable data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-media
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 150Gi
+  storageClassName: ceph-block

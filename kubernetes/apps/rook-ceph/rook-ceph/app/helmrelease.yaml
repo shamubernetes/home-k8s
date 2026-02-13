@@ -27,10 +27,10 @@ spec:
     namespace: volsync-system
   values:
     image:
-      tag: v1.16.0-4.g6da8ef89d # Until 1.16.1 is released
+      tag: v1.17.4 # Upgrading: 1.16 -> 1.17 -> 1.18 -> 1.19
     csi:
       snapshotter:
-        tag: v8.2.0 # Until 1.16.1 is released
+        tag: v8.2.1 # Upgrading: 1.16 -> 1.17 -> 1.18 -> 1.19
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true
       serviceMonitor:

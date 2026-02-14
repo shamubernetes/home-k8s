@@ -172,6 +172,11 @@ spec:
         existingClaim: plex-cache
         globalMounts:
         - path: /config/Library/Application Support/Plex Media Server/Cache
+      # Separate PVC for video preview thumbnails (Media/) to avoid backing up regeneratable data
+      previews:
+        existingClaim: plex-media
+        globalMounts:
+        - path: /config/Library/Application Support/Plex Media Server/Media
       logs:
         type: emptyDir
         globalMounts:

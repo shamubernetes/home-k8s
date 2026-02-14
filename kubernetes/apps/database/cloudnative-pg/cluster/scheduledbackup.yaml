@@ -4,7 +4,7 @@ kind: ScheduledBackup
 metadata:
   name: postgres-snapshot
 spec:
-  schedule: "0 2 * * *" # Daily at 2 AM
+  schedule: "0 0 2 * * *" # Daily at 2 AM (6-field cron: sec min hour day month dow)
   immediate: true
   backupOwnerReference: self
   cluster:
@@ -17,7 +17,7 @@ kind: ScheduledBackup
 metadata:
   name: postgres-r2
 spec:
-  schedule: "0 */12 * * *" # Every 12 hours
+  schedule: "0 0 */12 * * *" # Every 12 hours (6-field cron: sec min hour day month dow)
   immediate: true
   backupOwnerReference: self
   cluster:

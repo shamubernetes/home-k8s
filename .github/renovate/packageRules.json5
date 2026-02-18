@@ -180,6 +180,7 @@
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
       "ignoreTests": true,
     },
     {
@@ -188,6 +189,7 @@
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
     },
     {
       "description": "Auto-merge minor updates with 6 hours stability",
@@ -197,6 +199,7 @@
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
     },
     {
       "description": "Auto-merge minor Docker updates (no minimumReleaseAge due to missing registry timestamps)",
@@ -205,12 +208,14 @@
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
     },
     {
       "matchDatasources": ["custom.grafana-dashboards"],
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
       "matchUpdateTypes": ["major"],
       "ignoreTests": true
     },
@@ -220,6 +225,7 @@
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
       "matchUpdateTypes": ["minor", "digest"],
       "matchPackagePatterns": ["kube-prometheus-stack"],
     },
@@ -229,6 +235,7 @@
       "automerge": true,
       "automergeType": "pr",
       "assigneesFromCodeOwners": false,
+      "reviewersFromCodeOwners": false,
       "matchUpdateTypes": ["minor", "patch"],
     },
     // Schedules for critical infrastructure

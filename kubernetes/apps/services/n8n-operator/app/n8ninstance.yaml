@@ -80,5 +80,7 @@ spec:
       value: n8n.${HOME_DOMAIN}
     - name: N8N_PROTOCOL
       value: https
+    - name: N8N_TRUST_PROXY
+      value: "true"
     - name: N8N_CUSTOM_EXTENSIONS
       value: /home/node/.n8n/node_modules/@n8layer/n8n-nodes-1password

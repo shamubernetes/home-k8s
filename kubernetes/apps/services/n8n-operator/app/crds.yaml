@@ -1205,10 +1205,10 @@ spec:
                 description: Database configures the database connection.
                 properties:
                   logging:
-                    default: "false"
+                    default: none
                     description: Logging enables database query logging.
                     enum:
-                    - false
+                    - none
                     - error
                     - warn
                     - info

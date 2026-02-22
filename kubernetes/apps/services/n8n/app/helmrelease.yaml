@@ -57,7 +57,7 @@ spec:
               N8N_METRICS_INCLUDE_WORKFLOW_ID_LABEL: "true"
               # Database
               DB_TYPE: postgresdb
-              DB_POSTGRESDB_HOST: postgres17-pooler.database.svc.cluster.local
+              DB_POSTGRESDB_HOST: postgres17-pooler-session.database.svc.cluster.local
               DB_POSTGRESDB_PORT: "5432"
               DB_POSTGRESDB_DATABASE: n8n
             envFrom: *envFrom

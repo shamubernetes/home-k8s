@@ -23,6 +23,7 @@ spec:
       server_connect_timeout: "3"
       server_login_retry: "1"
       query_wait_timeout: "30"
+      ignore_startup_parameters: statement_timeout
   template:
     metadata:
       labels:

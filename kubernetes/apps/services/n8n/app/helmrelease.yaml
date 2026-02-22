@@ -86,6 +86,29 @@ spec:
                 memory: 256Mi
               limits:
                 memory: 1Gi
+          credential-seeder:
+            image:
+              repository: docker.io/busybox
+              tag: latest
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              echo "Starting credential seeder..."
+              /scripts/seed-credentials.sh
+              echo "Seeder complete, sleeping..."
+              sleep infinity
+            env:
+              OP_VAULT_KUBERNETES: "pc3wob7gb4f4vmsubawergeira"
+              OP_ITEM_N8N: "suaivhmauakqxfnuyem4u6fwzi"
+            envFrom:
+            - secretRef:
+                name: n8n-seeder-secrets
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 64Mi
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true
@@ -122,3 +145,11 @@ spec:
         type: emptyDir
         globalMounts:
         - path: /home/node/.cache
+      seeder-script:
+        type: configMap
+        name: n8n-credential-seeder
+        defaultMode: 0755
+        advancedMounts:
+          n8n:
+            credential-seeder:
+            - path: /scripts

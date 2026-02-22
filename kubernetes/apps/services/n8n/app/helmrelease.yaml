@@ -43,9 +43,10 @@ spec:
             command: ["/bin/sh", "-c"]
             args:
             - |
-              cd /home/node/.n8n
+              mkdir -p /home/node/.n8n/custom
+              cd /home/node/.n8n/custom
               if [ ! -d "node_modules/@n8layer/n8n-nodes-1password" ]; then
-                echo "Installing 1Password community node..."
+                echo "Installing 1Password community node to custom directory..."
                 npm install @n8layer/n8n-nodes-1password
               else
                 echo "1Password community node already installed"
@@ -58,7 +59,6 @@ spec:
             env:
               GENERIC_TIMEZONE: "${TIMEZONE}"
               TZ: "${TIMEZONE}"
-              N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/node_modules
               N8N_HOST: n8n.${HOME_DOMAIN}
               N8N_PORT: &port 5678
               N8N_PROTOCOL: https

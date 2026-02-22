@@ -43,6 +43,8 @@ spec:
             env:
               GENERIC_TIMEZONE: "${TIMEZONE}"
               TZ: "${TIMEZONE}"
+              # Load community nodes from PVC (installed previously)
+              N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/node_modules/@n8layer/n8n-nodes-1password
               N8N_HOST: n8n.${HOME_DOMAIN}
               N8N_PORT: &port 5678
               N8N_PROTOCOL: https

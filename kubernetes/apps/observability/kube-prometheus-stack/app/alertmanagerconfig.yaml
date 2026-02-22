@@ -29,6 +29,12 @@ spec:
       - name: severity
         value: info
         matchType: "="
+    - receiver: openclaw
+      matchers:
+      - name: severity
+        value: warning|critical
+        matchType: "=~"
+      continue: true
   inhibitRules:
   - equal: ["alertname", "namespace"]
     sourceMatch:
@@ -50,6 +56,17 @@ spec:
       matchType: "="
   receivers:
   - name: "null"
+  - name: openclaw
+    webhookConfigs:
+    - urlSecret:
+        name: alertmanager-secret
+        key: OPENCLAW_WEBHOOK_URL
+      httpConfig:
+        authorization:
+          credentials:
+            name: alertmanager-secret
+            key: OPENCLAW_WEBHOOK_TOKEN
+      sendResolved: true
   - name: heartbeat
     webhookConfigs:
     - urlSecret:

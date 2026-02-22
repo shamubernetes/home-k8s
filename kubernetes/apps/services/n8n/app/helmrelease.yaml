@@ -63,6 +63,8 @@ spec:
             env:
               GENERIC_TIMEZONE: "${TIMEZONE}"
               TZ: "${TIMEZONE}"
+              # Point to the custom nodes directory for loading community packages
+              N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom/node_modules/@n8layer/n8n-nodes-1password
               N8N_HOST: n8n.${HOME_DOMAIN}
               N8N_PORT: &port 5678
               N8N_PROTOCOL: https

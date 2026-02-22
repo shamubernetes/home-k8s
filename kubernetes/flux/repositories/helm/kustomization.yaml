@@ -28,5 +28,6 @@ resources:
 - ./postfinance.yaml
 - ./prometheus-community.yaml
 - ./rook-ceph.yaml
+- ./shamubernetes-charts.yaml
 - ./spegel.yaml
 - ./stakater.yaml

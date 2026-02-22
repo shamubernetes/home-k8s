@@ -5,3 +5,4 @@ namespace: services
 resources:
   - externalsecrets.yaml
   - n8ninstance.yaml
+  - credentials/postgres.yaml

@@ -45,9 +45,13 @@ spec:
             - |
               mkdir -p /home/node/.n8n/custom
               cd /home/node/.n8n/custom
+              # Initialize package.json to prevent npm from hoisting to parent
+              if [ ! -f "package.json" ]; then
+                echo '{"name":"n8n-custom-nodes","private":true}' > package.json
+              fi
               if [ ! -d "node_modules/@n8layer/n8n-nodes-1password" ]; then
                 echo "Installing 1Password community node to custom directory..."
-                npm install @n8layer/n8n-nodes-1password
+                npm install @n8layer/n8n-nodes-1password --save
               else
                 echo "1Password community node already installed"
               fi

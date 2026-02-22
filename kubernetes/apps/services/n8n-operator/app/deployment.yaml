@@ -25,7 +25,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/shamubernetes/n8n-operator:0.6.7@sha256:06563f3ababc562514067cae89f1b8d8f9ef6a151e40cba43fe163359ac206d7
+          image: ghcr.io/shamubernetes/n8n-operator:0.6.8@sha256:c5e3a3099781af3553eddb758cf934828e9020319b104ccbea7c300db03f688d
           args:
             - --leader-elect
             - --health-probe-bind-address=:8081

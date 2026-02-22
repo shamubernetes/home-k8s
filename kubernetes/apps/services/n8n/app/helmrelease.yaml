@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app n8n
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      n8n:
+        strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          init-db:
+            image:
+              repository: ghcr.io/home-operations/postgres-init
+              tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+            envFrom: &envFrom
+            - secretRef:
+                name: n8n-secret
+        containers:
+          app:
+            image:
+              repository: docker.io/n8nio/n8n
+              tag: 2.8.3@sha256:53004142b0e93de1e9e31943e601ed9bd4b24ca82a307864ccadf1820b627e5e
+            env:
+              GENERIC_TIMEZONE: "${TIMEZONE}"
+              TZ: "${TIMEZONE}"
+              N8N_HOST: n8n.${HOME_DOMAIN}
+              N8N_PORT: &port 5678
+              N8N_PROTOCOL: https
+              WEBHOOK_URL: https://n8n.${HOME_DOMAIN}/
+              N8N_EMAIL_MODE: smtp
+              N8N_SMTP_HOST: smtp-relay.network.svc.cluster.local
+              N8N_SMTP_PORT: "25"
+              N8N_SMTP_SSL: "false"
+              N8N_METRICS: "true"
+              N8N_METRICS_INCLUDE_DEFAULT_METRICS: "true"
+              N8N_METRICS_INCLUDE_API_ENDPOINTS: "true"
+              N8N_METRICS_INCLUDE_WORKFLOW_ID_LABEL: "true"
+              # Database
+              DB_TYPE: postgresdb
+              DB_POSTGRESDB_HOST: postgres17-pooler.database.svc.cluster.local
+              DB_POSTGRESDB_PORT: "5432"
+              DB_POSTGRESDB_DATABASE: n8n
+            envFrom: *envFrom
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: *port
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: n8n
+        ports:
+          http:
+            primary: true
+            port: *port
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: n8n.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    persistence:
+      data:
+        existingClaim: n8n
+        globalMounts:
+        - path: /home/node/.n8n
+      cache:
+        type: emptyDir
+        globalMounts:
+        - path: /home/node/.cache

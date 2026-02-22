@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: plex-media-cleanup
+  namespace: media
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+      containers:
+      - name: cleanup
+        image: alpine:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Old Media directory size:"
+          du -sh /config/Library/Application\ Support/Plex\ Media\ Server/Media || echo "Directory not found or empty"
+          echo ""
+          echo "Removing old Media directory..."
+          rm -rf /config/Library/Application\ Support/Plex\ Media\ Server/Media
+          echo "Cleanup complete!"
+          echo ""
+          echo "Remaining config PVC usage:"
+          du -sh /config/Library/Application\ Support/Plex\ Media\ Server
+        volumeMounts:
+        - name: config
+          mountPath: /config/Library/Application Support/Plex Media Server
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: plex

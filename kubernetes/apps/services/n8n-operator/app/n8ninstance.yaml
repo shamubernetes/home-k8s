@@ -1,0 +1,84 @@
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nInstance
+metadata:
+  name: n8n
+  namespace: services
+spec:
+  replicas: 1
+  image: docker.io/n8nio/n8n:2.9.1
+  imagePullPolicy: IfNotPresent
+  timezone: "America/New_York"
+
+  database:
+    type: postgresdb
+    secretRef:
+      name: n8n-db-secret
+    ssl: false
+    logging: none
+
+  webhook:
+    url: "https://n8n.${HOME_DOMAIN}/"
+
+  smtp:
+    enabled: true
+    secretRef:
+      name: n8n-smtp-secret
+
+  executions:
+    mode: regular
+    timeout: -1
+    saveDataOnError: all
+    saveDataOnSuccess: all
+    pruneData: true
+    pruneDataMaxAge: "336h"
+
+  logging:
+    level: info
+    output: console
+
+  encryption:
+    keySecretRef:
+      name: n8n-encryption-secret
+      key: N8N_ENCRYPTION_KEY
+
+  service:
+    type: ClusterIP
+    port: 5678
+
+  ingress:
+    enabled: true
+    className: internal
+    host: n8n.${HOME_DOMAIN}
+    path: /
+    pathType: Prefix
+    annotations:
+      external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+
+  persistence:
+    enabled: true
+    existingClaim: n8n
+    size: 5Gi
+
+  metrics:
+    enabled: true
+    includeWorkflowIdLabel: true
+    includeApiEndpoints: true
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  extraEnv:
+    - name: GENERIC_TIMEZONE
+      value: "America/New_York"
+    - name: N8N_HOST
+      value: n8n.${HOME_DOMAIN}
+    - name: N8N_PROTOCOL
+      value: https
+    - name: N8N_CUSTOM_EXTENSIONS
+      value: /home/node/.n8n/node_modules/@n8layer/n8n-nodes-1password

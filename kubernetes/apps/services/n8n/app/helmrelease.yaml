@@ -99,7 +99,9 @@ spec:
               sleep infinity
             env:
               OP_VAULT_KUBERNETES: "pc3wob7gb4f4vmsubawergeira"
+              OP_VAULT_MAUDE: "3nk7dheikxygtpdqhyn2opawmy"
               OP_ITEM_N8N: "suaivhmauakqxfnuyem4u6fwzi"
+              OP_ITEM_OPENCLAW_WEBHOOK: "323cfx7cvjxgh7kchngnuedjzm"
             envFrom:
             - secretRef:
                 name: n8n-seeder-secrets

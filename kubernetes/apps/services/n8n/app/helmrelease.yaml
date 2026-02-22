@@ -35,6 +35,21 @@ spec:
             envFrom: &envFrom
             - secretRef:
                 name: n8n-secret
+          install-community-nodes:
+            dependsOn: init-db
+            image:
+              repository: docker.io/n8nio/n8n
+              tag: 2.9.1@sha256:7fc6bfb986401011cb9e7dc08389f8b8f51330a7bd0a0b7acef832b47839b9f3
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              cd /home/node/.n8n
+              if [ ! -d "node_modules/@n8layer/n8n-nodes-1password" ]; then
+                echo "Installing 1Password community node..."
+                npm install @n8layer/n8n-nodes-1password
+              else
+                echo "1Password community node already installed"
+              fi
         containers:
           app:
             image:
@@ -43,6 +58,7 @@ spec:
             env:
               GENERIC_TIMEZONE: "${TIMEZONE}"
               TZ: "${TIMEZONE}"
+              N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/node_modules
               N8N_HOST: n8n.${HOME_DOMAIN}
               N8N_PORT: &port 5678
               N8N_PROTOCOL: https

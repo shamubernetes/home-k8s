@@ -17,6 +17,11 @@ spec:
         - secretRef:
             name: n8n-db-secret
 
+  license:
+    activationKeySecretRef:
+      name: n8n-license-secret
+      key: activation-key
+
   database:
     type: postgresdb
     secretRef:

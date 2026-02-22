@@ -5,4 +5,5 @@ resources:
 - ./namespace.yaml
 - ./atuin/ks.yaml
 - ./n8n/ks.yaml
+- ./n8n-operator/ks.yaml
 - ./static-webserver/ks.yaml

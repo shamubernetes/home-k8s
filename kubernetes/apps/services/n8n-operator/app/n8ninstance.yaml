@@ -42,6 +42,11 @@ spec:
       name: n8n-encryption-secret
       key: N8N_ENCRYPTION_KEY
 
+  # One-time owner bootstrap (skips setup screen)
+  ownerSetup:
+    secretRef:
+      name: n8n-owner-secret
+
   service:
     type: ClusterIP
     port: 5678

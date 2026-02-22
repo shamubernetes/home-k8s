@@ -6,3 +6,5 @@ resources:
   - crds.yaml
   - rbac.yaml
   - deployment.yaml
+  - externalsecrets.yaml
+  - n8ninstance.yaml

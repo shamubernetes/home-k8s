@@ -7434,3 +7434,478 @@ spec:
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.replicas
       status: {}
+---
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: n8ncredentials.n8n.n8n.io
+spec:
+  group: n8n.n8n.io
+  names:
+    kind: N8nCredential
+    listKind: N8nCredentialList
+    plural: n8ncredentials
+    singular: n8ncredential
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.credentialName
+      name: Credential
+      type: string
+    - jsonPath: .spec.credentialType
+      name: Type
+      type: string
+    - jsonPath: .status.credentialId
+      name: ID
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: N8nCredential is the Schema for the n8ncredentials API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: N8nCredentialSpec defines the desired state of N8nCredential.
+            properties:
+              credentialName:
+                description: CredentialName is the name of the credential in n8n
+                type: string
+              credentialType:
+                description: CredentialType is the n8n credential type (e.g., postgres,
+                  httpHeaderAuth)
+                type: string
+              data:
+                additionalProperties:
+                  type: string
+                description: Data contains static credential data (use secretRef for
+                  sensitive values)
+                type: object
+              deletionPolicy:
+                default: Retain
+                description: |-
+                  DeletionPolicy controls behavior when the CR is deleted.
+                  Retain keeps the credential in n8n, Delete removes it from n8n.
+                enum:
+                - Retain
+                - Delete
+                type: string
+              fieldMappings:
+                additionalProperties:
+                  type: string
+                description: |-
+                  FieldMappings maps n8n credential fields to Secret keys.
+                  Key: n8n credential field name, Value: Secret key name
+                  Example: {"password": "db-password", "host": "db-host"}
+                type: object
+              n8nInstance:
+                description: N8nInstance is the reference to the n8n instance
+                properties:
+                  apiKeySecretRef:
+                    description: APIKeySecretRef references the secret containing
+                      the n8n API key
+                    properties:
+                      key:
+                        description: Key in the Secret
+                        type: string
+                      name:
+                        description: Name of the Secret
+                        type: string
+                      namespace:
+                        description: Namespace of the Secret (defaults to the resource
+                          namespace)
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  serviceRef:
+                    description: ServiceRef references a Kubernetes Service
+                    properties:
+                      name:
+                        description: Name of the Service
+                        type: string
+                      namespace:
+                        description: Namespace of the Service (defaults to the resource
+                          namespace)
+                        type: string
+                      port:
+                        description: Port of the Service (defaults to 5678)
+                        format: int32
+                        type: integer
+                    required:
+                    - name
+                    type: object
+                  url:
+                    description: URL is the direct URL to the n8n API (e.g., http://n8n.services.svc:5678)
+                    type: string
+                required:
+                - apiKeySecretRef
+                type: object
+              secretRef:
+                description: |-
+                  SecretRef references a Kubernetes Secret containing credential data.
+                  The Secret can be managed by External Secrets Operator for any backend
+                  (1Password, Vault, AWS Secrets Manager, etc.)
+                properties:
+                  name:
+                    description: Name of the Secret
+                    type: string
+                  namespace:
+                    description: Namespace of the Secret (defaults to the resource
+                      namespace)
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - credentialName
+            - credentialType
+            - n8nInstance
+            type: object
+          status:
+            description: N8nCredentialStatus defines the observed state of N8nCredential.
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the credential's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              credentialHash:
+                description: CredentialHash is a hash of the last applied credential
+                  payload.
+                type: string
+              credentialId:
+                description: CredentialID is the ID of the credential in n8n
+                type: string
+              lastSyncTime:
+                description: LastSyncTime is the last time the credential was synced
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: n8nworkflows.n8n.n8n.io
+spec:
+  group: n8n.n8n.io
+  names:
+    kind: N8nWorkflow
+    listKind: N8nWorkflowList
+    plural: n8nworkflows
+    singular: n8nworkflow
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.workflowName
+      name: Workflow
+      type: string
+    - jsonPath: .status.active
+      name: Active
+      type: boolean
+    - jsonPath: .status.workflowId
+      name: ID
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: N8nWorkflow is the Schema for the n8nworkflows API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: N8nWorkflowSpec defines the desired state of N8nWorkflow.
+            properties:
+              active:
+                default: false
+                description: Active determines if the workflow should be active in
+                  n8n
+                type: boolean
+              credentialMappings:
+                additionalProperties:
+                  type: string
+                description: |-
+                  CredentialMappings maps credential references in the workflow to N8nCredential resources
+                  Key is the credential name in the workflow, value is the N8nCredential resource name
+                type: object
+              deletionPolicy:
+                default: Retain
+                description: |-
+                  DeletionPolicy controls behavior when the CR is deleted.
+                  Retain keeps the workflow in n8n, Delete removes it from n8n.
+                enum:
+                - Retain
+                - Delete
+                type: string
+              n8nInstance:
+                description: N8nInstance is the reference to the n8n instance
+                properties:
+                  apiKeySecretRef:
+                    description: APIKeySecretRef references the secret containing
+                      the n8n API key
+                    properties:
+                      key:
+                        description: Key in the Secret
+                        type: string
+                      name:
+                        description: Name of the Secret
+                        type: string
+                      namespace:
+                        description: Namespace of the Secret (defaults to the resource
+                          namespace)
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  serviceRef:
+                    description: ServiceRef references a Kubernetes Service
+                    properties:
+                      name:
+                        description: Name of the Service
+                        type: string
+                      namespace:
+                        description: Namespace of the Service (defaults to the resource
+                          namespace)
+                        type: string
+                      port:
+                        description: Port of the Service (defaults to 5678)
+                        format: int32
+                        type: integer
+                    required:
+                    - name
+                    type: object
+                  url:
+                    description: URL is the direct URL to the n8n API (e.g., http://n8n.services.svc:5678)
+                    type: string
+                required:
+                - apiKeySecretRef
+                type: object
+              sourceRef:
+                description: SourceRef references a ConfigMap containing the workflow
+                  JSON
+                properties:
+                  key:
+                    description: Key in the ConfigMap or Secret containing the workflow
+                      JSON
+                    type: string
+                  kind:
+                    default: ConfigMap
+                    description: Kind is the type of source (ConfigMap or Secret)
+                    enum:
+                    - ConfigMap
+                    - Secret
+                    type: string
+                  name:
+                    description: Name of the ConfigMap or Secret
+                    type: string
+                  namespace:
+                    description: Namespace of the source (defaults to the resource
+                      namespace)
+                    type: string
+                required:
+                - key
+                - name
+                type: object
+              workflow:
+                description: Workflow contains the inline workflow JSON
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              workflowName:
+                description: WorkflowName is the name of the workflow in n8n
+                type: string
+            required:
+            - n8nInstance
+            - workflowName
+            type: object
+          status:
+            description: N8nWorkflowStatus defines the observed state of N8nWorkflow.
+            properties:
+              active:
+                description: Active indicates if the workflow is currently active
+                  in n8n
+                type: boolean
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the workflow's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastSyncTime:
+                description: LastSyncTime is the last time the workflow was synced
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                format: int64
+                type: integer
+              workflowHash:
+                description: WorkflowHash is the hash of the last applied workflow
+                  content
+                type: string
+              workflowId:
+                description: WorkflowID is the ID of the workflow in n8n
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

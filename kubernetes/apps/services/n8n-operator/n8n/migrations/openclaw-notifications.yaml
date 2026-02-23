@@ -1,0 +1,70 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-migration-openclaw-notifications
+  namespace: services
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS openclaw_notifications (
+      id SERIAL PRIMARY KEY,
+      version VARCHAR(50) NOT NULL UNIQUE,
+      notified_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_openclaw_notifications_version ON openclaw_notifications(version);
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: n8n-migrate-openclaw-notif
+  namespace: services
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: ghcr.io/home-operations/postgres-init:17.5.0
+          env:
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: host
+            - name: PGPORT
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: port
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: user
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: password
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: database
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Running n8n OpenClaw notifications migration..."
+              psql -f /migrations/init.sql
+              echo "Migration complete."
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+      volumes:
+        - name: migrations
+          configMap:
+            name: n8n-migration-openclaw-notifications

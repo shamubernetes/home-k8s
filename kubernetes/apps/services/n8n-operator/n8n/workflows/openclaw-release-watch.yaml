@@ -44,7 +44,7 @@ data:
           },
           "id": "get-token",
           "name": "Get Webhook Token",
-          "type": "CUSTOM.onePassword",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
           "typeVersion": 1,
           "position": [440, 0],
           "credentials": {

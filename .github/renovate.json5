@@ -5,6 +5,9 @@
   pruneStaleBranches: true,
   rebaseWhen: "behind-base-branch",
   platformAutomerge: true,
+  // Disable automatic reviewer assignment globally - only add for non-automerge PRs via packageRules
+  reviewersFromCodeOwners: false,
+  assigneesFromCodeOwners: false,
   extends: [
     "config:best-practices",
     "github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5",

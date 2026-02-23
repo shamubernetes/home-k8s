@@ -238,6 +238,13 @@
       "reviewersFromCodeOwners": false,
       "matchUpdateTypes": ["minor", "patch"],
     },
+    // Request review for non-automerge updates (major versions)
+    {
+      "description": "Request review for major updates (not auto-merged)",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "reviewers": ["kiliantyler"],
+    },
     // Schedules for critical infrastructure
     {
       "description": "Talos and Kubernetes upgrades only on 2nd Saturday of month (2-6am)",

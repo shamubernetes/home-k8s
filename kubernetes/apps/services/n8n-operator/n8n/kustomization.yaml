@@ -6,3 +6,4 @@ resources:
   - externalsecrets.yaml
   - n8ninstance.yaml
   - credentials/postgres.yaml
+  - plugins/onepassword.yaml

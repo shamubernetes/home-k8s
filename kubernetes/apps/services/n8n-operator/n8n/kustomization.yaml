@@ -6,5 +6,6 @@ resources:
   - externalsecrets.yaml
   - n8ninstance.yaml
   - credentials/postgres.yaml
+  - credentials/onepassword.yaml
   - plugins/onepassword.yaml
   - workflows/openclaw-release-watch.yaml

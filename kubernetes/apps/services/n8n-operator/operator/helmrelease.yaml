@@ -27,7 +27,7 @@ spec:
     manager:
       image:
         repository: ghcr.io/shamubernetes/n8n-operator
-        tag: "0.8.0"
+        tag: "0.9.0@sha256:5e4a2608e916a5a4ca8e6e2d75f81712ea62482625956b7f6a034a988e753045"
       resources:
         requests:
           cpu: 10m

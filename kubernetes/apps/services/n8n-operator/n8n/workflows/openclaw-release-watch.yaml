@@ -197,3 +197,4 @@ spec:
     key: workflow.json
   credentialMappings:
     "Postgres account": postgres
+    "1Password Connect": onepassword

@@ -64,8 +64,8 @@ data:
           "parameters": {
             "assignments": {
               "assignments": [
-                {"id": "simplefinUrl", "name": "simplefinUrl", "value": "={{ $('Get SimpleFIN Creds').item.json.fields.find(f => f.label === 'credential').value }}", "type": "string"},
-                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $('Get Webhook Token').item.json.fields.find(f => f.label === 'token').value }}", "type": "string"}
+                {"id": "simplefinUrl", "name": "simplefinUrl", "value": "={{ $('Get SimpleFIN Creds').first().json.fields.find(f => f.label === 'credential').value }}", "type": "string"},
+                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $json.fields.find(f => f.label === 'token').value }}", "type": "string"}
               ]
             },
             "options": {}
@@ -120,8 +120,8 @@ data:
         }
       ],
       "connections": {
-        "Daily 8 AM": {"main": [[{"node": "Get SimpleFIN Creds", "type": "main", "index": 0}, {"node": "Get Webhook Token", "type": "main", "index": 0}]]},
-        "Get SimpleFIN Creds": {"main": [[{"node": "Extract Credentials", "type": "main", "index": 0}]]},
+        "Daily 8 AM": {"main": [[{"node": "Get SimpleFIN Creds", "type": "main", "index": 0}]]},
+        "Get SimpleFIN Creds": {"main": [[{"node": "Get Webhook Token", "type": "main", "index": 0}]]},
         "Get Webhook Token": {"main": [[{"node": "Extract Credentials", "type": "main", "index": 0}]]},
         "Extract Credentials": {"main": [[{"node": "Fetch SimpleFIN", "type": "main", "index": 0}]]},
         "Fetch SimpleFIN": {"main": [[{"node": "Process Data", "type": "main", "index": 0}]]},

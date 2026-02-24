@@ -110,8 +110,15 @@ data:
               ]
             },
             "sendBody": true,
-            "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({ summary: $json.summary, transactions: $json.transactions, alerts: $json.alerts }) }}",
+            "specifyBody": "keypair",
+            "bodyParameters": {
+              "parameters": [
+                {"name": "summary", "value": "={{ $json.summary }}"},
+                {"name": "transactions", "value": "={{ $json.transactions }}"},
+                {"name": "alerts", "value": "={{ $json.alerts }}"}
+              ]
+            },
+            "contentType": "json",
             "options": {}
           },
           "id": "webhook-openclaw",

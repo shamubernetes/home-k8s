@@ -11,7 +11,7 @@ data:
         {
           "parameters": {
             "rule": {
-              "interval": [{"field": "hours", "hoursInterval": 24, "triggerAtHour": 8}]
+              "interval": [{"field": "cronExpression", "expression": "0 8 * * *"}]
             }
           },
           "id": "schedule-trigger",

@@ -113,9 +113,7 @@ data:
             "specifyBody": "keypair",
             "bodyParameters": {
               "parameters": [
-                {"name": "summary", "value": "={{ $json.summary }}"},
-                {"name": "transactions", "value": "={{ $json.transactions }}"},
-                {"name": "alerts", "value": "={{ $json.alerts }}"}
+                {"name": "message", "value": "=Daily Finance Check:\\n\\n{{ $json.summary }}\\n\\n---\\nTransactions:\\n{{ $json.transactions }}\\n\\nAlerts:\\n{{ $json.alerts }}\\n\\nReview this. If notable spending or alerts, message Kilian. Otherwise NO_REPLY."}
               ]
             },
             "contentType": "json",

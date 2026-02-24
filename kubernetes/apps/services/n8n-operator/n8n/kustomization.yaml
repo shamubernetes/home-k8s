@@ -10,3 +10,4 @@ resources:
   - plugins/onepassword.yaml
   - migrations/openclaw-notifications.yaml
   - workflows/openclaw-release-watch.yaml
+  - workflows/finance-daily-check.yaml

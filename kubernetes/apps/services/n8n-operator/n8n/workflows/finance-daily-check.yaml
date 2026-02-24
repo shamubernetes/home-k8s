@@ -1,0 +1,157 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-finance-daily-check
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [{"field": "hours", "hoursInterval": 24, "triggerAtHour": 8}]
+            }
+          },
+          "id": "schedule-trigger",
+          "name": "Daily 8 AM",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "typeVersion": 1.2,
+          "position": [0, 0]
+        },
+        {
+          "parameters": {
+            "resource": "item",
+            "operation": "getItemDetails",
+            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
+            "itemUUID": "3wkp326j4i25n7b7h7oaw622wa",
+            "requestOptions": {}
+          },
+          "id": "get-simplefin",
+          "name": "Get SimpleFIN Creds",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [220, 0],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "resource": "item",
+            "operation": "getItemDetails",
+            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
+            "itemUUID": "323cfx7cvjxgh7kchngnuedjzm",
+            "requestOptions": {}
+          },
+          "id": "get-webhook-token",
+          "name": "Get Webhook Token",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [220, 200],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "assignments": {
+              "assignments": [
+                {"id": "simplefinUrl", "name": "simplefinUrl", "value": "={{ $('Get SimpleFIN Creds').item.json.fields.find(f => f.label === 'credential').value }}", "type": "string"},
+                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $('Get Webhook Token').item.json.fields.find(f => f.label === 'token').value }}", "type": "string"}
+              ]
+            },
+            "options": {}
+          },
+          "id": "extract-creds",
+          "name": "Extract Credentials",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 3.4,
+          "position": [440, 100]
+        },
+        {
+          "parameters": {
+            "url": "={{ $json.simplefinUrl }}/accounts?start-date={{ Math.floor((Date.now() - 2*24*60*60*1000) / 1000) }}",
+            "options": {
+              "response": {"response": {"responseFormat": "json"}}
+            }
+          },
+          "id": "fetch-simplefin",
+          "name": "Fetch SimpleFIN",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [660, 100]
+        },
+        {
+          "parameters": {
+            "jsCode": "// Process SimpleFIN data\nconst data = $input.first().json;\nconst yesterday = new Date();\nyesterday.setDate(yesterday.getDate() - 1);\nconst yesterdayStr = yesterday.toISOString().split('T')[0];\n\nlet totalSpent = 0;\nlet alerts = [];\nlet transactions = [];\n\nconst ALERT_THRESHOLD = 100;\nconst DINING_KEYWORDS = ['DOORDASH', 'UBEREATS', 'GRUBHUB', 'RESTAURANT', 'PIZZA', 'CHIPOTLE'];\n\nfor (const account of data.accounts || []) {\n  for (const txn of account.transactions || []) {\n    const txnDate = new Date(txn.posted * 1000).toISOString().split('T')[0];\n    if (txnDate !== yesterdayStr) continue;\n    \n    const amount = parseFloat(txn.amount);\n    if (amount >= 0) continue; // Skip income\n    \n    const absAmount = Math.abs(amount);\n    totalSpent += absAmount;\n    \n    const desc = (txn.description || '').toUpperCase();\n    transactions.push(`$${absAmount.toFixed(2)} - ${txn.description.substring(0, 40)}`);\n    \n    if (absAmount >= ALERT_THRESHOLD) {\n      alerts.push(`💸 BIG: $${absAmount.toFixed(2)} at ${txn.description.substring(0, 30)}`);\n    }\n    \n    if (DINING_KEYWORDS.some(kw => desc.includes(kw))) {\n      alerts.push(`🍕 DINING: $${absAmount.toFixed(2)} at ${txn.description.substring(0, 30)}`);\n    }\n  }\n}\n\n// Get balances\nlet balances = [];\nfor (const account of data.accounts || []) {\n  balances.push(`${account.name}: $${parseFloat(account.balance).toFixed(2)}`);\n}\n\nconst summary = `Yesterday's spending: $${totalSpent.toFixed(2)}\\nBalances:\\n${balances.join('\\n')}`;\n\nreturn {\n  json: {\n    summary,\n    transactions: transactions.length > 0 ? transactions.join('\\n') : 'No spending yesterday',\n    alerts: alerts.length > 0 ? alerts.join('\\n') : 'No alerts',\n    totalSpent,\n    hasAlerts: alerts.length > 0,\n    webhookToken: $('Extract Credentials').item.json.webhookToken\n  }\n};"
+          },
+          "id": "process-data",
+          "name": "Process Data",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "position": [880, 100]
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "http://10.0.10.95:18789/hooks/finance-daily",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [{"name": "Authorization", "value": "=Bearer {{ $json.webhookToken }}"}]
+            },
+            "sendBody": true,
+            "specifyBody": "json",
+            "jsonBody": "={{ JSON.stringify({ summary: $json.summary, transactions: $json.transactions, alerts: $json.alerts }) }}",
+            "options": {}
+          },
+          "id": "webhook-openclaw",
+          "name": "Notify OpenClaw",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [1100, 100]
+        }
+      ],
+      "connections": {
+        "Daily 8 AM": {"main": [[{"node": "Get SimpleFIN Creds", "type": "main", "index": 0}, {"node": "Get Webhook Token", "type": "main", "index": 0}]]},
+        "Get SimpleFIN Creds": {"main": [[{"node": "Extract Credentials", "type": "main", "index": 0}]]},
+        "Get Webhook Token": {"main": [[{"node": "Extract Credentials", "type": "main", "index": 0}]]},
+        "Extract Credentials": {"main": [[{"node": "Fetch SimpleFIN", "type": "main", "index": 0}]]},
+        "Fetch SimpleFIN": {"main": [[{"node": "Process Data", "type": "main", "index": 0}]]},
+        "Process Data": {"main": [[{"node": "Notify OpenClaw", "type": "main", "index": 0}]]}
+      },
+      "settings": {
+        "executionOrder": "v1"
+      }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: finance-daily-check
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Finance Daily Check"
+  active: true
+  deletionPolicy: Retain
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-finance-daily-check
+    key: workflow.json
+  credentialMappings:
+    "1Password Connect": onepassword

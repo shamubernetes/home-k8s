@@ -105,11 +105,14 @@ data:
             "url": "http://10.0.10.95:18789/hooks/finance-daily",
             "sendHeaders": true,
             "headerParameters": {
-              "parameters": [{"name": "Authorization", "value": "=Bearer {{ $json.webhookToken }}"}]
+              "parameters": [
+                {"name": "Authorization", "value": "=Bearer {{ $json.webhookToken }}"},
+                {"name": "Content-Type", "value": "application/json"}
+              ]
             },
             "sendBody": true,
-            "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({ summary: $json.summary, transactions: $json.transactions, alerts: $json.alerts }) }}",
+            "specifyBody": "string",
+            "body": "={{ JSON.stringify({ summary: $json.summary, transactions: $json.transactions, alerts: $json.alerts }) }}",
             "options": {}
           },
           "id": "webhook-openclaw",

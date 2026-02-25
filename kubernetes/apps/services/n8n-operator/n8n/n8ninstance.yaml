@@ -6,7 +6,7 @@ metadata:
   namespace: services
 spec:
   replicas: 1
-  image: docker.io/n8nio/n8n:2.10.0@sha256:7376bc277009ff684b27f9090aab385fd7faf0a4e029902587790a61d1633c3c
+  image: docker.io/n8nio/n8n:2.10.1@sha256:0b81acc80493b8b4629e9fd9d5f1a5cb8abbf92388bb99ef4444c5de92de1b95
   imagePullPolicy: IfNotPresent
   timezone: "America/New_York"
 

@@ -64,13 +64,10 @@ kind: Gateway
 metadata:
   name: envoy-external
   namespace: network
-  annotations:
-    external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
 spec:
   gatewayClassName: envoy
   infrastructure:
     annotations:
-      external-dns.alpha.kubernetes.io/hostname: external.${HOME_DOMAIN}
       io.cilium/lb-ipam-ips: "${IPAM_IP_ENVOY_EXTERNAL}"
   listeners:
   - name: http
@@ -97,13 +94,10 @@ kind: Gateway
 metadata:
   name: envoy-internal
   namespace: network
-  annotations:
-    external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
 spec:
   gatewayClassName: envoy
   infrastructure:
     annotations:
-      external-dns.alpha.kubernetes.io/hostname: internal.${HOME_DOMAIN}
       io.cilium/lb-ipam-ips: "${IPAM_IP_ENVOY_INTERNAL}"
   listeners:
   - name: http

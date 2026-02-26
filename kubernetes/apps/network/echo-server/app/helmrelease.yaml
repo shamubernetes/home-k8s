@@ -79,8 +79,6 @@ spec:
           scrapeTimeout: 10s
     route:
       app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: "external.${HOME_DOMAIN}"
         hostnames:
         - "{{ .Release.Name }}.${HOME_DOMAIN}"
         parentRefs:

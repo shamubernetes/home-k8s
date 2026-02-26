@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: envoy-gateway
+spec:
+  interval: 1h
+  url: oci://docker.io/envoyproxy/gateway-helm
+  ref:
+    tag: v1.7.0

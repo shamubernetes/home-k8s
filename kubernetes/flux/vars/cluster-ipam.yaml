@@ -25,3 +25,6 @@ data:
   IPAM_IP_ADGUARD_2: 10.100.47.202
   IPAM_IP_CS2: 10.100.47.210
   IPAM_IP_MC_ROUTER: 10.100.47.211
+  # Envoy Gateway (test IPs - will migrate to 249/250 after nginx removal)
+  IPAM_IP_ENVOY_EXTERNAL: 10.100.47.247
+  IPAM_IP_ENVOY_INTERNAL: 10.100.47.248

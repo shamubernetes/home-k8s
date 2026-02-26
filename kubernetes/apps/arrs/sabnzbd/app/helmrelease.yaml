@@ -72,6 +72,15 @@ spec:
               limits:
                 memory: 8Gi
     defaultPodOptions:
+      labels:
+        titans/network-intensive: "true"
+      topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"
       securityContext:
         runAsNonRoot: true
         runAsUser: 568

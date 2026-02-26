@@ -126,8 +126,26 @@ spec:
       persistence:
         size: 20Gi
         storageClass: openebs-hostpath
+      podLabels:
+        titans/network-intensive: "true"
+      topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"
     gateway:
       replicas: 2
+      podLabels:
+        titans/network-intensive: "true"
+      topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"
       ingress:
         enabled: true
         ingressClassName: internal
@@ -138,8 +156,26 @@ spec:
             pathType: Prefix
     read:
       replicas: 2
+      podLabels:
+        titans/network-intensive: "true"
+      topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"
     write:
       replicas: 2
       persistence:
         size: 20Gi
         storageClass: openebs-hostpath
+      podLabels:
+        titans/network-intensive: "true"
+      topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"

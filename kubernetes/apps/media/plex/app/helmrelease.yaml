@@ -122,6 +122,8 @@ spec:
               limits:
                 memory: 16Gi
     defaultPodOptions:
+      labels:
+        titans/network-intensive: "true"
       annotations:
         descheduler.alpha.kubernetes.io/evict: "false"
       affinity:
@@ -131,6 +133,13 @@ spec:
             - matchExpressions:
               - key: node-role.kubernetes.io/control-plane
                 operator: DoesNotExist
+      topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"
       securityContext:
         runAsNonRoot: true
         runAsUser: 568

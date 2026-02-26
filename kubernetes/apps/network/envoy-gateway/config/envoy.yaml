@@ -38,7 +38,7 @@ spec:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
       envoyService:
-        externalTrafficPolicy: Local
+        externalTrafficPolicy: Cluster
   shutdown:
     drainTimeout: 120s
   telemetry:

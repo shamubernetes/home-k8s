@@ -85,21 +85,6 @@ spec:
       extraArgs:
         default-ssl-certificate: "network/${HOME_DOMAIN/./-}-production-tls"
       terminationGracePeriodSeconds: 120
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/control-plane
-                operator: DoesNotExist
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  titans/network-intensive: "true"
-              topologyKey: kubernetes.io/hostname
       topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -109,6 +94,12 @@ spec:
             app.kubernetes.io/name: ingress-nginx
             app.kubernetes.io/instance: ingress-nginx-external
             app.kubernetes.io/component: controller
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            titans/network-intensive: "true"
       resources:
         requests:
           cpu: 100m

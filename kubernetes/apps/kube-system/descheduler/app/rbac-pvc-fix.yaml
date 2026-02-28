@@ -1,0 +1,31 @@
+# Supplementary RBAC to fix missing PVC permissions in chart 0.35.0
+# See: https://github.com/kubernetes-sigs/descheduler/pull/1836
+# Remove this file when upgrading to chart >= 0.36.0
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: descheduler-pvc-reader
+  labels:
+    app.kubernetes.io/name: descheduler
+    app.kubernetes.io/instance: descheduler
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: descheduler-pvc-reader
+  labels:
+    app.kubernetes.io/name: descheduler
+    app.kubernetes.io/instance: descheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: descheduler-pvc-reader
+subjects:
+  - kind: ServiceAccount
+    name: descheduler
+    namespace: kube-system

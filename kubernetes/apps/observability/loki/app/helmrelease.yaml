@@ -128,24 +128,40 @@ spec:
         storageClass: openebs-hostpath
       podLabels:
         titans/network-intensive: "true"
-      topologySpreadConstraints:
-      - maxSkew: 2
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            titans/network-intensive: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  titans/network-intensive: "true"
+              topologyKey: kubernetes.io/hostname
     gateway:
       replicas: 2
       podLabels:
         titans/network-intensive: "true"
-      topologySpreadConstraints:
-      - maxSkew: 2
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            titans/network-intensive: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  titans/network-intensive: "true"
+              topologyKey: kubernetes.io/hostname
       ingress:
         enabled: true
         ingressClassName: internal
@@ -158,13 +174,21 @@ spec:
       replicas: 2
       podLabels:
         titans/network-intensive: "true"
-      topologySpreadConstraints:
-      - maxSkew: 2
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            titans/network-intensive: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  titans/network-intensive: "true"
+              topologyKey: kubernetes.io/hostname
     write:
       replicas: 2
       persistence:
@@ -172,10 +196,18 @@ spec:
         storageClass: openebs-hostpath
       podLabels:
         titans/network-intensive: "true"
-      topologySpreadConstraints:
-      - maxSkew: 2
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            titans/network-intensive: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  titans/network-intensive: "true"
+              topologyKey: kubernetes.io/hostname

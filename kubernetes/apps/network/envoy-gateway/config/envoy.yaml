@@ -37,6 +37,14 @@ spec:
                 - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      titans/network-intensive: "true"
+                  topologyKey: kubernetes.io/hostname
       envoyService:
         externalTrafficPolicy: Cluster
   shutdown:

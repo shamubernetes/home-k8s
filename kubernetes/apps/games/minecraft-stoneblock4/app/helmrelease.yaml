@@ -13,7 +13,7 @@ spec:
         kind: HelmRepository
         namespace: flux-system
         name: minecraft-server-charts
-      version: 5.1.1
+      version: 5.1.2
   install:
     remediation:
       retries: 3

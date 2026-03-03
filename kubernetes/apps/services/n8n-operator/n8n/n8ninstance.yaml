@@ -33,6 +33,12 @@ spec:
   webhook:
     url: "https://n8n.${HOME_DOMAIN}/"
 
+  endpoints:
+    rest: rest
+    webhook: webhook
+    webhookTest: webhook-test
+    webhookWait: webhook-waiting
+
   smtp:
     enabled: true
     secretRef:

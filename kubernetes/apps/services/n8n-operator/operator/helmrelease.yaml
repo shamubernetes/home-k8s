@@ -25,9 +25,6 @@ spec:
       retries: 3
   values:
     manager:
-      image:
-        repository: ghcr.io/shamubernetes/n8n-operator
-        tag: "0.11.1"
       resources:
         requests:
           cpu: 10m

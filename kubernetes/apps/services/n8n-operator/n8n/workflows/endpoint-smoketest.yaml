@@ -1,0 +1,66 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-endpoint-test
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "httpMethod": "GET",
+            "path": "endpoint-test",
+            "responseMode": "responseNode",
+            "options": {}
+          },
+          "id": "webhook-trigger",
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 2,
+          "position": [0, 0],
+          "webhookId": "endpoint-test"
+        },
+        {
+          "parameters": {
+            "respondWith": "json",
+            "responseBody": "={ {\"status\": \"ok\", \"message\": \"n8n endpoint test successful\", \"timestamp\": new Date().toISOString(), \"webhook_path\": \"webhook\", \"rest_path\": \"rest\"} }",
+            "options": {}
+          },
+          "id": "respond",
+          "name": "Respond",
+          "type": "n8n-nodes-base.respondToWebhook",
+          "typeVersion": 1.1,
+          "position": [220, 0]
+        }
+      ],
+      "connections": {
+        "Webhook": {"main": [[{"node": "Respond", "type": "main", "index": 0}]]}
+      },
+      "settings": {
+        "executionOrder": "v1"
+      }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: endpoint-test
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Endpoint Test"
+  active: true
+  deletionPolicy: Delete
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-endpoint-test
+    key: workflow.json

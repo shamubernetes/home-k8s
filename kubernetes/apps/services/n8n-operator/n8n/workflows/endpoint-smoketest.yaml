@@ -25,7 +25,7 @@ data:
         {
           "parameters": {
             "respondWith": "json",
-            "responseBody": "={ {\"status\": \"ok\", \"message\": \"n8n endpoint test successful\", \"timestamp\": new Date().toISOString(), \"webhook_path\": \"webhook\", \"rest_path\": \"rest\"} }",
+            "responseBody": "={\"status\":\"ok\",\"message\":\"n8n endpoint test successful\",\"endpoint_path\":\"webhook\"}",
             "options": {}
           },
           "id": "respond",

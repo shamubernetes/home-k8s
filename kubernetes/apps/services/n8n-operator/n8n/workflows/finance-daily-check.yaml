@@ -120,7 +120,7 @@ data:
         {
           "parameters": {
             "operation": "executeQuery",
-            "query": "={{ (() => { const b = $json.todayBalances; const d = $json.runDate; if (!b || !b.length) return 'SELECT 1'; return b.map(r => `INSERT INTO finance_daily_balances (run_date, account_name, last4, balance) VALUES ('${d}', '${r.account_name}', '${r.last4}', ${r.balance}) ON CONFLICT (run_date, account_name) DO UPDATE SET balance = EXCLUDED.balance`).join('; '); })() }}",
+            "query": "={{ (() => { const b = $json.todayBalances; const d = $json.runDate; if (!b || !b.length) return 'SELECT 1'; return b.map(r => 'INSERT INTO finance_daily_balances (run_date, account_name, last4, balance) VALUES (\\'' + d + '\\', \\'' + r.account_name + '\\', \\'' + r.last4 + '\\', ' + r.balance + ') ON CONFLICT (run_date, account_name) DO UPDATE SET balance = EXCLUDED.balance').join('; '); })() }}",
             "options": {}
           },
           "id": "save-today-balances",

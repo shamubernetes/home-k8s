@@ -37,7 +37,7 @@ spec:
           app:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:963af1a83e0b2022fa8b75f06533177bdcac61d71408190aa668fea4f52a77c8
+              tag: latest@sha256:8140f9513f89d8617871316cf8778e4a3d71957ca290a0e59d58caf3ccbb24d7
             env:
               TZ: ${TIMEZONE}
               PUID: "568"

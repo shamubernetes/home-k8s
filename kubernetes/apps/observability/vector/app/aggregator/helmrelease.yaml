@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: docker.io/timberio/vector
-              tag: 0.54.0-alpine@sha256:ffbed90542e74e1cf45577665f8a1168b02686eec419775b59775b2ddc6bd189
+              tag: 0.54.0-alpine@sha256:0eee83ca0337cd5705c1ad2402f3cdfc257200d9b68b3f8715d5e33a3ce0b749
             args: ["--config", "/etc/vector/vector.yaml"]
             probes:
               liveness:

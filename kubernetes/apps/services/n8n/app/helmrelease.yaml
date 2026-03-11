@@ -39,7 +39,7 @@ spec:
           app:
             image:
               repository: docker.io/n8nio/n8n
-              tag: 2.12.0@sha256:a8347df5ad05d20843a521ef93f3126eaaddf26e39cb867d3f302fc199077dee
+              tag: 2.12.0@sha256:8d88665e460edcc545dee9a85e848147cd49ea064c2711ebeacbfb4a515bf35d
             env:
               GENERIC_TIMEZONE: "${TIMEZONE}"
               TZ: "${TIMEZONE}"

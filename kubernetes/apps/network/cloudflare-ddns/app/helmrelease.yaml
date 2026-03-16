@@ -28,7 +28,7 @@ spec:
           app:
             image:
               repository: favonia/cloudflare-ddns
-              tag: edge-alpine@sha256:fcade225d66be282b43170da808886d8ab44e2d850ca5524d2858b44eae9c2ef
+              tag: edge-alpine@sha256:ae2c274f6173fc6bdf14ad422e3ae9c2d8051ec2af22e38b5ae9a3908e75f31f
             env:
               # Domains to update (comma-separated)
               DOMAINS: "external.${GAME_DOMAIN}"

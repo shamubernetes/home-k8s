@@ -31,7 +31,7 @@ spec:
           memory: 64Mi
         limits:
           cpu: 500m
-          memory: 256Mi
+          memory: 512Mi
     crd:
       enable: true
       keep: true

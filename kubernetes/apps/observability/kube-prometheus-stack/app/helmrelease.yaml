@@ -56,6 +56,9 @@ spec:
                 requests:
                   storage: 1Gi
     defaultRules:
+      disabled:
+        etcdHighNumberOfLeaderChanges: true
+        etcdHighNumberOfFailedGRPCRequests: true
       rules:
         kubeApiserverAvailability: false
         kubeApiserverBurnrate: false
@@ -135,7 +138,48 @@ spec:
     grafana:
       enabled: false
       forceDeployDashboards: true
+    # Override default etcd rules with longer `for` durations to filter transient I/O spikes
+    # Root cause: Ceph and etcd share NVMe drives on control plane nodes, causing
+    # periodic I/O contention that self-resolves within ~10 minutes.
     additionalPrometheusRulesMap:
+      etcd-tuned-rules:
+        groups:
+        - name: etcd-tuned
+          rules:
+          - alert: etcdHighNumberOfLeaderChanges
+            annotations:
+              description: 'etcd cluster "{{ $labels.job }}": {{ $value }} leader changes within the last 15 minutes. Frequent elections may be a sign of insufficient resources, high network latency, or disruptions by other components.'
+              summary: etcd cluster has high number of leader changes.
+            expr: |-
+              increase((max without (instance, pod) (etcd_server_leader_changes_seen_total{job=~".*etcd.*"})
+              or 0*absent(etcd_server_leader_changes_seen_total{job=~".*etcd.*"}))[15m:1m]) >= 4
+            for: 15m
+            labels:
+              severity: warning
+          - alert: etcdHighNumberOfFailedGRPCRequests
+            annotations:
+              description: 'etcd cluster "{{ $labels.job }}": {{ $value }}% of requests for {{ $labels.grpc_method }} failed on etcd instance {{ $labels.instance }}.'
+              summary: etcd cluster has high number of failed gRPC requests.
+            expr: |-
+              100 * sum(rate(grpc_server_handled_total{job=~".*etcd.*", grpc_code=~"Unknown|FailedPrecondition|ResourceExhausted|Internal|Unavailable|DataLoss|DeadlineExceeded"}[5m])) without (grpc_type, grpc_code)
+                /
+              sum(rate(grpc_server_handled_total{job=~".*etcd.*"}[5m])) without (grpc_type, grpc_code)
+                > 1
+            for: 15m
+            labels:
+              severity: warning
+          - alert: etcdHighNumberOfFailedGRPCRequests
+            annotations:
+              description: 'etcd cluster "{{ $labels.job }}": {{ $value }}% of requests for {{ $labels.grpc_method }} failed on etcd instance {{ $labels.instance }}.'
+              summary: etcd cluster has high number of failed gRPC requests.
+            expr: |-
+              100 * sum(rate(grpc_server_handled_total{job=~".*etcd.*", grpc_code=~"Unknown|FailedPrecondition|ResourceExhausted|Internal|Unavailable|DataLoss|DeadlineExceeded"}[5m])) without (grpc_type, grpc_code)
+                /
+              sum(rate(grpc_server_handled_total{job=~".*etcd.*"}[5m])) without (grpc_type, grpc_code)
+                > 5
+            for: 15m
+            labels:
+              severity: critical
       dockerhub-rules:
         groups:
         - name: dockerhub

@@ -29,6 +29,14 @@ spec:
       - name: severity
         value: info
         matchType: "="
+    - receiver: "null"
+      matchers:
+      - name: alertname
+        value: CephNodeNetworkPacketDrops
+        matchType: "="
+      - name: instance
+        value: ".*chronos.*"
+        matchType: "=~"
     - receiver: openclaw
       matchers:
       - name: severity

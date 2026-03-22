@@ -11,11 +11,11 @@ data:
         {
           "parameters": {
             "rule": {
-              "interval": [{"field": "cronExpression", "expression": "0 8 */2 * *"}]
+              "interval": [{"field": "cronExpression", "expression": "0 20 * * *"}]
             }
           },
           "id": "schedule-trigger",
-          "name": "Every 2 Days 8 AM",
+          "name": "Daily 8 PM",
           "type": "n8n-nodes-base.scheduleTrigger",
           "typeVersion": 1.2,
           "position": [0, 0]
@@ -23,7 +23,7 @@ data:
         {
           "parameters": {
             "method": "GET",
-            "url": "=http://convex-backend.services.svc.cluster.local:3211/api/digest-html?from={{ $now.minus(2, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
+            "url": "=http://convex-backend.services.svc.cluster.local:3211/api/digest-html?from={{ $now.format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
             "options": {
               "response": {
                 "response": {
@@ -42,7 +42,7 @@ data:
           "parameters": {
             "fromEmail": "maude@maudeco.de",
             "toEmail": "kilian@kil.dev",
-            "subject": "=Cowtail Digest — {{ $now.minus(2, 'days').format('MMM d') }}–{{ $now.format('MMM d, yyyy') }}",
+            "subject": "=Cowtail Digest — {{ $now.format('MMM d, yyyy') }}",
             "emailType": "html",
             "html": "={{ $json.data }}",
             "options": {}
@@ -61,7 +61,7 @@ data:
         }
       ],
       "connections": {
-        "Every 2 Days 8 AM": {
+        "Daily 8 PM": {
           "main": [[{"node": "Fetch Digest HTML", "type": "main", "index": 0}]]
         },
         "Fetch Digest HTML": {

@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-error-handler
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "errorTriggerType": "allErrors"
+          },
+          "id": "error-trigger",
+          "name": "Error Trigger",
+          "type": "n8n-nodes-base.errorTrigger",
+          "typeVersion": 1,
+          "position": [0, 0]
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "http://10.0.10.95:18789/hooks/n8n-error",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {
+                  "name": "Authorization",
+                  "value": "Bearer {{ $env.OPENCLAW_WEBHOOK_TOKEN }}"
+                },
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "workflow_name",
+                  "value": "={{ $json.workflow.name }}"
+                },
+                {
+                  "name": "error_message",
+                  "value": "={{ $json.execution.error.message }}"
+                },
+                {
+                  "name": "execution_id",
+                  "value": "={{ $json.execution.id }}"
+                },
+                {
+                  "name": "timestamp",
+                  "value": "={{ $now.toISO() }}"
+                }
+              ]
+            },
+            "options": {}
+          },
+          "id": "notify-maude",
+          "name": "Notify Maude",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [220, 0]
+        }
+      ],
+      "connections": {
+        "Error Trigger": {
+          "main": [[{"node": "Notify Maude", "type": "main", "index": 0}]]
+        }
+      },
+      "settings": {
+        "executionOrder": "v1"
+      }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: error-handler
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Error Handler"
+  active: true
+  deletionPolicy: Retain
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-error-handler
+    key: workflow.json

@@ -16,3 +16,4 @@ resources:
   - workflows/endpoint-smoketest.yaml
   - workflows/cowtail-digest.yaml
   - workflows/cowtail-weekly-review.yaml
+  - workflows/error-handler.yaml

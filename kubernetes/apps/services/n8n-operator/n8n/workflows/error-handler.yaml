@@ -20,6 +20,40 @@ data:
         },
         {
           "parameters": {
+            "operation": "getItemDetails",
+            "vaultUUID": "pc3wob7gb4f4vmsubawergeira",
+            "itemUUID": "2jqh7c75ijlaeog2nafir77jre",
+            "requestOptions": {}
+          },
+          "id": "get-webhook-token",
+          "name": "Get Webhook Token",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [220, 0],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "assignments": {
+              "assignments": [
+                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $json.fields.find(f => f.label === 'OPENCLAW_WEBHOOK_TOKEN').value }}", "type": "string"}
+              ]
+            },
+            "options": {}
+          },
+          "id": "set-token",
+          "name": "Set Token",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 3.4,
+          "position": [440, 0]
+        },
+        {
+          "parameters": {
             "method": "POST",
             "url": "http://10.0.10.95:18789/hooks/n8n-error",
             "sendHeaders": true,
@@ -27,7 +61,7 @@ data:
               "parameters": [
                 {
                   "name": "Authorization",
-                  "value": "Bearer {{ $env.OPENCLAW_WEBHOOK_TOKEN }}"
+                  "value": "=Bearer {{ $json.webhookToken }}"
                 },
                 {
                   "name": "Content-Type",
@@ -40,15 +74,15 @@ data:
               "parameters": [
                 {
                   "name": "workflow_name",
-                  "value": "={{ $json.workflow.name }}"
+                  "value": "={{ $('Error Trigger').item.json.workflow.name }}"
                 },
                 {
                   "name": "error_message",
-                  "value": "={{ $json.execution.error.message }}"
+                  "value": "={{ $('Error Trigger').item.json.execution.error.message }}"
                 },
                 {
                   "name": "execution_id",
-                  "value": "={{ $json.execution.id }}"
+                  "value": "={{ $('Error Trigger').item.json.execution.id }}"
                 },
                 {
                   "name": "timestamp",
@@ -62,11 +96,17 @@ data:
           "name": "Notify Maude",
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
-          "position": [220, 0]
+          "position": [660, 0]
         }
       ],
       "connections": {
         "Error Trigger": {
+          "main": [[{"node": "Get Webhook Token", "type": "main", "index": 0}]]
+        },
+        "Get Webhook Token": {
+          "main": [[{"node": "Set Token", "type": "main", "index": 0}]]
+        },
+        "Set Token": {
           "main": [[{"node": "Notify Maude", "type": "main", "index": 0}]]
         }
       },
@@ -96,3 +136,5 @@ spec:
     kind: ConfigMap
     name: workflow-error-handler
     key: workflow.json
+  credentialMappings:
+    "1Password Connect": onepassword

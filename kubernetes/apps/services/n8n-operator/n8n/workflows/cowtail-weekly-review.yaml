@@ -22,6 +22,40 @@ data:
         },
         {
           "parameters": {
+            "operation": "getItemDetails",
+            "vaultUUID": "pc3wob7gb4f4vmsubawergeira",
+            "itemUUID": "2jqh7c75ijlaeog2nafir77jre",
+            "requestOptions": {}
+          },
+          "id": "get-webhook-token",
+          "name": "Get Webhook Token",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [220, 0],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "assignments": {
+              "assignments": [
+                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $json.fields.find(f => f.label === 'OPENCLAW_WEBHOOK_TOKEN').value }}", "type": "string"}
+              ]
+            },
+            "options": {}
+          },
+          "id": "set-token",
+          "name": "Set Token",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 3.4,
+          "position": [440, 0]
+        },
+        {
+          "parameters": {
             "method": "GET",
             "url": "=http://convex-backend.services.svc.cluster.local:3211/api/digest-html?from={{ $now.minus(7, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
             "options": {
@@ -36,7 +70,7 @@ data:
           "name": "Fetch Week HTML",
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
-          "position": [220, 0]
+          "position": [660, 0]
         },
         {
           "parameters": {
@@ -47,7 +81,7 @@ data:
               "parameters": [
                 {
                   "name": "Authorization",
-                  "value": "Bearer {{ $env.OPENCLAW_WEBHOOK_TOKEN }}"
+                  "value": "=Bearer {{ $('Set Token').item.json.webhookToken }}"
                 },
                 {
                   "name": "Content-Type",
@@ -78,11 +112,17 @@ data:
           "name": "Send to Maude",
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
-          "position": [440, 0]
+          "position": [880, 0]
         }
       ],
       "connections": {
         "Monday 9 AM": {
+          "main": [[{"node": "Get Webhook Token", "type": "main", "index": 0}]]
+        },
+        "Get Webhook Token": {
+          "main": [[{"node": "Set Token", "type": "main", "index": 0}]]
+        },
+        "Set Token": {
           "main": [[{"node": "Fetch Week HTML", "type": "main", "index": 0}]]
         },
         "Fetch Week HTML": {
@@ -115,3 +155,5 @@ spec:
     kind: ConfigMap
     name: workflow-cowtail-weekly-review
     key: workflow.json
+  credentialMappings:
+    "1Password Connect": onepassword

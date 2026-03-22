@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./atuin/ks.yaml
+- ./convex/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./static-webserver/ks.yaml

@@ -1,0 +1,178 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app convex
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      backend:
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          init-db:
+            image:
+              repository: ghcr.io/home-operations/postgres-init
+              tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+            envFrom: &envFrom
+            - secretRef:
+                name: convex-secret
+          init-buckets:
+            image:
+              repository: docker.io/amazon/aws-cli
+              tag: 2.27.31
+            envFrom: *envFrom
+            env:
+              S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              for bucket in convex-exports convex-snapshot-imports convex-modules convex-files convex-search; do
+                aws --endpoint-url "$S3_ENDPOINT" s3 mb "s3://$bucket" 2>/dev/null || true
+              done
+        containers:
+          app:
+            image:
+              repository: ghcr.io/get-convex/convex-backend
+              tag: latest
+            env:
+              INSTANCE_NAME: convex
+              DO_NOT_REQUIRE_SSL: "1"
+              CONVEX_CLOUD_ORIGIN: https://convex-api.${HOME_DOMAIN}
+              CONVEX_SITE_ORIGIN: https://convex-actions.${HOME_DOMAIN}
+              RUST_LOG: info
+              DISABLE_BEACON: "true"
+              # S3 via Ceph RGW
+              AWS_REGION: us-east-1
+              AWS_S3_FORCE_PATH_STYLE: "true"
+              S3_ENDPOINT_URL: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+              S3_STORAGE_EXPORTS_BUCKET: convex-exports
+              S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET: convex-snapshot-imports
+              S3_STORAGE_MODULES_BUCKET: convex-modules
+              S3_STORAGE_FILES_BUCKET: convex-files
+              S3_STORAGE_SEARCH_BUCKET: convex-search
+            envFrom: *envFrom
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /version
+                    port: &apiPort 3210
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 3
+                  failureThreshold: 5
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /version
+                    port: *apiPort
+                  initialDelaySeconds: 5
+                  periodSeconds: 5
+                  timeoutSeconds: 3
+                  failureThreshold: 3
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+      dashboard:
+        strategy: RollingUpdate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/get-convex/convex-dashboard
+              tag: latest
+            env:
+              NEXT_PUBLIC_DEPLOYMENT_URL: https://convex-api.${HOME_DOMAIN}
+              NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: "true"
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+    defaultPodOptions:
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      backend:
+        controller: backend
+        ports:
+          api:
+            primary: true
+            port: *apiPort
+          actions:
+            port: 3211
+      dashboard:
+        controller: dashboard
+        ports:
+          http:
+            port: 6791
+    ingress:
+      api:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: convex-api.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: backend
+              port: api
+      actions:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: convex-actions.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: backend
+              port: actions
+      dashboard:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: convex.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: dashboard
+              port: http
+    persistence:
+      data:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        storageClass: ceph-block
+        advancedMounts:
+          backend:
+            app:
+            - path: /convex/data

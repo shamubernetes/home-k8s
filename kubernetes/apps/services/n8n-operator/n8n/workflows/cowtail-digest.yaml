@@ -1,0 +1,83 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-cowtail-digest
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [{"field": "cronExpression", "expression": "0 8 */2 * *"}]
+            }
+          },
+          "id": "schedule-trigger",
+          "name": "Every 2 Days 8 AM",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "typeVersion": 1.2,
+          "position": [0, 0]
+        },
+        {
+          "parameters": {
+            "method": "GET",
+            "url": "=https://convex-actions.thezoo.house/api/digest-html?from={{ $now.minus(2, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
+            "options": {
+              "response": {
+                "response": {
+                  "responseFormat": "text"
+                }
+              }
+            }
+          },
+          "id": "fetch-digest",
+          "name": "Fetch Digest HTML",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [220, 0]
+        },
+        {
+          "parameters": {
+            "fromEmail": "maude@maudeco.de",
+            "toEmail": "kilian@kil.dev",
+            "subject": "=Cowtail Digest — {{ $now.minus(2, 'days').format('MMM d') }}–{{ $now.format('MMM d, yyyy') }}",
+            "emailType": "html",
+            "html": "={{ $json.data }}",
+            "options": {}
+          },
+          "id": "send-email",
+          "name": "Send Digest Email",
+          "type": "n8n-nodes-base.emailSend",
+          "typeVersion": 2.1,
+          "position": [440, 0],
+          "credentials": {
+            "smtp": {
+              "id": "smtp-relay",
+              "name": "SMTP Relay"
+            }
+          }
+        }
+      ],
+      "connections": {
+        "Every 2 Days 8 AM": {
+          "main": [[{"node": "Fetch Digest HTML", "type": "main", "index": 0}]]
+        },
+        "Fetch Digest HTML": {
+          "main": [[{"node": "Send Digest Email", "type": "main", "index": 0}]]
+        }
+      }
+    }
+---
+apiVersion: n8n.shamubernetes.io/v1
+kind: N8nWorkflow
+metadata:
+  name: cowtail-digest
+  namespace: services
+spec:
+  instanceRef:
+    name: n8n
+  configMapRef:
+    name: workflow-cowtail-digest
+  active: true

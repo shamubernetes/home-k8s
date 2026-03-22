@@ -56,15 +56,18 @@ data:
         },
         {
           "parameters": {
-            "method": "GET",
-            "url": "=http://convex-backend.services.svc.cluster.local:3211/api/digest-html?from={{ $now.minus(7, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
-            "options": {
-              "response": {
-                "response": {
-                  "responseFormat": "text"
-                }
-              }
-            }
+            "method": "POST",
+            "url": "http://convex-backend.services.svc.cluster.local:3210/api/query",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {"name": "Content-Type", "value": "application/json"}
+              ]
+            },
+            "sendBody": true,
+            "specifyBody": "json",
+            "jsonBody": "={\"path\":\"alerts:getByTimeRange\",\"args\":{\"from\":{{ $now.minus(7, 'days').toMillis() }},\"to\":{{ $now.toMillis() }}},\"format\":\"json\"}",
+            "options": {}
           },
           "id": "fetch-digest",
           "name": "Fetch Week HTML",
@@ -93,8 +96,8 @@ data:
             "bodyParameters": {
               "parameters": [
                 {
-                  "name": "message",
-                  "value": "={{ $json.data }}"
+                  "name": "alerts",
+                  "value": "={{ JSON.stringify($('Fetch Week HTML').item.json.value) }}"
                 },
                 {
                   "name": "from",

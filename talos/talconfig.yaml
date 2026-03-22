@@ -89,7 +89,7 @@ nodes:
       gateway: *gateway
 - hostname: "k8s-rhea"
   ipAddress: "10.100.47.51"
-  installDisk: "/dev/sdb"
+  installDisk: "/dev/sda"
   talosImageURL: *image
   controlPlane: false
   networkInterfaces:

@@ -42,11 +42,12 @@ spec:
             envFrom: *envFrom
             env:
               S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+              AWS_DEFAULT_REGION: us-east-1
             command: ["/bin/sh", "-c"]
             args:
             - |
               for bucket in convex-exports convex-snapshot-imports convex-modules convex-files convex-search; do
-                aws --endpoint-url "$S3_ENDPOINT" s3 mb "s3://$bucket" 2>/dev/null || true
+                aws --endpoint-url "$S3_ENDPOINT" --region us-east-1 s3 mb "s3://$bucket" 2>/dev/null || true
               done
         containers:
           app:
@@ -63,6 +64,8 @@ spec:
               # S3 via Ceph RGW
               AWS_REGION: us-east-1
               AWS_S3_FORCE_PATH_STYLE: "true"
+              AWS_S3_DISABLE_CHECKSUMS: "true"
+              AWS_S3_DISABLE_SSE: "true"
               S3_ENDPOINT_URL: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
               S3_STORAGE_EXPORTS_BUCKET: convex-exports
               S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET: convex-snapshot-imports

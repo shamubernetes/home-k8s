@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail
-              tag: 0.3.0
+              tag: 0.3.1
             env:
               TZ: America/New_York
             probes:
@@ -58,6 +58,21 @@ spec:
                 memory: 32Mi
               limits:
                 memory: 64Mi
+    configMaps:
+      config:
+        data:
+          config.json: |
+            {
+              "cephDashboardUrl": "https://rook.${HOME_DOMAIN}"
+            }
+    persistence:
+      config:
+        type: configMap
+        name: cowtail-config
+        globalMounts:
+        - path: /usr/share/nginx/html/config.json
+          subPath: config.json
+          readOnly: true
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true

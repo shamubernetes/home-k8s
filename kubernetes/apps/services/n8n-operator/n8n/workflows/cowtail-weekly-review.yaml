@@ -70,7 +70,7 @@ data:
             "options": {}
           },
           "id": "fetch-digest",
-          "name": "Fetch Week HTML",
+          "name": "Fetch Week Alerts",
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
           "position": [660, 0]
@@ -97,7 +97,7 @@ data:
               "parameters": [
                 {
                   "name": "alerts",
-                  "value": "={{ JSON.stringify($('Fetch Week HTML').item.json.value) }}"
+                  "value": "={{ JSON.stringify($('Fetch Week Alerts').item.json.value) }}"
                 },
                 {
                   "name": "from",
@@ -126,9 +126,9 @@ data:
           "main": [[{"node": "Set Token", "type": "main", "index": 0}]]
         },
         "Set Token": {
-          "main": [[{"node": "Fetch Week HTML", "type": "main", "index": 0}]]
+          "main": [[{"node": "Fetch Week Alerts", "type": "main", "index": 0}]]
         },
-        "Fetch Week HTML": {
+        "Fetch Week Alerts": {
           "main": [[{"node": "Send to Maude", "type": "main", "index": 0}]]
         }
       },

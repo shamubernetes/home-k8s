@@ -23,7 +23,7 @@ data:
         {
           "parameters": {
             "method": "GET",
-            "url": "=https://convex-actions.thezoo.house/api/digest-html?from={{ $now.minus(2, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
+            "url": "=http://convex-backend.services.svc.cluster.local:3211/api/digest-html?from={{ $now.minus(2, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
             "options": {
               "response": {
                 "response": {

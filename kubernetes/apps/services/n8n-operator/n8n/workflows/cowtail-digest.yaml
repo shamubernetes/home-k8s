@@ -87,6 +87,9 @@ spec:
   workflowName: "Cowtail Digest"
   active: true
   deletionPolicy: Retain
-  sourceConfigMap:
+  sourceRef:
+    kind: ConfigMap
     name: workflow-cowtail-digest
     key: workflow.json
+  credentialMappings:
+    "SMTP Relay": smtp-relay

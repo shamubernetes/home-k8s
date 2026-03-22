@@ -70,7 +70,7 @@ data:
       }
     }
 ---
-apiVersion: n8n.shamubernetes.io/v1
+apiVersion: n8n.n8n.io/v1
 kind: N8nWorkflow
 metadata:
   name: cowtail-digest

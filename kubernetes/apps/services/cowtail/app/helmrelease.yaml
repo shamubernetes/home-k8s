@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail
-              tag: 0.3.1
+              tag: 0.3.2
             env:
               TZ: America/New_York
             probes:
@@ -69,10 +69,11 @@ spec:
       config:
         type: configMap
         name: cowtail
-        globalMounts:
-        - path: /usr/share/nginx/html/config.json
-          subPath: config.json
-          readOnly: true
+        advancedMounts:
+          cowtail:
+            app:
+            - path: /etc/cowtail
+              readOnly: true
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true

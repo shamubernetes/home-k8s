@@ -54,7 +54,7 @@ data:
           "position": [440, 0],
           "credentials": {
             "smtp": {
-              "id": "smtp-relay",
+              "id": "{{ $credentials.smtp-relay.id }}",
               "name": "SMTP Relay"
             }
           }
@@ -70,14 +70,23 @@ data:
       }
     }
 ---
-apiVersion: n8n.n8n.io/v1
+apiVersion: n8n.n8n.io/v1alpha1
 kind: N8nWorkflow
 metadata:
   name: cowtail-digest
   namespace: services
 spec:
-  instanceRef:
-    name: n8n
-  configMapRef:
-    name: workflow-cowtail-digest
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Cowtail Digest"
   active: true
+  deletionPolicy: Retain
+  sourceConfigMap:
+    name: workflow-cowtail-digest
+    key: workflow.json

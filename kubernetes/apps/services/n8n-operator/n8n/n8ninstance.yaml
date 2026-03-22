@@ -106,3 +106,7 @@ spec:
       value: https
     - name: N8N_TRUST_PROXY
       value: "true"
+    - name: EXECUTIONS_DATA_SAVE_ON_ERROR
+      value: "all"
+    - name: N8N_DEFAULT_ERROR_WORKFLOW_ID
+      value: "M0oiO5S8RegCVa8m"

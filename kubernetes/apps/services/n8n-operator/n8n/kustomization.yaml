@@ -15,3 +15,4 @@ resources:
   - workflows/finance-daily-check.yaml
   - workflows/endpoint-smoketest.yaml
   - workflows/cowtail-digest.yaml
+  - workflows/cowtail-weekly-review.yaml

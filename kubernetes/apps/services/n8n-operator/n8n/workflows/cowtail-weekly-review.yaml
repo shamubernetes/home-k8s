@@ -1,0 +1,117 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-cowtail-weekly-review
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [{"field": "cronExpression", "expression": "0 9 * * 1"}]
+            }
+          },
+          "id": "schedule-trigger",
+          "name": "Monday 9 AM",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "typeVersion": 1.2,
+          "position": [0, 0]
+        },
+        {
+          "parameters": {
+            "method": "GET",
+            "url": "=http://convex-backend.services.svc.cluster.local:3211/api/digest-html?from={{ $now.minus(7, 'days').format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
+            "options": {
+              "response": {
+                "response": {
+                  "responseFormat": "text"
+                }
+              }
+            }
+          },
+          "id": "fetch-digest",
+          "name": "Fetch Week HTML",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [220, 0]
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "http://10.0.10.95:18789/hooks/cowtail-review",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {
+                  "name": "Authorization",
+                  "value": "Bearer {{ $env.OPENCLAW_WEBHOOK_TOKEN }}"
+                },
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "message",
+                  "value": "={{ $json.data }}"
+                },
+                {
+                  "name": "from",
+                  "value": "={{ $now.minus(7, 'days').format('yyyy-MM-dd') }}"
+                },
+                {
+                  "name": "to",
+                  "value": "={{ $now.format('yyyy-MM-dd') }}"
+                }
+              ]
+            },
+            "options": {}
+          },
+          "id": "webhook-openclaw",
+          "name": "Send to Maude",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [440, 0]
+        }
+      ],
+      "connections": {
+        "Monday 9 AM": {
+          "main": [[{"node": "Fetch Week HTML", "type": "main", "index": 0}]]
+        },
+        "Fetch Week HTML": {
+          "main": [[{"node": "Send to Maude", "type": "main", "index": 0}]]
+        }
+      },
+      "settings": {
+        "executionOrder": "v1"
+      }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: cowtail-weekly-review
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Cowtail Weekly Review"
+  active: true
+  deletionPolicy: Retain
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-cowtail-weekly-review
+    key: workflow.json

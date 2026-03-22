@@ -67,6 +67,9 @@ data:
         "Fetch Digest HTML": {
           "main": [[{"node": "Send Digest Email", "type": "main", "index": 0}]]
         }
+      },
+      "settings": {
+        "executionOrder": "v1"
       }
     }
 ---

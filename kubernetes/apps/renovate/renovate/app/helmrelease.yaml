@@ -47,6 +47,9 @@ spec:
               TZ: ${TIMEZONE}
               MEND_RNV_SERVER_PORT: &port 8080
               RENOVATE_REPOSITORY_CACHE: 'enabled'
+              # Fix Go build cache permission denied (runs as UID 568, not ubuntu)
+              GOCACHE: /tmp/go-cache
+              GOPATH: /tmp/go
               # TODO: Get into ceph-bucket
               # RENOVATE_REPOSITORY_CACHE_TYPE: 's3://renovate/cache/'
               # RENOVATE_X_S3_PATH_STYLE: 'true'

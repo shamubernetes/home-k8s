@@ -158,28 +158,6 @@ spec:
             service:
               identifier: backend
               port: actions
-      api-external:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-        className: external
-        hosts:
-        - host: convex-api.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: backend
-              port: api
-      actions-external:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-        className: external
-        hosts:
-        - host: convex-actions.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: backend
-              port: actions
       dashboard:
         annotations:
           external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}

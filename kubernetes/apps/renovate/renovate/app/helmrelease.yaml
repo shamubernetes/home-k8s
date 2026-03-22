@@ -47,10 +47,7 @@ spec:
               TZ: ${TIMEZONE}
               MEND_RNV_SERVER_PORT: &port 8080
               RENOVATE_REPOSITORY_CACHE: 'enabled'
-              # Fix Go/containerbase cache permission denied (runs as UID 568, not ubuntu)
-              HOME: /tmp/home
-              GOCACHE: /tmp/home/.cache/go-build
-              GOPATH: /tmp/home/go
+              # HOME/GOCACHE no longer needed — fixed by matching container UID
               # TODO: Get into ceph-bucket
               # RENOVATE_REPOSITORY_CACHE_TYPE: 's3://renovate/cache/'
               # RENOVATE_X_S3_PATH_STYLE: 'true'
@@ -73,9 +70,9 @@ spec:
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 568
-        runAsGroup: 568
-        fsGroup: 568
+        runAsUser: 12021
+        runAsGroup: 0
+        fsGroup: 0
         fsGroupChangePolicy: OnRootMismatch
         supplementalGroups: [44, 10000]
         seccompProfile: {type: RuntimeDefault}

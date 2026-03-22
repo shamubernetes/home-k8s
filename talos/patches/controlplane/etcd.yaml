@@ -3,5 +3,7 @@ cluster:
     extraArgs:
       listen-metrics-urls: http://0.0.0.0:2381
       quota-backend-bytes: "4294967296"  # 4 GiB (default is 2 GiB)
+      heartbeat-interval: "250"  # 250ms (default 100ms) — tolerate NVMe I/O contention
+      election-timeout: "2500"  # 2500ms (default 1000ms) — 10x heartbeat per etcd docs
     advertisedSubnets:
     - "10.100.47.0/24"

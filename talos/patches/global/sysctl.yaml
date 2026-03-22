@@ -9,4 +9,6 @@ machine:
     net.ipv4.tcp_rmem: 4096 87380 33554432 # 10Gb/s
     net.ipv4.tcp_wmem: 4096 65536 33554432 # 10Gb/s
     net.ipv4.tcp_window_scaling: 1 # 10Gb/s
+    net.core.netdev_max_backlog: 8192 # Packet drop mitigation
+    net.core.netdev_budget: 600 # Packet drop mitigation — 2x default NAPI budget
     vm.nr_hugepages: 1024 # PostgreSQL

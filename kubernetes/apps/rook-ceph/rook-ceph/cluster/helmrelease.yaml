@@ -31,6 +31,23 @@ spec:
     monitoring:
       enabled: true
       createPrometheusRules: true
+      prometheusRuleOverrides:
+        CephNodeNetworkPacketDrops:
+          expr: |
+            (
+              rate(node_network_receive_drop_total{device!="lo"}[5m]) +
+              rate(node_network_transmit_drop_total{device!="lo"}[5m])
+            ) / (
+              rate(node_network_receive_packets_total{device!="lo"}[5m]) +
+              rate(node_network_transmit_packets_total{device!="lo"}[5m])
+            ) >= 0.01 and (
+              rate(node_network_receive_drop_total{device!="lo"}[5m]) +
+              rate(node_network_transmit_drop_total{device!="lo"}[5m])
+            ) >= 50
+          for: 5m
+          annotations:
+            description: "Node {{ $labels.instance }} experiences sustained packet drop > 1% or > 50 packets/s on interface {{ $labels.device }}."
+            summary: "One or more NICs reports sustained packet drops"
     ingress:
       dashboard:
         ingressClassName: internal

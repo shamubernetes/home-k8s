@@ -39,7 +39,7 @@ spec:
           path: /
     toolbox:
       enabled: true
-    configOverride: |
+    configOverride: |+
       [global]
       bdev_enable_discard = true
       bdev_async_discard = true
@@ -50,6 +50,7 @@ spec:
       osd_scrub_sleep = 0.1
       osd_scrub_priority = 1
       osd_deep_scrub_interval = 1209600
+
     cephClusterSpec:
       cephConfig:
         global:

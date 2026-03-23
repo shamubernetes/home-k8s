@@ -1,0 +1,6 @@
+apiVersion: v1alpha1
+kind: EthernetConfig
+name: enp0s31f6
+rings:
+    rx: 4096
+    tx: 4096

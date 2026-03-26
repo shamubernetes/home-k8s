@@ -38,7 +38,7 @@ spec:
           init-buckets:
             image:
               repository: docker.io/amazon/aws-cli
-              tag: 2.34.17@sha256:2c7e993a402392c4229997d59648bbf3f923a96807b46abc7b22d9d9dff45646
+              tag: 2.34.18@sha256:12800a28077121347584025bce1510541dc98d309b646935d4f0447fc385b240
             envFrom: *envFrom
             env:
               S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80

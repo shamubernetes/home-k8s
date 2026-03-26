@@ -29,14 +29,16 @@ spec:
       - name: severity
         value: info
         matchType: "="
-    - receiver: "null"
+    - receiver: cowtail-direct
       matchers:
       - name: alertname
         value: CephNodeNetworkPacketDrops
         matchType: "="
-      - name: instance
-        value: ".*chronos.*"
-        matchType: "=~"
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: etcdHighNumberOfLeaderChanges
+        matchType: "="
     - receiver: openclaw
       matchers:
       - name: severity
@@ -64,6 +66,12 @@ spec:
       matchType: "="
   receivers:
   - name: "null"
+  - name: cowtail-direct
+    webhookConfigs:
+    - urlSecret:
+        name: alertmanager-secret
+        key: COWTAIL_WEBHOOK_URL
+      sendResolved: true
   - name: openclaw
     webhookConfigs:
     - urlSecret:

@@ -56,12 +56,7 @@ spec:
           path: /
     toolbox:
       enabled: true
-    configOverride: |+
-      [global]
-      bdev_enable_discard = true
-      bdev_async_discard = true
-      osd_class_update_on_start = false
-
+    configOverride: |
       [osd]
       osd_scrub_begin_hour = 2
       osd_scrub_end_hour = 6

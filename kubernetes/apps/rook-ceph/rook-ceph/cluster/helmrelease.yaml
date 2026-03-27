@@ -80,6 +80,16 @@ spec:
           osd_scrub_sleep: "0.1"
           osd_scrub_priority: "1"
           osd_deep_scrub_interval: "1209600"
+      healthCheck:
+        livenessProbe:
+          mon:
+            probe:
+              timeoutSeconds: 15
+              failureThreshold: 5
+          mds:
+            probe:
+              timeoutSeconds: 30
+              failureThreshold: 5
       crashCollector:
         disable: false
       dashboard:

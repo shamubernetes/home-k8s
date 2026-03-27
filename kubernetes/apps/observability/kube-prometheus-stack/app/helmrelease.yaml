@@ -59,6 +59,7 @@ spec:
       disabled:
         etcdHighNumberOfLeaderChanges: true
         etcdHighNumberOfFailedGRPCRequests: true
+        etcdHighCommitDurations: true
       rules:
         kubeApiserverAvailability: false
         kubeApiserverBurnrate: false
@@ -155,6 +156,16 @@ spec:
             expr: |-
               increase((max without (instance, pod) (etcd_server_leader_changes_seen_total{job=~".*etcd.*"})
               or 0*absent(etcd_server_leader_changes_seen_total{job=~".*etcd.*"}))[15m:1m]) >= 4
+            for: 15m
+            labels:
+              severity: warning
+          - alert: etcdHighCommitDurations
+            annotations:
+              description: 'etcd cluster "{{ $labels.job }}": 99th percentile commit durations {{ $value }}s on etcd instance {{ $labels.instance }}.'
+              summary: etcd cluster 99th percentile commit durations are too high.
+            expr: |-
+              histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket{job=~".*etcd.*"}[5m]))
+              > 0.5
             for: 15m
             labels:
               severity: warning

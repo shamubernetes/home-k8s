@@ -68,6 +68,7 @@ spec:
       osd_scrub_sleep = 0.1
       osd_scrub_priority = 1
       osd_deep_scrub_interval = 1209600
+      ; end
 
     cephClusterSpec:
       cephConfig:

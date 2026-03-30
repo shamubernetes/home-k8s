@@ -27,14 +27,6 @@ spec:
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
-        initContainers:
-          chown:
-            image:
-              repository: busybox
-              tag: latest
-            command: ["sh", "-c", "chown -R 1000:1000 /home/steam/cs2-dedicated /home/steam/Steam"]
-            securityContext:
-              runAsUser: 0
         containers:
           app:
             image:
@@ -56,6 +48,11 @@ spec:
               requests:
                 cpu: 10m
     defaultPodOptions:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       annotations:
         descheduler.alpha.kubernetes.io/evict: "false"
     service:

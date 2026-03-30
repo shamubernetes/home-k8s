@@ -5,4 +5,167 @@ metadata:
 data:
   pre.sh: |
     #!/bin/bash
-    echo "[pre.sh] Vanilla CS2 — no plugins"
+    set -e
+
+    CSGO_DIR="/home/steam/cs2-dedicated/game/csgo"
+    ADDONS_DIR="$CSGO_DIR/addons"
+    CSS_PLUGINS="$ADDONS_DIR/counterstrikesharp/plugins"
+
+    # Versions — bump these to update
+    METAMOD_URL="https://mms.alliedmods.net/mmsdrop/2.0/mmsource-2.0.0-git1390-linux.tar.gz"
+    CSS_VERSION="v1.0.364"
+    CSS_URL="https://github.com/roflmuffin/CounterStrikeSharp/releases/download/$${CSS_VERSION}/counterstrikesharp-with-runtime-linux-$${CSS_VERSION#v}.zip"
+
+    echo "[pre.sh] Installing MetaMod + CounterStrikeSharp + plugins..."
+
+    # ── MetaMod ───────────────────────────────────────
+    if [ ! -f "$ADDONS_DIR/metamod.vdf" ]; then
+      echo "[pre.sh] Installing MetaMod..."
+      mkdir -p "$ADDONS_DIR"
+      curl -sL "$METAMOD_URL" | tar xz -C "$CSGO_DIR/"
+    else
+      echo "[pre.sh] MetaMod already installed"
+    fi
+
+    # ── CounterStrikeSharp ────────────────────────────
+    if [ ! -d "$ADDONS_DIR/counterstrikesharp" ]; then
+      echo "[pre.sh] Installing CounterStrikeSharp $${CSS_VERSION}..."
+      cd /tmp
+      curl -sL "$CSS_URL" -o css.zip
+      unzip -o css.zip -d "$CSGO_DIR/" > /dev/null
+      rm css.zip
+    else
+      echo "[pre.sh] CounterStrikeSharp already installed"
+    fi
+
+    mkdir -p "$CSS_PLUGINS"
+
+    # ── Plugin: CS2Rcon (!rcon in chat) ───────────────
+    if [ ! -d "$CSS_PLUGINS/CS2Rcon" ]; then
+      echo "[pre.sh] Installing CS2Rcon..."
+      RCON_URL=$(curl -sL https://api.github.com/repos/LordFetznschaedl/CS2Rcon/releases/latest | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)
+      if [ -n "$RCON_URL" ]; then
+        curl -sL "$RCON_URL" -o /tmp/plugin.zip
+        unzip -o /tmp/plugin.zip -d /tmp/plugin_extract > /dev/null 2>&1
+        FOUND=$(find /tmp/plugin_extract -name "CS2Rcon.dll" | head -1)
+        if [ -n "$FOUND" ]; then
+          cp -r "$(dirname "$FOUND")" "$CSS_PLUGINS/"
+        fi
+        rm -rf /tmp/plugin.zip /tmp/plugin_extract
+      fi
+    fi
+
+    # ── Plugin: CS2-Deathmatch ────────────────────────
+    # This plugin extracts to addons/counterstrikesharp/plugins/ AND addons/counterstrikesharp/shared/
+    if [ ! -d "$CSS_PLUGINS/Deathmatch" ]; then
+      echo "[pre.sh] Installing CS2-Deathmatch..."
+      DM_URL=$(curl -sL https://api.github.com/repos/NockyCZ/CS2-Deathmatch/releases/latest | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)
+      if [ -n "$DM_URL" ]; then
+        curl -sL "$DM_URL" -o /tmp/plugin.zip
+        # Extract to temp first to inspect structure
+        mkdir -p /tmp/dm_extract
+        unzip -o /tmp/plugin.zip -d /tmp/dm_extract > /dev/null 2>&1
+        # Move plugin files to correct location
+        if [ -d "/tmp/dm_extract/addons" ]; then
+          cp -r /tmp/dm_extract/addons/* "$ADDONS_DIR/"
+        elif [ -d "/tmp/dm_extract/plugins" ]; then
+          cp -r /tmp/dm_extract/plugins/* "$CSS_PLUGINS/"
+        else
+          # Flat zip — just copy everything that has Deathmatch
+          find /tmp/dm_extract -name "Deathmatch" -type d -exec cp -r {} "$CSS_PLUGINS/" \;
+        fi
+        # Also check for shared API DLLs
+        if [ -d "/tmp/dm_extract/shared" ]; then
+          cp -r /tmp/dm_extract/shared/* "$ADDONS_DIR/counterstrikesharp/shared/"
+        fi
+        rm -rf /tmp/plugin.zip /tmp/dm_extract
+      fi
+    fi
+    # Clean up wrong location from previous installs
+    if [ -d "$CSGO_DIR/plugins/Deathmatch" ] && [ -d "$CSS_PLUGINS/Deathmatch" ]; then
+      rm -rf "$CSGO_DIR/plugins/Deathmatch"
+    fi
+
+    # ── Plugin: GunGame ───────────────────────────────
+    if [ ! -d "$CSS_PLUGINS/GunGame" ]; then
+      echo "[pre.sh] Installing GunGame..."
+      GG_URL=$(curl -sL https://api.github.com/repos/ssypchenko/cs2-gungame/releases/latest | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)
+      if [ -n "$GG_URL" ]; then
+        curl -sL "$GG_URL" -o /tmp/plugin.zip
+        mkdir -p /tmp/gg_extract
+        unzip -o /tmp/plugin.zip -d /tmp/gg_extract > /dev/null 2>&1
+        if [ -d "/tmp/gg_extract/addons" ]; then
+          cp -r /tmp/gg_extract/addons/* "$ADDONS_DIR/"
+        else
+          find /tmp/gg_extract -name "GunGame" -type d -exec cp -r {} "$CSS_PLUGINS/" \;
+        fi
+        rm -rf /tmp/plugin.zip /tmp/gg_extract
+      fi
+    fi
+
+    # ── Plugin: SimpleAdmin ───────────────────────────
+    if [ ! -d "$CSS_PLUGINS/SimpleAdmin" ]; then
+      echo "[pre.sh] Installing SimpleAdmin..."
+      SA_URL=$(curl -sL https://api.github.com/repos/connercsbn/SimpleAdmin/releases/latest | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)
+      if [ -n "$SA_URL" ]; then
+        curl -sL "$SA_URL" -o /tmp/plugin.zip
+        mkdir -p /tmp/sa_extract
+        unzip -o /tmp/plugin.zip -d /tmp/sa_extract > /dev/null 2>&1
+        if [ -d "/tmp/sa_extract/addons" ]; then
+          cp -r /tmp/sa_extract/addons/* "$ADDONS_DIR/"
+        else
+          find /tmp/sa_extract -name "SimpleAdmin" -type d -exec cp -r {} "$CSS_PLUGINS/" \;
+        fi
+        rm -rf /tmp/plugin.zip /tmp/sa_extract
+      fi
+    fi
+
+    # ── Plugin: CS2-ShowDamage ────────────────────────
+    if [ ! -d "$CSS_PLUGINS/CS2-ShowDamage" ]; then
+      echo "[pre.sh] Installing CS2-ShowDamage..."
+      SD_URL=$(curl -sL https://api.github.com/repos/ABKAM2023/CS2-ShowDamage/releases/latest | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)
+      if [ -n "$SD_URL" ]; then
+        curl -sL "$SD_URL" -o /tmp/plugin.zip
+        mkdir -p /tmp/sd_extract
+        unzip -o /tmp/plugin.zip -d /tmp/sd_extract > /dev/null 2>&1
+        if [ -d "/tmp/sd_extract/addons" ]; then
+          cp -r /tmp/sd_extract/addons/* "$ADDONS_DIR/"
+        else
+          find /tmp/sd_extract -name "CS2-ShowDamage" -type d -exec cp -r {} "$CSS_PLUGINS/" \;
+        fi
+        rm -rf /tmp/plugin.zip /tmp/sd_extract
+      fi
+    fi
+    # Clean up wrong location from previous installs
+    if [ -d "$ADDONS_DIR/ShowDamage" ] && [ -d "$CSS_PLUGINS/CS2-ShowDamage" ]; then
+      rm -rf "$ADDONS_DIR/ShowDamage"
+    fi
+
+    # ── Plugin: CS2-Parachute ─────────────────────────
+    if [ ! -d "$CSS_PLUGINS/Parachute" ]; then
+      echo "[pre.sh] Installing CS2-Parachute..."
+      PARA_URL=$(curl -sL https://api.github.com/repos/Franc1sco/CS2-Parachute/releases/latest | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)
+      if [ -n "$PARA_URL" ]; then
+        curl -sL "$PARA_URL" -o /tmp/plugin.zip
+        mkdir -p /tmp/para_extract
+        unzip -o /tmp/plugin.zip -d /tmp/para_extract > /dev/null 2>&1
+        if [ -d "/tmp/para_extract/addons" ]; then
+          cp -r /tmp/para_extract/addons/* "$ADDONS_DIR/"
+        else
+          find /tmp/para_extract -name "Parachute" -type d -exec cp -r {} "$CSS_PLUGINS/" \;
+        fi
+        rm -rf /tmp/plugin.zip /tmp/para_extract
+      fi
+    fi
+
+    # ── Enable MetaMod in gameinfo.gi ─────────────────
+    GAMEINFO="$CSGO_DIR/gameinfo.gi"
+    if ! grep -q "metamod" "$GAMEINFO" 2>/dev/null; then
+      echo "[pre.sh] Enabling MetaMod in gameinfo.gi..."
+      sed -i '/Game_LowViolence/a\\t\t\tGame\tcsgo/addons/metamod' "$GAMEINFO"
+    fi
+
+    echo "[pre.sh] Done! Installed mods:"
+    echo "  - MetaMod"
+    echo "  - CounterStrikeSharp $${CSS_VERSION}"
+    ls -1 "$CSS_PLUGINS" 2>/dev/null | grep -v README | while read p; do echo "  - Plugin: $$p"; done

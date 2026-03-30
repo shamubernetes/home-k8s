@@ -24,6 +24,10 @@ spec:
         provider:
           type: Kubernetes
           kubernetes:
+            leaderElection:
+              leaseDuration: 30s
+              renewDeadline: 20s
+              retryPeriod: 5s
             deploy:
               type: GatewayNamespace
         logging:

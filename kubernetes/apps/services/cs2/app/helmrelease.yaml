@@ -70,3 +70,7 @@ spec:
         existingClaim: cs2
         globalMounts:
           - path: /home/steam/cs2/cs2-dedicated
+      home:
+        existingClaim: cs2-home
+        globalMounts:
+          - path: /home/steam/Steam

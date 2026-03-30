@@ -14,7 +14,7 @@ data:
     # Versions — bump these to update
     METAMOD_URL="https://mms.alliedmods.net/mmsdrop/2.0/mmsource-2.0.0-git1390-linux.tar.gz"
     CSS_VERSION="v1.0.364"
-    CSS_URL="https://github.com/roflmuffin/CounterStrikeSharp/releases/download/${CSS_VERSION}/counterstrikesharp-with-runtime-linux-${CSS_VERSION#v}.zip"
+    CSS_URL="https://github.com/roflmuffin/CounterStrikeSharp/releases/download/$${CSS_VERSION}/counterstrikesharp-with-runtime-linux-$${CSS_VERSION#v}.zip"
 
     echo "[pre.sh] Installing MetaMod + CounterStrikeSharp + plugins..."
 
@@ -29,7 +29,7 @@ data:
 
     # ── CounterStrikeSharp ────────────────────────────
     if [ ! -d "$ADDONS_DIR/counterstrikesharp" ]; then
-      echo "[pre.sh] Installing CounterStrikeSharp ${CSS_VERSION}..."
+      echo "[pre.sh] Installing CounterStrikeSharp $${CSS_VERSION}..."
       cd /tmp
       curl -sL "$CSS_URL" -o css.zip
       unzip -o css.zip -d "$CSGO_DIR/" > /dev/null
@@ -120,7 +120,7 @@ data:
 
     echo "[pre.sh] Done! Installed mods:"
     echo "  - MetaMod"
-    echo "  - CounterStrikeSharp ${CSS_VERSION}"
+    echo "  - CounterStrikeSharp $${CSS_VERSION}"
     echo "  - CS2Rcon (!rcon in chat)"
     echo "  - CS2-Deathmatch"
     echo "  - GunGame"

@@ -39,6 +39,21 @@ spec:
       - name: alertname
         value: etcdHighNumberOfLeaderChanges
         matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: etcdHighNumberOfFailedGRPCRequests
+        matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: etcdDatabaseHighFragmentationRatio
+        matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: CephPGNotDeepScrubbed
+        matchType: "="
     - receiver: openclaw
       matchers:
       - name: severity

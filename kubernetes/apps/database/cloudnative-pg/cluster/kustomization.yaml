@@ -7,6 +7,7 @@ resources:
 - ./pooler.yaml
 - ./pooler-session.yaml
 - ./scheduledbackup.yaml
+- ./snapshot-retention.yaml
 - ./prometheusrule.yaml
 - ./service.yaml
 - ../../../../templates/gatus/infrastructure

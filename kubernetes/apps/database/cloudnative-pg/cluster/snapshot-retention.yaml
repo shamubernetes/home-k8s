@@ -1,0 +1,85 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: snapshot-retention
+  namespace: database
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: snapshot-retention
+  namespace: database
+rules:
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["backups"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: snapshot-retention
+  namespace: database
+subjects:
+  - kind: ServiceAccount
+    name: snapshot-retention
+    namespace: database
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: snapshot-retention
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: snapshot-retention
+  namespace: database
+spec:
+  schedule: "30 3 * * *" # Daily at 3:30 AM, after the 2 AM backup
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          serviceAccountName: snapshot-retention
+          restartPolicy: OnFailure
+          containers:
+            - name: retention
+              image: bitnami/kubectl:1.31
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  KEEP_DAYS=7
+                  CUTOFF=$(date -u -d "-${KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-${KEEP_DAYS}d +%Y-%m-%dT%H:%M:%SZ)
+                  echo "Pruning VolumeSnapshots older than ${KEEP_DAYS} days (before ${CUTOFF})"
+
+                  # Delete old VolumeSnapshots
+                  DELETED=0
+                  for snap in $(kubectl get volumesnapshot -n database -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.creationTimestamp}{"\n"}{end}'); do
+                    NAME=$(echo "$snap" | cut -d'|' -f1)
+                    CREATED=$(echo "$snap" | cut -d'|' -f2)
+                    if [ "$CREATED" \< "$CUTOFF" ]; then
+                      echo "Deleting VolumeSnapshot: ${NAME} (created: ${CREATED})"
+                      kubectl delete volumesnapshot -n database "${NAME}" --wait=false
+                      DELETED=$((DELETED + 1))
+                    fi
+                  done
+                  echo "Deleted ${DELETED} VolumeSnapshots"
+
+                  # Delete old Backup objects (volumeSnapshot method only)
+                  BACKUP_DELETED=0
+                  for backup in $(kubectl get backup -n database -o jsonpath='{range .items[?(@.spec.method=="volumeSnapshot")]}{.metadata.name}{"|"}{.metadata.creationTimestamp}{"\n"}{end}'); do
+                    NAME=$(echo "$backup" | cut -d'|' -f1)
+                    CREATED=$(echo "$backup" | cut -d'|' -f2)
+                    if [ "$CREATED" \< "$CUTOFF" ]; then
+                      kubectl delete backup -n database "${NAME}" --wait=false
+                      BACKUP_DELETED=$((BACKUP_DELETED + 1))
+                    fi
+                  done
+                  echo "Deleted ${BACKUP_DELETED} Backup objects"

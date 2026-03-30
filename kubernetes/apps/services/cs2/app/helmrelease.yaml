@@ -32,6 +32,11 @@ spec:
             image:
               repository: joedwards32/cs2
               tag: 4.0.1@sha256:34c093d24a23751fb409ae41dffe88884fb36964b365fcd25a31ec45e88ad8cf
+            env:
+              - name: CS2_CHEATS
+                value: "1"
+              - name: CS2_MAXPLAYERS
+                value: "20"
             envFrom:
               - secretRef:
                   name: cs2-secret
@@ -74,3 +79,10 @@ spec:
         existingClaim: cs2-home
         globalMounts:
           - path: /home/steam/Steam
+      scripts:
+        type: configMap
+        name: cs2-scripts
+        defaultMode: 0755
+        globalMounts:
+          - path: /home/steam/cs2-dedicated/pre.sh
+            subPath: pre.sh

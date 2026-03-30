@@ -74,11 +74,7 @@ spec:
       config:
         existingClaim: cs2
         globalMounts:
-          - path: /home/steam/cs2/cs2-dedicated
-      home:
-        existingClaim: cs2-home
-        globalMounts:
-          - path: /home/steam/Steam
+          - path: /home/steam/cs2-dedicated
       scripts:
         type: configMap
         name: cs2-scripts

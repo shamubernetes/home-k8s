@@ -56,8 +56,8 @@ spec:
                 - -c
                 - |
                   KEEP_DAYS=7
-                  CUTOFF=$(date -u -d "-${KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-${KEEP_DAYS}d +%Y-%m-%dT%H:%M:%SZ)
-                  echo "Pruning VolumeSnapshots older than ${KEEP_DAYS} days (before ${CUTOFF})"
+                  CUTOFF=$(date -u -d "-$${KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-$${KEEP_DAYS}d +%Y-%m-%dT%H:%M:%SZ)
+                  echo "Pruning VolumeSnapshots older than $${KEEP_DAYS} days (before $${CUTOFF})"
 
                   # Delete old VolumeSnapshots
                   DELETED=0
@@ -65,12 +65,12 @@ spec:
                     NAME=$(echo "$snap" | cut -d'|' -f1)
                     CREATED=$(echo "$snap" | cut -d'|' -f2)
                     if [ "$CREATED" \< "$CUTOFF" ]; then
-                      echo "Deleting VolumeSnapshot: ${NAME} (created: ${CREATED})"
-                      kubectl delete volumesnapshot -n database "${NAME}" --wait=false
+                      echo "Deleting VolumeSnapshot: $${NAME} (created: $${CREATED})"
+                      kubectl delete volumesnapshot -n database "$${NAME}" --wait=false
                       DELETED=$((DELETED + 1))
                     fi
                   done
-                  echo "Deleted ${DELETED} VolumeSnapshots"
+                  echo "Deleted $${DELETED} VolumeSnapshots"
 
                   # Delete old Backup objects (volumeSnapshot method only)
                   BACKUP_DELETED=0
@@ -78,8 +78,8 @@ spec:
                     NAME=$(echo "$backup" | cut -d'|' -f1)
                     CREATED=$(echo "$backup" | cut -d'|' -f2)
                     if [ "$CREATED" \< "$CUTOFF" ]; then
-                      kubectl delete backup -n database "${NAME}" --wait=false
+                      kubectl delete backup -n database "$${NAME}" --wait=false
                       BACKUP_DELETED=$((BACKUP_DELETED + 1))
                     fi
                   done
-                  echo "Deleted ${BACKUP_DELETED} Backup objects"
+                  echo "Deleted $${BACKUP_DELETED} Backup objects"

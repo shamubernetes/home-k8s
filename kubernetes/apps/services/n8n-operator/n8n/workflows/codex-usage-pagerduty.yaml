@@ -24,26 +24,6 @@ data:
         },
         {
           "parameters": {
-            "resource": "item",
-            "operation": "getItemDetails",
-            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
-            "itemUUID": "dukkdm7qf25d6nrstptvk7wx3y",
-            "requestOptions": {}
-          },
-          "id": "get-pagerduty-key",
-          "name": "Get PagerDuty Key",
-          "type": "@n8layer/n8n-nodes-1password.onePassword",
-          "typeVersion": 1,
-          "position": [220, 0],
-          "credentials": {
-            "onePasswordApi": {
-              "id": "",
-              "name": "1Password Connect"
-            }
-          }
-        },
-        {
-          "parameters": {
             "url": "http://10.0.10.95:3847/api/codex-usage",
             "options": {
               "response": {
@@ -57,17 +37,86 @@ data:
           "name": "Fetch Codex Usage",
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
+          "position": [220, 0]
+        },
+        {
+          "parameters": {
+            "jsCode": "const usage = $('Fetch Codex Usage').first().json;\n\nconst windows = [\n  { key: 'fiveHour', label: '5h', data: usage.fiveHour },\n  { key: 'weekly', label: 'weekly', data: usage.weekly },\n].filter(function (window) { return window.data; });\n\nfunction evaluateWindow(window) {\n  const remainingPercent = Number(window.data.remainingPercent);\n  const minutesToReset = Number(window.data.minutesToReset);\n  const resetAt = window.data.resetAt || null;\n  const suppressed = Number.isFinite(minutesToReset) && minutesToReset < 20;\n\n  let severity = 'ok';\n  if (!suppressed) {\n    if (remainingPercent <= 10) severity = 'critical';\n    else if (remainingPercent <= 20) severity = 'warning';\n  }\n\n  return {\n    key: window.key,\n    label: window.label,\n    remainingPercent: remainingPercent,\n    minutesToReset: minutesToReset,\n    resetAt: resetAt,\n    suppressed: suppressed,\n    severity: severity\n  };\n}\n\nconst evaluated = windows.map(evaluateWindow);\nconst rank = { ok: 0, warning: 1, critical: 2 };\nconst active = evaluated\n  .filter(function (window) { return window.severity !== 'ok'; })\n  .sort(function (a, b) {\n    return rank[b.severity] - rank[a.severity] || a.remainingPercent - b.remainingPercent || a.minutesToReset - b.minutesToReset;\n  });\n\nconst chosen = active[0] || null;\nconst suppressedLow = evaluated.filter(function (window) {\n  return window.suppressed && window.remainingPercent <= 20;\n});\n\nlet currentState = 'ok';\nlet summary = 'Codex usage healthy';\nlet chosenWindow = null;\n\nif (chosen) {\n  currentState = chosen.severity;\n  chosenWindow = chosen;\n  summary = 'Codex usage low: ' + chosen.label + ' window at ' + chosen.remainingPercent + '% remaining (' + chosen.minutesToReset + ' min to reset)';\n} else if (suppressedLow.length > 0) {\n  summary = 'Codex usage low but window resets soon: ' + suppressedLow.map(function (window) {\n    return window.label + ' ' + window.remainingPercent + '% (' + window.minutesToReset + ' min)';\n  }).join(', ');\n}\n\nreturn {\n  json: {\n    alertKey: 'codex-usage',\n    currentState: currentState,\n    summary: summary,\n    checkedAt: usage.checkedAt || new Date().toISOString(),\n    plan: usage.plan || null,\n    source: usage.source || 'openclaw',\n    chosenWindow: chosenWindow,\n    windows: evaluated,\n    suppressedLow: suppressedLow\n  }\n};"
+          },
+          "id": "evaluate-usage",
+          "name": "Evaluate Usage",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
           "position": [440, 0]
         },
         {
           "parameters": {
-            "jsCode": "const usage = $('Fetch Codex Usage').first().json;\nconst item = $('Get PagerDuty Key').first().json;\n\nconst routingKey = item.fields.find((f) => f.label === 'credential')?.value;\nif (!routingKey) {\n  throw new Error('PagerDuty routing key missing from 1Password item');\n}\n\nconst windows = [\n  { key: 'fiveHour', label: '5h', data: usage.fiveHour },\n  { key: 'weekly', label: 'weekly', data: usage.weekly },\n].filter((w) => w.data);\n\nfunction evaluateWindow(window) {\n  const remainingPercent = Number(window.data.remainingPercent);\n  const minutesToReset = Number(window.data.minutesToReset);\n  const resetAt = window.data.resetAt ?? null;\n  const suppressed = Number.isFinite(minutesToReset) && minutesToReset < 20;\n\n  let severity = 'ok';\n  if (!suppressed) {\n    if (remainingPercent <= 10) severity = 'critical';\n    else if (remainingPercent <= 20) severity = 'warning';\n  }\n\n  return {\n    key: window.key,\n    label: window.label,\n    remainingPercent,\n    minutesToReset,\n    resetAt,\n    suppressed,\n    severity,\n  };\n}\n\nconst evaluated = windows.map(evaluateWindow);\nconst rank = { ok: 0, warning: 1, critical: 2 };\nconst active = evaluated\n  .filter((w) => w.severity !== 'ok')\n  .sort((a, b) => rank[b.severity] - rank[a.severity] || a.remainingPercent - b.remainingPercent || a.minutesToReset - b.minutesToReset);\n\nconst chosen = active[0] ?? null;\nconst suppressedLow = evaluated.filter((w) => w.suppressed && w.remainingPercent <= 20);\n\nlet eventAction = 'resolve';\nlet summary = 'Codex usage healthy';\nlet payload = undefined;\n\nif (chosen) {\n  eventAction = 'trigger';\n  summary = `Codex usage low: ${chosen.label} window at ${chosen.remainingPercent}% remaining (${chosen.minutesToReset} min to reset)`;\n  payload = {\n    summary,\n    severity: chosen.severity,\n    source: 'n8n codex-usage bridge',\n    custom_details: {\n      checkedAt: usage.checkedAt ?? new Date().toISOString(),\n      plan: usage.plan ?? null,\n      source: usage.source ?? 'openclaw',\n      chosenWindow: chosen,\n      windows: evaluated,\n    },\n  };\n} else if (suppressedLow.length > 0) {\n  summary = `Codex usage low but window resets soon: ${suppressedLow.map((w) => `${w.label} ${w.remainingPercent}% (${w.minutesToReset} min)`).join(', ')}`;\n} else {\n  summary = 'Codex usage healthy';\n}\n\nconst event = {\n  routing_key: routingKey,\n  event_action: eventAction,\n  dedupe_key: 'codex-usage',\n};\n\nif (payload) {\n  event.payload = payload;\n}\n\nreturn {\n  json: {\n    event,\n    summary,\n    eventAction,\n    windows: evaluated,\n  },\n};"
+            "operation": "executeQuery",
+            "query": "SELECT alert_key, current_state, window_key, window_label, remaining_percent, minutes_to_reset, reset_at, summary, notified_at FROM codex_usage_alert_state WHERE alert_key = 'codex-usage' LIMIT 1",
+            "options": {}
+          },
+          "id": "load-alert-state",
+          "name": "Load Alert State",
+          "type": "n8n-nodes-base.postgres",
+          "typeVersion": 2.5,
+          "position": [660, 0],
+          "alwaysOutputData": true,
+          "credentials": {
+            "postgres": {
+              "id": "",
+              "name": "Postgres account"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "jsCode": "const current = $('Evaluate Usage').first().json;\nconst previous = $('Load Alert State').all().map(function (item) { return item.json; })[0] || null;\n\nconst wasActive = !!(previous && ['warning', 'critical'].includes(previous.current_state));\nconst isActive = ['warning', 'critical'].includes(current.currentState);\nconst currentWindowKey = current.chosenWindow ? current.chosenWindow.key : null;\n\nlet shouldNotify = false;\nlet eventAction = 'none';\n\nif (isActive) {\n  if (!previous || previous.current_state !== current.currentState || previous.window_key !== currentWindowKey) {\n    shouldNotify = true;\n    eventAction = 'trigger';\n  }\n} else if (wasActive) {\n  shouldNotify = true;\n  eventAction = 'resolve';\n}\n\nconst newState = {\n  alertKey: current.alertKey,\n  currentState: current.currentState,\n  windowKey: current.chosenWindow ? current.chosenWindow.key : null,\n  windowLabel: current.chosenWindow ? current.chosenWindow.label : null,\n  remainingPercent: current.chosenWindow ? current.chosenWindow.remainingPercent : null,\n  minutesToReset: current.chosenWindow ? current.chosenWindow.minutesToReset : null,\n  resetAt: current.chosenWindow ? current.chosenWindow.resetAt : null,\n  summary: current.summary,\n  checkedAt: current.checkedAt\n};\n\nreturn {\n  json: {\n    shouldNotify: shouldNotify,\n    eventAction: eventAction,\n    summary: current.summary,\n    current: current,\n    previous: previous,\n    newState: newState\n  }\n};"
+          },
+          "id": "decide-transition",
+          "name": "Decide Transition",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "position": [880, 0]
+        },
+        {
+          "parameters": {
+            "jsCode": "if (!$json.shouldNotify) {\n  return [];\n}\n\nreturn [{ json: $json }];"
+          },
+          "id": "gate-notify",
+          "name": "Gate Notify",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "position": [1100, 0]
+        },
+        {
+          "parameters": {
+            "resource": "item",
+            "operation": "getItemDetails",
+            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
+            "itemUUID": "dukkdm7qf25d6nrstptvk7wx3y",
+            "requestOptions": {}
+          },
+          "id": "get-pagerduty-key",
+          "name": "Get PagerDuty Key",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [1320, 0],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "jsCode": "const decision = $('Gate Notify').first().json;\nconst item = $('Get PagerDuty Key').first().json;\n\nconst routingKeyField = item.fields.find(function (field) {\n  return field.label === 'credential';\n});\nconst routingKey = routingKeyField ? routingKeyField.value : null;\nif (!routingKey) {\n  throw new Error('PagerDuty routing key missing from 1Password item');\n}\n\nconst event = {\n  routing_key: routingKey,\n  event_action: decision.eventAction,\n  dedupe_key: decision.newState.alertKey\n};\n\nif (decision.eventAction === 'trigger') {\n  event.payload = {\n    summary: decision.summary,\n    severity: decision.newState.currentState,\n    source: 'n8n codex-usage bridge',\n    custom_details: {\n      checkedAt: decision.current.checkedAt,\n      plan: decision.current.plan,\n      source: decision.current.source,\n      chosenWindow: decision.current.chosenWindow,\n      windows: decision.current.windows\n    }\n  };\n}\n\nreturn {\n  json: {\n    event: event,\n    summary: decision.summary,\n    newState: decision.newState\n  }\n};"
           },
           "id": "build-pagerduty-event",
           "name": "Build PagerDuty Event",
           "type": "n8n-nodes-base.code",
           "typeVersion": 2,
-          "position": [660, 0]
+          "position": [1540, 0]
         },
         {
           "parameters": {
@@ -94,14 +143,37 @@ data:
           "name": "Send PagerDuty Event",
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
-          "position": [880, 0]
+          "position": [1760, 0]
+        },
+        {
+          "parameters": {
+            "operation": "executeQuery",
+            "query": "={{ (() => { const state = $('Gate Notify').first().json.newState; const esc = (value) => value === null || value === undefined ? 'NULL' : '\'' + String(value).replace(/'/g, \"''\") + '\''; const num = (value) => value === null || value === undefined || Number.isNaN(Number(value)) ? 'NULL' : String(Number(value)); return 'INSERT INTO codex_usage_alert_state (alert_key, current_state, window_key, window_label, remaining_percent, minutes_to_reset, reset_at, summary, notified_at, updated_at) VALUES (' + esc(state.alertKey) + ', ' + esc(state.currentState) + ', ' + esc(state.windowKey) + ', ' + esc(state.windowLabel) + ', ' + num(state.remainingPercent) + ', ' + num(state.minutesToReset) + ', ' + esc(state.resetAt) + ', ' + esc(state.summary) + ', ' + esc(state.checkedAt) + ', NOW()) ON CONFLICT (alert_key) DO UPDATE SET current_state = EXCLUDED.current_state, window_key = EXCLUDED.window_key, window_label = EXCLUDED.window_label, remaining_percent = EXCLUDED.remaining_percent, minutes_to_reset = EXCLUDED.minutes_to_reset, reset_at = EXCLUDED.reset_at, summary = EXCLUDED.summary, notified_at = EXCLUDED.notified_at, updated_at = NOW()'; })() }}",
+            "options": {}
+          },
+          "id": "save-alert-state",
+          "name": "Save Alert State",
+          "type": "n8n-nodes-base.postgres",
+          "typeVersion": 2.5,
+          "position": [1980, 0],
+          "credentials": {
+            "postgres": {
+              "id": "",
+              "name": "Postgres account"
+            }
+          }
         }
       ],
       "connections": {
-        "Every 5 Minutes": {"main": [[{"node": "Get PagerDuty Key", "type": "main", "index": 0}]]},
-        "Get PagerDuty Key": {"main": [[{"node": "Fetch Codex Usage", "type": "main", "index": 0}]]},
-        "Fetch Codex Usage": {"main": [[{"node": "Build PagerDuty Event", "type": "main", "index": 0}]]},
-        "Build PagerDuty Event": {"main": [[{"node": "Send PagerDuty Event", "type": "main", "index": 0}]]}
+        "Every 5 Minutes": {"main": [[{"node": "Fetch Codex Usage", "type": "main", "index": 0}]]},
+        "Fetch Codex Usage": {"main": [[{"node": "Evaluate Usage", "type": "main", "index": 0}]]},
+        "Evaluate Usage": {"main": [[{"node": "Load Alert State", "type": "main", "index": 0}]]},
+        "Load Alert State": {"main": [[{"node": "Decide Transition", "type": "main", "index": 0}]]},
+        "Decide Transition": {"main": [[{"node": "Gate Notify", "type": "main", "index": 0}]]},
+        "Gate Notify": {"main": [[{"node": "Get PagerDuty Key", "type": "main", "index": 0}]]},
+        "Get PagerDuty Key": {"main": [[{"node": "Build PagerDuty Event", "type": "main", "index": 0}]]},
+        "Build PagerDuty Event": {"main": [[{"node": "Send PagerDuty Event", "type": "main", "index": 0}]]},
+        "Send PagerDuty Event": {"main": [[{"node": "Save Alert State", "type": "main", "index": 0}]]}
       },
       "settings": {
         "executionOrder": "v1"
@@ -131,3 +203,4 @@ spec:
     key: workflow.json
   credentialMappings:
     "1Password Connect": onepassword
+    "Postgres account": postgres

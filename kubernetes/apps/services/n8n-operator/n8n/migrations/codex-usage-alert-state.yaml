@@ -1,0 +1,76 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-migration-codex-usage-alert-state
+  namespace: services
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS codex_usage_alert_state (
+      alert_key VARCHAR(100) PRIMARY KEY,
+      current_state VARCHAR(20) NOT NULL,
+      window_key VARCHAR(20),
+      window_label VARCHAR(20),
+      remaining_percent INTEGER,
+      minutes_to_reset INTEGER,
+      reset_at TIMESTAMP WITH TIME ZONE,
+      summary TEXT,
+      notified_at TIMESTAMP WITH TIME ZONE,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_codex_usage_alert_state_updated_at ON codex_usage_alert_state(updated_at DESC);
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: n8n-migrate-codex-usage-alert-state
+  namespace: services
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: ghcr.io/home-operations/postgres-init:17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+          env:
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: host
+            - name: PGPORT
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: port
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: user
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: password
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-db-secret
+                  key: database
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Running codex usage alert state migration..."
+              psql -f /migrations/init.sql
+              echo "Migration complete."
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+      volumes:
+        - name: migrations
+          configMap:
+            name: n8n-migration-codex-usage-alert-state

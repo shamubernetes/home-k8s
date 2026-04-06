@@ -1,0 +1,131 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-codex-usage-pagerduty
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "rule": {
+              "interval": [{"field": "cronExpression", "expression": "*/5 * * * *"}]
+            }
+          },
+          "id": "schedule-trigger",
+          "name": "Every 5 Minutes",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "typeVersion": 1.2,
+          "position": [0, 0]
+        },
+        {
+          "parameters": {
+            "resource": "item",
+            "operation": "getItemDetails",
+            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
+            "itemUUID": "dukkdm7qf25d6nrstptvk7wx3y",
+            "requestOptions": {}
+          },
+          "id": "get-pagerduty-key",
+          "name": "Get PagerDuty Key",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [220, 0],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "url": "http://10.0.10.95:3847/api/codex-usage",
+            "options": {
+              "response": {
+                "response": {
+                  "responseFormat": "json"
+                }
+              }
+            }
+          },
+          "id": "fetch-codex-usage",
+          "name": "Fetch Codex Usage",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [440, 0]
+        },
+        {
+          "parameters": {
+            "jsCode": "const usage = $('Fetch Codex Usage').first().json;\nconst item = $('Get PagerDuty Key').first().json;\n\nconst routingKey = item.fields.find((f) => f.label === 'credential')?.value;\nif (!routingKey) {\n  throw new Error('PagerDuty routing key missing from 1Password item');\n}\n\nconst windows = [\n  { key: 'fiveHour', label: '5h', data: usage.fiveHour },\n  { key: 'weekly', label: 'weekly', data: usage.weekly },\n].filter((w) => w.data);\n\nfunction evaluateWindow(window) {\n  const remainingPercent = Number(window.data.remainingPercent);\n  const minutesToReset = Number(window.data.minutesToReset);\n  const resetAt = window.data.resetAt ?? null;\n  const suppressed = Number.isFinite(minutesToReset) && minutesToReset < 20;\n\n  let severity = 'ok';\n  if (!suppressed) {\n    if (remainingPercent <= 10) severity = 'critical';\n    else if (remainingPercent <= 20) severity = 'warning';\n  }\n\n  return {\n    key: window.key,\n    label: window.label,\n    remainingPercent,\n    minutesToReset,\n    resetAt,\n    suppressed,\n    severity,\n  };\n}\n\nconst evaluated = windows.map(evaluateWindow);\nconst rank = { ok: 0, warning: 1, critical: 2 };\nconst active = evaluated\n  .filter((w) => w.severity !== 'ok')\n  .sort((a, b) => rank[b.severity] - rank[a.severity] || a.remainingPercent - b.remainingPercent || a.minutesToReset - b.minutesToReset);\n\nconst chosen = active[0] ?? null;\nconst suppressedLow = evaluated.filter((w) => w.suppressed && w.remainingPercent <= 20);\n\nlet eventAction = 'resolve';\nlet summary = 'Codex usage healthy';\nlet payload = undefined;\n\nif (chosen) {\n  eventAction = 'trigger';\n  summary = `Codex usage low: ${chosen.label} window at ${chosen.remainingPercent}% remaining (${chosen.minutesToReset} min to reset)`;\n  payload = {\n    summary,\n    severity: chosen.severity,\n    source: 'n8n codex-usage bridge',\n    custom_details: {\n      checkedAt: usage.checkedAt ?? new Date().toISOString(),\n      plan: usage.plan ?? null,\n      source: usage.source ?? 'openclaw',\n      chosenWindow: chosen,\n      windows: evaluated,\n    },\n  };\n} else if (suppressedLow.length > 0) {\n  summary = `Codex usage low but window resets soon: ${suppressedLow.map((w) => `${w.label} ${w.remainingPercent}% (${w.minutesToReset} min)`).join(', ')}`;\n} else {\n  summary = 'Codex usage healthy';\n}\n\nconst event = {\n  routing_key: routingKey,\n  event_action: eventAction,\n  dedupe_key: 'codex-usage',\n};\n\nif (payload) {\n  event.payload = payload;\n}\n\nreturn {\n  json: {\n    event,\n    summary,\n    eventAction,\n    windows: evaluated,\n  },\n};"
+          },
+          "id": "build-pagerduty-event",
+          "name": "Build PagerDuty Event",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "position": [660, 0]
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "https://events.pagerduty.com/v2/enqueue",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {"name": "Content-Type", "value": "application/json"}
+              ]
+            },
+            "sendBody": true,
+            "specifyBody": "json",
+            "jsonBody": "={{ JSON.stringify($json.event) }}",
+            "options": {
+              "response": {
+                "response": {
+                  "responseFormat": "json"
+                }
+              }
+            }
+          },
+          "id": "send-pagerduty-event",
+          "name": "Send PagerDuty Event",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [880, 0]
+        }
+      ],
+      "connections": {
+        "Every 5 Minutes": {"main": [[{"node": "Get PagerDuty Key", "type": "main", "index": 0}]]},
+        "Get PagerDuty Key": {"main": [[{"node": "Fetch Codex Usage", "type": "main", "index": 0}]]},
+        "Fetch Codex Usage": {"main": [[{"node": "Build PagerDuty Event", "type": "main", "index": 0}]]},
+        "Build PagerDuty Event": {"main": [[{"node": "Send PagerDuty Event", "type": "main", "index": 0}]]}
+      },
+      "settings": {
+        "executionOrder": "v1"
+      }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: codex-usage-pagerduty
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Codex Usage PagerDuty"
+  active: true
+  deletionPolicy: Retain
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-codex-usage-pagerduty
+    key: workflow.json
+  credentialMappings:
+    "1Password Connect": onepassword

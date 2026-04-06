@@ -4,6 +4,8 @@ kind: ConfigMap
 metadata:
   name: workflow-codex-usage-pagerduty
   namespace: services
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
 data:
   workflow.json: |
     {

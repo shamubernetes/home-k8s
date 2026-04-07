@@ -2,28 +2,44 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-migration-codex-usage-alert-state
+  name: n8n-migration-codex-usage-alert-events
   namespace: services
 data:
   init.sql: |
-    CREATE TABLE IF NOT EXISTS codex_usage_alert_state (
-      alert_key VARCHAR(100) PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS codex_usage_alert_events (
+      id BIGSERIAL PRIMARY KEY,
+      alert_key VARCHAR(100) NOT NULL,
+      event_action VARCHAR(20) NOT NULL,
       current_state VARCHAR(20) NOT NULL,
       window_key VARCHAR(20),
       window_label VARCHAR(20),
-      remaining_percent INTEGER,
+      alert_reason VARCHAR(20),
+      summary TEXT NOT NULL,
+      remaining_percent NUMERIC(5,2),
+      used_percent NUMERIC(5,2),
+      expected_remaining_percent NUMERIC(5,2),
+      expected_used_percent NUMERIC(5,2),
+      pace_delta_percent NUMERIC(6,2),
+      burn_rate NUMERIC(6,2),
+      window_minutes INTEGER,
       minutes_to_reset INTEGER,
+      projected_minutes_to_empty INTEGER,
+      projected_margin_minutes INTEGER,
       reset_at TIMESTAMP WITH TIME ZONE,
-      summary TEXT,
-      notified_at TIMESTAMP WITH TIME ZONE,
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      checked_at TIMESTAMP WITH TIME ZONE NOT NULL,
+      dedup_key VARCHAR(100) NOT NULL,
+      pagerduty_status VARCHAR(40) NOT NULL,
+      pagerduty_message TEXT,
+      plan TEXT,
+      source TEXT,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_codex_usage_alert_state_updated_at ON codex_usage_alert_state(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_codex_usage_alert_events_latest ON codex_usage_alert_events(alert_key, created_at DESC);
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: n8n-migrate-codex-usage-alert-state
+  name: n8n-migrate-codex-usage-alert-events
   namespace: services
 spec:
   ttlSecondsAfterFinished: 300
@@ -64,7 +80,7 @@ spec:
             - -c
             - |
               set -e
-              echo "Running codex usage alert state migration..."
+              echo "Running codex usage alert events migration..."
               psql -f /migrations/init.sql
               echo "Migration complete."
           volumeMounts:
@@ -73,4 +89,4 @@ spec:
       volumes:
         - name: migrations
           configMap:
-            name: n8n-migration-codex-usage-alert-state
+            name: n8n-migration-codex-usage-alert-events

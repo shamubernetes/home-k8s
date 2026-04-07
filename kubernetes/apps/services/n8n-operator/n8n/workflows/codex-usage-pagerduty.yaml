@@ -9,175 +9,303 @@ metadata:
 data:
   workflow.json: |
     {
-      "nodes": [
-        {
-          "parameters": {
-            "rule": {
-              "interval": [{"field": "cronExpression", "expression": "*/5 * * * *"}]
-            }
-          },
-          "id": "schedule-trigger",
-          "name": "Every 5 Minutes",
-          "type": "n8n-nodes-base.scheduleTrigger",
-          "typeVersion": 1.2,
-          "position": [0, 0]
-        },
-        {
-          "parameters": {
-            "url": "http://10.0.10.95:3847/api/codex-usage",
-            "options": {
-              "response": {
-                "response": {
-                  "responseFormat": "json"
-                }
-              }
-            }
-          },
-          "id": "fetch-codex-usage",
-          "name": "Fetch Codex Usage",
-          "type": "n8n-nodes-base.httpRequest",
-          "typeVersion": 4.2,
-          "position": [220, 0]
-        },
-        {
-          "parameters": {
-            "jsCode": "const usage = $('Fetch Codex Usage').first().json;\n\nconst windows = [\n  { key: 'fiveHour', label: '5h', data: usage.fiveHour },\n  { key: 'weekly', label: 'weekly', data: usage.weekly },\n].filter(function (window) { return window.data; });\n\nfunction evaluateWindow(window) {\n  const remainingPercent = Number(window.data.remainingPercent);\n  const minutesToReset = Number(window.data.minutesToReset);\n  const resetAt = window.data.resetAt || null;\n  const suppressed = Number.isFinite(minutesToReset) && minutesToReset < 20;\n\n  let severity = 'ok';\n  if (!suppressed) {\n    if (remainingPercent <= 10) severity = 'critical';\n    else if (remainingPercent <= 20) severity = 'warning';\n  }\n\n  return {\n    key: window.key,\n    label: window.label,\n    remainingPercent: remainingPercent,\n    minutesToReset: minutesToReset,\n    resetAt: resetAt,\n    suppressed: suppressed,\n    severity: severity\n  };\n}\n\nfunction formatDuration(totalMinutes) {\n  if (!Number.isFinite(totalMinutes)) return 'unknown';\n  const minutes = Math.max(0, Math.round(totalMinutes));\n  const days = Math.floor(minutes / 1440);\n  const hours = Math.floor((minutes % 1440) / 60);\n  const mins = minutes % 60;\n  const parts = [];\n  if (days) parts.push(days + 'd');\n  if (hours) parts.push(hours + 'h');\n  if (mins || parts.length === 0) parts.push(mins + 'm');\n  return parts.join(' ');\n}\n\nconst evaluated = windows.map(evaluateWindow);\nconst rank = { ok: 0, warning: 1, critical: 2 };\nconst active = evaluated\n  .filter(function (window) { return window.severity !== 'ok'; })\n  .sort(function (a, b) {\n    return rank[b.severity] - rank[a.severity] || a.remainingPercent - b.remainingPercent || a.minutesToReset - b.minutesToReset;\n  });\n\nconst chosen = active[0] || null;\nconst fiveHour = evaluated.find(function (window) { return window.key === 'fiveHour'; }) || null;\nconst weekly = evaluated.find(function (window) { return window.key === 'weekly'; }) || null;\nconst suppressedLow = evaluated.filter(function (window) {\n  return window.suppressed && window.remainingPercent <= 20;\n});\n\nlet currentState = 'ok';\nlet summary = 'Codex usage healthy';\nlet chosenWindow = null;\n\nif (chosen) {\n  currentState = chosen.severity;\n  chosenWindow = chosen;\n  summary = 'Codex low — ' + chosen.label + ' ' + chosen.remainingPercent + '% left, resets in ' + formatDuration(chosen.minutesToReset) + '. Weekly ' + (weekly ? weekly.remainingPercent + '% left' : 'n/a') + '.';\n} else if (suppressedLow.length > 0) {\n  summary = 'Codex low but reset is soon — ' + suppressedLow.map(function (window) {\n    return window.label + ' ' + window.remainingPercent + '% left, resets in ' + formatDuration(window.minutesToReset);\n  }).join('; ');\n}\n\nreturn {\n  json: {\n    alertKey: 'codex-usage',\n    currentState: currentState,\n    summary: summary,\n    checkedAt: usage.checkedAt || new Date().toISOString(),\n    plan: usage.plan || null,\n    source: usage.source || 'openclaw',\n    chosenWindow: chosenWindow,\n    fiveHour: fiveHour,\n    weekly: weekly,\n    windows: evaluated,\n    suppressedLow: suppressedLow\n  }\n};"
-          },
-          "id": "evaluate-usage",
-          "name": "Evaluate Usage",
-          "type": "n8n-nodes-base.code",
-          "typeVersion": 2,
-          "position": [440, 0]
-        },
-        {
-          "parameters": {
-            "operation": "executeQuery",
-            "query": "SELECT alert_key, current_state, window_key, window_label, remaining_percent, minutes_to_reset, reset_at, summary, notified_at FROM codex_usage_alert_state WHERE alert_key = 'codex-usage' LIMIT 1",
-            "options": {}
-          },
-          "id": "load-alert-state",
-          "name": "Load Alert State",
-          "type": "n8n-nodes-base.postgres",
-          "typeVersion": 2.5,
-          "position": [660, 0],
-          "alwaysOutputData": true,
-          "credentials": {
-            "postgres": {
-              "id": "",
-              "name": "Postgres account"
-            }
-          }
-        },
-        {
-          "parameters": {
-            "jsCode": "const current = $('Evaluate Usage').first().json;\nconst previous = $('Load Alert State').all().map(function (item) { return item.json; })[0] || null;\n\nconst wasActive = !!(previous && ['warning', 'critical'].includes(previous.current_state));\nconst isActive = ['warning', 'critical'].includes(current.currentState);\nconst currentWindowKey = current.chosenWindow ? current.chosenWindow.key : null;\n\nlet shouldNotify = false;\nlet eventAction = 'none';\n\nif (isActive) {\n  if (!previous || previous.current_state !== current.currentState || previous.window_key !== currentWindowKey) {\n    shouldNotify = true;\n    eventAction = 'trigger';\n  }\n} else if (wasActive) {\n  shouldNotify = true;\n  eventAction = 'resolve';\n}\n\nconst newState = {\n  alertKey: current.alertKey,\n  currentState: current.currentState,\n  windowKey: current.chosenWindow ? current.chosenWindow.key : null,\n  windowLabel: current.chosenWindow ? current.chosenWindow.label : null,\n  remainingPercent: current.chosenWindow ? current.chosenWindow.remainingPercent : null,\n  minutesToReset: current.chosenWindow ? current.chosenWindow.minutesToReset : null,\n  resetAt: current.chosenWindow ? current.chosenWindow.resetAt : null,\n  summary: current.summary,\n  checkedAt: current.checkedAt\n};\n\nreturn {\n  json: {\n    shouldNotify: shouldNotify,\n    eventAction: eventAction,\n    summary: current.summary,\n    current: current,\n    previous: previous,\n    newState: newState\n  }\n};"
-          },
-          "id": "decide-transition",
-          "name": "Decide Transition",
-          "type": "n8n-nodes-base.code",
-          "typeVersion": 2,
-          "position": [880, 0]
-        },
-        {
-          "parameters": {
-            "jsCode": "if (!$json.shouldNotify) {\n  return [];\n}\n\nreturn [{ json: $json }];"
-          },
-          "id": "gate-notify",
-          "name": "Gate Notify",
-          "type": "n8n-nodes-base.code",
-          "typeVersion": 2,
-          "position": [1100, 0]
-        },
-        {
-          "parameters": {
-            "resource": "item",
-            "operation": "getItemDetails",
-            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
-            "itemUUID": "dukkdm7qf25d6nrstptvk7wx3y",
-            "requestOptions": {}
-          },
-          "id": "get-pagerduty-key",
-          "name": "Get PagerDuty Key",
-          "type": "@n8layer/n8n-nodes-1password.onePassword",
-          "typeVersion": 1,
-          "position": [1320, 0],
-          "credentials": {
-            "onePasswordApi": {
-              "id": "",
-              "name": "1Password Connect"
-            }
-          }
-        },
-        {
-          "parameters": {
-            "jsCode": "const decision = $('Gate Notify').first().json;\nconst item = $('Get PagerDuty Key').first().json;\n\nconst routingKeyField = item.fields.find(function (field) {\n  return field.label === 'credential';\n});\nconst routingKey = routingKeyField ? routingKeyField.value : null;\nif (!routingKey) {\n  throw new Error('PagerDuty routing key missing from 1Password item');\n}\n\nfunction formatDuration(totalMinutes) {\n  if (!Number.isFinite(totalMinutes)) return 'unknown';\n  const minutes = Math.max(0, Math.round(totalMinutes));\n  const days = Math.floor(minutes / 1440);\n  const hours = Math.floor((minutes % 1440) / 60);\n  const mins = minutes % 60;\n  const parts = [];\n  if (days) parts.push(days + 'd');\n  if (hours) parts.push(hours + 'h');\n  if (mins || parts.length === 0) parts.push(mins + 'm');\n  return parts.join(' ');\n}\n\nfunction formatTimestamp(iso) {\n  if (!iso) return 'unknown';\n  return new Intl.DateTimeFormat('en-US', {\n    timeZone: 'America/New_York',\n    month: 'short',\n    day: 'numeric',\n    hour: 'numeric',\n    minute: '2-digit',\n    timeZoneName: 'short'\n  }).format(new Date(iso));\n}\n\nconst event = {\n  routing_key: routingKey,\n  event_action: decision.eventAction,\n  dedup_key: decision.newState.alertKey\n};\n\nif (decision.eventAction === 'trigger') {\n  const current = decision.current;\n  const chosen = current.chosenWindow;\n  const fiveHour = current.fiveHour;\n  const weekly = current.weekly;\n\n  event.payload = {\n    summary: decision.summary,\n    severity: decision.newState.currentState,\n    source: 'n8n codex-usage bridge',\n    custom_details: {\n      'Window': chosen ? chosen.label : 'unknown',\n      'Remaining': chosen ? chosen.remainingPercent + '%' : 'unknown',\n      'Resets In': chosen ? formatDuration(chosen.minutesToReset) : 'unknown',\n      'Reset At': chosen ? formatTimestamp(chosen.resetAt) : 'unknown',\n      '5h Remaining': fiveHour ? fiveHour.remainingPercent + '%' : 'unknown',\n      '5h Resets In': fiveHour ? formatDuration(fiveHour.minutesToReset) : 'unknown',\n      'Weekly Remaining': weekly ? weekly.remainingPercent + '%' : 'unknown',\n      'Weekly Resets In': weekly ? formatDuration(weekly.minutesToReset) : 'unknown',\n      'Checked At': formatTimestamp(current.checkedAt),\n      'Plan': current.plan || 'unknown',\n      'Desired Urgency': decision.newState.currentState === 'warning' ? 'low' : 'high'\n    }\n  };\n}\n\nreturn {\n  json: {\n    event: event,\n    summary: decision.summary,\n    newState: decision.newState\n  }\n};"
-          },
-          "id": "build-pagerduty-event",
-          "name": "Build PagerDuty Event",
-          "type": "n8n-nodes-base.code",
-          "typeVersion": 2,
-          "position": [1540, 0]
-        },
-        {
-          "parameters": {
-            "method": "POST",
-            "url": "https://events.pagerduty.com/v2/enqueue",
-            "sendHeaders": true,
-            "headerParameters": {
-              "parameters": [
-                {"name": "Content-Type", "value": "application/json"}
-              ]
+        "nodes": [
+            {
+                "parameters": {
+                    "rule": {
+                        "interval": [
+                            {
+                                "field": "cronExpression",
+                                "expression": "*/5 * * * *"
+                            }
+                        ]
+                    }
+                },
+                "id": "schedule-trigger",
+                "name": "Every 5 Minutes",
+                "type": "n8n-nodes-base.scheduleTrigger",
+                "typeVersion": 1.2,
+                "position": [
+                    0,
+                    0
+                ]
             },
-            "sendBody": true,
-            "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify($json.event) }}",
-            "options": {
-              "response": {
-                "response": {
-                  "responseFormat": "json"
+            {
+                "parameters": {
+                    "url": "http://10.0.10.95:3847/api/codex-usage",
+                    "options": {
+                        "response": {
+                            "response": {
+                                "responseFormat": "json"
+                            }
+                        }
+                    }
+                },
+                "id": "fetch-codex-usage",
+                "name": "Fetch Codex Usage",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4.2,
+                "position": [
+                    220,
+                    0
+                ]
+            },
+            {
+                "parameters": {
+                    "jsCode": "const usage = $('Fetch Codex Usage').first().json;\n\nconst WINDOW_MINUTES = {\n  fiveHour: 300,\n  weekly: 10080,\n};\n\nconst MIN_PACE_ELAPSED = {\n  fiveHour: 60,\n  weekly: 720,\n};\n\nfunction round(value, digits) {\n  if (!Number.isFinite(value)) return null;\n  const factor = Math.pow(10, digits);\n  return Math.round(value * factor) / factor;\n}\n\nfunction evaluateWindow(window) {\n  const remainingPercent = Number(window.data.remainingPercent);\n  const usedPercent = Number.isFinite(Number(window.data.usedPercent))\n    ? Number(window.data.usedPercent)\n    : round(100 - remainingPercent, 1);\n  const minutesToReset = Number(window.data.minutesToReset);\n  const resetAt = window.data.resetAt || null;\n  const windowMinutes = WINDOW_MINUTES[window.key] || null;\n  const elapsedMinutes = Number.isFinite(windowMinutes) && Number.isFinite(minutesToReset)\n    ? Math.max(0, windowMinutes - minutesToReset)\n    : null;\n  const expectedRemainingPercent = Number.isFinite(windowMinutes) && Number.isFinite(minutesToReset)\n    ? round((minutesToReset / windowMinutes) * 100, 1)\n    : null;\n  const expectedUsedPercent = expectedRemainingPercent === null\n    ? null\n    : round(100 - expectedRemainingPercent, 1);\n  const paceDeltaPercent = expectedRemainingPercent === null\n    ? null\n    : round(remainingPercent - expectedRemainingPercent, 1);\n  const burnRate = Number.isFinite(expectedUsedPercent) && expectedUsedPercent > 0\n    ? round(usedPercent / expectedUsedPercent, 2)\n    : null;\n  const usagePerMinute = Number.isFinite(elapsedMinutes) && elapsedMinutes > 0\n    ? usedPercent / elapsedMinutes\n    : null;\n  const projectedMinutesToEmpty = Number.isFinite(usagePerMinute) && usagePerMinute > 0\n    ? Math.max(0, Math.round(remainingPercent / usagePerMinute))\n    : null;\n  const projectedMarginMinutes = Number.isFinite(projectedMinutesToEmpty) && Number.isFinite(minutesToReset)\n    ? projectedMinutesToEmpty - minutesToReset\n    : null;\n  const paceEligible = Number.isFinite(elapsedMinutes)\n    && Number.isFinite(minutesToReset)\n    && elapsedMinutes >= (MIN_PACE_ELAPSED[window.key] || 0)\n    && usedPercent >= 5\n    && minutesToReset > 20;\n\n  return {\n    key: window.key,\n    label: window.label,\n    windowMinutes: windowMinutes,\n    usedPercent: usedPercent,\n    remainingPercent: remainingPercent,\n    minutesToReset: minutesToReset,\n    elapsedMinutes: elapsedMinutes,\n    resetAt: resetAt,\n    expectedRemainingPercent: expectedRemainingPercent,\n    expectedUsedPercent: expectedUsedPercent,\n    paceDeltaPercent: paceDeltaPercent,\n    burnRate: burnRate,\n    projectedMinutesToEmpty: projectedMinutesToEmpty,\n    projectedMarginMinutes: projectedMarginMinutes,\n    paceEligible: paceEligible,\n  };\n}\n\nconst windows = [\n  { key: 'fiveHour', label: '5h', data: usage.fiveHour },\n  { key: 'weekly', label: 'weekly', data: usage.weekly },\n].filter(function (window) { return window.data; });\n\nconst evaluated = windows.map(evaluateWindow);\nconst fiveHour = evaluated.find(function (window) { return window.key === 'fiveHour'; }) || null;\nconst weekly = evaluated.find(function (window) { return window.key === 'weekly'; }) || null;\n\nreturn {\n  json: {\n    alertKey: 'codex-usage',\n    checkedAt: usage.checkedAt || new Date().toISOString(),\n    plan: usage.plan || null,\n    source: usage.source || 'openclaw',\n    fiveHour: fiveHour,\n    weekly: weekly,\n    windows: evaluated,\n  }\n};"
+                },
+                "id": "evaluate-usage",
+                "name": "Evaluate Usage",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [
+                    440,
+                    0
+                ]
+            },
+            {
+                "parameters": {
+                    "operation": "executeQuery",
+                    "query": "SELECT alert_key AS \"alertKey\", event_action AS \"eventAction\", current_state AS \"currentState\", window_key AS \"windowKey\", window_label AS \"windowLabel\", alert_reason AS \"alertReason\", remaining_percent AS \"remainingPercent\", used_percent AS \"usedPercent\", expected_remaining_percent AS \"expectedRemainingPercent\", expected_used_percent AS \"expectedUsedPercent\", pace_delta_percent AS \"paceDeltaPercent\", burn_rate AS \"burnRate\", minutes_to_reset AS \"minutesToReset\", projected_minutes_to_empty AS \"projectedMinutesToEmpty\", projected_margin_minutes AS \"projectedMarginMinutes\", reset_at AS \"resetAt\", summary, checked_at AS \"checkedAt\", created_at AS \"createdAt\" FROM codex_usage_alert_events WHERE alert_key = 'codex-usage' ORDER BY created_at DESC LIMIT 1",
+                    "options": {}
+                },
+                "id": "load-alert-state",
+                "name": "Load Latest Event",
+                "type": "n8n-nodes-base.postgres",
+                "typeVersion": 2.5,
+                "position": [
+                    660,
+                    0
+                ],
+                "alwaysOutputData": true,
+                "credentials": {
+                    "postgres": {
+                        "id": "",
+                        "name": "Postgres account"
+                    }
                 }
-              }
+            },
+            {
+                "parameters": {
+                    "jsCode": "const current = $('Evaluate Usage').first().json;\nconst previous = $('Load Latest Event').all().map(function (item) { return item.json; })[0] || null;\n\nconst rank = { ok: 0, warning: 1, critical: 2 };\n\nfunction formatDuration(totalMinutes) {\n  if (!Number.isFinite(totalMinutes)) return 'unknown';\n  const minutes = Math.max(0, Math.round(totalMinutes));\n  const days = Math.floor(minutes / 1440);\n  const hours = Math.floor((minutes % 1440) / 60);\n  const mins = minutes % 60;\n  const parts = [];\n  if (days) parts.push(days + 'd');\n  if (hours) parts.push(hours + 'h');\n  if (mins || parts.length === 0) parts.push(mins + 'm');\n  return parts.join(' ');\n}\n\nfunction formatPercent(value) {\n  if (!Number.isFinite(value)) return 'unknown';\n  return (Math.round(value * 10) / 10).toFixed(1).replace(/\\.0$/, '') + '%';\n}\n\nfunction formatSignedPercent(value) {\n  if (!Number.isFinite(value)) return 'unknown';\n  const rounded = (Math.round(value * 10) / 10).toFixed(1).replace(/\\.0$/, '');\n  return (value > 0 ? '+' : '') + rounded + ' pts';\n}\n\nfunction formatBurnRate(value) {\n  if (!Number.isFinite(value)) return 'unknown';\n  return value.toFixed(2) + 'x';\n}\n\nfunction previousForWindow(windowKey) {\n  if (!previous || previous.windowKey !== windowKey || previous.currentState === 'ok') {\n    return null;\n  }\n  return previous;\n}\n\nfunction determineWindowAlert(window, previousWindow) {\n  const remainingPercent = Number(window.remainingPercent);\n  const minutesToReset = Number(window.minutesToReset);\n  const burnRate = Number(window.burnRate);\n  const projectedMinutesToEmpty = Number(window.projectedMinutesToEmpty);\n  const resetSoon = Number.isFinite(minutesToReset) && minutesToReset < 20;\n\n  let remainingState = 'ok';\n  if (!resetSoon) {\n    if (remainingPercent <= 10) remainingState = 'critical';\n    else if (remainingPercent <= 20) remainingState = 'warning';\n  }\n\n  let paceState = 'ok';\n  const previousState = previousWindow ? previousWindow.currentState : 'ok';\n  const previousReason = previousWindow ? previousWindow.alertReason : null;\n\n  if (!resetSoon\n    && window.paceEligible\n    && Number.isFinite(burnRate)\n    && Number.isFinite(projectedMinutesToEmpty)\n    && Number.isFinite(minutesToReset)\n    && projectedMinutesToEmpty < minutesToReset) {\n    const criticalTrigger = 1.75;\n    const criticalClear = 1.50;\n    const warningTrigger = 1.25;\n    const warningClear = 1.10;\n\n    if (previousReason === 'pace' && previousState === 'critical') {\n      if (burnRate >= criticalClear) paceState = 'critical';\n      else if (burnRate >= warningClear) paceState = 'warning';\n    } else if (burnRate >= criticalTrigger) {\n      paceState = 'critical';\n    } else if (previousReason === 'pace' && (previousState === 'warning' || previousState === 'critical')) {\n      if (burnRate >= warningClear) paceState = 'warning';\n    } else if (burnRate >= warningTrigger) {\n      paceState = 'warning';\n    }\n  }\n\n  let currentState = 'ok';\n  let alertReason = null;\n\n  if (rank[paceState] > rank[remainingState]) {\n    currentState = paceState;\n    alertReason = 'pace';\n  } else if (rank[remainingState] > 0) {\n    currentState = remainingState;\n    alertReason = 'remaining';\n  }\n\n  return {\n    key: window.key,\n    label: window.label,\n    windowMinutes: window.windowMinutes,\n    usedPercent: window.usedPercent,\n    remainingPercent: window.remainingPercent,\n    minutesToReset: window.minutesToReset,\n    elapsedMinutes: window.elapsedMinutes,\n    resetAt: window.resetAt,\n    expectedRemainingPercent: window.expectedRemainingPercent,\n    expectedUsedPercent: window.expectedUsedPercent,\n    paceDeltaPercent: window.paceDeltaPercent,\n    burnRate: window.burnRate,\n    projectedMinutesToEmpty: window.projectedMinutesToEmpty,\n    projectedMarginMinutes: window.projectedMarginMinutes,\n    paceEligible: window.paceEligible,\n    resetSoon: resetSoon,\n    remainingState: remainingState,\n    paceState: paceState,\n    currentState: currentState,\n    alertReason: alertReason,\n  };\n}\n\nconst evaluated = current.windows.map(function (window) {\n  return determineWindowAlert(window, previousForWindow(window.key));\n});\n\nconst fiveHour = evaluated.find(function (window) { return window.key === 'fiveHour'; }) || null;\nconst weekly = evaluated.find(function (window) { return window.key === 'weekly'; }) || null;\n\nconst active = evaluated\n  .filter(function (window) { return window.currentState !== 'ok'; })\n  .sort(function (a, b) {\n    return rank[b.currentState] - rank[a.currentState]\n      || (Number(b.burnRate) || 0) - (Number(a.burnRate) || 0)\n      || a.remainingPercent - b.remainingPercent\n      || a.minutesToReset - b.minutesToReset;\n  });\n\nconst chosen = active[0] || null;\nlet shouldNotify = false;\nlet eventAction = 'none';\nlet summary = 'Codex usage healthy';\n\nif (chosen) {\n  if (chosen.alertReason === 'pace') {\n    const beforeReset = Number.isFinite(chosen.projectedMarginMinutes) && chosen.projectedMarginMinutes < 0\n      ? formatDuration(Math.abs(chosen.projectedMarginMinutes)) + ' before reset'\n      : 'after reset';\n    summary = 'Codex burn rate high \u2014 ' + chosen.label\n      + ' at ' + formatBurnRate(chosen.burnRate)\n      + ', ' + formatPercent(chosen.remainingPercent)\n      + ' left, expected ' + formatPercent(chosen.expectedRemainingPercent)\n      + ' left by now, projecting empty in ' + formatDuration(chosen.projectedMinutesToEmpty)\n      + ' (' + beforeReset + ').';\n  } else {\n    summary = 'Codex low \u2014 ' + chosen.label\n      + ' ' + formatPercent(chosen.remainingPercent)\n      + ' left, resets in ' + formatDuration(chosen.minutesToReset)\n      + '. Weekly ' + (weekly ? formatPercent(weekly.remainingPercent) + ' left' : 'n/a') + '.';\n  }\n\n  if (!previous || previous.currentState !== chosen.currentState || previous.windowKey !== chosen.key) {\n    shouldNotify = true;\n    eventAction = 'trigger';\n  }\n} else if (previous && previous.currentState && previous.currentState !== 'ok') {\n  shouldNotify = true;\n  eventAction = 'resolve';\n}\n\nconst newState = {\n  alertKey: current.alertKey,\n  currentState: chosen ? chosen.currentState : 'ok',\n  windowKey: chosen ? chosen.key : null,\n  windowLabel: chosen ? chosen.label : null,\n  alertReason: chosen ? chosen.alertReason : null,\n  remainingPercent: chosen ? chosen.remainingPercent : null,\n  usedPercent: chosen ? chosen.usedPercent : null,\n  expectedRemainingPercent: chosen ? chosen.expectedRemainingPercent : null,\n  expectedUsedPercent: chosen ? chosen.expectedUsedPercent : null,\n  paceDeltaPercent: chosen ? chosen.paceDeltaPercent : null,\n  burnRate: chosen ? chosen.burnRate : null,\n  windowMinutes: chosen ? chosen.windowMinutes : null,\n  minutesToReset: chosen ? chosen.minutesToReset : null,\n  projectedMinutesToEmpty: chosen ? chosen.projectedMinutesToEmpty : null,\n  projectedMarginMinutes: chosen ? chosen.projectedMarginMinutes : null,\n  resetAt: chosen ? chosen.resetAt : null,\n  summary: summary,\n  checkedAt: current.checkedAt,\n  plan: current.plan || null,\n  source: current.source || 'openclaw',\n};\n\nreturn {\n  json: {\n    shouldNotify: shouldNotify,\n    eventAction: eventAction,\n    summary: summary,\n    current: {\n      alertKey: current.alertKey,\n      checkedAt: current.checkedAt,\n      plan: current.plan || null,\n      source: current.source || 'openclaw',\n      fiveHour: fiveHour,\n      weekly: weekly,\n      windows: evaluated,\n    },\n    previous: previous,\n    newState: newState,\n  }\n};"
+                },
+                "id": "decide-transition",
+                "name": "Decide Transition",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [
+                    880,
+                    0
+                ]
+            },
+            {
+                "parameters": {
+                    "jsCode": "if (!$json.shouldNotify) {\n  return [];\n}\n\nreturn [{ json: $json }];"
+                },
+                "id": "gate-notify",
+                "name": "Gate Notify",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [
+                    1100,
+                    0
+                ]
+            },
+            {
+                "parameters": {
+                    "resource": "item",
+                    "operation": "getItemDetails",
+                    "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
+                    "itemUUID": "dukkdm7qf25d6nrstptvk7wx3y",
+                    "requestOptions": {}
+                },
+                "id": "get-pagerduty-key",
+                "name": "Get PagerDuty Key",
+                "type": "@n8layer/n8n-nodes-1password.onePassword",
+                "typeVersion": 1,
+                "position": [
+                    1320,
+                    0
+                ],
+                "credentials": {
+                    "onePasswordApi": {
+                        "id": "",
+                        "name": "1Password Connect"
+                    }
+                }
+            },
+            {
+                "parameters": {
+                    "jsCode": "const decision = $('Gate Notify').first().json;\nconst item = $('Get PagerDuty Key').first().json;\n\nconst routingKeyField = item.fields.find(function (field) {\n  return field.label === 'credential';\n});\nconst routingKey = routingKeyField ? routingKeyField.value : null;\nif (!routingKey) {\n  throw new Error('PagerDuty routing key missing from 1Password item');\n}\n\nfunction formatDuration(totalMinutes) {\n  if (!Number.isFinite(totalMinutes)) return 'unknown';\n  const minutes = Math.max(0, Math.round(totalMinutes));\n  const days = Math.floor(minutes / 1440);\n  const hours = Math.floor((minutes % 1440) / 60);\n  const mins = minutes % 60;\n  const parts = [];\n  if (days) parts.push(days + 'd');\n  if (hours) parts.push(hours + 'h');\n  if (mins || parts.length === 0) parts.push(mins + 'm');\n  return parts.join(' ');\n}\n\nfunction formatTimestamp(iso) {\n  if (!iso) return 'unknown';\n  return new Intl.DateTimeFormat('en-US', {\n    timeZone: 'America/New_York',\n    month: 'short',\n    day: 'numeric',\n    hour: 'numeric',\n    minute: '2-digit',\n    timeZoneName: 'short'\n  }).format(new Date(iso));\n}\n\nfunction formatPercent(value) {\n  if (!Number.isFinite(value)) return 'unknown';\n  return (Math.round(value * 10) / 10).toFixed(1).replace(/\\.0$/, '') + '%';\n}\n\nfunction formatSignedPercent(value) {\n  if (!Number.isFinite(value)) return 'unknown';\n  const rounded = (Math.round(value * 10) / 10).toFixed(1).replace(/\\.0$/, '');\n  return (value > 0 ? '+' : '') + rounded + ' pts';\n}\n\nfunction formatBurnRate(value) {\n  if (!Number.isFinite(value)) return 'unknown';\n  return value.toFixed(2) + 'x';\n}\n\nconst state = decision.newState;\nconst event = {\n  routing_key: routingKey,\n  event_action: decision.eventAction,\n  dedup_key: state.alertKey\n};\n\nif (decision.eventAction === 'trigger') {\n  const current = decision.current;\n  const fiveHour = current.fiveHour;\n  const weekly = current.weekly;\n\n  event.payload = {\n    summary: decision.summary,\n    severity: state.currentState,\n    source: 'n8n codex-usage bridge',\n    custom_details: {\n      'Alert Reason': state.alertReason || 'unknown',\n      'Window': state.windowLabel || 'unknown',\n      'Remaining': formatPercent(state.remainingPercent),\n      'Used': formatPercent(state.usedPercent),\n      'Expected Remaining': formatPercent(state.expectedRemainingPercent),\n      'Expected Used': formatPercent(state.expectedUsedPercent),\n      'Pace Delta': formatSignedPercent(state.paceDeltaPercent),\n      'Burn Rate': formatBurnRate(state.burnRate),\n      'Projects Empty In': formatDuration(state.projectedMinutesToEmpty),\n      'Runs Out Before Reset By': Number.isFinite(state.projectedMarginMinutes) && state.projectedMarginMinutes < 0 ? formatDuration(Math.abs(state.projectedMarginMinutes)) : 'no',\n      'Resets In': formatDuration(state.minutesToReset),\n      'Reset At': formatTimestamp(state.resetAt),\n      '5h Remaining': fiveHour ? formatPercent(fiveHour.remainingPercent) : 'unknown',\n      '5h Burn Rate': fiveHour ? formatBurnRate(fiveHour.burnRate) : 'unknown',\n      '5h Pace Delta': fiveHour ? formatSignedPercent(fiveHour.paceDeltaPercent) : 'unknown',\n      'Weekly Remaining': weekly ? formatPercent(weekly.remainingPercent) : 'unknown',\n      'Weekly Burn Rate': weekly ? formatBurnRate(weekly.burnRate) : 'unknown',\n      'Weekly Pace Delta': weekly ? formatSignedPercent(weekly.paceDeltaPercent) : 'unknown',\n      'Checked At': formatTimestamp(current.checkedAt),\n      'Plan': current.plan || 'unknown',\n      'Desired Urgency': state.currentState === 'warning' ? 'low' : 'high'\n    }\n  };\n}\n\nreturn {\n  json: {\n    event: event,\n    summary: decision.summary,\n    newState: state,\n    current: decision.current\n  }\n};"
+                },
+                "id": "build-pagerduty-event",
+                "name": "Build PagerDuty Event",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [
+                    1540,
+                    0
+                ]
+            },
+            {
+                "parameters": {
+                    "method": "POST",
+                    "url": "https://events.pagerduty.com/v2/enqueue",
+                    "sendHeaders": true,
+                    "headerParameters": {
+                        "parameters": [
+                            {
+                                "name": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ]
+                    },
+                    "sendBody": true,
+                    "specifyBody": "json",
+                    "jsonBody": "={{ JSON.stringify($json.event) }}",
+                    "options": {
+                        "response": {
+                            "response": {
+                                "responseFormat": "json"
+                            }
+                        }
+                    }
+                },
+                "id": "send-pagerduty-event",
+                "name": "Send PagerDuty Event",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4.2,
+                "position": [
+                    1760,
+                    0
+                ]
+            },
+            {
+                "parameters": {
+                    "operation": "executeQuery",
+                    "query": "={{ (() => { const built = $('Build PagerDuty Event').first().json; const send = $('Send PagerDuty Event').first().json; const state = built.newState; const current = built.current || {}; const quote = String.fromCharCode(39); const esc = (value) => value === null || value === undefined ? 'NULL' : quote + String(value).replace(/'/g, quote + quote) + quote; const num = (value) => value === null || value === undefined || Number.isNaN(Number(value)) ? 'NULL' : String(Number(value)); return 'INSERT INTO codex_usage_alert_events (alert_key, event_action, current_state, window_key, window_label, alert_reason, summary, remaining_percent, used_percent, expected_remaining_percent, expected_used_percent, pace_delta_percent, burn_rate, window_minutes, minutes_to_reset, projected_minutes_to_empty, projected_margin_minutes, reset_at, checked_at, dedup_key, pagerduty_status, pagerduty_message, plan, source, created_at) VALUES (' + esc(state.alertKey) + ', ' + esc(built.event.event_action) + ', ' + esc(state.currentState) + ', ' + esc(state.windowKey) + ', ' + esc(state.windowLabel) + ', ' + esc(state.alertReason) + ', ' + esc(state.summary) + ', ' + num(state.remainingPercent) + ', ' + num(state.usedPercent) + ', ' + num(state.expectedRemainingPercent) + ', ' + num(state.expectedUsedPercent) + ', ' + num(state.paceDeltaPercent) + ', ' + num(state.burnRate) + ', ' + num(state.windowMinutes) + ', ' + num(state.minutesToReset) + ', ' + num(state.projectedMinutesToEmpty) + ', ' + num(state.projectedMarginMinutes) + ', ' + esc(state.resetAt) + ', ' + esc(state.checkedAt) + ', ' + esc(built.event.dedup_key) + ', ' + esc(send.status || 'success') + ', ' + esc(send.message || null) + ', ' + esc(state.plan) + ', ' + esc(state.source || current.source || 'openclaw') + ', NOW())'; })() }}",
+                    "options": {}
+                },
+                "id": "save-alert-state",
+                "name": "Save Alert Event",
+                "type": "n8n-nodes-base.postgres",
+                "typeVersion": 2.5,
+                "position": [
+                    1980,
+                    0
+                ],
+                "credentials": {
+                    "postgres": {
+                        "id": "",
+                        "name": "Postgres account"
+                    }
+                }
             }
-          },
-          "id": "send-pagerduty-event",
-          "name": "Send PagerDuty Event",
-          "type": "n8n-nodes-base.httpRequest",
-          "typeVersion": 4.2,
-          "position": [1760, 0]
+        ],
+        "connections": {
+            "Every 5 Minutes": {
+                "main": [
+                    [
+                        {
+                            "node": "Fetch Codex Usage",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Fetch Codex Usage": {
+                "main": [
+                    [
+                        {
+                            "node": "Evaluate Usage",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Evaluate Usage": {
+                "main": [
+                    [
+                        {
+                            "node": "Load Latest Event",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Decide Transition": {
+                "main": [
+                    [
+                        {
+                            "node": "Gate Notify",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Gate Notify": {
+                "main": [
+                    [
+                        {
+                            "node": "Get PagerDuty Key",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Get PagerDuty Key": {
+                "main": [
+                    [
+                        {
+                            "node": "Build PagerDuty Event",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Build PagerDuty Event": {
+                "main": [
+                    [
+                        {
+                            "node": "Send PagerDuty Event",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Send PagerDuty Event": {
+                "main": [
+                    [
+                        {
+                            "node": "Save Alert Event",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Load Latest Event": {
+                "main": [
+                    [
+                        {
+                            "node": "Decide Transition",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            }
         },
-        {
-          "parameters": {
-            "operation": "executeQuery",
-            "query": "={{ (() => { const state = $('Gate Notify').first().json.newState; const quote = String.fromCharCode(39); const esc = (value) => value === null || value === undefined ? 'NULL' : quote + String(value).replace(/'/g, quote + quote) + quote; const num = (value) => value === null || value === undefined || Number.isNaN(Number(value)) ? 'NULL' : String(Number(value)); return 'INSERT INTO codex_usage_alert_state (alert_key, current_state, window_key, window_label, remaining_percent, minutes_to_reset, reset_at, summary, notified_at, updated_at) VALUES (' + esc(state.alertKey) + ', ' + esc(state.currentState) + ', ' + esc(state.windowKey) + ', ' + esc(state.windowLabel) + ', ' + num(state.remainingPercent) + ', ' + num(state.minutesToReset) + ', ' + esc(state.resetAt) + ', ' + esc(state.summary) + ', ' + esc(state.checkedAt) + ', NOW()) ON CONFLICT (alert_key) DO UPDATE SET current_state = EXCLUDED.current_state, window_key = EXCLUDED.window_key, window_label = EXCLUDED.window_label, remaining_percent = EXCLUDED.remaining_percent, minutes_to_reset = EXCLUDED.minutes_to_reset, reset_at = EXCLUDED.reset_at, summary = EXCLUDED.summary, notified_at = EXCLUDED.notified_at, updated_at = NOW()'; })() }}",
-            "options": {}
-          },
-          "id": "save-alert-state",
-          "name": "Save Alert State",
-          "type": "n8n-nodes-base.postgres",
-          "typeVersion": 2.5,
-          "position": [1980, 0],
-          "credentials": {
-            "postgres": {
-              "id": "",
-              "name": "Postgres account"
-            }
-          }
+        "settings": {
+            "executionOrder": "v1"
         }
-      ],
-      "connections": {
-        "Every 5 Minutes": {"main": [[{"node": "Fetch Codex Usage", "type": "main", "index": 0}]]},
-        "Fetch Codex Usage": {"main": [[{"node": "Evaluate Usage", "type": "main", "index": 0}]]},
-        "Evaluate Usage": {"main": [[{"node": "Load Alert State", "type": "main", "index": 0}]]},
-        "Load Alert State": {"main": [[{"node": "Decide Transition", "type": "main", "index": 0}]]},
-        "Decide Transition": {"main": [[{"node": "Gate Notify", "type": "main", "index": 0}]]},
-        "Gate Notify": {"main": [[{"node": "Get PagerDuty Key", "type": "main", "index": 0}]]},
-        "Get PagerDuty Key": {"main": [[{"node": "Build PagerDuty Event", "type": "main", "index": 0}]]},
-        "Build PagerDuty Event": {"main": [[{"node": "Send PagerDuty Event", "type": "main", "index": 0}]]},
-        "Send PagerDuty Event": {"main": [[{"node": "Save Alert State", "type": "main", "index": 0}]]}
-      },
-      "settings": {
-        "executionOrder": "v1"
-      }
     }
 ---
 apiVersion: n8n.n8n.io/v1alpha1

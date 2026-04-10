@@ -58,8 +58,8 @@ spec:
       enabled: true
     configOverride: |
       [osd]
-      osd_scrub_begin_hour = 2
-      osd_scrub_end_hour = 6
+      osd_scrub_begin_hour = 0
+      osd_scrub_end_hour = 23
       osd_scrub_sleep = 0.1
       osd_scrub_priority = 1
       osd_deep_scrub_interval = 1209600
@@ -72,8 +72,8 @@ spec:
           bdev_async_discard_threads: "1"
           osd_class_update_on_start: "false"
         osd:
-          osd_scrub_begin_hour: "2"
-          osd_scrub_end_hour: "6"
+          osd_scrub_begin_hour: "0"
+          osd_scrub_end_hour: "23"
           osd_scrub_sleep: "0.1"
           osd_scrub_priority: "1"
           osd_deep_scrub_interval: "1209600"

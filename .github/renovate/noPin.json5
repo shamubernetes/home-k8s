@@ -14,6 +14,8 @@
         "ghcr.io/home-operations/charts/tuppr",
         "ghcr.io/rafaribe/homelab-assistant-crds",
         "docker.io/envoyproxy/gateway-helm",
+        "n8n-operator",
+        "ghcr.io/shamubernetes/charts/n8n-operator",
       ],
       pinDigests: false
     },

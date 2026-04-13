@@ -155,8 +155,8 @@ spec:
               summary: etcd cluster has high number of leader changes.
             expr: |-
               increase((max without (instance, pod) (etcd_server_leader_changes_seen_total{job=~".*etcd.*"})
-              or 0*absent(etcd_server_leader_changes_seen_total{job=~".*etcd.*"}))[15m:1m]) >= 4
-            for: 15m
+              or 0*absent(etcd_server_leader_changes_seen_total{job=~".*etcd.*"}))[15m:1m]) >= 8
+            for: 20m
             labels:
               severity: warning
           - alert: etcdHighCommitDurations

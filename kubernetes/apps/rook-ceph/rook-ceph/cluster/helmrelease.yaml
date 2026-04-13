@@ -34,14 +34,20 @@ spec:
       prometheusRuleOverrides:
         CephNodeDiskspaceWarning:
           expr: |
-            predict_linear(
+            (
+              predict_linear(
+                max by (instance, device, mountpoint) (
+                  node_filesystem_free_bytes{device=~"/.*",mountpoint="/var"}
+                )[2d:]
+                , 3600 * 24 * 5
+              )
+              /
               max by (instance, device, mountpoint) (
-                node_filesystem_free_bytes{device=~"/.*"}
-              )[2d:]
-              , 3600 * 24 * 5
+                node_filesystem_size_bytes{device=~"/.*",mountpoint="/var"}
+              )
             )
             * on(instance) group_left(nodename)
-            max by (instance, nodename) (node_uname_info) < 0
+            max by (instance, nodename) (node_uname_info) < 0.12
         CephNodeNetworkPacketDrops:
           expr: |
             (
@@ -71,7 +77,10 @@ spec:
       osd_scrub_begin_hour = 0
       osd_scrub_end_hour = 23
       osd_scrub_sleep = 0.1
-      osd_scrub_priority = 1
+      osd_scrub_priority = 5
+      osd_max_scrubs = 3
+      osd_scrub_load_threshold = 2.0
+      osd_scrub_during_recovery = false
       osd_deep_scrub_interval = 1209600
       ; end
 
@@ -85,7 +94,10 @@ spec:
           osd_scrub_begin_hour: "0"
           osd_scrub_end_hour: "23"
           osd_scrub_sleep: "0.1"
-          osd_scrub_priority: "1"
+          osd_scrub_priority: "5"
+          osd_max_scrubs: "3"
+          osd_scrub_load_threshold: "2.0"
+          osd_scrub_during_recovery: "false"
           osd_deep_scrub_interval: "1209600"
       healthCheck:
         livenessProbe:

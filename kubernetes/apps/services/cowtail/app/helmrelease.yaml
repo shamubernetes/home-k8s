@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail
-              tag: 0.4.8@sha256:3cf6c9fabd970e0c44d5b07e405ffd1e94e28467cfa2eff220bbdf5fc65fe374
+              tag: 0.5.2@sha256:54dd8ea9b3a2949aea41ed152c82470c8c7fbdd5a7f851dccc1d0e0113c0d75f
             env:
               TZ: America/New_York
             probes:

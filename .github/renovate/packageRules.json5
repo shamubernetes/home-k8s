@@ -238,6 +238,16 @@
       "reviewersFromCodeOwners": false,
       "matchUpdateTypes": ["minor", "patch"],
     },
+    {
+      "description": "Never auto-merge Convex image updates",
+      "matchDatasources": ["docker"],
+      "matchDepNames": [
+        "ghcr.io/get-convex/convex-backend",
+        "ghcr.io/get-convex/convex-dashboard"
+      ],
+      "automerge": false,
+      "reviewers": ["kiliantyler"],
+    },
     // Request review for non-automerge updates (major versions)
     {
       "description": "Request review for major updates (not auto-merged)",

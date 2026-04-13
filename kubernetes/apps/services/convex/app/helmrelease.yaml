@@ -53,7 +53,7 @@ spec:
           app:
             image:
               repository: ghcr.io/get-convex/convex-backend
-              tag: latest
+              tag: latest@sha256:1a52e73d487dc421a1678f3033292260e66a96d570221bfa551286e9c97f692e
             env:
               INSTANCE_NAME: convex
               DO_NOT_REQUIRE_SSL: "1"
@@ -108,7 +108,7 @@ spec:
           app:
             image:
               repository: ghcr.io/get-convex/convex-dashboard
-              tag: latest
+              tag: latest@sha256:2e42a82380647823e21025fe62b4fb9bad8223e6294e6377b68f5f6fbafe3d34
             env:
               NEXT_PUBLIC_DEPLOYMENT_URL: https://convex-api.${HOME_DOMAIN}
               NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: "true"

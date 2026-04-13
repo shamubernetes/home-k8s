@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &name ghar-set-maudecode
+  namespace: actions-runner-system
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.14.0
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  driftDetection:
+    mode: enabled
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+    - name: ghar-controller
+      namespace: actions-runner-system
+  values:
+    nameOverride: ghar-set-maudecode
+    runnerScaleSetName: ghar-set-maudecode
+    githubConfigSecret: ghar-set-maudecode-secret
+    githubConfigUrl: https://github.com/MaudeCode
+    minRunners: 0
+    maxRunners: 6
+    containerMode:
+      type: dind
+    template:
+      spec:
+        topologySpreadConstraints:
+          - maxSkew: 2
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector:
+              matchLabels:
+                actions.github.com/scale-set-name: ghar-set-maudecode
+        containers:
+          - name: runner
+            image: ghcr.io/home-operations/actions-runner:2.333.1@sha256:1a7726bcaeba4e46fe07fe98e1805b4df78618a71e67758f932862b929f852d4
+            command: ["/home/runner/run.sh"]
+            env:
+              - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
+                value: "false"
+              - name: NODE
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.hostIP
+    controllerServiceAccount:
+      name: ghar-controller
+      namespace: actions-runner-system

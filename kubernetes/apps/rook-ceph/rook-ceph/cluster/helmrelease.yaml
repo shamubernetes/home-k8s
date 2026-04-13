@@ -32,6 +32,16 @@ spec:
       enabled: true
       createPrometheusRules: true
       prometheusRuleOverrides:
+        CephNodeDiskspaceWarning:
+          expr: |
+            predict_linear(
+              max by (instance, device, mountpoint) (
+                node_filesystem_free_bytes{device=~"/.*"}
+              )[2d:]
+              , 3600 * 24 * 5
+            )
+            * on(instance) group_left(nodename)
+            max by (instance, nodename) (node_uname_info) < 0
         CephNodeNetworkPacketDrops:
           expr: |
             (

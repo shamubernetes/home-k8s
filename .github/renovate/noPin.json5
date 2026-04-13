@@ -13,6 +13,7 @@
       matchDepNames: [
         "ghcr.io/home-operations/charts/tuppr",
         "ghcr.io/rafaribe/homelab-assistant-crds",
+        "docker.io/envoyproxy/gateway-helm",
       ],
       pinDigests: false
     },

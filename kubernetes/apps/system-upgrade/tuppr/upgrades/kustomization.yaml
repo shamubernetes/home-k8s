@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
 - ./talosupgrade.yaml
 - ./kubernetesupgrade.yaml
+- ./legacy-plan-cleanup-rbac.yaml
 - ./legacy-plan-cleanup.yaml

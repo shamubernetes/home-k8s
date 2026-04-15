@@ -1,0 +1,28 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: legacy-plan-cleanup
+  namespace: system-upgrade
+rules:
+- apiGroups:
+  - upgrade.cattle.io
+  resources:
+  - plans
+  verbs:
+  - get
+  - list
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: legacy-plan-cleanup
+  namespace: system-upgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: legacy-plan-cleanup
+subjects:
+- kind: ServiceAccount
+  name: tuppr
+  namespace: system-upgrade

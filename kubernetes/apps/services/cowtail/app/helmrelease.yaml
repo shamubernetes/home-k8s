@@ -59,7 +59,8 @@ spec:
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: false
-              capabilities: {drop: ["ALL"]}
+              # nginx's entrypoint needs its default root startup behavior here
+              # (envsubst, temp dir ownership, then dropping privileges).
             resources:
               requests:
                 cpu: 10m

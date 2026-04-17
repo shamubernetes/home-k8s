@@ -84,9 +84,10 @@ spec:
               readOnly: true
     defaultPodOptions:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 101
-        runAsGroup: 101
+        # Cowtail's nginx image renders config and Universal Links files at startup,
+        # which requires write access to root-owned image paths under /etc/nginx and
+        # /usr/share/nginx/html.
+        runAsNonRoot: false
         seccompProfile: {type: RuntimeDefault}
     service:
       app:

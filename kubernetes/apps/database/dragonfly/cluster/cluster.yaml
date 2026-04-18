@@ -8,7 +8,7 @@ spec:
   replicas: 3
   env:
   - name: MAX_MEMORY
-    value: "384"
+    value: "512"
   args:
   - --maxmemory=$(MAX_MEMORY)Mi
   - --proactor_threads=2

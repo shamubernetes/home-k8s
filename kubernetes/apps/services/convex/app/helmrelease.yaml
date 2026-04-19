@@ -53,7 +53,7 @@ spec:
           app:
             image:
               repository: ghcr.io/get-convex/convex-backend
-              tag: latest@sha256:1a52e73d487dc421a1678f3033292260e66a96d570221bfa551286e9c97f692e
+              tag: latest@sha256:2143ad479a997802e74ac52f5f1ce3d6e75309b1965e36069d1c939166e210eb
             env:
               INSTANCE_NAME: convex
               DO_NOT_REQUIRE_SSL: "1"

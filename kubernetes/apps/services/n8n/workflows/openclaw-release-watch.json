@@ -110,6 +110,38 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "stable-only",
+              "leftValue": "={{ $('Extract Versions').item.json.openclawVersion }}",
+              "rightValue": "-beta",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-stable-releases",
+      "name": "Filter Stable Releases",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
         "query": "SELECT version FROM openclaw_notifications WHERE version = '{{ $json.openclawVersion }}' LIMIT 1",
         "options": {}
@@ -119,7 +151,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        880,
+        1100,
         0
       ],
       "alwaysOutputData": true,
@@ -158,7 +190,7 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
       "position": [
-        1100,
+        1320,
         0
       ]
     },
@@ -190,7 +222,7 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
       "position": [
-        1320,
+        1540,
         0
       ]
     },
@@ -217,7 +249,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1540,
+        1760,
         0
       ]
     },
@@ -232,7 +264,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1760,
+        1980,
         0
       ],
       "credentials": {
@@ -281,7 +313,7 @@
       "main": [
         [
           {
-            "node": "Check If Notified",
+            "node": "Filter Stable Releases",
             "type": "main",
             "index": 0
           }
@@ -326,6 +358,17 @@
         [
           {
             "node": "Mark As Notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Stable Releases": {
+      "main": [
+        [
+          {
+            "node": "Check If Notified",
             "type": "main",
             "index": 0
           }
@@ -464,6 +507,38 @@
       },
       {
         "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "stable-only",
+                "leftValue": "={{ $('Extract Versions').item.json.openclawVersion }}",
+                "rightValue": "-beta",
+                "operator": {
+                  "type": "string",
+                  "operation": "notContains"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "filter-stable-releases",
+        "name": "Filter Stable Releases",
+        "type": "n8n-nodes-base.filter",
+        "typeVersion": 2,
+        "position": [
+          880,
+          0
+        ]
+      },
+      {
+        "parameters": {
           "operation": "executeQuery",
           "query": "SELECT version FROM openclaw_notifications WHERE version = '{{ $json.openclawVersion }}' LIMIT 1",
           "options": {}
@@ -473,7 +548,7 @@
         "type": "n8n-nodes-base.postgres",
         "typeVersion": 2.5,
         "position": [
-          880,
+          1100,
           0
         ],
         "alwaysOutputData": true,
@@ -512,7 +587,7 @@
         "type": "n8n-nodes-base.filter",
         "typeVersion": 2,
         "position": [
-          1100,
+          1320,
           0
         ]
       },
@@ -544,7 +619,7 @@
         "type": "n8n-nodes-base.filter",
         "typeVersion": 2,
         "position": [
-          1320,
+          1540,
           0
         ]
       },
@@ -571,7 +646,7 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          1540,
+          1760,
           0
         ]
       },
@@ -586,7 +661,7 @@
         "type": "n8n-nodes-base.postgres",
         "typeVersion": 2.5,
         "position": [
-          1760,
+          1980,
           0
         ],
         "credentials": {
@@ -635,7 +710,7 @@
         "main": [
           [
             {
-              "node": "Check If Notified",
+              "node": "Filter Stable Releases",
               "type": "main",
               "index": 0
             }
@@ -680,6 +755,17 @@
           [
             {
               "node": "Mark As Notified",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter Stable Releases": {
+        "main": [
+          [
+            {
+              "node": "Check If Notified",
               "type": "main",
               "index": 0
             }

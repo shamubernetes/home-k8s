@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail
-              tag: 0.7.0@sha256:c82896f977747126e4f9ca3944310862af8752f012719c14c98c43f5c25185a8
+              tag: 0.8.0@sha256:14973194316d1cb4c8c176d8faa1d16e045f920507615b1f671b18ce7981ddae
             env:
               TZ: America/New_York
               CONVEX_API_UPSTREAM: http://convex-backend.services.svc.cluster.local:3210
@@ -67,6 +67,47 @@ spec:
                 memory: 32Mi
               limits:
                 memory: 64Mi
+      cowtail-realtime:
+        replicas: 1
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/maudecode/cowtail-realtime
+              tag: 0.8.0@sha256:04c41683c904a6ad534d5641dc0de122da69433d5faeaefcc57654c44bd02f89
+            env:
+              TZ: America/New_York
+              PORT: &realtimePort 8787
+              COWTAIL_HTTP_BASE_URL: http://convex-backend.services.svc.cluster.local:3211
+              CONVEX_URL: http://convex-backend.services.svc.cluster.local:3210
+            envFrom:
+            - secretRef:
+                name: cowtail-secret
+            probes:
+              liveness: &realtimeProbes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: *realtimePort
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              readiness: *realtimeProbes
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
     configMaps:
       config:
         data:
@@ -83,6 +124,12 @@ spec:
             app:
             - path: /etc/cowtail
               readOnly: true
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          cowtail-realtime:
+            app:
+            - path: /tmp
     defaultPodOptions:
       securityContext:
         # Cowtail's nginx image renders config and Universal Links files at startup,
@@ -96,14 +143,25 @@ spec:
         ports:
           http:
             port: *port
+      realtime:
+        controller: cowtail-realtime
+        ports:
+          http:
+            port: *realtimePort
     ingress:
       app:
         annotations:
           external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
         className: external
         hosts:
         - host: cowtail.${HOME_DOMAIN}
           paths:
+          - path: /openclaw/realtime
+            service:
+              identifier: realtime
+              port: http
           - path: /
             service:
               identifier: app

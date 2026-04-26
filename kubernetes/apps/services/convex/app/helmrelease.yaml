@@ -24,7 +24,10 @@ spec:
   values:
     controllers:
       backend:
-        strategy: Recreate
+        strategy: RollingUpdate
+        rollingUpdate:
+          surge: "0"
+          unavailable: 1
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:

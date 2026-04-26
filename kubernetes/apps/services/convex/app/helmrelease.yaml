@@ -111,7 +111,7 @@ spec:
           app:
             image:
               repository: ghcr.io/get-convex/convex-dashboard
-              tag: latest@sha256:2e42a82380647823e21025fe62b4fb9bad8223e6294e6377b68f5f6fbafe3d34
+              tag: latest@sha256:187e661dd3a3777b6b444832a3ea46f6e37acd19d2569394e075086dea86c4ed
             env:
               NEXT_PUBLIC_DEPLOYMENT_URL: https://convex-api.${HOME_DOMAIN}
               NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: "true"

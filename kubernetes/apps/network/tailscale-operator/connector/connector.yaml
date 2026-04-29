@@ -25,6 +25,14 @@ spec:
     - 10.50.0.0/24
     - 10.100.0.0/24
     - 10.100.47.0/24
+    # Host routes for critical DNS/ingress/LB services. These help iOS prefer
+    # Tailscale over overlapping private routes on arbitrary WiFi networks.
+    - 10.100.47.200/32
+    - 10.100.47.201/32
+    - 10.100.47.202/32
+    - 10.100.47.230/32
+    - 10.100.47.249/32
+    - 10.100.47.250/32
     - 10.107.104.0/22
     - 10.108.108.0/23
     - 10.255.253.0/24

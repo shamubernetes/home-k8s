@@ -33,6 +33,7 @@ spec:
         healthCheck:
           initialDelaySeconds: 60
           periodSeconds: 60
+          timeoutSeconds: 5
       hostpathClass:
         enabled: true
         name: openebs-hostpath

@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/tailscale.com/connector_v1alpha1.json
+apiVersion: tailscale.com/v1alpha1
+kind: Connector
+metadata:
+  name: titans-exit-node
+spec:
+  hostname: titans-exit-node
+  exitNode: true
+  tags:
+  - tag:k8s

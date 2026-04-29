@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app tailscale-operator
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace tailscale
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: external-secrets-secret-store
+  path: ./kubernetes/apps/network/tailscale-operator/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace
+
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app tailscale-exit-node
+  namespace: "${KS_NAMESPACE}"
+spec:
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: tailscale-operator
+  path: ./kubernetes/apps/network/tailscale-operator/connector
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"

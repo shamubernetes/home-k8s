@@ -31,3 +31,4 @@ resources:
 - ./shamubernetes-charts.yaml
 - ./spegel.yaml
 - ./stakater.yaml
+- ./tailscale.yaml

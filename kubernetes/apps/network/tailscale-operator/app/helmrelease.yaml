@@ -25,6 +25,8 @@ spec:
       secret:
         secretName: operator-oauth
     operatorConfig:
+      image:
+        repository: ghcr.io/tailscale/k8s-operator
       hostname: titans-tailscale-operator
       defaultTags:
       - tag:k8s-operator
@@ -35,4 +37,6 @@ spec:
         limits:
           memory: 256Mi
     proxyConfig:
+      image:
+        repository: ghcr.io/tailscale/tailscale
       defaultTags: tag:k8s

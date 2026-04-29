@@ -6,6 +6,18 @@ metadata:
 spec:
   hostname: titans-exit-node
   exitNode: true
+  tags:
+  - tag:k8s
+
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/tailscale.com/connector_v1alpha1.json
+apiVersion: tailscale.com/v1alpha1
+kind: Connector
+metadata:
+  name: titans-subnet-router
+spec:
+  hostname: titans-subnet-router
   subnetRouter:
     advertiseRoutes:
     - 10.0.10.0/24

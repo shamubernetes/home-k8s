@@ -74,7 +74,7 @@
             {
               "id": "openclawVersion",
               "name": "openclawVersion",
-              "value": "={{ $('OpenClaw Release').item.json.title.replace('OpenClaw ', '').replace('n8n@', '') }}",
+              "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^v/i, '').replace(/^openclaw\\s+/i, '').trim() }}",
               "type": "string"
             },
             {
@@ -143,7 +143,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT version FROM openclaw_notifications WHERE version = '{{ $json.openclawVersion }}' LIMIT 1",
+        "query": "SELECT version FROM openclaw_notifications WHERE regexp_replace(regexp_replace(version, '^\\s*openclaw\\s+', '', 'i'), '^v', '', 'i') = '{{ $json.openclawVersion }}' LIMIT 1",
         "options": {}
       },
       "id": "check-notified",
@@ -471,7 +471,7 @@
               {
                 "id": "openclawVersion",
                 "name": "openclawVersion",
-                "value": "={{ $('OpenClaw Release').item.json.title.replace('OpenClaw ', '').replace('n8n@', '') }}",
+                "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^v/i, '').replace(/^openclaw\\s+/i, '').trim() }}",
                 "type": "string"
               },
               {
@@ -540,7 +540,7 @@
       {
         "parameters": {
           "operation": "executeQuery",
-          "query": "SELECT version FROM openclaw_notifications WHERE version = '{{ $json.openclawVersion }}' LIMIT 1",
+          "query": "SELECT version FROM openclaw_notifications WHERE regexp_replace(regexp_replace(version, '^\\s*openclaw\\s+', '', 'i'), '^v', '', 'i') = '{{ $json.openclawVersion }}' LIMIT 1",
           "options": {}
         },
         "id": "check-notified",

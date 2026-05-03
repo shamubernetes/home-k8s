@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail
-              tag: 0.11.0@sha256:f3ef67e7ab6daf4a5ea927642ded64e100d613afcb2ee1b1b117e54ffffc5272
+              tag: 0.12.0@sha256:337e036d627c98474eb14473db12f316e3287492e7fe130d036ddc96b610f4ed
             env:
               TZ: America/New_York
               CONVEX_API_UPSTREAM: http://convex-backend.services.svc.cluster.local:3210
@@ -76,7 +76,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail-realtime
-              tag: 0.11.0@sha256:d6ecb87b52eb82d365fe595332b692e419b9792449ae446fed41f4ca7d9a5ef1
+              tag: 0.12.0@sha256:d07acff1f7e67ef89a0eab7e8b8cec196e9b423f81dc5d27616eb439a7236d8b
             env:
               TZ: America/New_York
               PORT: &realtimePort 8787

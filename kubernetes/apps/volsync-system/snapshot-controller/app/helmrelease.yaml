@@ -25,5 +25,13 @@ spec:
       retries: 3
   values:
     controller:
+      replicaCount: 2
+      priorityClassName: system-cluster-critical
+      resources:
+        requests:
+          cpu: 25m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
       serviceMonitor:
         create: true

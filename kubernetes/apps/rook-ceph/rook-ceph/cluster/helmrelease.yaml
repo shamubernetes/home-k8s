@@ -78,10 +78,12 @@ spec:
       osd_scrub_end_hour = 23
       osd_scrub_sleep = 0
       osd_scrub_priority = 7
-      osd_max_scrubs = 4
+      osd_max_scrubs = 2
       osd_scrub_load_threshold = 4.0
       osd_scrub_during_recovery = false
-      osd_deep_scrub_interval = 1209600
+      osd_deep_scrub_interval = 604800
+      osd_deep_scrub_randomize_ratio = 0.25
+      osd_scrub_interval_randomize_ratio = 0.75
       ; end
 
     cephClusterSpec:
@@ -95,10 +97,12 @@ spec:
           osd_scrub_end_hour: "23"
           osd_scrub_sleep: "0"
           osd_scrub_priority: "7"
-          osd_max_scrubs: "4"
+          osd_max_scrubs: "2"
           osd_scrub_load_threshold: "4.0"
           osd_scrub_during_recovery: "false"
-          osd_deep_scrub_interval: "1209600"
+          osd_deep_scrub_interval: "604800"
+          osd_deep_scrub_randomize_ratio: "0.25"
+          osd_scrub_interval_randomize_ratio: "0.75"
       healthCheck:
         livenessProbe:
           mon:

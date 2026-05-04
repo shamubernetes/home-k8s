@@ -239,6 +239,22 @@
       "matchUpdateTypes": ["minor", "patch"],
     },
     {
+      "description": "Never auto-merge n8n image updates after bad digest rollouts",
+      "matchDatasources": ["docker"],
+      "matchDepNames": ["docker.io/n8nio/n8n", "n8nio/n8n"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "reviewers": ["kiliantyler"],
+    },
+    {
+      "description": "Never auto-merge curlimages/curl updates used by init and check containers",
+      "matchDatasources": ["docker"],
+      "matchDepNames": ["curlimages/curl"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "reviewers": ["kiliantyler"],
+    },
+    {
       "description": "Never auto-merge Convex image updates",
       "matchDatasources": ["docker"],
       "matchDepNames": [

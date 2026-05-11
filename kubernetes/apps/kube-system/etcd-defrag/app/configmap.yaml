@@ -13,7 +13,7 @@ data:
     # Exits with error if it cannot properly check etcd status
 
     # Configuration
-    FRAG_THRESHOLD=35  # Defrag if fragmentation exceeds this percentage
+    FRAG_THRESHOLD=25  # Defrag if fragmentation exceeds this percentage
 
     echo "=========================================="
     echo "etcd Fragmentation Check & Defrag Script"

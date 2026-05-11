@@ -8,6 +8,7 @@ spec:
     # renovate: datasource=docker depName=ghcr.io/siderolabs/installer
     version: v1.13.0
   policy:
+    placement: hard
     rebootMode: powercycle
   healthChecks:
   - apiVersion: volsync.backube/v1alpha1

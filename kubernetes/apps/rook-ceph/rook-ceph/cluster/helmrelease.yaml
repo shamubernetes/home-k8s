@@ -35,19 +35,25 @@ spec:
         CephNodeDiskspaceWarning:
           expr: |
             (
-              predict_linear(
+              (
+                predict_linear(
+                  max by (instance, device, mountpoint) (
+                    node_filesystem_free_bytes{device=~"/.*",mountpoint="/var"}
+                  )[2d:]
+                  , 3600 * 24 * 5
+                )
+                /
                 max by (instance, device, mountpoint) (
-                  node_filesystem_free_bytes{device=~"/.*",mountpoint="/var"}
-                )[2d:]
-                , 3600 * 24 * 5
-              )
-              /
+                  node_filesystem_size_bytes{device=~"/.*",mountpoint="/var"}
+                )
+              ) < 0.12
+              and on(instance, device, mountpoint)
               max by (instance, device, mountpoint) (
-                node_filesystem_size_bytes{device=~"/.*",mountpoint="/var"}
-              )
+                node_filesystem_free_bytes{device=~"/.*",mountpoint="/var"}
+              ) < 40 * 1024 * 1024 * 1024
             )
             * on(instance) group_left(nodename)
-            max by (instance, nodename) (node_uname_info) < 0.12
+            max by (instance, nodename) (node_uname_info)
         CephNodeNetworkPacketDrops:
           expr: |
             (
@@ -77,13 +83,13 @@ spec:
       osd_scrub_begin_hour = 0
       osd_scrub_end_hour = 23
       osd_scrub_sleep = 0
-      osd_scrub_priority = 7
-      osd_max_scrubs = 2
+      osd_scrub_priority = 10
+      osd_max_scrubs = 3
       osd_scrub_load_threshold = 4.0
       osd_scrub_during_recovery = false
       osd_deep_scrub_interval = 604800
-      osd_deep_scrub_randomize_ratio = 0.25
-      osd_scrub_interval_randomize_ratio = 0.75
+      osd_deep_scrub_randomize_ratio = 0.10
+      osd_scrub_interval_randomize_ratio = 0.25
       ; end
 
     cephClusterSpec:
@@ -96,13 +102,13 @@ spec:
           osd_scrub_begin_hour: "0"
           osd_scrub_end_hour: "23"
           osd_scrub_sleep: "0"
-          osd_scrub_priority: "7"
-          osd_max_scrubs: "2"
+          osd_scrub_priority: "10"
+          osd_max_scrubs: "3"
           osd_scrub_load_threshold: "4.0"
           osd_scrub_during_recovery: "false"
           osd_deep_scrub_interval: "604800"
-          osd_deep_scrub_randomize_ratio: "0.25"
-          osd_scrub_interval_randomize_ratio: "0.75"
+          osd_deep_scrub_randomize_ratio: "0.10"
+          osd_scrub_interval_randomize_ratio: "0.25"
       healthCheck:
         livenessProbe:
           mon:

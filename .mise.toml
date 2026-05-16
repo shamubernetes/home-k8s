@@ -1,6 +1,6 @@
 [tools]
 kubectl = "1.36.1"
-sops = "3.13.0"
+sops = "3.13.1"
 age = "1.2.1"
 task = "3.44.0"
 flux2 = "2.8.7"

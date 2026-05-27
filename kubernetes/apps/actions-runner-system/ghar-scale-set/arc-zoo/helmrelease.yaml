@@ -78,7 +78,7 @@ spec:
               initialDelaySeconds: 0
               failureThreshold: 24
               periodSeconds: 5
-              timeoutSeconds: 5
+              timeoutSeconds: 15
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work

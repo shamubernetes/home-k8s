@@ -23,7 +23,7 @@ spec:
   enableSuperuserAccess: true
   postgresql:
     parameters:
-      max_connections: "250"
+      max_connections: "400"
       shared_buffers: 128MB
   nodeMaintenanceWindow:
     inProgress: false

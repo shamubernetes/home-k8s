@@ -50,19 +50,24 @@ spec:
       GF_SERVER_ROOT_URL: https://grafana.${HOME_DOMAIN}
     envFromSecrets:
     - name: *secret
-    startupProbe:
+    livenessProbe:
       httpGet:
         path: /api/health
         port: grafana
         scheme: HTTP
+      initialDelaySeconds: 180
       periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 30
+      timeoutSeconds: 30
+      failureThreshold: 10
     grafana.ini:
       analytics:
         check_for_updates: false
         check_for_plugin_updates: false
         reporting_enabled: false
+      database:
+        max_open_conn: 10
+        max_idle_conn: 2
+        conn_max_lifetime: 14400
       # auth:
       #   oauth_auto_login: true
       #   oauth_allow_insecure_email_lookup: true

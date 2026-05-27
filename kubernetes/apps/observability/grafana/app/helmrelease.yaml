@@ -50,6 +50,14 @@ spec:
       GF_SERVER_ROOT_URL: https://grafana.${HOME_DOMAIN}
     envFromSecrets:
     - name: *secret
+    startupProbe:
+      httpGet:
+        path: /api/health
+        port: grafana
+        scheme: HTTP
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 30
     grafana.ini:
       analytics:
         check_for_updates: false

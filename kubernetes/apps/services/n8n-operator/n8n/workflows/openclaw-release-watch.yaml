@@ -44,7 +44,7 @@ data:
           "type": "n8n-nodes-base.httpRequest",
           "typeVersion": 4.2,
           "position": [
-            220,
+            440,
             0
           ]
         },
@@ -61,7 +61,7 @@ data:
           "type": "@n8layer/n8n-nodes-1password.onePassword",
           "typeVersion": 1,
           "position": [
-            440,
+            660,
             0
           ],
           "credentials": {
@@ -78,7 +78,7 @@ data:
                 {
                   "id": "openclawVersion",
                   "name": "openclawVersion",
-                  "value": "={{ $('OpenClaw Release').item.json.title.replace('OpenClaw ', '').replace('n8n@', '') }}",
+                  "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim() }}",
                   "type": "string"
                 },
                 {
@@ -108,7 +108,7 @@ data:
           "type": "n8n-nodes-base.set",
           "typeVersion": 3.4,
           "position": [
-            660,
+            880,
             0
           ]
         },
@@ -123,11 +123,11 @@ data:
               "conditions": [
                 {
                   "id": "stable-only",
-                  "leftValue": "={{ $('Extract Versions').item.json.openclawVersion }}",
-                  "rightValue": "-beta",
+                  "leftValue": "={{ (/^\\d{4}\\.\\d+\\.\\d+(?:-\\d+)?$/).test(((($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'stable' : 'skip' }}",
+                  "rightValue": "stable",
                   "operator": {
                     "type": "string",
-                    "operation": "notContains"
+                    "operation": "equals"
                   }
                 }
               ],
@@ -140,14 +140,14 @@ data:
           "type": "n8n-nodes-base.filter",
           "typeVersion": 2,
           "position": [
-            880,
+            220,
             0
           ]
         },
         {
           "parameters": {
             "operation": "executeQuery",
-            "query": "SELECT version FROM openclaw_notifications WHERE version = '{{ $json.openclawVersion }}' LIMIT 1",
+            "query": "SELECT version FROM openclaw_notifications WHERE regexp_replace(regexp_replace(version, '^\\s*openclaw\\s+', '', 'i'), '^v', '', 'i') = '{{ $json.openclawVersion }}' LIMIT 1",
             "options": {}
           },
           "id": "check-notified",
@@ -284,7 +284,7 @@ data:
           "main": [
             [
               {
-                "node": "Fetch Cove Release",
+                "node": "Filter Stable Releases",
                 "type": "main",
                 "index": 0
               }
@@ -317,7 +317,7 @@ data:
           "main": [
             [
               {
-                "node": "Filter Stable Releases",
+                "node": "Check If Notified",
                 "type": "main",
                 "index": 0
               }
@@ -372,7 +372,7 @@ data:
           "main": [
             [
               {
-                "node": "Check If Notified",
+                "node": "Fetch Cove Release",
                 "type": "main",
                 "index": 0
               }

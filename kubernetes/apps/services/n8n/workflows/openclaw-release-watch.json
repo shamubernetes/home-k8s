@@ -40,7 +40,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        220,
+        440,
         0
       ]
     },
@@ -57,7 +57,7 @@
       "type": "CUSTOM.onePassword",
       "typeVersion": 1,
       "position": [
-        440,
+        660,
         0
       ],
       "credentials": {
@@ -74,7 +74,7 @@
             {
               "id": "openclawVersion",
               "name": "openclawVersion",
-              "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^v/i, '').replace(/^openclaw\\s+/i, '').trim() }}",
+              "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim() }}",
               "type": "string"
             },
             {
@@ -104,7 +104,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        660,
+        880,
         0
       ]
     },
@@ -119,11 +119,11 @@
           "conditions": [
             {
               "id": "stable-only",
-              "leftValue": "={{ $('Extract Versions').item.json.openclawVersion }}",
-              "rightValue": "-beta",
+              "leftValue": "={{ (/^\\d{4}\\.\\d+\\.\\d+(?:-\\d+)?$/).test(((($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'stable' : 'skip' }}",
+              "rightValue": "stable",
               "operator": {
                 "type": "string",
-                "operation": "notContains"
+                "operation": "equals"
               }
             }
           ],
@@ -136,7 +136,7 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
       "position": [
-        880,
+        220,
         0
       ]
     },
@@ -280,7 +280,7 @@
       "main": [
         [
           {
-            "node": "Fetch Cove Release",
+            "node": "Filter Stable Releases",
             "type": "main",
             "index": 0
           }
@@ -313,7 +313,7 @@
       "main": [
         [
           {
-            "node": "Filter Stable Releases",
+            "node": "Check If Notified",
             "type": "main",
             "index": 0
           }
@@ -368,7 +368,7 @@
       "main": [
         [
           {
-            "node": "Check If Notified",
+            "node": "Fetch Cove Release",
             "type": "main",
             "index": 0
           }
@@ -437,7 +437,7 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          220,
+          440,
           0
         ]
       },
@@ -454,7 +454,7 @@
         "type": "CUSTOM.onePassword",
         "typeVersion": 1,
         "position": [
-          440,
+          660,
           0
         ],
         "credentials": {
@@ -471,7 +471,7 @@
               {
                 "id": "openclawVersion",
                 "name": "openclawVersion",
-                "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^v/i, '').replace(/^openclaw\\s+/i, '').trim() }}",
+                "value": "={{ (($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title).replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim() }}",
                 "type": "string"
               },
               {
@@ -501,7 +501,7 @@
         "type": "n8n-nodes-base.set",
         "typeVersion": 3.4,
         "position": [
-          660,
+          880,
           0
         ]
       },
@@ -516,11 +516,11 @@
             "conditions": [
               {
                 "id": "stable-only",
-                "leftValue": "={{ $('Extract Versions').item.json.openclawVersion }}",
-                "rightValue": "-beta",
+                "leftValue": "={{ (/^\\d{4}\\.\\d+\\.\\d+(?:-\\d+)?$/).test(((($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'stable' : 'skip' }}",
+                "rightValue": "stable",
                 "operator": {
                   "type": "string",
-                  "operation": "notContains"
+                  "operation": "equals"
                 }
               }
             ],
@@ -533,7 +533,7 @@
         "type": "n8n-nodes-base.filter",
         "typeVersion": 2,
         "position": [
-          880,
+          220,
           0
         ]
       },
@@ -677,7 +677,7 @@
         "main": [
           [
             {
-              "node": "Fetch Cove Release",
+              "node": "Filter Stable Releases",
               "type": "main",
               "index": 0
             }
@@ -710,7 +710,7 @@
         "main": [
           [
             {
-              "node": "Filter Stable Releases",
+              "node": "Check If Notified",
               "type": "main",
               "index": 0
             }
@@ -765,7 +765,7 @@
         "main": [
           [
             {
-              "node": "Check If Notified",
+              "node": "Fetch Cove Release",
               "type": "main",
               "index": 0
             }

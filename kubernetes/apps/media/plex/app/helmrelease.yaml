@@ -181,18 +181,18 @@ spec:
       cache:
         type: nfs
         server: "${IPAM_IP_NFS}"
-        path: /mnt/user/k8s
+        path: /mnt/user/Media
         globalMounts:
         - path: /config/Library/Application Support/Plex Media Server/Cache
-          subPath: plex/cache
+          subPath: .plex-cache
       # Video preview thumbnails are write-heavy and should not churn Ceph RBD.
       previews:
         type: nfs
         server: "${IPAM_IP_NFS}"
-        path: /mnt/user/k8s
+        path: /mnt/user/Media
         globalMounts:
         - path: /config/Library/Application Support/Plex Media Server/Media
-          subPath: plex/previews
+          subPath: .plex-previews
       logs:
         type: emptyDir
         globalMounts:

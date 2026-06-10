@@ -177,16 +177,22 @@ spec:
         # TODO: If setting up Plex for the first time, you'll want to add the globalMounts section
         globalMounts:
         - path: /config/Library/Application Support/Plex Media Server
-      # Separate PVC for cache to avoid backing up cache files
+      # Regeneratable cache data stays persistent, but off Ceph RBD.
       cache:
-        existingClaim: plex-cache
+        type: nfs
+        server: "${IPAM_IP_NFS}"
+        path: /mnt/user/k8s
         globalMounts:
         - path: /config/Library/Application Support/Plex Media Server/Cache
-      # Separate PVC for video preview thumbnails (Media/) to avoid backing up regeneratable data
+          subPath: plex/cache
+      # Video preview thumbnails are write-heavy and should not churn Ceph RBD.
       previews:
-        existingClaim: plex-media
+        type: nfs
+        server: "${IPAM_IP_NFS}"
+        path: /mnt/user/k8s
         globalMounts:
         - path: /config/Library/Application Support/Plex Media Server/Media
+          subPath: plex/previews
       logs:
         type: emptyDir
         globalMounts:

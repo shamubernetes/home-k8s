@@ -23,8 +23,12 @@ spec:
   enableSuperuserAccess: true
   postgresql:
     parameters:
+      checkpoint_timeout: 15min
+      max_wal_size: 4GB
       max_connections: "400"
+      min_wal_size: 1GB
       shared_buffers: 128MB
+      wal_compression: "on"
   nodeMaintenanceWindow:
     inProgress: false
     reusePVC: true

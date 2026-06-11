@@ -54,7 +54,7 @@
       },
       "id": "get-token",
       "name": "Get Webhook Token",
-      "type": "CUSTOM.onePassword",
+      "type": "@n8layer/n8n-nodes-1password.onePassword",
       "typeVersion": 1,
       "position": [
         660,
@@ -62,7 +62,7 @@
       ],
       "credentials": {
         "onePasswordApi": {
-          "id": "bm8BFahBXvbS2Spj",
+          "id": "iDXyywChBpfjvdoO",
           "name": "1Password Connect"
         }
       }
@@ -118,13 +118,13 @@
           },
           "conditions": [
             {
-              "id": "stable-only",
-              "leftValue": "={{ (/^\\d{4}\\.\\d+\\.\\d+(?:-\\d+)?$/).test(((($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'stable' : 'skip' }}",
-              "rightValue": "stable",
+              "id": "official-full-release",
+              "leftValue": "={{ /^\\d+\\.\\d+\\.\\d+(?:-\\d+)?$/.test((($json.link || '').split('/').pop() || $json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'official' : 'prerelease' }}",
               "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+                "operation": "equals",
+                "type": "string"
+              },
+              "rightValue": "official"
             }
           ],
           "combinator": "and"
@@ -157,7 +157,7 @@
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
-          "id": "fuKOXWYzqCT5iLWp",
+          "id": "yQUj4P0H3mPoM1mR",
           "name": "Postgres account"
         }
       }
@@ -241,7 +241,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ version: $('Extract Versions').item.json.openclawVersion, url: $('Extract Versions').item.json.url }) }}",
+        "jsonBody": "={{ JSON.stringify({ version: $('Extract Versions').item.json.openclawVersion, url: $('Extract Versions').item.json.url, audit: { coveCompatibility: true, officialUiDiff: true, uiParityRequired: true, instructions: 'Run openclaw-release-review including the mandatory official UI diff/parity audit before notifying.' } }) }}",
         "options": {}
       },
       "id": "webhook-call",
@@ -269,42 +269,20 @@
       ],
       "credentials": {
         "postgres": {
-          "id": "fuKOXWYzqCT5iLWp",
+          "id": "yQUj4P0H3mPoM1mR",
           "name": "Postgres account"
         }
       }
     }
   ],
   "connections": {
-    "OpenClaw Release": {
+    "Check If Notified": {
       "main": [
         [
           {
-            "node": "Filter Stable Releases",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Cove Release": {
-      "main": [
-        [
-          {
-            "node": "Get Webhook Token",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Webhook Token": {
-      "main": [
-        [
-          {
-            "node": "Extract Versions",
-            "type": "main",
-            "index": 0
+            "index": 0,
+            "node": "Skip If Already Notified",
+            "type": "main"
           }
         ]
       ]
@@ -313,31 +291,20 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Check If Notified",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
     },
-    "Check If Notified": {
+    "Fetch Cove Release": {
       "main": [
         [
           {
-            "node": "Skip If Already Notified",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Skip If Already Notified": {
-      "main": [
-        [
-          {
-            "node": "Filter If Different",
-            "type": "main",
-            "index": 0
+            "index": 0,
+            "node": "Get Webhook Token",
+            "type": "main"
           }
         ]
       ]
@@ -346,20 +313,9 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Notify OpenClaw",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notify OpenClaw": {
-      "main": [
-        [
-          {
-            "node": "Mark As Notified",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
@@ -368,19 +324,62 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Fetch Cove Release",
-            "type": "main",
-            "index": 0
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Get Webhook Token": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Extract Versions",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Notify OpenClaw": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Mark As Notified",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "OpenClaw Release": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Filter Stable Releases",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Skip If Already Notified": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Filter If Different",
+            "type": "main"
           }
         ]
       ]
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate",
     "availableInMCP": false,
-    "callerPolicy": "workflowsFromSameOwner"
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionOrder": "v1"
   },
   "staticData": {
     "node:OpenClaw Release": {

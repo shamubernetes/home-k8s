@@ -122,9 +122,9 @@ data:
               },
               "conditions": [
                 {
-                  "id": "stable-only",
-                  "leftValue": "={{ (/^\\d{4}\\.\\d+\\.\\d+(?:-\\d+)?$/).test(((($('OpenClaw Release').item.json.link || '').split('/').pop() || $('OpenClaw Release').item.json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'stable' : 'skip' }}",
-                  "rightValue": "stable",
+                  "id": "official-full-release",
+                  "leftValue": "={{ /^\\d+\\.\\d+\\.\\d+(?:-\\d+)?$/.test((($json.link || '').split('/').pop() || $json.title || '').replace(/^openclaw\\s+/i, '').replace(/^v/i, '').trim()) ? 'official' : 'prerelease' }}",
+                  "rightValue": "official",
                   "operator": {
                     "type": "string",
                     "operation": "equals"
@@ -245,7 +245,7 @@ data:
             },
             "sendBody": true,
             "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({ version: $('Extract Versions').item.json.openclawVersion, url: $('Extract Versions').item.json.url }) }}",
+            "jsonBody": "={{ JSON.stringify({ version: $('Extract Versions').item.json.openclawVersion, url: $('Extract Versions').item.json.url, audit: { coveCompatibility: true, officialUiDiff: true, uiParityRequired: true, instructions: 'Run openclaw-release-review including the mandatory official UI diff/parity audit before notifying.' } }) }}",
             "options": {}
           },
           "id": "webhook-call",
@@ -381,6 +381,8 @@ data:
         }
       },
       "settings": {
+        "availableInMCP": false,
+        "callerPolicy": "workflowsFromSameOwner",
         "executionOrder": "v1"
       }
     }

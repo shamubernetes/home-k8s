@@ -95,7 +95,23 @@ spec:
               PLEX_ADVERTISE_URL: https://plex.${HOME_DOMAIN}:443,http://${IPAM_IP_PLEX}:32400
               PLEX_NO_AUTH_NETWORKS: 10.0.0.0/8
             probes:
-              liveness: &probes
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command:
+                    - sh
+                    - -c
+                    - |
+                      CACHE_PATH="/config/Library/Application Support/Plex Media Server/Cache"
+                      stat "$CACHE_PATH" >/dev/null
+                      curl -fsS --max-time 2 http://127.0.0.1:32400/identity >/dev/null
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 3
+                  failureThreshold: 3
+              readiness:
                 enabled: true
                 custom: true
                 spec:
@@ -106,7 +122,6 @@ spec:
                   periodSeconds: 10
                   timeoutSeconds: 1
                   failureThreshold: 3
-              readiness: *probes
               startup:
                 enabled: true
                 spec:

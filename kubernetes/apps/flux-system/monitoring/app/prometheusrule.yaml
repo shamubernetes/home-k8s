@@ -24,7 +24,7 @@ spec:
       expr: |
         max by (exported_namespace, name, kind) (
           label_replace(
-            gotk_resource_info{suspended!="true",ready!="True"},
+            gotk_resource_info{suspended!="true",ready=~"False|Unknown"},
             "kind",
             "$1",
             "customresource_kind",

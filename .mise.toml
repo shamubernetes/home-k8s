@@ -5,7 +5,7 @@ age = "1.2.1"
 task = "3.51.1"
 flux2 = "2.8.8"
 talhelper = "latest"
-talosctl = "1.13.3"
+talosctl = "1.13.4"
 krew = "0.5.0"
 "npm:renovate" = "latest"
 

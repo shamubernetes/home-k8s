@@ -33,6 +33,7 @@ spec:
           name: rook-csi-operator-image-set-configmap
         clusterName: rook-ceph
         cephFsClientType: kernel
+        snapshotPolicy: volumeSnapshot
         nodePlugin:
           imagePullPolicy: IfNotPresent
           kubeletDirPath: /var/lib/kubelet
@@ -48,6 +49,7 @@ spec:
       rbd:
         enabled: true
         name: rook-ceph.rbd.csi.ceph.com
+        snapshotPolicy: volumeSnapshot
       cephfs:
         enabled: true
         name: rook-ceph.cephfs.csi.ceph.com

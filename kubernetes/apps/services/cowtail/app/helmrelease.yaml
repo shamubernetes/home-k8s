@@ -76,7 +76,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail-realtime
-              tag: 0.14.1@sha256:aa9212c37390e283577092072969ddb214a9d80419e8a449c4e27c9ef78e370f
+              tag: 0.14.2@sha256:c344ce69755121e2f07e37b07b60d30ca4f4aecfc7aa6e08cae0101e1998a709
             env:
               TZ: America/New_York
               PORT: &realtimePort 8787

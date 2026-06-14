@@ -74,14 +74,29 @@ spec:
           expr: |
             (
               (
-                predict_linear(ceph_pool_percent_used[2d], 3600 * 24 * 5)
-                * on (cluster, pool_id, instance) group_right ()
-                ceph_pool_metadata
+                predict_linear(
+                  (
+                    max by (cluster, pool_id) (
+                      ceph_pool_percent_used
+                    )
+                  )[2d:],
+                  3600 * 24 * 5
+                )
+                * on (cluster, pool_id) group_right ()
+                max by (cluster, pool_id, name, application, description, compression_mode, type) (
+                  ceph_pool_metadata
+                )
               ) >= 0.95
             )
-            and on(cluster, pool_id, instance)
+            and on(cluster, pool_id)
             (
-              min_over_time(ceph_pool_percent_used[10m]) > 0.01
+              min_over_time(
+                (
+                  max by (cluster, pool_id) (
+                    ceph_pool_percent_used
+                  )
+                )[10m:]
+              ) > 0.01
             )
     ingress:
       dashboard:

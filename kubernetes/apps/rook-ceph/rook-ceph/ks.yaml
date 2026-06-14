@@ -66,6 +66,8 @@ spec:
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
+  dependsOn:
+  - name: rook-ceph
   path: ./kubernetes/apps/rook-ceph/rook-ceph/csi
   prune: false
   sourceRef:

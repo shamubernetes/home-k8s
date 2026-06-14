@@ -1,5 +1,5 @@
 [tools]
-kubectl = "1.36.1"
+kubectl = "1.36.2"
 sops = "3.13.1"
 age = "1.2.1"
 task = "3.51.1"

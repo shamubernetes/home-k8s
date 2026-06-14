@@ -26,6 +26,8 @@ spec:
   - name: vector-aggregator
     namespace: observability
   values:
+    defaultPodOptions:
+      automountServiceAccountToken: true
     controllers:
       vector-agent:
         type: daemonset
@@ -60,6 +62,7 @@ spec:
               privileged: true
         serviceAccount:
           identifier: *app
+          automountServiceAccountToken: true
     serviceAccount:
       vector-agent: {}
     rbac:

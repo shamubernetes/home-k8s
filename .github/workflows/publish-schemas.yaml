@@ -30,12 +30,12 @@ jobs:
       packages: write
     steps:
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         token: "${{ secrets.GITHUB_TOKEN }}"
 
     - name: Setup Homebrew
-      uses: Homebrew/actions/setup-homebrew@59e6b20d96df1a3c9ccb0aa402676e01a4cc6ff3 # master
+      uses: Homebrew/actions/setup-homebrew@5289d4857e180699398c1c0c5cca24882e524d05 # master
 
     - name: Setup Workflow Tools
       shell: bash
@@ -53,7 +53,7 @@ jobs:
 
     - name: Write kubeconfig
       id: kubeconfig
-      uses: timheuer/base64-to-file@784a1a4a994315802b7d8e2084e116e783d157be # v1.2.4
+      uses: timheuer/base64-to-file@dfa5a5dd38803cb4f5c3a081eeb28e8362d43e9c # v2.0.0
       with:
         encodedString: "${{ secrets.KUBECONFIG }}"
         fileName: kubeconfig

@@ -6,7 +6,7 @@ task = "3.44.0"
 flux2 = "2.8.8"
 talhelper = "latest"
 talosctl = "1.13.3"
-krew = "0.4.5"
+krew = "0.5.0"
 "npm:renovate" = "latest"
 
 [env]

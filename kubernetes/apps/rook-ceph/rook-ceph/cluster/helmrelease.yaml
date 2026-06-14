@@ -70,6 +70,19 @@ spec:
           annotations:
             description: "Node {{ $labels.instance }} experiences sustained packet drop > 1% or > 50 packets/s on interface {{ $labels.device }}."
             summary: "One or more NICs reports sustained packet drops"
+        CephPoolGrowthWarning:
+          expr: |
+            (
+              (
+                predict_linear(ceph_pool_percent_used[2d], 3600 * 24 * 5)
+                * on (cluster, pool_id, instance) group_right ()
+                ceph_pool_metadata
+              ) >= 0.95
+            )
+            and on(cluster, pool_id, instance)
+            (
+              min_over_time(ceph_pool_percent_used[10m]) > 0.01
+            )
     ingress:
       dashboard:
         ingressClassName: internal

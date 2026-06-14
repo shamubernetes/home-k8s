@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/cowtail
-              tag: 0.14.1@sha256:0949b7afc2ea886d1da064d11d770adb4249a1e7cdd2969b9e7100d5b46a3c46
+              tag: 0.14.2@sha256:810b5c28997178fd0b7df4f37ed1aa8425e43f47124cd0f81209f9fe3fcca79d
             env:
               TZ: America/New_York
               CONVEX_API_UPSTREAM: http://convex-backend.services.svc.cluster.local:3210

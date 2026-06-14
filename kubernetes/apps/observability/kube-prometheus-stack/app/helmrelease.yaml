@@ -300,13 +300,13 @@ spec:
           - alert: NodeDiskIOSaturation
             annotations:
               description: |
-                Disk IO queue (aqu-sq) is high on {{ $labels.device }} at {{ $labels.instance }}, has been above 1 for the last 5 minutes, and the disk has also been more than 10% busy over the last 5 minutes. This aggressive post-mitigation threshold is intended to prove storage pressure has been relieved.
+                Disk IO queue (aqu-sq) is high on {{ $labels.device }} at {{ $labels.instance }}, has been above 5 for the last 15 minutes, and the disk has also been more than 30% busy over the last 5 minutes. This combination indicates sustained saturation rather than a brief queue spike from bursty small writes.
               summary: Disk IO queue is high on a busy disk.
             expr: |-
-              rate(node_disk_io_time_weighted_seconds_total{job="node-exporter", device=~"(/dev/)?(mmcblk.p.+|nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)"}[5m]) > 1
+              rate(node_disk_io_time_weighted_seconds_total{job="node-exporter", device=~"(/dev/)?(mmcblk.p.+|nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)"}[5m]) > 5
               and
-              rate(node_disk_io_time_seconds_total{job="node-exporter", device=~"(/dev/)?(mmcblk.p.+|nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)"}[5m]) > 0.1
-            for: 5m
+              rate(node_disk_io_time_seconds_total{job="node-exporter", device=~"(/dev/)?(mmcblk.p.+|nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)"}[5m]) > 0.3
+            for: 15m
             labels:
               severity: warning
       oom-rules:

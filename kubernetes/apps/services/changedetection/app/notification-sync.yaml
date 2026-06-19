@@ -1,0 +1,43 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: changedetection-notification-sync
+spec:
+  schedule: "17 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: sync
+            image: curlimages/curl:8.15.0@sha256:6cb6321df7f0aef52f2b6a8810e181bf96a8f4c1a7d5a55b5c91a7c98a16d047
+            envFrom:
+            - secretRef:
+                name: changedetection-secret
+            command:
+            - /bin/sh
+            - -ec
+            - |
+              api_url="http://changedetection-app.services.svc.cluster.local:5000/api/v1/notifications"
+              current="$$(curl -fsS -H "x-api-key: $${CHANGEDETECTION_API_TOKEN}" "$${api_url}")"
+
+              case "$${current}" in
+                *"$${CHANGEDETECTION_NOTIFICATION_URL}"*)
+                  echo "Pushover notification URL already configured."
+                  exit 0
+                  ;;
+              esac
+
+              curl -fsS \
+                -X POST \
+                -H "x-api-key: $${CHANGEDETECTION_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "{\"notification_urls\":[\"$${CHANGEDETECTION_NOTIFICATION_URL}\"]}" \
+                "$${api_url}" >/dev/null
+
+              echo "Added Pushover notification URL."

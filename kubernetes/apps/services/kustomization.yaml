@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./atuin/ks.yaml
+- ./changedetection/ks.yaml
 - ./convex/ks.yaml
 - ./cs2/ks.yaml
 - ./cowtail/ks.yaml

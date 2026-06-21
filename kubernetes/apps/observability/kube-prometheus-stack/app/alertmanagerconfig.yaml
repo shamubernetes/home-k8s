@@ -24,6 +24,11 @@ spec:
       - name: alertname
         value: Watchdog
         matchType: "="
+    - receiver: openclaw
+      matchers:
+      - name: alertname
+        value: HermesCutoverLiveTest
+        matchType: "="
     - receiver: "null"
       matchers:
       - name: severity

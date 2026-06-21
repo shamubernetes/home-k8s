@@ -12,7 +12,6 @@ resources:
   - migrations/openclaw-notifications.yaml
   - migrations/codex-usage-alert-events.yaml
   - workflows/endpoint-smoketest.yaml
-  - workflows/cowtail-digest.yaml
   - workflows/cowtail-weekly-review.yaml
   - workflows/error-handler.yaml
   - workflows/codex-usage-pagerduty.yaml

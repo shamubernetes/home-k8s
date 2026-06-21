@@ -88,7 +88,7 @@ spec:
       name: n8n-api-key
       key: api-key
   workflowName: "Cowtail Digest"
-  active: true
+  active: false
   deletionPolicy: Retain
   sourceRef:
     kind: ConfigMap

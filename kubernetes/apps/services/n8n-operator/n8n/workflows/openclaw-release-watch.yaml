@@ -402,7 +402,7 @@ spec:
       name: n8n-api-key
       key: api-key
   workflowName: "OpenClaw Release Watch"
-  active: true
+  active: false
   deletionPolicy: Retain
   sourceRef:
     kind: ConfigMap

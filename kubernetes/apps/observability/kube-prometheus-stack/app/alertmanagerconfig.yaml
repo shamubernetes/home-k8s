@@ -24,14 +24,6 @@ spec:
       - name: alertname
         value: Watchdog
         matchType: "="
-    - receiver: openclaw
-      groupInterval: 15s
-      groupWait: 0s
-      repeatInterval: 1m
-      matchers:
-      - name: alertname
-        value: HermesCutoverLive(Test|ResolvedTest)
-        matchType: "=~"
     - receiver: "null"
       matchers:
       - name: severity

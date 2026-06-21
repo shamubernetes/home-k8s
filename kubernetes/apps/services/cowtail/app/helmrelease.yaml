@@ -67,47 +67,7 @@ spec:
                 memory: 32Mi
               limits:
                 memory: 64Mi
-      cowtail-realtime:
-        replicas: 1
-        strategy: RollingUpdate
-        annotations:
-          reloader.stakater.com/auto: "true"
-        containers:
-          app:
-            image:
-              repository: ghcr.io/maudecode/cowtail-realtime
-              tag: 0.14.3@sha256:ad7f361deecd8e7ee3e4a7f66fd52490e820d44bb6b787f58c93b4e021094ebc
-            env:
-              TZ: America/New_York
-              PORT: &realtimePort 8787
-              COWTAIL_HTTP_BASE_URL: http://convex-backend.services.svc.cluster.local:3211
-              CONVEX_URL: http://convex-backend.services.svc.cluster.local:3210
-            envFrom:
-            - secretRef:
-                name: cowtail-secret
-            probes:
-              liveness: &realtimeProbes
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /healthz
-                    port: *realtimePort
-                  initialDelaySeconds: 0
-                  periodSeconds: 10
-                  timeoutSeconds: 1
-                  failureThreshold: 3
-              readiness: *realtimeProbes
-            securityContext:
-              allowPrivilegeEscalation: false
-              readOnlyRootFilesystem: true
-              capabilities: {drop: ["ALL"]}
-            resources:
-              requests:
-                cpu: 10m
-                memory: 64Mi
-              limits:
-                memory: 256Mi
+
     configMaps:
       config:
         data:
@@ -124,12 +84,7 @@ spec:
             app:
             - path: /etc/cowtail
               readOnly: true
-      tmp:
-        type: emptyDir
-        advancedMounts:
-          cowtail-realtime:
-            app:
-            - path: /tmp
+
     defaultPodOptions:
       securityContext:
         # Cowtail's nginx image renders config and Universal Links files at startup,
@@ -143,11 +98,7 @@ spec:
         ports:
           http:
             port: *port
-      realtime:
-        controller: cowtail-realtime
-        ports:
-          http:
-            port: *realtimePort
+
     ingress:
       app:
         annotations:
@@ -158,10 +109,6 @@ spec:
         hosts:
         - host: cowtail.${HOME_DOMAIN}
           paths:
-          - path: /openclaw/realtime
-            service:
-              identifier: realtime
-              port: http
           - path: /
             service:
               identifier: app

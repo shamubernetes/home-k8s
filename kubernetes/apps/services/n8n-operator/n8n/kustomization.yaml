@@ -11,7 +11,6 @@ resources:
   - plugins/onepassword.yaml
   - migrations/openclaw-notifications.yaml
   - migrations/codex-usage-alert-events.yaml
-  - workflows/openclaw-release-watch.yaml
   - workflows/endpoint-smoketest.yaml
   - workflows/cowtail-digest.yaml
   - workflows/cowtail-weekly-review.yaml

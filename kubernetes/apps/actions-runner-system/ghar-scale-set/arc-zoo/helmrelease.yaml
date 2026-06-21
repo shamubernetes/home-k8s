@@ -32,8 +32,8 @@ spec:
     runnerScaleSetName: ghar-set-zoo
     githubConfigSecret: actions-runner-controller-auth-secret
     githubConfigUrl: https://github.com/shamubernetes
-    minRunners: 0
-    maxRunners: 0
+    minRunners: 2
+    maxRunners: 6
     containerMode:
       type: dind
     template:

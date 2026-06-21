@@ -41,7 +41,7 @@ data:
           "parameters": {
             "assignments": {
               "assignments": [
-                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $json.fields.find(f => f.label === 'OPENCLAW_WEBHOOK_TOKEN').value }}", "type": "string"}
+                {"id": "webhookToken", "name": "webhookToken", "value": "={{ $json.fields.find(f => f.label === 'HERMES_WEBHOOK_TOKEN').value }}", "type": "string"}
               ]
             },
             "options": {}
@@ -55,7 +55,7 @@ data:
         {
           "parameters": {
             "method": "POST",
-            "url": "http://10.0.10.95:18789/hooks/n8n-error",
+            "url": "http://10.0.10.95:8645/webhooks/n8n-error",
             "sendHeaders": true,
             "headerParameters": {
               "parameters": [

@@ -202,7 +202,7 @@ spec:
       name: n8n-api-key
       key: api-key
   workflowName: "Finance Daily Check"
-  active: true
+  active: false
   deletionPolicy: Retain
   sourceRef:
     kind: ConfigMap

@@ -91,12 +91,12 @@ spec:
     webhookConfigs:
     - urlSecret:
         name: alertmanager-secret
-        key: OPENCLAW_WEBHOOK_URL
+        key: HERMES_WEBHOOK_URL
       httpConfig:
         authorization:
           credentials:
             name: alertmanager-secret
-            key: OPENCLAW_WEBHOOK_TOKEN
+            key: HERMES_WEBHOOK_TOKEN
       sendResolved: true
   - name: heartbeat
     webhookConfigs:

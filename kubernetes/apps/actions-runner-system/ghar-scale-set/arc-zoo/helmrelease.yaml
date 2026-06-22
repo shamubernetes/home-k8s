@@ -32,9 +32,9 @@ spec:
     runnerScaleSetName: ghar-set-zoo
     githubConfigSecret: actions-runner-controller-auth-secret
     githubConfigUrl: https://github.com/shamubernetes
-    minRunners: 2
+    minRunners: 0
     # Each dind runner writes heavily to the node system disk. Keep the zoo
-    # scale set to one runner per worker to avoid saturating /var on sda.
+    # scale set to one active runner per worker and avoid idle warm-runner churn.
     maxRunners: 2
     containerMode:
       type: dind

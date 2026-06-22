@@ -78,7 +78,7 @@ data:
         {
           "parameters": {
             "method": "POST",
-            "url": "http://10.0.10.95:8645/webhooks/cowtail-review",
+            "url": "http://10.0.10.95:8645/webhooks/n8n-cowtail-review",
             "sendHeaders": true,
             "headerParameters": {
               "parameters": [

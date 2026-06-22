@@ -9,7 +9,7 @@ on:
 jobs:
   labeler:
     name: Labeler
-    runs-on: ["ghar-set-zoo"]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write

@@ -7,7 +7,7 @@ on:
 jobs:
   create-issue:
     name: Create Failure Issue
-    runs-on: ["ghar-set-zoo"]
+    runs-on: ubuntu-latest
     # Only run on Flux error events (types are like "Kustomization/name.namespace" or "HelmRelease/name.namespace")
     if: |
       github.event.client_payload.severity == 'error' &&

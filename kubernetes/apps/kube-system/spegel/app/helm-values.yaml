@@ -1,5 +1,8 @@
 spegel:
-  appendMirrors: true
+  mirroredRegistries:
+  - https://docker.io
+  additionalMirrorTargets:
+  - https://registry-1.docker.io
   containerdSock: /run/containerd/containerd.sock
   containerdRegistryConfigPath: /etc/cri/conf.d/hosts
 service:

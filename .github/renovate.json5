@@ -3,7 +3,9 @@
   timezone: "America/New_York",
   dependencyDashboard: true,
   pruneStaleBranches: true,
-  rebaseWhen: "behind-base-branch",
+  // Avoid mass rebasing every Renovate branch each run. Those updates fan out
+  // GitHub Actions jobs and overload the self-hosted ARC dind runner.
+  rebaseWhen: "conflicted",
   platformAutomerge: true,
   // Disable automatic reviewer assignment globally - only add for non-automerge PRs via packageRules
   reviewersFromCodeOwners: false,

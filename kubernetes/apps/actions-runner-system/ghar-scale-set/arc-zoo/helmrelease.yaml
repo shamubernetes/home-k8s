@@ -34,8 +34,8 @@ spec:
     githubConfigUrl: https://github.com/shamubernetes
     minRunners: 2
     # Each dind runner writes heavily to the node system disk. Keep the zoo
-    # scale set to two runners per worker to avoid saturating /var on sda.
-    maxRunners: 4
+    # scale set to one runner per worker to avoid saturating /var on sda.
+    maxRunners: 2
     containerMode:
       type: dind
     template:

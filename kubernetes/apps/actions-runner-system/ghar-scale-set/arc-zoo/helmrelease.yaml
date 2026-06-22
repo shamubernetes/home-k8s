@@ -33,7 +33,9 @@ spec:
     githubConfigSecret: actions-runner-controller-auth-secret
     githubConfigUrl: https://github.com/shamubernetes
     minRunners: 2
-    maxRunners: 6
+    # Each dind runner writes heavily to the node system disk. Keep the zoo
+    # scale set to two runners per worker to avoid saturating /var on sda.
+    maxRunners: 4
     containerMode:
       type: dind
     template:
@@ -46,9 +48,9 @@ spec:
                     - key: node-role.kubernetes.io/control-plane
                       operator: DoesNotExist
         topologySpreadConstraints:
-          - maxSkew: 2
+          - maxSkew: 1
             topologyKey: kubernetes.io/hostname
-            whenUnsatisfiable: ScheduleAnyway
+            whenUnsatisfiable: DoNotSchedule
             labelSelector:
               matchLabels:
                 actions.github.com/scale-set-name: ghar-set-zoo

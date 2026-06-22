@@ -40,5 +40,7 @@ module.exports = {
   reviewersFromCodeOwners: true,
   semanticCommits: "enabled",
   timezone: "America/New_York",
-  rebaseWhen: 'behind-base-branch'
+  // Avoid rebasing every existing Renovate branch each run. Mass rebases
+  // fan out GitHub Actions jobs and overload the ARC Docker-in-Docker runner.
+  rebaseWhen: "conflicted",
 }

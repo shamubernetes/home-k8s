@@ -55,7 +55,7 @@ spec:
                     port: &port 6060
                   periodSeconds: 10
                   timeoutSeconds: 5
-                  failureThreshold: 30
+                  failureThreshold: 60
               liveness: &probes
                 enabled: true
                 custom: true
@@ -71,18 +71,16 @@ spec:
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: false
-              capabilities: {drop: ["ALL"]}
+              capabilities:
+                drop: ["ALL"]
+                add: ["CHOWN", "SETUID", "SETGID", "FOWNER", "DAC_OVERRIDE"]
             resources:
               requests:
                 cpu: 50m
                 memory: 512Mi
               limits:
                 memory: 2Gi
-      mariadb:
-        annotations:
-          reloader.stakater.com/auto: "true"
-        containers:
-          app:
+          mariadb:
             image:
               repository: docker.io/linuxserver/mariadb
               tag: 11.4.8@sha256:11fa225bdec1f3300712be7e712222afe2c0ab69008a6ef43d216032696ae22b
@@ -143,11 +141,6 @@ spec:
         ports:
           http:
             port: *port
-      mariadb:
-        controller: mariadb
-        ports:
-          mysql:
-            port: 3306
     ingress:
       app:
         annotations:
@@ -168,13 +161,7 @@ spec:
             app:
             - path: /app/data
               subPath: grimmory-data
-      mariadb-config:
-        type: persistentVolumeClaim
-        accessMode: ReadWriteOnce
-        size: 10Gi
-        advancedMounts:
-          mariadb:
-            app:
+            mariadb:
             - path: /config
               subPath: mariadb-config
       media:

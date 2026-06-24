@@ -8,3 +8,4 @@ resources:
 - ./stash/ks.yaml
 - ./calibre-web-automated/ks.yaml
 - ./audiobookshelf/ks.yaml
+- ./grimmory/ks.yaml

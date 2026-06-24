@@ -30,6 +30,7 @@ data:
   VOLSYNC_SCHEDULE_CWA_BDL: "48 * * * *"
   VOLSYNC_SCHEDULE_AUDIOBOOKSHELF: "51 * * * *"
   VOLSYNC_SCHEDULE_LISTENARR: "54 * * * *"
+  VOLSYNC_SCHEDULE_GRIMMORY: "57 * * * *"
   # Plex is large (~77GiB) - daily only at 4 AM
   VOLSYNC_SCHEDULE_PLEX: "0 4 * * *"
 
@@ -54,5 +55,6 @@ data:
   VOLSYNC_R2_SCHEDULE_CWA_BDL: "1 4 * * *"
   VOLSYNC_R2_SCHEDULE_AUDIOBOOKSHELF: "2 4 * * *"
   VOLSYNC_R2_SCHEDULE_LISTENARR: "3 4 * * *"
+  VOLSYNC_R2_SCHEDULE_GRIMMORY: "4 4 * * *"
   # Plex R2 runs last (large backup)- after Plex NFS completes at 4:00
   VOLSYNC_R2_SCHEDULE_PLEX: "30 4 * * *"

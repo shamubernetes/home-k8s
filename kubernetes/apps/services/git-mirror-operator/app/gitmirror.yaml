@@ -33,7 +33,7 @@ spec:
           name: gitmirror-codeberg-ssh
           key: ssh-privatekey
   mirror:
-    mode: exact
+    mode: additive
   fallback:
     schedule: "17 * * * *"
   job:

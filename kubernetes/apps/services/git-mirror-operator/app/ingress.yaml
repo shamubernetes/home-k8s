@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/networking.k8s.io/ingress_v1.json
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitmirror
+  annotations:
+    external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+spec:
+  ingressClassName: external
+  rules:
+  - host: gitmirror.${HOME_DOMAIN}
+    http:
+      paths:
+      - path: /webhooks/github
+        pathType: Prefix
+        backend:
+          service:
+            name: git-mirror-operator-github-webhook-service
+            port:
+              name: github-webhook

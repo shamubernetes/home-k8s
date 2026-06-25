@@ -1,0 +1,52 @@
+apiVersion: mirror.shamubernetes.com/v1alpha1
+kind: GitMirror
+metadata:
+  name: home-k8s
+spec:
+  provider: github
+  github:
+    owner: shamubernetes
+    repo: home-k8s
+    webhookSecretRef:
+      name: gitmirror-github-app
+      key: webhook-secret
+  source:
+    url: https://github.com/shamubernetes/home-k8s.git
+    auth:
+      type: githubApp
+      githubApp:
+        appIDSecretRef:
+          name: gitmirror-github-app
+          key: app-id
+        installationIDSecretRef:
+          name: gitmirror-github-app
+          key: installation-id
+        privateKeySecretRef:
+          name: gitmirror-github-app
+          key: private-key.pem
+  target:
+    url: git@codeberg.org:shamubernetes/home-k8s.git
+    auth:
+      type: ssh
+      ssh:
+        privateKeyRef:
+          name: gitmirror-codeberg-ssh
+          key: ssh-privatekey
+  mirror:
+    mode: exact
+  fallback:
+    schedule: "17 * * * *"
+  job:
+    image: ghcr.io/shamubernetes/git-mirror-sync:v0.1.2@sha256:80ddf88f37f6075db9e637d61aa8549ae11d589adf96aff8a8b176289b3dfdfe
+    serviceAccountName: git-mirror-sync
+    knownHostsConfigMapName: git-mirror-known-hosts
+    knownHostsConfigMapKey: known_hosts
+    backoffLimit: 2
+    activeDeadlineSeconds: 1800
+    ttlSecondsAfterFinished: 3600
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi

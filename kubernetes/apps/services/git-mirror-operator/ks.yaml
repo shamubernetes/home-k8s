@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/gitrepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: git-mirror-operator
+  namespace: "${KS_NAMESPACE}"
+spec:
+  interval: "${KS_INTERVAL}"
+  url: https://github.com/shamubernetes/git-mirror-operator.git
+  ref:
+    tag: v0.1.2
+
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app git-mirror-operator
+  namespace: "${KS_NAMESPACE}"
+spec:
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  path: ./config/default
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: git-mirror-operator
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  images:
+  - name: ghcr.io/shamubernetes/git-mirror-operator
+    newTag: v0.1.2
+    digest: sha256:e0bd8ba0e266944906d3543d9d3ee9a07bcf4dd6d2e053980ebc7104ee1d3c75
+  patches:
+  - target:
+      kind: Deployment
+      name: git-mirror-operator-controller-manager
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: ghcr.io/shamubernetes/git-mirror-sync:v0.1.2@sha256:80ddf88f37f6075db9e637d61aa8549ae11d589adf96aff8a8b176289b3dfdfe
+
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app git-mirror-operator-config
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace git-mirror-operator-system
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: external-secrets-secret-store
+  - name: git-mirror-operator
+  path: ./kubernetes/apps/services/git-mirror-operator/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: false
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace

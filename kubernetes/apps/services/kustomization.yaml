@@ -8,5 +8,6 @@ resources:
 - ./convex/ks.yaml
 - ./cs2/ks.yaml
 - ./cowtail/ks.yaml
+- ./git-mirror-operator/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./static-webserver/ks.yaml

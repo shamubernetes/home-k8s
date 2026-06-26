@@ -38,7 +38,7 @@ spec:
   patches:
   - target:
       kind: Deployment
-      name: git-mirror-operator-controller-manager
+      labelSelector: control-plane=controller-manager
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value

@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plane-auth-config-repair
+data:
+  reconcile-auth-config.sh: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    python manage.py shell <<'PY'
+    import os
+    import time
+
+    from django.core.cache import cache
+    from django.db import close_old_connections
+    from django.db.utils import OperationalError, ProgrammingError
+
+    from plane.license.models import InstanceConfiguration
+
+
+    def env_enabled(*names):
+        return "1" if all(os.environ.get(name, "").strip() for name in names) else "0"
+
+
+    def wait_for_instance_configuration_table():
+        last_error = None
+        for attempt in range(1, 61):
+            try:
+                InstanceConfiguration.objects.exists()
+                return
+            except (OperationalError, ProgrammingError) as exc:
+                last_error = exc
+                close_old_connections()
+                print(f"InstanceConfiguration table not ready yet, attempt {attempt}/60")
+                time.sleep(5)
+
+        raise RuntimeError(f"InstanceConfiguration table was not ready after waiting: {last_error}")
+
+
+    wait_for_instance_configuration_table()
+
+    # Plane's upstream configure_instance command currently creates these status
+    # rows only when none of them exist. If Gitea/GitLab rows already exist,
+    # GitHub can be configured and usable while the admin UI still lacks the
+    # IS_GITHUB_ENABLED row it uses for the active-status toggle.
+    provider_status_rows = [
+        ("IS_GOOGLE_ENABLED", "GOOGLE", env_enabled("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")),
+        ("IS_GITHUB_ENABLED", "GITHUB", env_enabled("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET")),
+        ("IS_GITLAB_ENABLED", "GITLAB", env_enabled("GITLAB_HOST", "GITLAB_CLIENT_ID", "GITLAB_CLIENT_SECRET")),
+        ("IS_GITEA_ENABLED", "GITEA", env_enabled("GITEA_HOST", "GITEA_CLIENT_ID", "GITEA_CLIENT_SECRET")),
+    ]
+
+    created = []
+    for key, category, value in provider_status_rows:
+        _, was_created = InstanceConfiguration.objects.get_or_create(
+            key=key,
+            defaults={
+                "category": category,
+                "value": value,
+                "is_encrypted": False,
+            },
+        )
+        if was_created:
+            created.append(f"{key}={value}")
+
+    if created:
+        cache.clear()
+        print("Created missing auth provider status rows: " + ", ".join(created))
+    else:
+        print("Auth provider status rows already present; nothing to change")
+    PY

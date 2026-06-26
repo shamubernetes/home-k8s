@@ -41,6 +41,50 @@ spec:
           - op: replace
             path: /data/SILO_API_BASE_URL
             value: https://plane.${HOME_DOMAIN}
+      - target:
+          kind: Deployment
+          name: plane-api-wl
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: plane-api-wl
+          spec:
+            template:
+              spec:
+                initContainers:
+                - name: reconcile-auth-config
+                  image: makeplane/backend-commercial:v2.6.3
+                  imagePullPolicy: Always
+                  command:
+                  - /bin/bash
+                  - -lc
+                  - /opt/plane-auth-config-repair/reconcile-auth-config.sh
+                  envFrom:
+                  - configMapRef:
+                      name: plane-app-vars
+                      optional: false
+                  - secretRef:
+                      name: plane-app-secret
+                      optional: false
+                  - secretRef:
+                      name: plane-doc-store-secret
+                      optional: false
+                  - secretRef:
+                      name: plane-opensearch-secret
+                      optional: false
+                  - secretRef:
+                      name: plane-silo-secret
+                      optional: false
+                  volumeMounts:
+                  - name: plane-auth-config-repair
+                    mountPath: /opt/plane-auth-config-repair
+                    readOnly: true
+                volumes:
+                - name: plane-auth-config-repair
+                  configMap:
+                    name: plane-auth-config-repair
+                    defaultMode: 0555
   values:
     planeVersion: v2.6.3
     license:

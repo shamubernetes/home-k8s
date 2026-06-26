@@ -8,7 +8,7 @@ spec:
   interval: "${KS_INTERVAL}"
   url: https://github.com/shamubernetes/git-mirror-operator.git
   ref:
-    tag: v0.1.2
+    tag: v0.2.0
 
 # yamllint disable-line rule:document-start
 ---
@@ -33,8 +33,8 @@ spec:
   timeout: "${KS_TIMEOUT}"
   images:
   - name: ghcr.io/shamubernetes/git-mirror-operator
-    newTag: v0.1.2
-    digest: sha256:e0bd8ba0e266944906d3543d9d3ee9a07bcf4dd6d2e053980ebc7104ee1d3c75
+    newTag: v0.2.0
+    digest: sha256:744df24a053706aafb2e92bd4b1f7185342af661874a13b71bd53cc40cdf1d75
   patches:
   - target:
       kind: Deployment
@@ -42,7 +42,7 @@ spec:
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
-        value: ghcr.io/shamubernetes/git-mirror-sync:v0.1.2@sha256:80ddf88f37f6075db9e637d61aa8549ae11d589adf96aff8a8b176289b3dfdfe
+        value: ghcr.io/shamubernetes/git-mirror-sync:v0.2.0@sha256:26464501914c3534b23c6e0375ab72b4033334842763e5da8f28800a5e744c5b
 
 # yamllint disable-line rule:document-start
 ---

@@ -33,11 +33,11 @@ spec:
           name: gitmirror-codeberg-ssh
           key: ssh-privatekey
   mirror:
-    mode: additive
+    mode: exact
   fallback:
     schedule: "17 * * * *"
   job:
-    image: ghcr.io/shamubernetes/git-mirror-sync:v0.1.2@sha256:80ddf88f37f6075db9e637d61aa8549ae11d589adf96aff8a8b176289b3dfdfe
+    image: ghcr.io/shamubernetes/git-mirror-sync:v0.2.0@sha256:26464501914c3534b23c6e0375ab72b4033334842763e5da8f28800a5e744c5b
     serviceAccountName: git-mirror-sync
     knownHostsConfigMapName: git-mirror-known-hosts
     knownHostsConfigMapKey: known_hosts

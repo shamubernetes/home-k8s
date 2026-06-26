@@ -8,3 +8,4 @@ resources:
 - ./fs-fuse.yaml
 - ./convex-objectstoreuser.yaml
 - ./plane-objectstoreuser.yaml
+- ./plane-uploads-ingress.yaml

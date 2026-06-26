@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/networking.k8s.io/ingress_v1.json
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plane-uploads
+  namespace: rook-ceph
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+spec:
+  ingressClassName: internal
+  rules:
+  - host: plane.${HOME_DOMAIN}
+    http:
+      paths:
+      - path: /uploads
+        pathType: Prefix
+        backend:
+          service:
+            name: rook-ceph-rgw-ceph-objectstore
+            port:
+              number: 80

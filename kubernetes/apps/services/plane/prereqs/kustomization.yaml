@@ -5,3 +5,4 @@ resources:
 - ./externalsecret.yaml
 - ./init-bucket-job.yaml
 - ./init-db-job.yaml
+- ./init-uploads-bucket-job.yaml

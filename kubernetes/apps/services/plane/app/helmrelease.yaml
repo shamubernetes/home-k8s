@@ -51,6 +51,8 @@ spec:
       local_setup: false
     minio:
       local_setup: false
+      env:
+        minio_endpoint_ssl: true
     rabbitmq:
       local_setup: true
       storageClass: ceph-block

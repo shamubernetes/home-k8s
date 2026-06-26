@@ -7,8 +7,8 @@ spec:
   interval: 10m
   chart:
     spec:
-      chart: plane-ce
-      version: 1.5.1
+      chart: plane-enterprise
+      version: 2.6.1
       sourceRef:
         kind: HelmRepository
         name: makeplane
@@ -25,47 +25,88 @@ spec:
   - kustomize:
       patches:
       - target:
-          kind: ConfigMap
-          name: plane-app-vars
+          kind: Ingress
+          name: plane-ingress
         patch: |-
           - op: replace
-            path: /data/WEB_URL
+            path: /spec/ingressClassName
+            value: internal
+      - target:
+          kind: ConfigMap
+          name: plane-silo-vars
+        patch: |-
+          - op: replace
+            path: /data/APP_BASE_URL
+            value: https://plane.${HOME_DOMAIN}
+          - op: replace
+            path: /data/SILO_API_BASE_URL
             value: https://plane.${HOME_DOMAIN}
   values:
-    planeVersion: v1.3.1
+    planeVersion: v2.6.3
+    license:
+      licenseDomain: plane.${HOME_DOMAIN}
     ingress:
       enabled: true
-      appHost: plane.${HOME_DOMAIN}
+      ingressClass: nginx
       minioHost: ""
       rabbitmqHost: ""
-      ingressClass: internal
       ingress_annotations:
         external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
         nginx.ingress.kubernetes.io/proxy-body-size: 20m
     ssl:
       createIssuer: false
       generateCerts: false
-    postgres:
-      local_setup: false
-    redis:
-      local_setup: false
-    minio:
-      local_setup: false
-      env:
-        minio_endpoint_ssl: true
-    api:
-      annotations: &reloader
-        reloader.stakater.com/auto: "true"
-    worker:
-      annotations: *reloader
-    beatworker:
-      annotations: *reloader
-    rabbitmq:
-      local_setup: true
-      storageClass: ceph-block
-      volumeSize: 1Gi
+    services:
+      postgres:
+        local_setup: false
+      redis:
+        local_setup: false
+      minio:
+        local_setup: false
+        env:
+          minio_endpoint_ssl: true
+      rabbitmq:
+        local_setup: true
+        volumeSize: 1Gi
+      opensearch:
+        local_setup: false
+      api:
+        annotations: &reloader
+          reloader.stakater.com/auto: "true"
+      worker:
+        annotations: *reloader
+      beatworker:
+        annotations: *reloader
+      silo:
+        enabled: true
+        annotations: *reloader
+      pi:
+        enabled: false
+      email_service:
+        enabled: false
+      outbox_poller:
+        enabled: false
+      automation_consumer:
+        enabled: false
+      runner:
+        enabled: false
+      iframely:
+        enabled: false
     external_secrets:
       app_env_existingSecret: plane-app-secret
       live_env_existingSecret: plane-live-secret
       doc_store_existingSecret: plane-doc-store-secret
       rabbitmq_existingSecret: plane-rabbitmq-secret
+      opensearch_existingSecret: plane-opensearch-secret
+      silo_env_existingSecret: plane-silo-secret
+    env:
+      storageClass: ceph-block
+      remote_redis_url: redis://dragonfly.database.svc.cluster.local:6379/12
+      pgdb_name: plane_enterprise
+      pgdb_remote_url: postgresql://unused:unused@postgres17-pooler.database.svc.cluster.local:5432/plane_enterprise?sslmode=disable
+      docstore_bucket: uploads
+      doc_upload_size_limit: "5242880"
+      storage_provider: S3
+      web_url: https://plane.${HOME_DOMAIN}
+      use_storage_proxy: false
+      api_key_rate_limit: 60/minute

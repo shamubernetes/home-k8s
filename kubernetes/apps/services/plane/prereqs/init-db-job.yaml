@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-batch-v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: plane-init-db
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init-db
+        image: ghcr.io/home-operations/postgres-init:17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+        envFrom:
+        - secretRef:
+            name: plane-app-secret

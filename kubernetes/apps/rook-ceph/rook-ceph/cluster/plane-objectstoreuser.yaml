@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/ceph.rook.io/cephobjectstoreuser_v1.json
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStoreUser
+metadata:
+  name: plane
+  namespace: rook-ceph
+spec:
+  store: ceph-objectstore
+  displayName: plane
+  capabilities:
+    user: "*"
+    bucket: "*"

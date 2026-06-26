@@ -10,4 +10,5 @@ resources:
 - ./cowtail/ks.yaml
 - ./git-mirror-operator/ks.yaml
 - ./n8n-operator/ks.yaml
+- ./plane/ks.yaml
 - ./static-webserver/ks.yaml

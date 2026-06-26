@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app plane
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: plane-ce
+      version: 1.5.1
+      sourceRef:
+        kind: HelmRepository
+        name: makeplane
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: ConfigMap
+          name: plane-app-vars
+        patch: |-
+          - op: replace
+            path: /data/WEB_URL
+            value: https://plane.${HOME_DOMAIN}
+  values:
+    planeVersion: v1.3.1
+    ingress:
+      enabled: true
+      appHost: plane.${HOME_DOMAIN}
+      minioHost: ""
+      rabbitmqHost: ""
+      ingressClass: internal
+      ingress_annotations:
+        external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    ssl:
+      createIssuer: false
+      generateCerts: false
+    postgres:
+      local_setup: false
+    redis:
+      local_setup: false
+    minio:
+      local_setup: false
+    rabbitmq:
+      local_setup: true
+      storageClass: ceph-block
+      volumeSize: 1Gi
+    external_secrets:
+      app_env_existingSecret: plane-app-secret
+      live_env_existingSecret: plane-live-secret
+      doc_store_existingSecret: plane-doc-store-secret
+      rabbitmq_existingSecret: plane-rabbitmq-secret

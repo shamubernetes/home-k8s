@@ -74,6 +74,8 @@ spec:
         annotations: &reloader
           reloader.stakater.com/auto: "true"
       worker:
+        memoryRequest: 512Mi
+        memoryLimit: 2Gi
         annotations: *reloader
       beatworker:
         annotations: *reloader

@@ -16,8 +16,6 @@ spec:
         app.kubernetes.io/name: plane-github-bridge
     spec:
       automountServiceAccountToken: false
-      imagePullSecrets:
-      - name: plane-github-bridge-ghcr
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

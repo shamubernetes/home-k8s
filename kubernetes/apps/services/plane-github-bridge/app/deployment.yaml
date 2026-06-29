@@ -37,7 +37,7 @@ spec:
             drop: ["ALL"]
       containers:
       - name: app
-        image: ghcr.io/shamubernetes/plane-github-bridge:ba55f86e06ff80ab36a3861ff08d72d9d49e00c3@sha256:d31b2340917bc15a212bc4e542b97f8e544f54c9fa190ff9bfe145e49f26ed4e
+        image: ghcr.io/shamubernetes/plane-github-bridge:370e31d66be47baaec853475ced4b908673a33f7@sha256:5004c0db32f278f4ba3d338d3c62b7000ef8d77ff247ad087ffa114035426391
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

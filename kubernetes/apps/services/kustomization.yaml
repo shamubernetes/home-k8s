@@ -11,4 +11,5 @@ resources:
 - ./git-mirror-operator/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./plane/ks.yaml
+- ./plane-github-bridge/ks.yaml
 - ./static-webserver/ks.yaml

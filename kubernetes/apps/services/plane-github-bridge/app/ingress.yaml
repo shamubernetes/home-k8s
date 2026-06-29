@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/networking.k8s.io/ingress_v1.json
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plane-github-bridge
+  annotations:
+    external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+spec:
+  ingressClassName: external
+  rules:
+  - host: plane-github.${HOME_DOMAIN}
+    http:
+      paths:
+      - path: /github/webhook
+        pathType: Exact
+        backend: &backend
+          service:
+            name: plane-github-bridge
+            port:
+              name: http
+      - path: /plane/setup
+        pathType: Exact
+        backend: *backend
+      - path: /plane/callback
+        pathType: Exact
+        backend: *backend
+      - path: /plane/webhook
+        pathType: Exact
+        backend: *backend

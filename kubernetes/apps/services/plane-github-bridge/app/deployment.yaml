@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/apps/v1/deployment.json
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plane-github-bridge
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plane-github-bridge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plane-github-bridge
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: plane-github-bridge-ghcr
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      - name: init-db
+        image: ghcr.io/home-operations/postgres-init:17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+        envFrom:
+        - secretRef:
+            name: plane-github-bridge-secret
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+      containers:
+      - name: app
+        image: ghcr.io/shamubernetes/plane-github-bridge:0489ee5134c933df7aff0b415003bb03324837d2@sha256:4f75b9fd1d32d439992acdf915005cf4253850927e6067a640238c62eb0840f0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+        - name: PORT
+          value: "3000"
+        - name: TZ
+          value: America/New_York
+        envFrom:
+        - secretRef:
+            name: plane-github-bridge-secret
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 128Mi
+          limits:
+            memory: 512Mi

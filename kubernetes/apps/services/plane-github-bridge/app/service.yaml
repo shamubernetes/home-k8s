@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/v1/service.json
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-github-bridge
+spec:
+  selector:
+    app.kubernetes.io/name: plane-github-bridge
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

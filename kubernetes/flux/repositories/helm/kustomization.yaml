@@ -20,6 +20,7 @@ resources:
 - ./jetstack.yaml
 - ./kuberhealthy.yaml
 - ./kyverno.yaml
+- ./mariadb-operator.yaml
 - ./metrics-server.yaml
 - ./minecraft-server-charts.yaml
 - ./makeplane.yaml

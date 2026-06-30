@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolume-v1.json
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: seafile-data-nfs
+spec:
+  storageClassName: seafile-data-nfs
+  capacity:
+    storage: 1Ti
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: seafile-data-nfs
+    volumeAttributes:
+      server: "${IPAM_IP_NFS}"
+      share: /mnt/user/Seafile
+  mountOptions:
+  - nfsvers=4.2
+  - nconnect=16
+  - hard
+  - noatime
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seafile-data
+  namespace: services
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: seafile-data-nfs
+  resources:
+    requests:
+      storage: 1Ti

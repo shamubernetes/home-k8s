@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seafile-configure-onlyoffice
+data:
+  configure-and-start.sh: |-
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    settings=/shared/seafile/conf/seahub_settings.py
+    start_marker="# BEGIN home-k8s onlyoffice"
+    end_marker="# END home-k8s onlyoffice"
+
+    mkdir -p "$(dirname "$settings")"
+    touch "$settings"
+
+    tmp=$(mktemp)
+    awk \
+      -v start="$start_marker" \
+      -v end="$end_marker" \
+      'BEGIN { skip=0 } $0 == start { skip=1; next } $0 == end { skip=0; next } skip == 0 { print }' \
+      "$settings" > "$tmp"
+
+    cat >> "$tmp" <<EOF
+    $start_marker
+    ENABLE_ONLYOFFICE = True
+    ONLYOFFICE_APIJS_URL = 'https://onlyoffice.thezoo.house/web-apps/apps/api/documents/api.js'
+    ONLYOFFICE_JWT_SECRET = '${ONLYOFFICE_JWT_SECRET}'
+    ONLYOFFICE_FILE_EXTENSION = (
+        'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
+        'odt', 'fodt', 'odp', 'fodp', 'ods', 'fods',
+        'ppsx', 'pps', 'csv'
+    )
+    ONLYOFFICE_EDIT_FILE_EXTENSION = ('docx', 'pptx', 'xlsx', 'csv')
+    OFFICE_PREVIEW_MAX_SIZE = 30 * 1024 * 1024
+    $end_marker
+    EOF
+
+    cat "$tmp" > "$settings"
+    rm -f "$tmp"
+
+    exec /sbin/my_init -- /scripts/enterpoint.sh

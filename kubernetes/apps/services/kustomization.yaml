@@ -10,6 +10,8 @@ resources:
 - ./cowtail/ks.yaml
 - ./git-mirror-operator/ks.yaml
 - ./n8n-operator/ks.yaml
+- ./onlyoffice/ks.yaml
 - ./plane/ks.yaml
 - ./plane-github-bridge/ks.yaml
+- ./seafile/ks.yaml
 - ./static-webserver/ks.yaml

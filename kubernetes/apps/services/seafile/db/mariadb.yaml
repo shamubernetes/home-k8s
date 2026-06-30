@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/k8s.mariadb.com/mariadb_v1alpha1.json
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: seafile-mariadb
+spec:
+  image: mariadb:11.8.8@sha256:d1f0379f1ef03c24aa465744e3fc3482deded8faca5d5178a458a75a18b2b5db
+  replicas: 1
+  port: 3306
+  rootPasswordSecretKeyRef:
+    name: seafile-db-secret
+    key: MARIADB_ROOT_PASSWORD
+  username: seafile
+  passwordSecretKeyRef:
+    name: seafile-db-secret
+    key: SEAFILE_MYSQL_DB_PASSWORD
+  database: ccnet_db
+  cleanupPolicy: Skip
+  storage:
+    size: 10Gi
+    storageClassName: ceph-block
+    resizeInUseVolumes: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  myCnf: |
+    [mariadb]
+    character-set-server=utf8mb4
+    collation-server=utf8mb4_unicode_ci
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/k8s.mariadb.com/database_v1alpha1.json
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: seafile-db
+spec:
+  mariaDbRef:
+    name: seafile-mariadb
+  name: seafile_db
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+  cleanupPolicy: Skip
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/k8s.mariadb.com/database_v1alpha1.json
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: seahub-db
+spec:
+  mariaDbRef:
+    name: seafile-mariadb
+  name: seahub_db
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+  cleanupPolicy: Skip
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/k8s.mariadb.com/grant_v1alpha1.json
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: seafile-ccnet-db
+spec:
+  mariaDbRef:
+    name: seafile-mariadb
+  privileges:
+  - ALL PRIVILEGES
+  database: ccnet_db
+  table: "*"
+  username: seafile
+  host: "%"
+  cleanupPolicy: Skip
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/k8s.mariadb.com/grant_v1alpha1.json
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: seafile-seafile-db
+spec:
+  mariaDbRef:
+    name: seafile-mariadb
+  privileges:
+  - ALL PRIVILEGES
+  database: seafile_db
+  table: "*"
+  username: seafile
+  host: "%"
+  cleanupPolicy: Skip
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/k8s.mariadb.com/grant_v1alpha1.json
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: seafile-seahub-db
+spec:
+  mariaDbRef:
+    name: seafile-mariadb
+  privileges:
+  - ALL PRIVILEGES
+  database: seahub_db
+  table: "*"
+  username: seafile
+  host: "%"
+  cleanupPolicy: Skip

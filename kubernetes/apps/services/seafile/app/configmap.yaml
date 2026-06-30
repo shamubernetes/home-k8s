@@ -40,4 +40,10 @@ data:
     cat "$tmp" > "$settings"
     rm -f "$tmp"
 
+    # NFS root-squash stores Seafile data as Unraid nobody:users (99:100).
+    # Container root is squashed to that owner for real file operations, but
+    # Seafile's startup script compares local usernames and exits before start.
+    # Keep root-owned container startup, but skip that false-positive owner check.
+    sed -i 's/^    validate_running_user;/#    validate_running_user;/' /opt/seafile/seafile-server-*/seafile.sh
+
     exec /sbin/my_init -- /scripts/enterpoint.sh

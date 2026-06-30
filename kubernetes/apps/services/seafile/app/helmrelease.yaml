@@ -5,6 +5,7 @@ metadata:
   name: seafile
 spec:
   interval: 10m
+  timeout: 20m
   chart:
     spec:
       chart: app-template

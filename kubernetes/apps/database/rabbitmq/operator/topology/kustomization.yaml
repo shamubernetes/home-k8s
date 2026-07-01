@@ -4,3 +4,14 @@ kind: Kustomization
 resources:
 # renovate: datasource=github-releases depName=rabbitmq/messaging-topology-operator
 - https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.19.3/messaging-topology-operator-ghcr-io.yaml
+patches:
+- target:
+    group: cert-manager.io
+    version: v1
+    kind: Certificate
+    name: messaging-topology-metrics-certs
+    namespace: rabbitmq-system
+  patch: |-
+    - op: replace
+      path: /spec/secretName
+      value: messaging-topology-metrics-server-cert

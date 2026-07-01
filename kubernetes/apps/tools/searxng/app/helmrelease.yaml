@@ -1,0 +1,133 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app searxng
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      searxng:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: docker.io/searxng/searxng
+              tag: latest@sha256:6c1e8797ba29a47d575dea4805e3138976bfe1333fab630418de03930bd14803
+            env:
+              SEARXNG_BASE_URL: https://searxng.${HOME_DOMAIN}
+              SEARXNG_BIND_ADDRESS: 0.0.0.0
+              SEARXNG_IMAGE_PROXY: "false"
+              SEARXNG_LIMITER: "false"
+              SEARXNG_METHOD: GET
+              SEARXNG_PORT: &port 8080
+              SEARXNG_PUBLIC_INSTANCE: "false"
+              TZ: ${TIMEZONE}
+            envFrom:
+            - secretRef:
+                name: searxng-secret
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: *port
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    defaultPodOptions:
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: searxng
+        ports:
+          http:
+            port: *port
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    configMaps:
+      config:
+        data:
+          settings.yml: |
+            use_default_settings: true
+
+            general:
+              instance_name: SearXNG
+              enable_metrics: false
+
+            search:
+              formats:
+                - html
+                - json
+
+            server:
+              base_url: https://searxng.${HOME_DOMAIN}
+              limiter: false
+              public_instance: false
+              image_proxy: false
+              method: GET
+              default_http_headers:
+                X-Content-Type-Options: nosniff
+                X-Download-Options: noopen
+                X-Robots-Tag: noindex, nofollow
+                Referrer-Policy: no-referrer
+
+            ui:
+              static_use_hash: true
+    persistence:
+      config:
+        type: configMap
+        identifier: config
+        advancedMounts:
+          searxng:
+            app:
+            - path: /etc/searxng/settings.yml
+              subPath: settings.yml
+              readOnly: true
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          searxng:
+            app:
+            - path: /tmp

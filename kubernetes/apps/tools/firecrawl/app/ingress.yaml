@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/ingress-networking-v1.json
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: firecrawl
+  annotations:
+    external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+spec:
+  ingressClassName: internal
+  rules:
+  - host: firecrawl.${HOME_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: firecrawl-api
+            port:
+              number: 3002

@@ -1,0 +1,206 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: firecrawl
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: ./kubernetes/apps/tools/firecrawl/app/chart
+      sourceRef:
+        kind: GitRepository
+        name: "${KS_GIT_REPO_NAME}"
+        namespace: "${KS_NAMESPACE}"
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    fullnameOverride: firecrawl
+
+    image:
+      repository: docker.io/winkkgmbh/firecrawl
+      tag: latest@sha256:b9ccf2b29722257c154b20e6e5a233fc56d1181b70c6b9fd763cf55b4f3c8d87
+      pullPolicy: IfNotPresent
+      dockerSecretEnabled: false
+
+    playwright:
+      repository: docker.io/winkkgmbh/firecrawl-playwright
+      tag: latest@sha256:d84e22d726d16f2607c898abdb49d1c34239ed1b6181335e3531a6031f45423f
+      pullPolicy: IfNotPresent
+      replicaCount: 1
+
+    redis:
+      enabled: false
+      external:
+        url: redis://dragonfly.database.svc.cluster.local:6379/13
+        rateLimitUrl: redis://dragonfly.database.svc.cluster.local:6379/14
+
+    nuqPostgres:
+      enabled: false
+      external:
+        url: postgresql://firecrawl:external-secret@postgres17-pooler.database.svc.cluster.local:5432/firecrawl_nuq?sslmode=disable
+
+    rabbitmq:
+      enabled: false
+      external:
+        url: amqp://firecrawl:external-secret@rabbitmq.database.svc.cluster.local:5672/firecrawl
+
+    resources:
+      enabled: true
+
+    api:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          memory: 2Gi
+
+    worker:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          memory: 2Gi
+
+    extractWorker:
+      enabled: true
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          memory: 2Gi
+
+    nuqWorker:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          memory: 2Gi
+
+    nuqPrefetchWorker:
+      enabled: true
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 50m
+          memory: 256Mi
+        limits:
+          memory: 1Gi
+
+    cclogWorker:
+      enabled: false
+
+    config:
+      ENV: production
+      LOGGING_LEVEL: INFO
+      NUM_WORKERS_PER_QUEUE: "4"
+      NUQ_WORKER_COUNT: "1"
+      PLAYWRIGHT_MICROSERVICE_URL: http://firecrawl-playwright:3000/scrape
+
+    playwrightConfig:
+      MAX_CONCURRENT_PAGES: "4"
+
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: Secret
+          name: firecrawl-secret
+        patch: |-
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: firecrawl-secret
+          $patch: delete
+      - target:
+          kind: Deployment
+          name: firecrawl-playwright
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: firecrawl-playwright
+            annotations:
+              reloader.stakater.com/auto: "true"
+          spec:
+            template:
+              spec:
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                      - matchExpressions:
+                        - key: node-role.kubernetes.io/control-plane
+                          operator: DoesNotExist
+                containers:
+                - name: playwright-service
+                  resources:
+                    requests:
+                      cpu: 250m
+                      memory: 1Gi
+                    limits:
+                      memory: 3Gi
+      - target:
+          kind: Deployment
+          name: firecrawl-api
+        patch: &reloaderPatch |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: firecrawl-api
+            annotations:
+              reloader.stakater.com/auto: "true"
+      - target:
+          kind: Deployment
+          name: firecrawl-worker
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: firecrawl-worker
+            annotations:
+              reloader.stakater.com/auto: "true"
+      - target:
+          kind: Deployment
+          name: firecrawl-extract-worker
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: firecrawl-extract-worker
+            annotations:
+              reloader.stakater.com/auto: "true"
+      - target:
+          kind: Deployment
+          name: firecrawl-nuq-worker
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: firecrawl-nuq-worker
+            annotations:
+              reloader.stakater.com/auto: "true"
+      - target:
+          kind: Deployment
+          name: firecrawl-nuq-prefetch-worker
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: firecrawl-nuq-prefetch-worker
+            annotations:
+              reloader.stakater.com/auto: "true"

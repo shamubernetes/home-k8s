@@ -119,6 +119,41 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 - Use SOPS (`*.sops.yaml`) for Flux cluster variables, Talos/bootstrap secrets, and existing SOPS-managed resources, not as the default for new app runtime secrets.
 - Never commit plaintext secrets.
 
+## Shared Data Services
+
+Prefer existing shared data platforms before adding embedded sidecars or app-local singleton databases.
+
+### PostgreSQL
+
+- Use the existing CloudNativePG/Postgres 17 service for Postgres-compatible apps.
+- Default app connection host: `postgres17-pooler.database.svc.cluster.local`.
+- Direct writer host is available as `postgres17-rw.database.svc.cluster.local` when an app requires direct session behavior that the pooler breaks.
+- Initialize app databases/users through GitOps-owned init resources or established app patterns, not manual psql mutations.
+- Store app DB credentials in 1Password and surface them with `ExternalSecret` via `op-secret-store`.
+- Common env pattern:
+  - `DATABASE_URL=postgresql://...@postgres17-pooler.database.svc.cluster.local:5432/<db>`
+  - `INIT_POSTGRES_HOST=postgres17-pooler.database.svc.cluster.local`
+  - `INIT_POSTGRES_DBNAME`, `INIT_POSTGRES_USER`, `INIT_POSTGRES_PASS`, `INIT_POSTGRES_SUPER_PASS`
+
+### MariaDB/MySQL
+
+- Use the MariaDB Operator in the `database` namespace for MariaDB/MySQL-compatible apps.
+- Prefer operator-managed app-specific MariaDB resources through GitOps over embedded database sidecars.
+- Use `ceph-block` storage unless the app has a documented reason to use a different storage backend.
+- Only use same-pod database sidecars for small apps when no suitable shared/operator path exists, and document why.
+
+### Redis-compatible cache/queue
+
+- Use shared Dragonfly for Redis-compatible needs unless isolation requires otherwise.
+- In-cluster URL pattern: `redis://dragonfly.database.svc.cluster.local:6379/<db>`.
+- If a workload in another namespace uses Dragonfly and network policy is enforced, update the Dragonfly client NetworkPolicy in GitOps before rollout.
+
+### Object storage
+
+- Prefer existing Rook-Ceph object storage/RGW patterns for S3-compatible needs.
+- Keep browser-facing presigned URLs on a hostname the browser can reach, not an in-cluster service DNS name.
+- Store S3 credentials in 1Password and expose through `ExternalSecret`.
+
 ## Talos Configuration
 
 - Main config: `talos/talconfig.yaml`

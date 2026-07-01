@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: rabbitmq-cluster-operator
+  namespace: "${KS_NAMESPACE}"
+spec:
+  path: ./kubernetes/apps/database/rabbitmq/operator/cluster
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: rabbitmq-topology-operator
+  namespace: "${KS_NAMESPACE}"
+spec:
+  dependsOn:
+  - name: rabbitmq-cluster-operator
+  path: ./kubernetes/apps/database/rabbitmq/operator/topology
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+
+# yamllint disable-line rule:document-start
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: rabbitmq-cluster
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace database
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: rabbitmq
+  dependsOn:
+  - name: rabbitmq-cluster-operator
+  - name: rabbitmq-topology-operator
+  - name: external-secrets-secret-store
+  path: ./kubernetes/apps/database/rabbitmq/cluster
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: rabbitmq
+      NAMESPACE: *namespace

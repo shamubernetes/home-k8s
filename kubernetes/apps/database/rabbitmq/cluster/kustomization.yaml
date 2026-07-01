@@ -2,8 +2,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ./namespace.yaml
-- ./cloudnative-pg/ks.yaml
-- ./dragonfly/ks.yaml
-- ./mariadb-operator/ks.yaml
-- ./rabbitmq/ks.yaml
+- ./externalsecret-plane.yaml
+- ./externalsecret-firecrawl.yaml
+- ./cluster.yaml
+- ./topology.yaml
+- ./networkpolicy.yaml

@@ -110,8 +110,7 @@ spec:
         env:
           minio_endpoint_ssl: true
       rabbitmq:
-        local_setup: true
-        volumeSize: 1Gi
+        local_setup: false
       opensearch:
         local_setup: false
       api:
@@ -148,6 +147,7 @@ spec:
     env:
       storageClass: ceph-block
       remote_redis_url: redis://dragonfly.database.svc.cluster.local:6379/12
+      rabbitmq_host: rabbitmq.database.svc.cluster.local
       pgdb_name: plane_enterprise
       pgdb_remote_url: postgresql://unused:unused@postgres17-pooler.database.svc.cluster.local:5432/plane_enterprise?sslmode=disable
       docstore_bucket: uploads

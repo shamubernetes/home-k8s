@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app documenso-gotenberg
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      documenso-gotenberg:
+        containers:
+          app:
+            image:
+              repository: docker.io/gotenberg/gotenberg
+              tag: 8.23.2@sha256:56c47f7b913f3b978554115a0191c4a9dcc2558f9090f27f3f13f28a7c2f8329
+            args:
+            - gotenberg
+            - --api-port=3000
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: &port 3000
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 6
+              readiness: *probes
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: documenso-gotenberg
+        ports:
+          http:
+            primary: true
+            port: *port
+    persistence:
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/validate-app <category>/<app> [namespace]
+       scripts/validate-app <category>/<app>/app [namespace]
+
+Validates a GitOps app without applying it:
+  1. kubectl kustomize the app directory
+  2. server-side dry-run non-Secret manifests from the app kustomization
+  3. helm template each HelmRelease with Flux-like common substitutions
+  4. server-side dry-run rendered chart output
+
+Runtime app secrets should normally be ExternalSecret resources backed by
+op-secret-store. SOPS Secret manifests are skipped during local dry-run because
+this host may not have the Flux age identity.
+USAGE
+}
+
+if [[ ${1:-} == "-h" || ${1:-} == "--help" || $# -lt 1 ]]; then
+  usage
+  exit 0
+fi
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "missing required command: $1" >&2
+    exit 1
+  }
+}
+
+need kubectl
+need helm
+need yq
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+input=${1#kubernetes/apps/}
+input=${input%/}
+if [[ $input != */app ]]; then
+  app_path="kubernetes/apps/${input}/app"
+else
+  app_path="kubernetes/apps/${input}"
+fi
+
+abs_app_path="${repo_root}/${app_path}"
+if [[ ! -f "${abs_app_path}/kustomization.yaml" ]]; then
+  echo "app kustomization not found: ${app_path}/kustomization.yaml" >&2
+  exit 1
+fi
+
+category=$(awk -F/ '{print $1}' <<<"${input}")
+app_name=$(awk -F/ '{print $2}' <<<"${input}")
+namespace=${2:-$category}
+
+tmpdir=$(mktemp -d)
+cleanup() { rm -rf "$tmpdir"; }
+trap cleanup EXIT
+
+app_rendered="${tmpdir}/app.yaml"
+non_secret="${tmpdir}/app-non-secret.yaml"
+
+printf '==> kustomize %s\n' "$app_path"
+kubectl kustomize "$abs_app_path" > "$app_rendered"
+
+printf '==> server dry-run app manifests, skipping raw Secret docs\n'
+yq 'select(.kind != "Secret")' "$app_rendered" > "$non_secret"
+if [[ -s "$non_secret" ]]; then
+  kubectl apply --dry-run=server -f "$non_secret" >/dev/null
+fi
+
+subst_file="${tmpdir}/subst.env"
+: > "$subst_file"
+add_cm_subst() {
+  local name=$1
+  kubectl -n flux-system get cm "$name" -o json 2>/dev/null \
+    | yq -r '.data // {} | to_entries[] | .key + "=" + .value' >> "$subst_file" || true
+}
+add_cm_subst cluster-settings
+add_cm_subst cluster-ipam
+add_cm_subst volsync-schedules
+home_domain=$(kubectl -n flux-system get secret cluster-secrets -o jsonpath='{.data.HOME_DOMAIN}' 2>/dev/null | base64 --decode 2>/dev/null || true)
+if [[ -n "$home_domain" ]]; then
+  printf 'HOME_DOMAIN=%s\n' "$home_domain" >> "$subst_file"
+fi
+
+substitute_file() {
+  local in=$1 out=$2
+  python3 - "$subst_file" "$in" "$out" <<'PY'
+from pathlib import Path
+import sys
+subst = {}
+for line in Path(sys.argv[1]).read_text().splitlines():
+    if '=' in line:
+        k, v = line.split('=', 1)
+        subst[k] = v
+text = Path(sys.argv[2]).read_text()
+for k, v in subst.items():
+    text = text.replace('${' + k + '}', v)
+Path(sys.argv[3]).write_text(text)
+PY
+}
+
+mapfile -t hr_names < <(yq -r -N 'select(.kind == "HelmRelease") | .metadata.name' "$app_rendered")
+if [[ ${#hr_names[@]} -gt 0 ]]; then
+  printf '==> helm template %s HelmRelease(s)\n' "${#hr_names[@]}"
+fi
+
+idx=0
+for release_name in "${hr_names[@]}"; do
+  hr="${tmpdir}/hr-${idx}.yaml"
+  values="${tmpdir}/values-${idx}.yaml"
+  values_subst="${tmpdir}/values-${idx}.subst.yaml"
+  rendered="${tmpdir}/helm-${idx}.yaml"
+  yq "select(.kind == \"HelmRelease\" and .metadata.name == \"${release_name}\")" "$app_rendered" > "$hr"
+
+  chart=$(yq -r '.spec.chart.spec.chart' "$hr")
+  version=$(yq -r '.spec.chart.spec.version // ""' "$hr")
+  repo=$(yq -r '.spec.chart.spec.sourceRef.name' "$hr")
+  hr_namespace=$(yq -r '.metadata.namespace // ""' "$hr")
+  [[ -n "$hr_namespace" && "$hr_namespace" != "null" ]] && namespace_for_hr=$hr_namespace || namespace_for_hr=$namespace
+
+  yq '.spec.values // {}' "$hr" > "$values"
+  substitute_file "$values" "$values_subst"
+
+  chart_ref="${repo}/${chart}"
+  printf '    %s -> %s (%s)\n' "$release_name" "$chart_ref" "${version:-no explicit version}"
+  if [[ -n "$version" && "$version" != "null" ]]; then
+    helm template "$release_name" "$chart_ref" --version "$version" -n "$namespace_for_hr" -f "$values_subst" > "$rendered"
+  else
+    helm template "$release_name" "$chart_ref" -n "$namespace_for_hr" -f "$values_subst" > "$rendered"
+  fi
+  kubectl apply --dry-run=server -n "$namespace_for_hr" -f "$rendered" >/dev/null
+  idx=$((idx + 1))
+done
+
+printf 'ok: %s validated\n' "$app_path"

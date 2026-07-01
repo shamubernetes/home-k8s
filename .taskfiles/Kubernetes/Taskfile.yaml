@@ -72,3 +72,22 @@ tasks:
       cluster: '{{.cluster | default "main"}}'
     preconditions:
     - kubectl --context {{.cluster}} --namespace {{.ns}} get externalsecret {{.secret}}
+
+  validate-app:
+    desc: Validate a GitOps app kustomization and rendered HelmRelease output
+    summary: |
+      app: App path as <category>/<app> or <category>/<app>/app (required)
+      ns: Namespace to dry-run rendered Helm resources in (default: app category)
+    cmd: '{{.ROOT_DIR}}/scripts/validate-app {{.app}} {{.ns}}'
+    vars:
+      ns: '{{.ns | default ""}}'
+    requires:
+      vars: ["app"]
+
+  pin-image:
+    desc: Resolve an image tag to an immutable digest reference
+    summary: |
+      image: Mutable image tag to resolve, for example docker.io/searxng/searxng:latest (required)
+    cmd: '{{.ROOT_DIR}}/scripts/pin-image {{.image}}'
+    requires:
+      vars: ["image"]

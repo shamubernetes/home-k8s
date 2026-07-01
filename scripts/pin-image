@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/pin-image <image:tag>
+
+Prints an immutable image reference using the registry digest. Prefer the
+multi-arch index digest when available, so Kubernetes can still choose the
+right platform.
+USAGE
+}
+
+if [[ ${1:-} == "-h" || ${1:-} == "--help" || $# -ne 1 ]]; then
+  usage
+  exit 0
+fi
+
+image=$1
+if [[ $image != *:* || $image == *@* ]]; then
+  echo "expected image:tag without digest, got: $image" >&2
+  exit 1
+fi
+
+if command -v crane >/dev/null 2>&1; then
+  digest=$(crane digest "$image")
+elif command -v skopeo >/dev/null 2>&1; then
+  digest=$(skopeo inspect "docker://${image}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["Digest"])')
+else
+  digest=$(python3 - "$image" <<'PY'
+import json
+import re
+import sys
+import urllib.parse
+import urllib.request
+import urllib.error
+
+image = sys.argv[1]
+first = image.split('/')[0]
+if ('.' in first) or (':' in first) or first == 'localhost':
+    registry, remainder = image.split('/', 1)
+else:
+    registry, remainder = 'registry-1.docker.io', image
+if registry == 'docker.io':
+    registry = 'registry-1.docker.io'
+if '/' not in remainder:
+    remainder = 'library/' + remainder
+repo, tag = remainder.rsplit(':', 1)
+accept = ', '.join([
+    'application/vnd.oci.image.index.v1+json',
+    'application/vnd.docker.distribution.manifest.list.v2+json',
+    'application/vnd.oci.image.manifest.v1+json',
+    'application/vnd.docker.distribution.manifest.v2+json',
+])
+url = f'https://{registry}/v2/{repo}/manifests/{tag}'
+headers = {'Accept': accept}
+
+def request(headers):
+    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30)
+
+try:
+    resp = request(headers)
+except urllib.error.HTTPError as exc:
+    if exc.code != 401:
+        raise
+    www = exc.headers.get('WWW-Authenticate', '')
+    match = re.match(r'Bearer\s+(.*)', www)
+    if not match:
+        raise
+    params = {}
+    for key, value in re.findall(r'(\w+)="([^"]*)"', match.group(1)):
+        params[key] = value
+    realm = params.pop('realm')
+    token_url = realm + '?' + urllib.parse.urlencode(params)
+    token = json.load(urllib.request.urlopen(token_url, timeout=30)).get('token')
+    headers['Authorization'] = f'Bearer {token}'
+    resp = request(headers)
+
+with resp:
+    print(resp.headers['Docker-Content-Digest'])
+PY
+)
+fi
+
+printf '%s@%s\n' "${image%:*}" "$digest"

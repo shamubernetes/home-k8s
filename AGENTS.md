@@ -4,7 +4,7 @@ This file provides guidance to All Agents when working with code in this reposit
 
 ## Project Overview
 
-This is a GitOps-managed home Kubernetes cluster using FluxCD, Talos Linux, and SOPS for secret encryption.
+This is a GitOps-managed home Kubernetes cluster using FluxCD and Talos Linux. Runtime application secrets normally come from 1Password via External Secrets (`op-secret-store`). SOPS is still used for Flux cluster variables, Talos/bootstrap secrets, and existing SOPS-managed resources.
 
 ## Common Commands
 
@@ -23,6 +23,12 @@ task kubernetes:delete-failed-pods
 
 # Sync ExternalSecrets
 task kubernetes:sync-secrets ns=<namespace> secret=<name>
+
+# Validate a GitOps app without applying it
+task kubernetes:validate-app app=<category>/<app>
+
+# Resolve a mutable image tag to an immutable digest reference
+task kubernetes:pin-image image=docker.io/library/nginx:latest
 
 # Bootstrap entire cluster (destructive)
 task bootstrap:kubernetes nodes=<node1,node2> disk=/dev/nvme0n1
@@ -51,7 +57,8 @@ task bootstrap:kubernetes nodes=<node1,node2> disk=/dev/nvme0n1
 Each app follows: `kubernetes/apps/<category>/<app>/app/`
 - `kustomization.yaml` - References resources and templates
 - `helmrelease.yaml` - HelmRelease with chart configuration
-- `*.sops.yaml` - Encrypted secrets
+- `externalsecret.yaml` - Runtime app secrets from 1Password via External Secrets when needed
+- `*.sops.yaml` - Only for Flux/Talos/bootstrap secrets or existing areas that intentionally use SOPS directly
 
 ## YAML Conventions
 
@@ -83,10 +90,13 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 
 ## Secrets Management
 
-- Encrypted files use `.sops.yaml` suffix
-- Edit with `sops <file>` CLI
-- Never commit plaintext secrets
-- Reference secrets via `valuesFrom` in HelmReleases
+- Runtime app secrets should use 1Password plus External Secrets by default:
+  - Create or update an item in the `Kubernetes` vault.
+  - Add an `ExternalSecret` using `secretStoreRef.kind: ClusterSecretStore` and `secretStoreRef.name: op-secret-store`.
+  - Target the app secret as `<app>-secret` unless the chart expects a different name.
+  - Consume the generated Secret with `envFrom.secretRef`, explicit env refs, or `valuesFrom` as appropriate.
+- Use SOPS (`*.sops.yaml`) for Flux cluster variables, Talos/bootstrap secrets, and existing SOPS-managed resources, not as the default for new app runtime secrets.
+- Never commit plaintext secrets.
 
 ## Talos Configuration
 
@@ -103,3 +113,23 @@ When using `app-template` charts:
 - External ingress: `ingressClassName: external` with external-dns
 - Internal ingress: `ingressClassName: internal`
 - LoadBalancers: Use Cilium annotation `io.cilium/lb-ipam-ips: "${IPAM_IP_*}"`
+
+## New App Validation
+
+Before committing a new or changed app, run:
+
+```bash
+scripts/validate-app <category>/<app>
+# or
+task kubernetes:validate-app app=<category>/<app>
+```
+
+This renders the app kustomization, server-dry-runs non-Secret manifests, renders HelmReleases with common Flux substitutions, and server-dry-runs the rendered chart output. Raw Secret manifests are skipped during local dry-run because SOPS material may only be available to Flux.
+
+For public images, pin mutable tags before committing:
+
+```bash
+scripts/pin-image docker.io/searxng/searxng:latest
+# or
+task kubernetes:pin-image image=docker.io/searxng/searxng:latest
+```

@@ -4,5 +4,7 @@ kind: Kustomization
 resources:
 - ./externalsecret.yaml
 - ./init-db-job.yaml
+- ./nuq-schema-configmap.yaml
+- ./init-nuq-schema-job.yaml
 - ./helmrelease.yaml
 - ./ingress.yaml

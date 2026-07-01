@@ -1,0 +1,201 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: firecrawl-nuq-schema
+data:
+  nuq-schema.sql: |
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    -- Checkpoint tuning: spread I/O to reduce stalls during heavy WAL activity
+    -- These settings help prevent prefetch queries from returning 0 jobs during checkpoints
+    
+    -- Checkpoint settings: reduce frequency and spread I/O
+    
+    -- Aggressive background writer: pre-flush dirty pages to reduce checkpoint burst
+    
+    -- I/O concurrency for SSD/cloud storage (hyperdisk)
+    
+    -- WAL settings for better write performance
+    
+    -- Reduce fsync overhead
+    
+    CREATE SCHEMA IF NOT EXISTS nuq;
+    
+    DO $$ BEGIN
+      CREATE TYPE nuq.job_status AS ENUM ('queued', 'active', 'completed', 'failed');
+    EXCEPTION
+      WHEN duplicate_object THEN null;
+    END $$;
+    
+    DO $$ BEGIN
+      CREATE TYPE nuq.group_status AS ENUM ('active', 'completed', 'cancelled');
+    EXCEPTION
+      WHEN duplicate_object THEN null;
+    END $$;
+    
+    CREATE TABLE IF NOT EXISTS nuq.queue_scrape (
+      id uuid NOT NULL DEFAULT gen_random_uuid(),
+      status nuq.job_status NOT NULL DEFAULT 'queued'::nuq.job_status,
+      data jsonb,
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      priority int NOT NULL DEFAULT 0,
+      lock uuid,
+      locked_at timestamp with time zone,
+      stalls integer,
+      finished_at timestamp with time zone,
+      listen_channel_id text, -- for listenable jobs over rabbitmq
+      returnvalue jsonb, -- only for selfhost
+      failedreason text, -- only for selfhost
+      owner_id uuid,
+      group_id uuid,
+      CONSTRAINT queue_scrape_pkey PRIMARY KEY (id)
+    );
+    
+    ALTER TABLE nuq.queue_scrape
+    SET (autovacuum_vacuum_scale_factor = 0.01,
+         autovacuum_analyze_scale_factor = 0.01,
+         autovacuum_vacuum_cost_limit = 10000,
+         autovacuum_vacuum_cost_delay = 0);
+    
+    CREATE INDEX IF NOT EXISTS queue_scrape_active_locked_at_idx ON nuq.queue_scrape USING btree (locked_at) WHERE (status = 'active'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_queued_optimal_2_idx ON nuq.queue_scrape (priority ASC, created_at ASC, id) WHERE (status = 'queued'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_failed_created_at_idx ON nuq.queue_scrape USING btree (created_at) WHERE (status = 'failed'::nuq.job_status);
+    
+    -- Predicate-matching partial indexes for the standalone (group_id IS NULL)
+    -- cleaners. In production virtually every row has a group_id, so these
+    -- indexes stay tiny and turn the standalone cleaners into fast no-ops instead
+    -- of seq scans over the whole 18M-row table.
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_completed_standalone_created_at_idx ON nuq.queue_scrape USING btree (created_at) WHERE (status = 'completed'::nuq.job_status AND group_id IS NULL);
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_failed_standalone_created_at_idx ON nuq.queue_scrape USING btree (created_at) WHERE (status = 'failed'::nuq.job_status AND group_id IS NULL);
+    
+    -- Plain group_id index for the cascading DELETE in nuq_group_crawl_clean.
+    -- The other partial (group_id, ...) indexes are all filtered by mode or status
+    -- so DELETE WHERE group_id IN (...) seq-scans the whole 18M-row table without
+    -- this. EXPLAIN confirmed ~7s/100 group_ids before adding this.
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_id_idx ON nuq.queue_scrape (group_id) WHERE group_id IS NOT NULL;
+    
+    -- Indexes for crawl-status.ts queries
+    -- For getGroupAnyJob: query by group_id, owner_id, and data->>'mode' = 'single_urls'
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_owner_mode_idx ON nuq.queue_scrape (group_id, owner_id) WHERE ((data->>'mode') = 'single_urls');
+    
+    -- For getGroupNumericStats: query by group_id and data->>'mode', grouped by status
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_mode_status_idx ON nuq.queue_scrape (group_id, status) WHERE ((data->>'mode') = 'single_urls');
+    
+    -- For getCrawlJobsForListing: query by group_id, status='completed', data->>'mode', ordered by finished_at, created_at
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_completed_listing_idx ON nuq.queue_scrape (group_id, finished_at ASC, created_at ASC) WHERE (status = 'completed'::nuq.job_status AND (data->>'mode') = 'single_urls');
+    
+    -- For group finish cron
+    CREATE INDEX IF NOT EXISTS idx_queue_scrape_group_status ON nuq.queue_scrape (group_id, status) WHERE status IN ('active', 'queued');
+    
+    CREATE TABLE IF NOT EXISTS nuq.queue_scrape_backlog (
+      id uuid NOT NULL DEFAULT gen_random_uuid(),
+      data jsonb,
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      priority int NOT NULL DEFAULT 0,
+      listen_channel_id text, -- for listenable jobs over rabbitmq
+      owner_id uuid,
+      group_id uuid,
+      times_out_at timestamptz,
+      CONSTRAINT queue_scrape_backlog_pkey PRIMARY KEY (id)
+    );
+    
+    -- For getBackloggedJobIDsOfOwner: query backlog by owner_id
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_backlog_owner_id_idx ON nuq.queue_scrape_backlog (owner_id);
+    
+    -- For getGroupNumericStats backlog query: query by group_id and data->>'mode' on backlog table
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_backlog_group_mode_idx ON nuq.queue_scrape_backlog (group_id) WHERE ((data->>'mode') = 'single_urls');
+    
+    -- For nuq_queue_scrape_backlog_reaper: avoid seq scan over the entire backlog every minute
+    CREATE INDEX IF NOT EXISTS nuq_queue_scrape_backlog_times_out_at_idx ON nuq.queue_scrape_backlog (times_out_at);
+    
+    -- Per-index REINDEX CONCURRENTLY, spread across the global low-traffic window
+    -- (02:00-06:20 UTC). REINDEX INDEX takes a ShareUpdateExclusiveLock only on
+    -- the target index, not the whole table.
+    --
+    -- Note: REINDEX CONCURRENTLY cannot run inside a transaction block, and pg_cron
+    -- wraps multi-statement commands in an implicit transaction. So each cron body
+    -- must be a single REINDEX statement -- statement_timeout cannot be set
+    -- inline. Stuck reindexes are caught by nuq_maintenance_watchdog below.
+    
+    -- Watchdog: cancel any nuq REINDEX CONCURRENTLY that has been running > 18 min.
+    -- Acts as the safety net since statement_timeout cannot be set inline with
+    -- REINDEX CONCURRENTLY. Slots are 20 min apart, so the watchdog must run
+    -- frequently enough that a stuck job is killed before the next slot fires.
+    -- Cadence (1 min) + threshold (18 min) caps actual reindex runtime at ~19 min,
+    -- strictly under the 20 min cadence.
+    
+    CREATE TABLE IF NOT EXISTS nuq.queue_crawl_finished (
+      id uuid NOT NULL DEFAULT gen_random_uuid(),
+      status nuq.job_status NOT NULL DEFAULT 'queued'::nuq.job_status,
+      data jsonb,
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      priority int NOT NULL DEFAULT 0,
+      lock uuid,
+      locked_at timestamp with time zone,
+      stalls integer,
+      finished_at timestamp with time zone,
+      listen_channel_id text, -- for listenable jobs over rabbitmq
+      returnvalue jsonb, -- only for selfhost
+      failedreason text, -- only for selfhost
+      owner_id uuid,
+      group_id uuid,
+      CONSTRAINT queue_crawl_finished_pkey PRIMARY KEY (id)
+    );
+    
+    ALTER TABLE nuq.queue_crawl_finished
+    SET (autovacuum_vacuum_scale_factor = 0.01,
+         autovacuum_analyze_scale_factor = 0.01,
+         autovacuum_vacuum_cost_limit = 10000,
+         autovacuum_vacuum_cost_delay = 0);
+    
+    CREATE INDEX IF NOT EXISTS queue_crawl_finished_active_locked_at_idx ON nuq.queue_crawl_finished USING btree (locked_at) WHERE (status = 'active'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_queued_optimal_2_idx ON nuq.queue_crawl_finished (priority ASC, created_at ASC, id) WHERE (status = 'queued'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_failed_created_at_idx ON nuq.queue_crawl_finished USING btree (created_at) WHERE (status = 'failed'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_completed_created_at_idx ON nuq.queue_crawl_finished USING btree (created_at) WHERE (status = 'completed'::nuq.job_status);
+    
+    -- Predicate-matching partial indexes for the standalone (group_id IS NULL)
+    -- cleaners; see note on queue_scrape above.
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_completed_standalone_created_at_idx ON nuq.queue_crawl_finished USING btree (created_at) WHERE (status = 'completed'::nuq.job_status AND group_id IS NULL);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_failed_standalone_created_at_idx ON nuq.queue_crawl_finished USING btree (created_at) WHERE (status = 'failed'::nuq.job_status AND group_id IS NULL);
+    
+    -- Plain group_id index for the cascading DELETE in nuq_group_crawl_clean.
+    -- See note on queue_scrape above.
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_group_id_idx ON nuq.queue_crawl_finished (group_id) WHERE group_id IS NOT NULL;
+    
+    -- Per-index REINDEX CONCURRENTLY for queue_crawl_finished. See note above on
+    -- why these are single-statement (no inline statement_timeout).
+    
+    CREATE TABLE IF NOT EXISTS nuq.group_crawl (
+      id uuid NOT NULL,
+      status nuq.group_status NOT NULL DEFAULT 'active'::nuq.group_status,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      owner_id uuid NOT NULL,
+      ttl int8 NOT NULL DEFAULT 86400000,
+      expires_at timestamptz,
+      CONSTRAINT group_crawl_pkey PRIMARY KEY (id)
+    );
+    
+    -- Index for group finish cron to find active groups
+    CREATE INDEX IF NOT EXISTS idx_group_crawl_status ON nuq.group_crawl (status) WHERE status = 'active'::nuq.group_status;
+    
+    -- Index for nuq_group_crawl_clean victim selection. The status='active'
+    -- partial index above is the opposite predicate, so without this the cleaner
+    -- seq-scans the whole group_crawl table every 5 min.
+    CREATE INDEX IF NOT EXISTS nuq_group_crawl_completed_expires_at_idx ON nuq.group_crawl (expires_at) WHERE status = 'completed'::nuq.group_status;
+    
+    -- Index for backlog group_id lookups
+    CREATE INDEX IF NOT EXISTS idx_queue_scrape_backlog_group_id ON nuq.queue_scrape_backlog (group_id);
+    
+    -- Batched group cleanup: small LIMIT, fast cadence. queue_scrape has 12
+    -- indexes plus scattered heap pages, so per-row delete cost (~86 rows/s
+    -- measured) dominates regardless of how the work is grouped. Bigger batches
+    -- just made one heavy outlier group (max 8495 jobs vs p50 9) blow the
+    -- statement_timeout. 500 groups/min: throughput is 30k/hr against a steady
+    -- arrival of ~19k/hr, normal runs land in ~10s, worst case with a heavy
+    -- group in the batch ~140s -- well under the 90s timeout, and if we ever do
+    -- hit it the next minute's tick takes another swing rather than holding a
+    -- 4min transaction. SKIP LOCKED keeps overlapping ticks from fighting.
+    
+    -- pg_cron does not auto-prune cron.job_run_details; with sub-minute crons it
+    -- grows unbounded and seq-scans get unusable. Keep the last 24h.

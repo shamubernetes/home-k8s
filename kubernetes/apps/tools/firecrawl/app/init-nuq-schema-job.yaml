@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-batch-v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: firecrawl-init-nuq-schema-v1
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init-nuq-schema
+        image: docker.io/library/postgres:17-alpine@sha256:0a8a1e76503c091f0feb387d51b10fcd746c2d61cf6cdd6e8356973a45e40a0f
+        envFrom:
+        - secretRef:
+            name: firecrawl-secret
+        command:
+        - /bin/sh
+        - -ec
+        - psql "$NUQ_DATABASE_URL" -v ON_ERROR_STOP=1 -f /schema/nuq-schema.sql
+        volumeMounts:
+        - name: schema
+          mountPath: /schema
+          readOnly: true
+      volumes:
+      - name: schema
+        configMap:
+          name: firecrawl-nuq-schema

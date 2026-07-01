@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/reconcile-app <category>/<app> [namespace]
+
+Reconciles a GitOps app after its commit has been pushed, waits for common
+readiness resources, and prints service/ingress status. For brand-new apps,
+this also reconciles cluster-apps so the child Kustomization is created.
+USAGE
+}
+
+if [[ ${1:-} == "-h" || ${1:-} == "--help" || $# -lt 1 ]]; then
+  usage
+  exit 0
+fi
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
+need flux
+need kubectl
+need yq
+
+input=${1#kubernetes/apps/}
+input=${input%/}
+input=${input%/app}
+category=$(awk -F/ '{print $1}' <<<"$input")
+app=$(awk -F/ '{print $2}' <<<"$input")
+namespace=${2:-$category}
+ks="${app}"
+app_dir="kubernetes/apps/${category}/${app}/app"
+
+[[ -f "kubernetes/apps/${category}/${app}/ks.yaml" ]] || { echo "missing ks.yaml for ${input}" >&2; exit 1; }
+
+flux reconcile source git home-kubernetes -n flux-system
+if ! kubectl -n flux-system get kustomization "$ks" >/dev/null 2>&1; then
+  flux reconcile kustomization cluster-apps -n flux-system --with-source
+fi
+flux reconcile kustomization "$ks" -n flux-system --with-source
+kubectl wait --for=condition=Ready "kustomization/${ks}" -n flux-system --timeout=180s
+
+if kubectl kustomize "$app_dir" | yq -e 'select(.kind == "ExternalSecret")' >/dev/null 2>&1; then
+  mapfile -t externals < <(kubectl kustomize "$app_dir" | yq -r -N 'select(.kind == "ExternalSecret") | .metadata.name')
+  for name in "${externals[@]}"; do
+    kubectl wait --for=condition=Ready "externalsecret/${name}" -n "$namespace" --timeout=180s
+  done
+fi
+
+mapfile -t hrs < <(kubectl kustomize "$app_dir" | yq -r -N 'select(.kind == "HelmRelease") | .metadata.name')
+for name in "${hrs[@]}"; do
+  kubectl wait --for=condition=Ready "helmrelease/${name}" -n "$namespace" --timeout=300s
+  kubectl get helmrelease "$name" -n "$namespace"
+done
+
+if kubectl -n "$namespace" get deployment -l app.kubernetes.io/name="$app" --no-headers 2>/dev/null | grep -q .; then
+  mapfile -t deployments < <(kubectl -n "$namespace" get deployment -l app.kubernetes.io/name="$app" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+  for name in "${deployments[@]}"; do
+    kubectl wait --for=condition=Available "deployment/${name}" -n "$namespace" --timeout=300s
+  done
+fi
+
+kubectl get externalsecret,helmrelease,pod,svc,ingress -n "$namespace" -l app.kubernetes.io/name="$app" -o wide || true

@@ -63,6 +63,17 @@ non_secret="${tmpdir}/app-non-secret.yaml"
 printf '==> kustomize %s\n' "$app_path"
 kubectl kustomize "$abs_app_path" > "$app_rendered"
 
+ks_path="${repo_root}/kubernetes/apps/${category}/${app_name}/ks.yaml"
+if yq -e 'select(.kind == "ExternalSecret")' "$app_rendered" >/dev/null 2>&1; then
+  if [[ ! -f "$ks_path" ]] || ! yq -e '.spec.dependsOn[]? | select(.name == "external-secrets-secret-store")' "$ks_path" >/dev/null 2>&1; then
+    echo "warning: app contains ExternalSecret but ks.yaml does not depend on external-secrets-secret-store" >&2
+  fi
+fi
+
+if ! "${repo_root}/scripts/check-image-pins" "$abs_app_path" >/dev/null; then
+  echo "warning: one or more app-template images are not digest pinned" >&2
+fi
+
 printf '==> server dry-run app manifests, skipping raw Secret docs\n'
 yq 'select(.kind != "Secret")' "$app_rendered" > "$non_secret"
 if [[ -s "$non_secret" ]]; then

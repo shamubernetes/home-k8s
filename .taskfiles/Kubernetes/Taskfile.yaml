@@ -91,3 +91,34 @@ tasks:
     cmd: '{{.ROOT_DIR}}/scripts/pin-image {{.image}}'
     requires:
       vars: ["image"]
+
+  check-image-pins:
+    desc: Check app-template images for missing digest pins
+    summary: |
+      path: Optional path to scan (default: kubernetes/apps)
+    cmd: '{{.ROOT_DIR}}/scripts/check-image-pins {{.path}}'
+    vars:
+      path: '{{.path | default ""}}'
+
+  reconcile-app:
+    desc: Reconcile and wait for a GitOps app after pushing changes
+    summary: |
+      app: App path as <category>/<app> (required)
+      ns: Namespace to wait in (default: app category)
+    cmd: '{{.ROOT_DIR}}/scripts/reconcile-app {{.app}} {{.ns}}'
+    vars:
+      ns: '{{.ns | default ""}}'
+    requires:
+      vars: ["app"]
+
+  new-app:
+    desc: Scaffold a standard app-template GitOps app
+    summary: |
+      category: App category, for example tools or services (required)
+      app: App name (required)
+      args: Extra args passed to scripts/new-app, for example --image ... --port ... --internal --secret
+    cmd: '{{.ROOT_DIR}}/scripts/new-app {{.category}} {{.app}} {{.args}}'
+    vars:
+      args: '{{.args | default ""}}'
+    requires:
+      vars: ["category", "app"]

@@ -30,6 +30,15 @@ task kubernetes:validate-app app=<category>/<app>
 # Resolve a mutable image tag to an immutable digest reference
 task kubernetes:pin-image image=docker.io/library/nginx:latest
 
+# Check app-template images for missing digest pins
+task kubernetes:check-image-pins
+
+# Scaffold a standard app-template app
+task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest --port 8080 --internal"
+
+# Reconcile and wait for a pushed app
+task kubernetes:reconcile-app app=tools/searxng
+
 # Bootstrap entire cluster (destructive)
 task bootstrap:kubernetes nodes=<node1,node2> disk=/dev/nvme0n1
 ```
@@ -59,6 +68,18 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 - `helmrelease.yaml` - HelmRelease with chart configuration
 - `externalsecret.yaml` - Runtime app secrets from 1Password via External Secrets when needed
 - `*.sops.yaml` - Only for Flux/Talos/bootstrap secrets or existing areas that intentionally use SOPS directly
+
+### App Category Placement
+
+- `tools` - agent/admin/operator utilities and small cluster helper UIs
+- `services` - user-facing internal apps that do not fit a narrower domain
+- `network` - ingress, DNS, routing, SMTP, tunnels, network controllers
+- `database` - database operators, shared datastores, caches, and database cluster resources
+- `observability` - monitoring, alerting, logging, dashboards, status checks
+- `media` - media library, playback, download, or metadata apps
+- `arrs` - Arr-stack apps and download automation
+- `games` - game servers and game-specific routers
+- `security` - identity, auth, policy, and security services
 
 ## YAML Conventions
 
@@ -132,4 +153,20 @@ For public images, pin mutable tags before committing:
 scripts/pin-image docker.io/searxng/searxng:latest
 # or
 task kubernetes:pin-image image=docker.io/searxng/searxng:latest
+```
+
+To scaffold a new standard app-template app:
+
+```bash
+scripts/new-app tools example --image docker.io/library/nginx:latest --port 8080 --internal
+# or
+task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest --port 8080 --internal"
+```
+
+After pushing app changes, reconcile and wait with:
+
+```bash
+scripts/reconcile-app tools/searxng
+# or
+task kubernetes:reconcile-app app=tools/searxng
 ```

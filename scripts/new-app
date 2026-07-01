@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/new-app <category> <app> --image <image:tag|image:tag@sha256:...> --port <port> [options]
+
+Options:
+  --internal              Add internal ingress at <app>.${HOME_DOMAIN} (default)
+  --external              Add external ingress at <app>.${HOME_DOMAIN}
+  --no-ingress            Do not add ingress
+  --secret                Add ExternalSecret skeleton targeting <app>-secret
+  --config-file <path>    Mount a ConfigMap file at the given container path
+  --chart-version <ver>   app-template version (default: 4.6.2)
+
+Creates a standard Flux/app-template app skeleton and wires it into the parent
+category kustomization. Review generated files before committing.
+USAGE
+}
+
+if [[ ${1:-} == "-h" || ${1:-} == "--help" || $# -lt 2 ]]; then
+  usage
+  exit 0
+fi
+
+category=$1
+app=$2
+shift 2
+image=""
+port=""
+ingress="internal"
+with_secret=false
+config_file=""
+chart_version="4.6.2"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image) image=${2:?}; shift 2 ;;
+    --port) port=${2:?}; shift 2 ;;
+    --internal) ingress="internal"; shift ;;
+    --external) ingress="external"; shift ;;
+    --no-ingress) ingress="none"; shift ;;
+    --secret) with_secret=true; shift ;;
+    --config-file) config_file=${2:?}; shift 2 ;;
+    --chart-version) chart_version=${2:?}; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+[[ -n "$image" ]] || { echo "--image is required" >&2; exit 1; }
+[[ -n "$port" ]] || { echo "--port is required" >&2; exit 1; }
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+base="${repo_root}/kubernetes/apps/${category}/${app}"
+app_dir="${base}/app"
+parent="${repo_root}/kubernetes/apps/${category}/kustomization.yaml"
+
+[[ -f "$parent" ]] || { echo "parent kustomization not found: kubernetes/apps/${category}/kustomization.yaml" >&2; exit 1; }
+if [[ -e "$base" ]]; then
+  echo "app path already exists: kubernetes/apps/${category}/${app}" >&2
+  exit 1
+fi
+
+mkdir -p "$app_dir"
+
+cat > "${base}/ks.yaml" <<EOF
+# yaml-language-server: \$schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app ${app}
+  namespace: "\${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace ${category}
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+EOF
+if [[ "$with_secret" == true ]]; then
+cat >> "${base}/ks.yaml" <<'EOF'
+  dependsOn:
+  - name: external-secrets-secret-store
+EOF
+fi
+cat >> "${base}/ks.yaml" <<EOF
+  path: ./kubernetes/apps/${category}/${app}/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "\${KS_GIT_REPO_NAME}"
+  wait: false
+  interval: "\${KS_INTERVAL}"
+  retryInterval: "\${KS_RETRY_INTERVAL}"
+  timeout: "\${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace
+EOF
+
+cat > "${app_dir}/kustomization.yaml" <<'EOF'
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+EOF
+if [[ "$with_secret" == true ]]; then
+  echo "- ./externalsecret.yaml" >> "${app_dir}/kustomization.yaml"
+fi
+echo "- ./helmrelease.yaml" >> "${app_dir}/kustomization.yaml"
+
+if [[ "$with_secret" == true ]]; then
+cat > "${app_dir}/externalsecret.yaml" <<EOF
+# yaml-language-server: \$schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: ${app}
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: ${app}-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        EXAMPLE_SECRET: "{{ .EXAMPLE_SECRET }}"
+  dataFrom:
+  - extract:
+      key: ${app}
+EOF
+fi
+
+if [[ "$image" == *@sha256:* ]]; then
+  before_digest=${image%@sha256:*}
+  digest="sha256:${image##*@sha256:}"
+  last_segment=${before_digest##*/}
+  if [[ "$last_segment" != *:* ]]; then
+    echo "--image with a digest must include a tag for app-template, for example repo/app:tag@${digest}" >&2
+    exit 1
+  fi
+  image_repo=${before_digest%:*}
+  image_tag="${before_digest##*:}@${digest}"
+else
+  image_repo=${image%:*}
+  image_tag=${image##*:}
+fi
+
+cat > "${app_dir}/helmrelease.yaml" <<EOF
+# yaml-language-server: \$schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app ${app}
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: ${chart_version}
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      ${app}:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ${image_repo}
+              tag: ${image_tag}
+            env:
+              TZ: \${TIMEZONE}
+EOF
+if [[ "$with_secret" == true ]]; then
+cat >> "${app_dir}/helmrelease.yaml" <<EOF
+            envFrom:
+            - secretRef:
+                name: ${app}-secret
+EOF
+fi
+cat >> "${app_dir}/helmrelease.yaml" <<EOF
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: &port ${port}
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 25m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+    defaultPodOptions:
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: ${app}
+        ports:
+          http:
+            port: *port
+EOF
+if [[ "$ingress" != "none" ]]; then
+cat >> "${app_dir}/helmrelease.yaml" <<EOF
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: ${ingress}.\${HOME_DOMAIN}
+        className: ${ingress}
+        hosts:
+        - host: "{{ .Release.Name }}.\${HOME_DOMAIN}"
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+EOF
+fi
+if [[ -n "$config_file" ]]; then
+key=$(basename "$config_file")
+cat >> "${app_dir}/helmrelease.yaml" <<EOF
+    configMaps:
+      config:
+        data:
+          ${key}: |
+            # TODO: replace with ${app} configuration
+    persistence:
+      config:
+        type: configMap
+        identifier: config
+        advancedMounts:
+          ${app}:
+            app:
+            - path: ${config_file}
+              subPath: ${key}
+              readOnly: true
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          ${app}:
+            app:
+            - path: /tmp
+EOF
+else
+cat >> "${app_dir}/helmrelease.yaml" <<EOF
+    persistence:
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          ${app}:
+            app:
+            - path: /tmp
+EOF
+fi
+
+if ! grep -q -- "- ./${app}/ks.yaml" "$parent"; then
+  printf '%s\n' "- ./${app}/ks.yaml" >> "$parent"
+fi
+
+printf 'created kubernetes/apps/%s/%s\n' "$category" "$app"
+printf 'next: review files, replace TODOs, then run scripts/validate-app %s/%s\n' "$category" "$app"

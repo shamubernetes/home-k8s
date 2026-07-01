@@ -85,6 +85,25 @@ spec:
                   configMap:
                     name: plane-auth-config-repair
                     defaultMode: 0555
+      - target:
+          kind: Deployment
+          name: plane-silo-wl
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: plane-silo-wl
+          spec:
+            template:
+              spec:
+                containers:
+                - name: plane-silo
+                  env:
+                  - name: AMQP_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: plane-silo-amqp-secret
+                        key: AMQP_URL
   values:
     planeVersion: v2.6.3
     license:

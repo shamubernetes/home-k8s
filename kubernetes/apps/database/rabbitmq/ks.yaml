@@ -10,7 +10,11 @@ spec:
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
-  wait: true
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: rabbitmq-cluster-operator
+    namespace: rabbitmq-system
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"
@@ -31,7 +35,11 @@ spec:
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
-  wait: true
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: messaging-topology-operator
+    namespace: rabbitmq-system
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

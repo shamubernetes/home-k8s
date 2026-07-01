@@ -5,9 +5,10 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/reconcile-app <category>/<app> [namespace]
 
-Reconciles a GitOps app after its commit has been pushed, waits for common
-readiness resources, and prints service/ingress status. For brand-new apps,
-this also reconciles cluster-apps so the child Kustomization is created.
+Watches Flux converge a GitOps app after its commit has been pushed. This does
+not force Flux reconciliation; Flux is expected to pick up Git changes on its
+normal interval. The script waits for the app Kustomization to appear, waits for
+common readiness resources, and prints service/ingress status.
 USAGE
 }
 
@@ -17,7 +18,6 @@ if [[ ${1:-} == "-h" || ${1:-} == "--help" || $# -lt 1 ]]; then
 fi
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
-need flux
 need kubectl
 need yq
 
@@ -32,30 +32,36 @@ app_dir="kubernetes/apps/${category}/${app}/app"
 
 [[ -f "kubernetes/apps/${category}/${app}/ks.yaml" ]] || { echo "missing ks.yaml for ${input}" >&2; exit 1; }
 
-flux reconcile source git home-kubernetes -n flux-system
-if ! kubectl -n flux-system get kustomization "$ks" >/dev/null 2>&1; then
-  flux reconcile kustomization cluster-apps -n flux-system --with-source
-fi
-flux reconcile kustomization "$ks" -n flux-system --with-source
-kubectl wait --for=condition=Ready "kustomization/${ks}" -n flux-system --timeout=180s
+printf '==> watching Flux for kustomization/%s in flux-system\n' "$ks"
+end=$((SECONDS + 900))
+until kubectl -n flux-system get kustomization "$ks" >/dev/null 2>&1; do
+  if (( SECONDS >= end )); then
+    echo "timed out waiting for Flux to create kustomization/${ks}" >&2
+    exit 1
+  fi
+  sleep 10
+done
+
+kubectl wait --for=condition=Ready "kustomization/${ks}" -n flux-system --timeout=900s
+kubectl -n flux-system get kustomization "$ks"
 
 if kubectl kustomize "$app_dir" | yq -e 'select(.kind == "ExternalSecret")' >/dev/null 2>&1; then
   mapfile -t externals < <(kubectl kustomize "$app_dir" | yq -r -N 'select(.kind == "ExternalSecret") | .metadata.name')
   for name in "${externals[@]}"; do
-    kubectl wait --for=condition=Ready "externalsecret/${name}" -n "$namespace" --timeout=180s
+    kubectl wait --for=condition=Ready "externalsecret/${name}" -n "$namespace" --timeout=300s
   done
 fi
 
 mapfile -t hrs < <(kubectl kustomize "$app_dir" | yq -r -N 'select(.kind == "HelmRelease") | .metadata.name')
 for name in "${hrs[@]}"; do
-  kubectl wait --for=condition=Ready "helmrelease/${name}" -n "$namespace" --timeout=300s
+  kubectl wait --for=condition=Ready "helmrelease/${name}" -n "$namespace" --timeout=600s
   kubectl get helmrelease "$name" -n "$namespace"
 done
 
 if kubectl -n "$namespace" get deployment -l app.kubernetes.io/name="$app" --no-headers 2>/dev/null | grep -q .; then
   mapfile -t deployments < <(kubectl -n "$namespace" get deployment -l app.kubernetes.io/name="$app" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
   for name in "${deployments[@]}"; do
-    kubectl wait --for=condition=Available "deployment/${name}" -n "$namespace" --timeout=300s
+    kubectl wait --for=condition=Available "deployment/${name}" -n "$namespace" --timeout=600s
   done
 fi
 

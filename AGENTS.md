@@ -36,7 +36,7 @@ task kubernetes:check-image-pins
 # Scaffold a standard app-template app
 task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest --port 8080 --internal"
 
-# Reconcile and wait for a pushed app
+# Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
 
 # Bootstrap entire cluster (destructive)
@@ -206,10 +206,12 @@ scripts/new-app tools example --image docker.io/library/nginx:latest --port 8080
 task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest --port 8080 --internal"
 ```
 
-After pushing app changes, reconcile and wait with:
+After pushing app changes, watch Flux converge with:
 
 ```bash
 scripts/reconcile-app tools/searxng
 # or
 task kubernetes:reconcile-app app=tools/searxng
 ```
+
+Do not force Flux reconciliation as the default agent workflow. Push Git changes, then watch the existing Flux controllers converge. Manual `flux reconcile ...` is for explicit break-glass/debug use, not normal app rollout.

@@ -101,7 +101,7 @@ tasks:
       path: '{{.path | default ""}}'
 
   reconcile-app:
-    desc: Reconcile and wait for a GitOps app after pushing changes
+    desc: Watch Flux converge a GitOps app after pushing changes
     summary: |
       app: App path as <category>/<app> (required)
       ns: Namespace to wait in (default: app category)

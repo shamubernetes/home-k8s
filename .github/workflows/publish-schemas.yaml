@@ -35,7 +35,7 @@ jobs:
         token: "${{ secrets.GITHUB_TOKEN }}"
 
     - name: Setup Homebrew
-      uses: Homebrew/actions/setup-homebrew@5289d4857e180699398c1c0c5cca24882e524d05 # master
+      uses: Homebrew/actions/setup-homebrew@64bb52ce84da6455bdbd6df88ac86151ba2ff16c # master
 
     - name: Setup Workflow Tools
       shell: bash

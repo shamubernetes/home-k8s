@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: firecrawl-init-nuq-schema-v1
+  name: firecrawl-init-nuq-schema-v2
 spec:
   backoffLimit: 6
   template:

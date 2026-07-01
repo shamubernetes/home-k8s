@@ -81,6 +81,14 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 - `games` - game servers and game-specific routers
 - `security` - identity, auth, policy, and security services
 
+## Tooling and Python
+
+- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, and Renovate.
+- Do not treat missing `pyenv` or missing system Python packages such as PyYAML as a repo problem. This repository does not declare a Python runtime or Python dependencies.
+- For YAML inspection and transformation, prefer `yq`, `kubectl kustomize`, `helm template`, and the scripts under `scripts/`.
+- If a helper script uses Python, keep it Python standard-library only unless a Python environment and dependency file are added deliberately.
+- Do not install Python packages globally/Homebrew just to inspect YAML. If a one-off Python dependency is unavoidable, use an isolated temporary environment and do not make it part of the repo workflow without adding explicit project config.
+
 ## YAML Conventions
 
 ### Schema Headers (required first line)

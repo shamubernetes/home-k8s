@@ -1,4 +1,4 @@
-# Allow shared RabbitMQ clients from application namespaces.
+# Allow shared RabbitMQ clients and RabbitMQ operators.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -20,4 +20,11 @@ spec:
           kubernetes.io/metadata.name: tools
     ports:
     - port: 5672
+      protocol: TCP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: rabbitmq-system
+    ports:
+    - port: 15672
       protocol: TCP

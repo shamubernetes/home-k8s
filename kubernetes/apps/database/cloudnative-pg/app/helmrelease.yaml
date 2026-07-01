@@ -25,8 +25,6 @@ spec:
   - name: openebs
     namespace: openebs-system
   values:
-    image:
-      tag: 1.27.0
     crds:
       create: true
     monitoring:

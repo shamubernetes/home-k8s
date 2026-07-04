@@ -19,6 +19,9 @@ spec:
           kubernetes.io/metadata.name: games
     - namespaceSelector:
         matchLabels:
+          kubernetes.io/metadata.name: media
+    - namespaceSelector:
+        matchLabels:
           kubernetes.io/metadata.name: observability
     - namespaceSelector:
         matchLabels:

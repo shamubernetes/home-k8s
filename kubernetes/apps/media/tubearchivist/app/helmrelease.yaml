@@ -54,6 +54,9 @@ spec:
                   httpGet:
                     path: /api/health/
                     port: &port 8000
+                    httpHeaders:
+                    - name: Host
+                      value: tube.${HOME_DOMAIN}
                   initialDelaySeconds: 60
                   periodSeconds: 30
                   timeoutSeconds: 10
@@ -66,6 +69,9 @@ spec:
                   httpGet:
                     path: /api/health/
                     port: *port
+                    httpHeaders:
+                    - name: Host
+                      value: tube.${HOME_DOMAIN}
                   periodSeconds: 10
                   failureThreshold: 60
             securityContext:

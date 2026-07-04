@@ -6,6 +6,7 @@ resources:
 - ./plex/ks.yaml
 # - ./kometa/ks.yaml
 - ./stash/ks.yaml
+- ./tubearchivist/ks.yaml
 - ./calibre-web-automated/ks.yaml
 - ./audiobookshelf/ks.yaml
 - ./grimmory/ks.yaml

@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app elasticsearch
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  values:
+    controllers:
+      elasticsearch:
+        type: statefulset
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: docker.elastic.co/elasticsearch/elasticsearch
+              tag: 8.19.0@sha256:e1e66bfabae0fd03a0a36651a9bb198e7f061e0c99f457a6203b116e053e9cdb
+            env:
+              discovery.type: single-node
+              xpack.security.enabled: "true"
+              xpack.security.http.ssl.enabled: "false"
+              ES_JAVA_OPTS: -Xms1g -Xmx1g
+              path.repo: /usr/share/elasticsearch/data/snapshot
+              ELASTIC_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: elasticsearch-secret
+                    key: ELASTIC_PASSWORD
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: &httpPort 9200
+                  initialDelaySeconds: 60
+                  periodSeconds: 20
+                  timeoutSeconds: 5
+                  failureThreshold: 6
+              readiness: *probe
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: *httpPort
+                  periodSeconds: 10
+                  failureThreshold: 60
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 500m
+                memory: 2Gi
+              limits:
+                memory: 3Gi
+        pod:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile: {type: RuntimeDefault}
+        statefulset:
+          volumeClaimTemplates:
+          - name: data
+            storageClass: ceph-block
+            accessMode: ReadWriteOnce
+            size: 50Gi
+            globalMounts:
+            - path: /usr/share/elasticsearch/data
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *httpPort
+          transport:
+            port: 9300

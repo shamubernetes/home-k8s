@@ -5,6 +5,7 @@ metadata:
   name: plane-uploads
   namespace: rook-ceph
   annotations:
+    external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
     nginx.ingress.kubernetes.io/proxy-body-size: 20m
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
 spec:

@@ -86,6 +86,11 @@ spec:
     - urlSecret:
         name: alertmanager-secret
         key: COWTAIL_WEBHOOK_URL
+      httpConfig:
+        authorization:
+          credentials:
+            name: alertmanager-secret
+            key: COWTAIL_ALERTMANAGER_WEBHOOK_TOKEN
       sendResolved: true
   - name: openclaw
     webhookConfigs:

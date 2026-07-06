@@ -51,6 +51,8 @@ spec:
           timeoutSeconds: 5
     extraArgs:
     - --ignore-ingress-tls-spec
+    - --webhook-provider-read-timeout=30s
+    - --webhook-provider-write-timeout=30s
     policy: sync
     sources: ["ingress", "service"]
     txtOwnerId: k8s.

@@ -6,4 +6,3 @@ resources:
 - ./firecrawl/ks.yaml
 - ./reflector/ks.yaml
 - ./searxng/ks.yaml
-- ./plane-mcp/ks.yaml

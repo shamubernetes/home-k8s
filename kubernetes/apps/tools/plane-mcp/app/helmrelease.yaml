@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app plane-mcp
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      plane-mcp:
+        replicas: 2
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/maudecode/plane-cli
+              tag: 0.1.0@sha256:98056508f96b2d36e8300353f9ca9d9f1044887ec7bdecbcf76ca004947eeded
+            env:
+              HOST: 0.0.0.0
+              PORT: &port 3000
+              PLANE_CLI_HOME: /data
+              PLANE_MCP_ALLOWED_ORIGINS: https://hermes-gateway.${HOME_DOMAIN},https://plane-mcp.${HOME_DOMAIN}
+              PLANE_MCP_REDIS_PREFIX: plane-cli:mcp
+              PLANE_MCP_REDIS_URL: redis://dragonfly.database.svc.cluster.local:6379/15
+              PLANE_MCP_SESSION_TTL_SECONDS: "86400"
+              TZ: ${TIMEZONE}
+            envFrom:
+            - secretRef:
+                name: plane-mcp-secret
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: *port
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 3
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+              readOnlyRootFilesystem: true
+            resources:
+              requests:
+                cpu: 25m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: plane-mcp
+        ports:
+          http:
+            port: *port
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+        className: external
+        hosts:
+        - host: plane-mcp.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    persistence:
+      config:
+        type: secret
+        name: plane-mcp-secret
+        advancedMounts:
+          plane-mcp:
+            app:
+            - path: /data/.config/plane-cli/config.yaml
+              readOnly: true
+              subPath: config.yaml
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          plane-mcp:
+            app:
+            - path: /tmp

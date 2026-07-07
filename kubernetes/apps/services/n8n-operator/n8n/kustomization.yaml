@@ -15,3 +15,4 @@ resources:
   - workflows/cowtail-weekly-review.yaml
   - workflows/error-handler.yaml
   - workflows/codex-usage-pagerduty.yaml
+  - workflows/openai-model-release.yaml

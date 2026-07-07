@@ -1,0 +1,370 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-openai-model-release
+  namespace: services
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
+data:
+  workflow.json: |
+    {
+          "nodes": [
+                {
+                      "parameters": {
+                            "rule": {
+                                  "interval": [
+                                        {
+                                              "field": "cronExpression",
+                                              "expression": "17 * * * *"
+                                        }
+                                  ]
+                            }
+                      },
+                      "id": "schedule-trigger",
+                      "name": "Hourly",
+                      "type": "n8n-nodes-base.scheduleTrigger",
+                      "typeVersion": 1.2,
+                      "position": [
+                            0,
+                            0
+                      ]
+                },
+                {
+                      "parameters": {
+                            "operation": "getItemDetails",
+                            "vaultUUID": "3nk7dheikxygtpdqhyn2opawmy",
+                            "itemUUID": "ixfjrb2neaqaqd7bcysuvyea5y",
+                            "requestOptions": {}
+                      },
+                      "id": "get-openai-key",
+                      "name": "Get OpenAI Key",
+                      "type": "@n8layer/n8n-nodes-1password.onePassword",
+                      "typeVersion": 1,
+                      "position": [
+                            220,
+                            0
+                      ],
+                      "credentials": {
+                            "onePasswordApi": {
+                                  "id": "",
+                                  "name": "1Password Connect"
+                            }
+                      }
+                },
+                {
+                      "parameters": {
+                            "operation": "getItemDetails",
+                            "vaultUUID": "pc3wob7gb4f4vmsubawergeira",
+                            "itemUUID": "2jqh7c75ijlaeog2nafir77jre",
+                            "requestOptions": {}
+                      },
+                      "id": "get-webhook-token",
+                      "name": "Get Webhook Token",
+                      "type": "@n8layer/n8n-nodes-1password.onePassword",
+                      "typeVersion": 1,
+                      "position": [
+                            440,
+                            0
+                      ],
+                      "credentials": {
+                            "onePasswordApi": {
+                                  "id": "",
+                                  "name": "1Password Connect"
+                            }
+                      }
+                },
+                {
+                      "parameters": {
+                            "jsCode": "const openaiItem = $('Get OpenAI Key').first().json;\nconst webhookItem = $('Get Webhook Token').first().json;\n\nfunction field(item, labels) {\n  const fields = item.fields || [];\n  for (const label of labels) {\n    const found = fields.find((f) => f.label === label);\n    if (found && found.value) return found.value;\n  }\n  return null;\n}\n\nconst openaiApiKey = field(openaiItem, ['credential', 'OPENAI_API_KEY', 'api key', 'password']);\nconst webhookToken = field(webhookItem, ['HERMES_WEBHOOK_TOKEN', 'OPENCLAW_WEBHOOK_TOKEN']);\n\nif (!openaiApiKey) throw new Error('OpenAI API key missing from 1Password item');\nif (!webhookToken) throw new Error('Hermes webhook token missing from 1Password item');\n\nreturn [{ json: { openaiApiKey, webhookToken } }];"
+                      },
+                      "id": "prepare-secrets",
+                      "name": "Prepare Secrets",
+                      "type": "n8n-nodes-base.code",
+                      "typeVersion": 2,
+                      "position": [
+                            660,
+                            0
+                      ]
+                },
+                {
+                      "parameters": {
+                            "url": "https://api.openai.com/v1/models",
+                            "sendHeaders": true,
+                            "headerParameters": {
+                                  "parameters": [
+                                        {
+                                              "name": "Authorization",
+                                              "value": "=Bearer {{ $json.openaiApiKey }}"
+                                        },
+                                        {
+                                              "name": "Content-Type",
+                                              "value": "application/json"
+                                        }
+                                  ]
+                            },
+                            "options": {
+                                  "response": {
+                                        "response": {
+                                              "responseFormat": "json"
+                                        }
+                                  }
+                            }
+                      },
+                      "id": "list-models",
+                      "name": "List Models",
+                      "type": "n8n-nodes-base.httpRequest",
+                      "typeVersion": 4.2,
+                      "position": [
+                            880,
+                            0
+                      ]
+                },
+                {
+                      "parameters": {
+                            "jsCode": "const response = $('List Models').first().json;\nconst secrets = $('Prepare Secrets').first().json;\nconst models = Array.isArray(response.data) ? response.data : [];\nconst staticData = $getWorkflowStaticData('global');\nconst now = new Date().toISOString();\n\nif (!staticData.seen) staticData.seen = {};\nif (!staticData.notified) staticData.notified = {};\n\nconst includePattern = /^(gpt-[0-9][a-z0-9]*(?:\\.[0-9]+)?(?:$|-)|o[0-9]+(?:$|-))/i;\nconst excludePattern = /(embedding|moderation|realtime|audio|tts|transcribe|whisper|image|vision|search|computer-use)/i;\n\nfunction isWatchedModel(id) {\n  return includePattern.test(id) && !excludePattern.test(id);\n}\n\nconst watched = models\n  .filter((model) => model && typeof model.id === 'string')\n  .filter((model) => isWatchedModel(model.id))\n  .sort((a, b) => a.id.localeCompare(b.id));\n\nif (!staticData.initialized) {\n  for (const model of watched) {\n    staticData.seen[model.id] = {\n      id: model.id,\n      created: model.created || null,\n      owned_by: model.owned_by || null,\n      firstSeenAt: now,\n    };\n  }\n  staticData.initialized = true;\n  staticData.initializedAt = now;\n  return [];\n}\n\nconst candidates = [];\nfor (const model of watched) {\n  if (!staticData.seen[model.id]) {\n    staticData.seen[model.id] = {\n      id: model.id,\n      created: model.created || null,\n      owned_by: model.owned_by || null,\n      firstSeenAt: now,\n    };\n  }\n  if (!staticData.notified[model.id]) {\n    candidates.push({\n      json: {\n        model_id: model.id,\n        created: model.created || null,\n        owned_by: model.owned_by || null,\n        first_seen_at: staticData.seen[model.id].firstSeenAt || now,\n        openaiApiKey: secrets.openaiApiKey,\n        webhookToken: secrets.webhookToken,\n      },\n    });\n  }\n}\n\nreturn candidates;"
+                      },
+                      "id": "select-candidate-models",
+                      "name": "Select Candidate Models",
+                      "type": "n8n-nodes-base.code",
+                      "typeVersion": 2,
+                      "position": [
+                            1100,
+                            0
+                      ]
+                },
+                {
+                      "parameters": {
+                            "method": "POST",
+                            "url": "https://api.openai.com/v1/responses",
+                            "sendHeaders": true,
+                            "headerParameters": {
+                                  "parameters": [
+                                        {
+                                              "name": "Authorization",
+                                              "value": "=Bearer {{ $json.openaiApiKey }}"
+                                        },
+                                        {
+                                              "name": "Content-Type",
+                                              "value": "application/json"
+                                        }
+                                  ]
+                            },
+                            "sendBody": true,
+                            "specifyBody": "json",
+                            "jsonBody": "={{ JSON.stringify({ model: $json.model_id, input: 'Reply with exactly: ok', max_output_tokens: 8 }) }}",
+                            "options": {
+                                  "response": {
+                                        "response": {
+                                              "responseFormat": "json"
+                                        }
+                                  }
+                            }
+                      },
+                      "id": "smoke-test-model",
+                      "name": "Smoke Test Model",
+                      "type": "n8n-nodes-base.httpRequest",
+                      "typeVersion": 4.2,
+                      "position": [
+                            1320,
+                            0
+                      ],
+                      "continueOnFail": true
+                },
+                {
+                      "parameters": {
+                            "jsCode": "const smokeItems = $input.all();\nconst candidates = $('Select Candidate Models').all();\nconst now = new Date().toISOString();\nconst output = [];\n\nasync function hmacSha256Hex(secret, body) {\n  const encoder = new TextEncoder();\n  const key = await crypto.subtle.importKey(\n    'raw',\n    encoder.encode(secret),\n    { name: 'HMAC', hash: 'SHA-256' },\n    false,\n    ['sign']\n  );\n  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(body));\n  return Array.from(new Uint8Array(signature))\n    .map((byte) => byte.toString(16).padStart(2, '0'))\n    .join('');\n}\n\nfor (let i = 0; i < smokeItems.length; i++) {\n  const smoke = smokeItems[i].json || {};\n  const candidate = candidates[i] ? candidates[i].json : null;\n  if (!candidate) continue;\n\n  const failed = smoke.error || smoke.message?.toLowerCase?.().includes('error');\n  const succeeded = !failed && (smoke.id || smoke.object === 'response' || Array.isArray(smoke.output));\n  if (!succeeded) continue;\n\n  const createdAt = candidate.created\n    ? new Date(Number(candidate.created) * 1000).toISOString()\n    : 'unknown';\n\n  const payload = {\n    event_type: 'openai_model_usable',\n    model_id: candidate.model_id,\n    checked_at: now,\n    created_at: createdAt,\n    owned_by: candidate.owned_by || 'unknown',\n    first_seen_at: candidate.first_seen_at,\n    smoke_response_id: smoke.id || null,\n  };\n  const body = JSON.stringify(payload);\n  const signature = await hmacSha256Hex(candidate.webhookToken, body);\n\n  output.push({\n    json: {\n      ...payload,\n      body,\n      signature,\n      request_id: 'openai-model-' + candidate.model_id.replace(/[^a-zA-Z0-9_.-]/g, '-') + '-' + Date.now(),\n    },\n  });\n}\n\nreturn output;"
+                      },
+                      "id": "build-notification",
+                      "name": "Build Notification",
+                      "type": "n8n-nodes-base.code",
+                      "typeVersion": 2,
+                      "position": [
+                            1540,
+                            0
+                      ]
+                },
+                {
+                      "parameters": {
+                            "method": "POST",
+                            "url": "http://10.0.10.95:8645/webhooks/n8n-openai-model-release",
+                            "sendHeaders": true,
+                            "headerParameters": {
+                                  "parameters": [
+                                        {
+                                              "name": "Content-Type",
+                                              "value": "application/json"
+                                        },
+                                        {
+                                              "name": "X-Webhook-Signature",
+                                              "value": "={{ $json.signature }}"
+                                        },
+                                        {
+                                              "name": "X-Request-ID",
+                                              "value": "={{ $json.request_id }}"
+                                        }
+                                  ]
+                            },
+                            "sendBody": true,
+                            "specifyBody": "json",
+                            "jsonBody": "={{ $json.body }}",
+                            "options": {
+                                  "response": {
+                                        "response": {
+                                              "responseFormat": "json"
+                                        }
+                                  }
+                            }
+                      },
+                      "id": "send-to-hermes",
+                      "name": "Send to Hermes",
+                      "type": "n8n-nodes-base.httpRequest",
+                      "typeVersion": 4.2,
+                      "position": [
+                            1760,
+                            0
+                      ]
+                },
+                {
+                      "parameters": {
+                            "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.notified) staticData.notified = {};\nconst notifications = $('Build Notification').all();\nconst now = new Date().toISOString();\nfor (const item of notifications) {\n  const modelId = item.json.model_id;\n  if (!modelId) continue;\n  staticData.notified[modelId] = {\n    notifiedAt: now,\n    checkedAt: item.json.checked_at,\n    requestId: item.json.request_id,\n  };\n}\nreturn $input.all();"
+                      },
+                      "id": "mark-notified",
+                      "name": "Mark Notified",
+                      "type": "n8n-nodes-base.code",
+                      "typeVersion": 2,
+                      "position": [
+                            1980,
+                            0
+                      ]
+                }
+          ],
+          "connections": {
+                "Hourly": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Get OpenAI Key",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Get OpenAI Key": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Get Webhook Token",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Get Webhook Token": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Prepare Secrets",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Prepare Secrets": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "List Models",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "List Models": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Select Candidate Models",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Select Candidate Models": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Smoke Test Model",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Smoke Test Model": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Build Notification",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Build Notification": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Send to Hermes",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                },
+                "Send to Hermes": {
+                      "main": [
+                            [
+                                  {
+                                        "node": "Mark Notified",
+                                        "type": "main",
+                                        "index": 0
+                                  }
+                            ]
+                      ]
+                }
+          },
+          "settings": {
+                "executionOrder": "v1"
+          }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: openai-model-release
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "OpenAI Model Release Watcher"
+  active: true
+  deletionPolicy: Retain
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-openai-model-release
+    key: workflow.json
+  credentialMappings:
+    "1Password Connect": onepassword

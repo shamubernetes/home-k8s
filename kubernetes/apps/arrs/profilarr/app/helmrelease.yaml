@@ -34,19 +34,22 @@ spec:
         containers:
           app:
             image:
-              repository: santiagosayshey/profilarr
-              tag: v1.1.4@sha256:8a514f8429cd33885166facc9eb6504fa9ded056c737609e5e8ef32ae0afb350
+              repository: ghcr.io/dictionarry-hub/profilarr
+              tag: latest@sha256:7a9b5112ff227320d17c65ab643a5d875713e6235991ef04a8e482ec51427902
             env:
+              ORIGIN: https://profilarr.${HOME_DOMAIN}
               TZ: ${TIMEZONE}
               PUID: "568"
               PGID: "568"
               UMASK: "022"
+            envFrom:
+            - secretRef:
+                name: profilarr-secret
             resources:
               requests:
                 cpu: 15m
-                memory: 180M
+                memory: 256M
             securityContext:
-              # profilarr entrypoint needs root to set up user/permissions
               runAsNonRoot: false
               runAsUser: 0
               runAsGroup: 0
@@ -77,3 +80,6 @@ spec:
     persistence:
       config:
         existingClaim: *app
+        globalMounts:
+        - path: /config
+          subPath: v2

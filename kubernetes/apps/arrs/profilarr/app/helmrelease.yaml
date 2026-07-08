@@ -37,6 +37,7 @@ spec:
               repository: ghcr.io/dictionarry-hub/profilarr
               tag: latest@sha256:7a9b5112ff227320d17c65ab643a5d875713e6235991ef04a8e482ec51427902
             env:
+              AUTH: "off"
               ORIGIN: https://profilarr.${HOME_DOMAIN}
               TZ: ${TIMEZONE}
               PUID: "568"

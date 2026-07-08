@@ -1,0 +1,234 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-email-check
+  namespace: services
+data:
+  workflow.json: |
+    {
+      "nodes": [
+        {
+          "parameters": {
+            "mailbox": "INBOX",
+            "postProcessAction": "nothing",
+            "downloadAttachments": false,
+            "format": "simple",
+            "options": {
+              "customEmailConfig": "[\"UNSEEN\"]",
+              "forceReconnect": 15,
+              "trackLastMessageId": true
+            }
+          },
+          "id": "email-trigger",
+          "name": "Email Trigger",
+          "type": "n8n-nodes-base.emailReadImap",
+          "typeVersion": 2.1,
+          "position": [
+            0,
+            0
+          ],
+          "credentials": {
+            "imap": {
+              "id": "",
+              "name": "IMAP Maude Mail"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "operation": "getItemDetails",
+            "vaultUUID": "pc3wob7gb4f4vmsubawergeira",
+            "itemUUID": "2jqh7c75ijlaeog2nafir77jre",
+            "requestOptions": {}
+          },
+          "id": "get-webhook-token",
+          "name": "Get Webhook Token",
+          "type": "@n8layer/n8n-nodes-1password.onePassword",
+          "typeVersion": 1,
+          "position": [
+            240,
+            0
+          ],
+          "credentials": {
+            "onePasswordApi": {
+              "id": "",
+              "name": "1Password Connect"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "assignments": {
+              "assignments": [
+                {
+                  "id": "webhookToken",
+                  "name": "webhookToken",
+                  "value": "={{ $json.fields.find(f => f.label === 'HERMES_WEBHOOK_TOKEN').value }}",
+                  "type": "string"
+                }
+              ]
+            },
+            "options": {}
+          },
+          "id": "set-token",
+          "name": "Set Token",
+          "type": "n8n-nodes-base.set",
+          "typeVersion": 3.4,
+          "position": [
+            480,
+            0
+          ]
+        },
+        {
+          "parameters": {
+            "jsCode": "const email = $('Email Trigger').first().json || {};\nconst token = $('Set Token').first().json.webhookToken;\n\nfunction asText(value) {\n  if (value === undefined || value === null) return '';\n  if (typeof value === 'string') return value;\n  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(', ');\n  if (typeof value === 'object') {\n    if (value.text) return String(value.text);\n    if (value.address) return String(value.address);\n    if (value.name && value.address) return `${value.name} <${value.address}>`;\n    if (Array.isArray(value.value)) return value.value.map(asText).filter(Boolean).join(', ');\n    return JSON.stringify(value);\n  }\n  return String(value);\n}\n\nfunction header(name) {\n  const headers = email.headers || {};\n  return headers[name] || headers[name.toLowerCase()] || headers[name.toUpperCase()] || '';\n}\n\nconst body = asText(email.textPlain || email.text || email.html || email.textHtml || email.raw || '');\nconst snippet = body.replace(/\\s+/g, ' ').trim().slice(0, 700);\n\nreturn [{\n  json: {\n    from: asText(email.from),\n    subject: asText(email.subject),\n    date: asText(email.date || header('date')),\n    message_id: asText(email.messageId || email.messageID || header('message-id')),\n    uid: asText(email.uid || email.id || email.attributes?.uid),\n    snippet,\n    webhookToken: token,\n  },\n}];"
+          },
+          "id": "prepare-payload",
+          "name": "Prepare Payload",
+          "type": "n8n-nodes-base.code",
+          "typeVersion": 2,
+          "position": [
+            720,
+            0
+          ]
+        },
+        {
+          "parameters": {
+            "method": "POST",
+            "url": "http://10.0.10.95:8645/webhooks/n8n-email-check",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {
+                  "name": "Authorization",
+                  "value": "=Bearer {{ $json.webhookToken }}"
+                },
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "from",
+                  "value": "={{ $json.from }}"
+                },
+                {
+                  "name": "subject",
+                  "value": "={{ $json.subject }}"
+                },
+                {
+                  "name": "date",
+                  "value": "={{ $json.date }}"
+                },
+                {
+                  "name": "message_id",
+                  "value": "={{ $json.message_id }}"
+                },
+                {
+                  "name": "uid",
+                  "value": "={{ $json.uid }}"
+                },
+                {
+                  "name": "snippet",
+                  "value": "={{ $json.snippet }}"
+                }
+              ]
+            },
+            "options": {
+              "response": {
+                "response": {
+                  "responseFormat": "json"
+                }
+              }
+            }
+          },
+          "id": "send-to-maude",
+          "name": "Send to Maude",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 4.2,
+          "position": [
+            960,
+            0
+          ]
+        }
+      ],
+      "connections": {
+        "Email Trigger": {
+          "main": [
+            [
+              {
+                "node": "Get Webhook Token",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Get Webhook Token": {
+          "main": [
+            [
+              {
+                "node": "Set Token",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Set Token": {
+          "main": [
+            [
+              {
+                "node": "Prepare Payload",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Prepare Payload": {
+          "main": [
+            [
+              {
+                "node": "Send to Maude",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      },
+      "settings": {
+        "executionOrder": "v1"
+      }
+    }
+---
+apiVersion: n8n.n8n.io/v1alpha1
+kind: N8nWorkflow
+metadata:
+  name: email-check
+  namespace: services
+spec:
+  n8nInstance:
+    serviceRef:
+      name: n8n
+      namespace: services
+      port: 5678
+    apiKeySecretRef:
+      name: n8n-api-key
+      key: api-key
+  workflowName: "Email Check"
+  active: true
+  deletionPolicy: Retain
+  sourceRef:
+    kind: ConfigMap
+    name: workflow-email-check
+    key: workflow.json
+  credentialMappings:
+    "IMAP Maude Mail": imap-maude
+    "1Password Connect": onepassword

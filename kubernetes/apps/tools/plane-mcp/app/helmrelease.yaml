@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app plane-mcp
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      plane-mcp:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/maudecode/plane-cli
+              tag: v0.2.1@sha256:645f6ae214a44a3e6f440404a73c0a705c7092b2f4d7911e55a39cd9f0c626c1
+            env:
+              HOST: 0.0.0.0
+              PORT: &port 3000
+              PLANE_CLI_HOME: /data
+              PLANE_MCP_ALLOWED_ORIGINS: https://hermes-gateway.${HOME_DOMAIN},https://plane-mcp.${HOME_DOMAIN}
+              PLANE_MCP_REDIS_PREFIX: plane-cli:mcp
+              PLANE_MCP_REDIS_URL: redis://dragonfly.database.svc.cluster.local:6379/16
+              PLANE_MCP_SESSION_TTL_SECONDS: "86400"
+              TZ: ${TIMEZONE}
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: *port
+                  initialDelaySeconds: 10
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 25m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: plane-mcp
+        ports:
+          http:
+            port: *port
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: plane-mcp.${HOME_DOMAIN}
+          paths:
+          - path: /mcp
+            pathType: Prefix
+            service:
+              identifier: app
+              port: http
+    persistence:
+      data:
+        type: emptyDir
+        advancedMounts:
+          plane-mcp:
+            app:
+            - path: /data

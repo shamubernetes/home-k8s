@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/plane-cli
-              tag: v0.2.1@sha256:645f6ae214a44a3e6f440404a73c0a705c7092b2f4d7911e55a39cd9f0c626c1
+              tag: v0.2.2@sha256:788149d12b5395abb803b7ed3f988fcd0de0c3b8f484010ab02800c8b22fc02f
             env:
               HOST: 0.0.0.0
               PORT: &port 3000

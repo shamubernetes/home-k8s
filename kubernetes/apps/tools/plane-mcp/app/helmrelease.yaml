@@ -35,6 +35,7 @@ spec:
               HOST: 0.0.0.0
               PORT: &port 3000
               PLANE_CLI_HOME: /data
+              PLANE_BASE_URL: https://plane.${HOME_DOMAIN}
               PLANE_MCP_ALLOWED_ORIGINS: https://hermes-gateway.${HOME_DOMAIN},https://plane-mcp.${HOME_DOMAIN}
               PLANE_MCP_REDIS_PREFIX: plane-cli:mcp
               PLANE_MCP_REDIS_URL: redis://dragonfly.database.svc.cluster.local:6379/11
@@ -72,16 +73,6 @@ spec:
         ports:
           http:
             port: *port
-    configMaps:
-      config:
-        data:
-          config.yaml: |
-            defaultWorkspace: zoo
-            workspaces:
-              zoo:
-                displayName: Zoo Plane
-                workspaceSlug: zoo
-                baseUrl: https://plane.${HOME_DOMAIN}
     ingress:
       app:
         annotations:
@@ -96,15 +87,6 @@ spec:
               identifier: app
               port: http
     persistence:
-      config:
-        type: configMap
-        identifier: config
-        advancedMounts:
-          plane-mcp:
-            app:
-            - path: /data/.config/plane-cli/config.yaml
-              subPath: config.yaml
-              readOnly: true
       data:
         type: emptyDir
         advancedMounts:

@@ -72,6 +72,16 @@ spec:
         ports:
           http:
             port: *port
+    configMaps:
+      config:
+        data:
+          config.yaml: |
+            defaultWorkspace: zoo
+            workspaces:
+              zoo:
+                displayName: Zoo Plane
+                workspaceSlug: zoo
+                baseUrl: https://plane.${HOME_DOMAIN}
     ingress:
       app:
         annotations:
@@ -86,6 +96,15 @@ spec:
               identifier: app
               port: http
     persistence:
+      config:
+        type: configMap
+        identifier: config
+        advancedMounts:
+          plane-mcp:
+            app:
+            - path: /data/.config/plane-cli/config.yaml
+              subPath: config.yaml
+              readOnly: true
       data:
         type: emptyDir
         advancedMounts:

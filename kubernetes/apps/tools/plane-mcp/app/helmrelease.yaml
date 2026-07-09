@@ -35,7 +35,7 @@ spec:
               HOST: 0.0.0.0
               PORT: &port 3000
               PLANE_CLI_HOME: /data
-              PLANE_BASE_URL: https://plane.${HOME_DOMAIN}
+              PLANE_BASE_URL: http://plane-api.services.svc.cluster.local:8000
               PLANE_MCP_ALLOWED_ORIGINS: https://hermes-gateway.${HOME_DOMAIN},https://plane-mcp.${HOME_DOMAIN}
               PLANE_MCP_REDIS_PREFIX: plane-cli:mcp
               PLANE_MCP_REDIS_URL: redis://dragonfly.database.svc.cluster.local:6379/11

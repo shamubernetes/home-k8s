@@ -1,0 +1,45 @@
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: git-mirror-operator
+  namespace: git-mirror-operator-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: git-mirror-operator
+      version: 0.3.1
+      sourceRef:
+        kind: HelmRepository
+        name: shamubernetes-charts
+        namespace: flux-system
+  install:
+    disableTakeOwnership: false
+    remediation:
+      retries: 3
+  upgrade:
+    disableTakeOwnership: false
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    manager:
+      image:
+        repository: ghcr.io/shamubernetes/git-mirror-operator
+        tag: 0.3.1@sha256:5130327bf4177d6ba6888de8a59c5966eb25d86b3988b50f6ffb128cf1276c0b
+    sync:
+      image:
+        repository: ghcr.io/shamubernetes/git-mirror-sync
+        tag: 0.3.1@sha256:16978854a5d17e1c7f9c8e7a2facf07b6477b5a0a05752f879812c64e7e63a2e
+    rbacHelpers:
+      enable: true
+    crd:
+      enable: true
+      keep: true
+    metrics:
+      enable: true
+    prometheus:
+      enable: false

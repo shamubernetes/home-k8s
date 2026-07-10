@@ -37,7 +37,7 @@ spec:
   fallback:
     schedule: "17 * * * *"
   job:
-    image: ghcr.io/shamubernetes/git-mirror-sync:v0.2.0@sha256:26464501914c3534b23c6e0375ab72b4033334842763e5da8f28800a5e744c5b
+    image: ghcr.io/shamubernetes/git-mirror-sync:v0.3.1@sha256:16978854a5d17e1c7f9c8e7a2facf07b6477b5a0a05752f879812c64e7e63a2e
     serviceAccountName: git-mirror-sync
     knownHostsConfigMapName: git-mirror-known-hosts
     knownHostsConfigMapKey: known_hosts

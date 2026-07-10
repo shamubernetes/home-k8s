@@ -5,4 +5,4 @@ metadata:
 data:
   PalWorldSettings.ini: |
     [/Script/Pal.PalGameWorldSettings]
-    OptionSettings=(ServerName="The Zoo",ServerDescription="Kilian's Palworld server",ServerPlayerMaxNum=16,AutoSaveSpan=300.000000,bIsUseBackupSaveData=True,CrossplayPlatforms=(Steam,Xbox,PS5,Mac),ExpRate=1.500000,PalCaptureRate=1.500000,PalEggDefaultHatchingTime=0.500000,CollectionDropRate=1.500000,EnemyDropItemRate=1.500000,ItemWeightRate=0.750000,NightTimeSpeedRate=1.500000,DeathPenalty=Item,BaseCampMaxNumInGuild=6,BaseCampWorkerMaxNum=25,MaxBuildingLimitNum=0,BuildObjectDeteriorationDamageRate=0.000000)
+    OptionSettings=(ServerName="The Zoo",ServerDescription="Kilian's Palworld server",ServerPlayerMaxNum=16,AutoSaveSpan=300.000000,bIsUseBackupSaveData=True,CrossplayPlatforms=(Steam,Xbox,PS5,Mac),ExpRate=1.500000,PalCaptureRate=1.500000,PalEggDefaultHatchingTime=0.500000,CollectionDropRate=1.500000,EnemyDropItemRate=1.500000,ItemWeightRate=0.750000,NightTimeSpeedRate=1.500000,PlayerDamageRateAttack=1.250000,PlayerDamageRateDefense=0.750000,DeathPenalty=Item,BaseCampMaxNumInGuild=6,BaseCampWorkerMaxNum=25,MaxBuildingLimitNum=0,BuildObjectDeteriorationDamageRate=0.000000)

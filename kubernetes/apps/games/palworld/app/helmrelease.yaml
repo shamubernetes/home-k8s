@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app palworld
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      palworld:
+        strategy: Recreate
+        initContainers:
+          prepare:
+            image:
+              repository: &imageRepository ghcr.io/pocketpairjp/palserver
+              tag: &imageTag v1.0.0.100427@sha256:3a36c93eba3ded457ad6c74acd19923642fafb74f4f675afe05b545b8726251c
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                mkdir -p /pal/Package/Pal/Saved/Config/LinuxServer
+                cp /config/PalWorldSettings.ini /pal/Package/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+                chown -R user:usergroup /pal/Package/Pal/Saved
+            securityContext:
+              runAsUser: 0
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+                add: ["CHOWN"]
+        containers:
+          app:
+            image:
+              repository: *imageRepository
+              tag: *imageTag
+            args:
+              - -port=8211
+              - -useperfthreads
+              - -NoAsyncLoadingThread
+              - -UseMultithreadForDS
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 4
+                memory: 32Gi
+              limits:
+                cpu: 8
+                memory: 40Gi
+    defaultPodOptions:
+      annotations:
+        descheduler.alpha.kubernetes.io/evict: "false"
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        type: LoadBalancer
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_PALWORLD}"
+        ports:
+          game:
+            port: 8211
+            protocol: UDP
+    persistence:
+      saved:
+        type: persistentVolumeClaim
+        storageClass: ceph-block
+        accessMode: ReadWriteOnce
+        retain: true
+        size: 50Gi
+        globalMounts:
+          - path: /pal/Package/Pal/Saved
+      settings:
+        type: configMap
+        name: palworld-settings
+        advancedMounts:
+          palworld:
+            prepare:
+              - path: /config/PalWorldSettings.ini
+                subPath: PalWorldSettings.ini
+                readOnly: true

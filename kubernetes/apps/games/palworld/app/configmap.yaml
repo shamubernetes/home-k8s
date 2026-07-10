@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: palworld-settings
+data:
+  PalWorldSettings.ini: |
+    [/Script/Pal.PalGameWorldSettings]
+    OptionSettings=(ServerName="The Zoo",ServerDescription="Kilian's Palworld server",ServerPlayerMaxNum=16,bIsUseBackupSaveData=True,CrossplayPlatforms=(Steam,Xbox,PS5,Mac))

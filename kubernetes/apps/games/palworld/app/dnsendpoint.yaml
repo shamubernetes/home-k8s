@@ -8,3 +8,6 @@ spec:
       recordType: CNAME
       targets:
         - external.${GAME_DOMAIN}
+      providerSpecific:
+        - name: external-dns.alpha.kubernetes.io/cloudflare-proxied
+          value: "false"

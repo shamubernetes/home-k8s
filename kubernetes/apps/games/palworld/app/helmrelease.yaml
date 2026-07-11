@@ -49,9 +49,6 @@ spec:
               tag: *imageTag
             args:
               - -port=8211
-              - -useperfthreads
-              - -NoAsyncLoadingThread
-              - -UseMultithreadForDS
             securityContext:
               allowPrivilegeEscalation: false
               capabilities: {drop: ["ALL"]}

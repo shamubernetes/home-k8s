@@ -106,6 +106,8 @@ spec:
       value: https
     - name: N8N_TRUST_PROXY
       value: "true"
+    - name: NODE_FUNCTION_ALLOW_BUILTIN
+      value: crypto
     - name: OPENCLAW_WEBHOOK_TOKEN
       valueFrom:
         secretKeyRef:

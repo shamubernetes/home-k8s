@@ -16,7 +16,7 @@ data:
                                   "interval": [
                                         {
                                               "field": "cronExpression",
-                                              "expression": "30 23 11 07 *"
+                                              "expression": "37 23 11 07 *"
                                         }
                                   ]
                             }
@@ -135,7 +135,7 @@ data:
                 },
                 {
                       "parameters": {
-                            "jsCode": "const candidates = $input.all();\nconst now = new Date().toISOString();\nconst output = [];\n\nasync function hmacSha256Hex(secret, body) {\n  const encoder = new TextEncoder();\n  const key = await crypto.subtle.importKey(\n    'raw',\n    encoder.encode(secret),\n    { name: 'HMAC', hash: 'SHA-256' },\n    false,\n    ['sign']\n  );\n  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(body));\n  return Array.from(new Uint8Array(signature))\n    .map((byte) => byte.toString(16).padStart(2, '0'))\n    .join('');\n}\n\nfor (const item of candidates) {\n  const candidate = item.json;\n\n  const createdAt = candidate.created\n    ? new Date(Number(candidate.created) * 1000).toISOString()\n    : 'unknown';\n\n  const payload = {\n    event_type: 'openai_model_available',\n    model_id: candidate.model_id,\n    checked_at: now,\n    created_at: createdAt,\n    owned_by: candidate.owned_by || 'unknown',\n    first_seen_at: candidate.first_seen_at,\n  };\n  const body = JSON.stringify(payload);\n  const signature = await hmacSha256Hex(candidate.webhookToken, body);\n\n  output.push({\n    json: {\n      ...payload,\n      body,\n      signature,\n      request_id: 'openai-model-' + candidate.model_id.replace(/[^a-zA-Z0-9_.-]/g, '-') + '-' + Date.now(),\n    },\n  });\n}\n\nreturn output;"
+                            "jsCode": "const { createHmac } = require('crypto');\nconst candidates = $input.all();\nconst now = new Date().toISOString();\nconst output = [];\n\nfor (const item of candidates) {\n  const candidate = item.json;\n\n  const createdAt = candidate.created\n    ? new Date(Number(candidate.created) * 1000).toISOString()\n    : 'unknown';\n\n  const payload = {\n    event_type: 'openai_model_available',\n    model_id: candidate.model_id,\n    checked_at: now,\n    created_at: createdAt,\n    owned_by: candidate.owned_by || 'unknown',\n    first_seen_at: candidate.first_seen_at,\n  };\n  const body = JSON.stringify(payload);\n  const signature = createHmac('sha256', candidate.webhookToken).update(body).digest('hex');\n\n  output.push({\n    json: {\n      ...payload,\n      body,\n      signature,\n      request_id: 'openai-model-' + candidate.model_id.replace(/[^a-zA-Z0-9_.-]/g, '-') + '-' + Date.now(),\n    },\n  });\n}\n\nreturn output;"
                       },
                       "id": "build-notification",
                       "name": "Build Notification",

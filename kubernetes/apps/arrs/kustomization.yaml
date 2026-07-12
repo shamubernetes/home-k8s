@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./media-nfs.yaml
+- ./oauth2-proxy/ks.yaml
 - ./sabnzbd/ks.yaml
 - ./radarr/ks.yaml
 - ./radarr-3d/ks.yaml

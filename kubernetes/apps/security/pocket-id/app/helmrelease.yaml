@@ -29,6 +29,7 @@ spec:
   values:
     controllers:
       pocket-id:
+        replicas: 0
         strategy: Recreate
         initContainers:
           encryption-key:

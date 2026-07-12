@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/palworld-rcon
-              tag: main@sha256:e2764464d16289e23f03a5c8e3e0e38bc1f69c76b31613d96f68c1d5eb5a3745
+              tag: main@sha256:7a934c5e3e336501d03e95713b6cd6892198213859f0637dded51fac536623f6
             env:
               RCON_HOST: palworld-rcon-server
               RCON_PORT: "25575"

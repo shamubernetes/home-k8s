@@ -4,7 +4,4 @@ kind: Kustomization
 resources:
 - ./configmap.yaml
 - ./dnsendpoint.yaml
-- ./externalsecret.yaml
 - ./helmrelease.yaml
-- ./networkpolicy.yaml
-- ./rcon-helmrelease.yaml

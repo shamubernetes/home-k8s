@@ -10,7 +10,6 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-    - name: external-secrets-secret-store
     - name: rook-ceph-cluster
   path: ./kubernetes/apps/games/palworld/app
   prune: true

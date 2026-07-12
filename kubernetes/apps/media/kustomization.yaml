@@ -10,3 +10,4 @@ resources:
 - ./calibre-web-automated/ks.yaml
 - ./audiobookshelf/ks.yaml
 - ./grimmory/ks.yaml
+- ./pasta/ks.yaml

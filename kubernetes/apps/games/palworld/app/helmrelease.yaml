@@ -34,8 +34,11 @@ spec:
             args:
               - |
                 mkdir -p /pal/Package/Pal/Saved/Config/LinuxServer
-                cp /config/PalWorldSettings.ini /pal/Package/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+                sed "s|__RCON_PASSWORD__|$${RCON_PASSWORD}|g" /config/PalWorldSettings.ini > /pal/Package/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
                 chown -R user:usergroup /pal/Package/Pal/Saved
+            envFrom:
+            - secretRef:
+                name: palworld-rcon-secret
             securityContext:
               runAsUser: 0
               allowPrivilegeEscalation: false
@@ -74,6 +77,12 @@ spec:
           game:
             port: 8211
             protocol: UDP
+      rcon-server:
+        controller: *app
+        ports:
+          rcon:
+            port: 25575
+            protocol: TCP
     persistence:
       saved:
         type: persistentVolumeClaim

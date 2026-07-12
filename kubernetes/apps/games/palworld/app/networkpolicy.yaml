@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: palworld-rcon
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: palworld
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - port: 8211
+      protocol: UDP
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: palworld-rcon
+    ports:
+    - port: 25575
+      protocol: TCP

@@ -1,0 +1,116 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app pocket-id
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
+  values:
+    controllers:
+      pocket-id:
+        strategy: Recreate
+        initContainers:
+          encryption-key:
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+            command:
+            - sh
+            - -c
+            - |
+              test -s /app/data/encryption_key || (umask 077 && head -c 32 /dev/urandom > /app/data/encryption_key)
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+              readOnlyRootFilesystem: true
+        containers:
+          app:
+            image:
+              repository: ghcr.io/pocket-id/pocket-id
+              tag: v2.10.0-distroless@sha256:244c5d2613b1b89b18a8fee07e47e9a43907a09009c6280236131fccf1ba5f9f
+            env:
+              ANALYTICS_DISABLED: "true"
+              APP_URL: https://sso.${HOME_DOMAIN}
+              DB_CONNECTION_STRING: /app/data/pocket-id.db
+              ENCRYPTION_KEY_FILE: /app/data/encryption_key
+              TRUST_PROXY: "true"
+              TZ: ${TIMEZONE}
+              VERSION_CHECK_DISABLED: "true"
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: [/app/pocket-id, healthcheck]
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 3
+                  failureThreshold: 5
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+              readOnlyRootFilesystem: true
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: &port 1411
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+        className: internal
+        hosts:
+        - host: sso.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    persistence:
+      data:
+        existingClaim: *app
+        globalMounts:
+        - path: /app/data
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

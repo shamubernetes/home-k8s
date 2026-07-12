@@ -46,7 +46,9 @@ spec:
               readiness: *probes
             securityContext:
               allowPrivilegeEscalation: false
-              capabilities: {drop: ["ALL"]}
+              capabilities:
+                drop: ["ALL"]
+                add: ["SETUID", "SETGID"]
             resources:
               requests:
                 cpu: 10m

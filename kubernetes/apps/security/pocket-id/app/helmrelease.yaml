@@ -27,8 +27,12 @@ spec:
   values:
     controllers:
       pocket-id:
-        replicas: 3
+        # Pocket ID 2.10 rejects concurrent instances through its database lock.
+        replicas: 1
         strategy: RollingUpdate
+        rollingUpdate:
+          unavailable: 1
+          surge: "0"
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
@@ -100,14 +104,6 @@ spec:
                 memory: 64Mi
               limits:
                 memory: 256Mi
-        pod:
-          topologySpreadConstraints:
-          - maxSkew: 1
-            topologyKey: kubernetes.io/hostname
-            whenUnsatisfiable: DoNotSchedule
-            labelSelector:
-              matchLabels:
-                app.kubernetes.io/name: *app
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true

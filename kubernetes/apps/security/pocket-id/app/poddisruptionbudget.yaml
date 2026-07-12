@@ -3,7 +3,7 @@ kind: PodDisruptionBudget
 metadata:
   name: pocket-id
 spec:
-  minAvailable: 2
+  minAvailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/controller: pocket-id

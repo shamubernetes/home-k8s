@@ -32,6 +32,7 @@ servers:
   # This allows internal services to resolve *.thezoo.house to the internal ingress
   - name: hosts
     configBlock: |-
+      ${IPAM_IP_NGINX_INTERNAL} sso.${HOME_DOMAIN}
       10.0.10.95 hermes-gateway.thezoo.house
       fallthrough
   - name: forward

@@ -5,5 +5,5 @@ resources:
 - ../../../../templates/volsync
 - ./externalsecret.yaml
 - ./objectbucketclaim.yaml
-- ./migration-job.yaml
+- ./poddisruptionbudget.yaml
 - ./helmrelease.yaml

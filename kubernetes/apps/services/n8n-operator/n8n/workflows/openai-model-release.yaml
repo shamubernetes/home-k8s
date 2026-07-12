@@ -16,7 +16,7 @@ data:
                                   "interval": [
                                         {
                                               "field": "cronExpression",
-                                              "expression": "17 * * * *"
+                                              "expression": "23 23 11 07 *"
                                         }
                                   ]
                             }

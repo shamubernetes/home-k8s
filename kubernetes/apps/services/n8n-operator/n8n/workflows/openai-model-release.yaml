@@ -154,6 +154,12 @@ data:
                             "specifyBody": "json",
                             "jsonBody": "={{ JSON.stringify({ model: $json.model_id, input: 'Reply with exactly: ok', max_output_tokens: 16 }) }}",
                             "options": {
+                                  "batching": {
+                                        "batch": {
+                                              "batchSize": 1,
+                                              "batchInterval": 5000
+                                        }
+                                  },
                                   "response": {
                                         "response": {
                                               "responseFormat": "json"

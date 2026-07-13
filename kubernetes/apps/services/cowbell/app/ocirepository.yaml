@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: cowbell
+spec:
+  interval: 15m
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    digest: sha256:d332ad80a90bc044c56c741f5726649f0e4dd5d50bbed79a77c9a582f434f681
+  url: oci://ghcr.io/maudecode/charts/cowbell

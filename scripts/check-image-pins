@@ -5,7 +5,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/check-image-pins [path ...]
 
-Scans YAML files for app-template image tags that are not pinned with a digest.
+Scans YAML files for image values that are not pinned with a digest.
 If no path is provided, scans kubernetes/apps.
 USAGE
 }
@@ -21,13 +21,17 @@ need yq
 paths=("${@:-kubernetes/apps}")
 status=0
 while IFS= read -r -d '' file; do
-  while IFS=$'\t' read -r repo tag; do
-    [[ -n "${repo:-}" && -n "${tag:-}" ]] || continue
+  while IFS='|' read -r repo tag digest; do
+    [[ -n "${repo:-}" ]] || continue
+    if [[ "$digest" == sha256:* ]]; then
+      continue
+    fi
+    [[ -n "${tag:-}" ]] || continue
     if [[ "$tag" != *@sha256:* && "$repo" != *@sha256:* ]]; then
       printf '%s: image is not digest pinned: %s:%s\n' "$file" "$repo" "$tag" >&2
       status=1
     fi
-  done < <(yq -r '.. | select(has("image") and (.image | type == "!!map")) | [.image.repository, .image.tag] | @tsv' "$file" 2>/dev/null || true)
+  done < <(yq -r '.. | select(has("image") and (.image | type == "!!map")) | [(.image.repository // ""), (.image.tag // ""), (.image.digest // "")] | join("|")' "$file" 2>/dev/null || true)
 done < <(find "${paths[@]}" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0)
 
 exit "$status"

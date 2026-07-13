@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cowbell
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: cowbell
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    replicaCount: 2
+    image:
+      repository: ghcr.io/maudecode/cowbell
+      digest: sha256:dc2eebbdd1a6e952aed208afbf54d6295014f22e6b1ede788fcaa6b953425114
+    env:
+      existingSecret: cowbell-secret
+    ingress:
+      enabled: true
+      className: external
+      annotations:
+        external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+      hosts:
+      - host: issue.${HOME_DOMAIN}
+        paths:
+        - path: /
+          pathType: Prefix
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1

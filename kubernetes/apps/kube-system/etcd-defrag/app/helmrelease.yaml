@@ -28,7 +28,7 @@ spec:
       etcd-defrag:
         type: cronjob
         cronjob:
-          schedule: "0 */6 * * *"  # Every 6 hours; etcd fragments quickly during controller churn
+          schedule: "0 */3 * * *"  # Every 3 hours; observed fragmentation crossed 50% between 6-hour checks
           concurrencyPolicy: Forbid
           successfulJobsHistory: 1
           failedJobsHistory: 1

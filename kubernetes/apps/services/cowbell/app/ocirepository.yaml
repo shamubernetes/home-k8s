@@ -9,5 +9,5 @@ spec:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    digest: sha256:0566387f11f766c5a5feb68f12c630f9523671ee5d7e6998264e51b10632cd68
+    digest: sha256:ec37f48d0b97617c4997cab64779ae9ff8f5c8af7f22eeb3d9a91998cb570fe4
   url: oci://ghcr.io/maudecode/charts/cowbell

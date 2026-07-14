@@ -20,7 +20,7 @@ spec:
     replicaCount: 2
     image:
       repository: ghcr.io/maudecode/cowbell
-      digest: sha256:dea505dc7fe530b45d0660db490e5f63bfcb63fca3fc7036fd6ddbb65f5a20d5
+      digest: sha256:b61e3064643f63c7358a253f62ff1d51855a71cd3d7d55653c35c97bdaf251a9
     dispatcher:
       enabled: true
       replicaCount: 1

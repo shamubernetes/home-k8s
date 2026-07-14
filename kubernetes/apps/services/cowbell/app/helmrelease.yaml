@@ -20,7 +20,10 @@ spec:
     replicaCount: 2
     image:
       repository: ghcr.io/maudecode/cowbell
-      digest: sha256:dc2eebbdd1a6e952aed208afbf54d6295014f22e6b1ede788fcaa6b953425114
+      digest: sha256:dea505dc7fe530b45d0660db490e5f63bfcb63fca3fc7036fd6ddbb65f5a20d5
+    dispatcher:
+      enabled: true
+      replicaCount: 1
     env:
       existingSecret: cowbell-secret
     ingress:

@@ -60,8 +60,9 @@ spec:
             resources:
               requests:
                 cpu: 100m
+                memory: 512Mi
               limits:
-                memory: 1Gi
+                memory: 2Gi
         pod:
           priorityClassName: system-cluster-critical
           affinity:
@@ -73,13 +74,13 @@ spec:
                     operator: Exists
             podAntiAffinity:
               preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 1
+              - weight: 100
                 podAffinityTerm:
                   topologyKey: kubernetes.io/hostname
                   labelSelector:
                     matchLabels:
                       app.kubernetes.io/name: adguard-home
-                      app.kubernetes.io/component: adguard-home
+                      app.kubernetes.io/controller: adguard-home
           tolerations:
           - key: CriticalAddonsOnly
             operator: Exists

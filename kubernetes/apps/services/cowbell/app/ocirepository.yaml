@@ -10,4 +10,6 @@ spec:
     operation: copy
   ref:
     digest: sha256:ec37f48d0b97617c4997cab64779ae9ff8f5c8af7f22eeb3d9a91998cb570fe4
+  secretRef:
+    name: ghcr-pull-secret
   url: oci://ghcr.io/maudecode/charts/cowbell

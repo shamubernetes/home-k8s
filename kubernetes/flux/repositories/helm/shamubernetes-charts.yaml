@@ -8,4 +8,6 @@ metadata:
 spec:
   type: oci
   interval: 5m
+  secretRef:
+    name: ghcr-pull-secret
   url: oci://ghcr.io/shamubernetes/charts

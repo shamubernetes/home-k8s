@@ -33,6 +33,14 @@ module.exports = {
   dependencyDashboardTitle: "Update Dashboard 🐳",
   enabled: true,
   gitAuthor: "ShamuBot <148669015+shamubot[bot]@users.noreply.github.com>",
+  hostRules: [
+    {
+      hostType: "docker",
+      matchHost: "ghcr.io",
+      username: process.env.GHCR_USERNAME,
+      password: process.env.GHCR_TOKEN,
+    },
+  ],
   pinDigests: true,
   prHourlyLimit: 2,
   prConcurrentLimit: 4,

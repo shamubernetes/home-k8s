@@ -4,16 +4,11 @@ version: "3"
 vars:
   KUBERNETES_DIR: "{{.ROOT_DIR}}/kubernetes"
 
-env:
-  KUBECONFIG: "{{.KUBECONFIG_FILE}}"
-  SOPS_AGE_KEY_FILE: "{{.AGE_FILE}}"
-
 includes:
-  bootstrap: .taskfiles/bootstrap
-  github: .taskfiles/github
-  kubernetes: .taskfiles/kubernetes
+  github: .taskfiles/Github
+  kubernetes: .taskfiles/Kubernetes
+  talos: .taskfiles/Talos
   # rook: .taskfiles/rook
-  # talos: .taskfiles/talos
 
 tasks:
 

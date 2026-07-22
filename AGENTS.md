@@ -39,8 +39,6 @@ task kubernetes:new-app category=tools app=example args="--image docker.io/libra
 # Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
 
-# Bootstrap entire cluster (destructive)
-task bootstrap:kubernetes nodes=<node1,node2> disk=/dev/nvme0n1
 ```
 
 ## Architecture

@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+vars:
+  TALOS_DIR: "{{.ROOT_DIR}}/talos"
+
+tasks:
+  validate:
+    desc: Render and strictly validate every Talos machine config with ephemeral secrets
+    cmds:
+    - |
+      set -eu
+      tmp="$(mktemp -d)"
+      trap 'rm -rf "$tmp"' EXIT
+
+      talhelper validate talconfig "{{.TALOS_DIR}}/talconfig.yaml"
+      talhelper gensecret > "$tmp/talsecret.yaml"
+      talhelper genconfig \
+        --config-file "{{.TALOS_DIR}}/talconfig.yaml" \
+        --secret-file "$tmp/talsecret.yaml" \
+        --out-dir "$tmp/clusterconfig" \
+        --no-gitignore
+
+      found=false
+      for config in "$tmp"/clusterconfig/*.yaml; do
+        test -e "$config" || continue
+        talosctl validate --mode metal --strict --config "$config"
+        found=true
+      done
+      test "$found" = true
+
+  render:
+    desc: Render the real Talos machine configs into the ignored clusterconfig directory
+    cmds:
+    - |
+      set -eu
+      secret="$(mktemp)"
+      trap 'rm -f "$secret"' EXIT
+
+      sops --decrypt "{{.TALOS_DIR}}/talsecret.sops.yaml" > "$secret"
+      talhelper genconfig \
+        --config-file "{{.TALOS_DIR}}/talconfig.yaml" \
+        --secret-file "$secret" \
+        --out-dir "{{.TALOS_DIR}}/clusterconfig"
+
+      for config in "{{.TALOS_DIR}}"/clusterconfig/*.yaml; do
+        test -e "$config" || continue
+        talosctl validate --mode metal --strict --config "$config"
+      done
+    preconditions:
+    - sh: test -f "$SOPS_AGE_KEY_FILE"
+      msg: SOPS_AGE_KEY_FILE must point to the local age identity
+
+  diff:
+    desc: Preview one rendered machine config against one Talos node
+    requires:
+      vars: [node, config]
+    cmd: talosctl apply-config --nodes "{{.node}}" --file "{{.config}}" --dry-run
+    preconditions:
+    - sh: test -f "{{.config}}"
+      msg: Rendered config not found; run task talos:render first
+    - sh: test -f "$TALOSCONFIG"
+      msg: TALOSCONFIG must point to a valid Talos client config
+
+  apply:
+    desc: Validate and apply one rendered machine config to one explicit node
+    prompt: Apply Talos machine config to {{.node}} using mode {{.mode}}?
+    vars:
+      mode: '{{.mode | default "no-reboot"}}'
+    requires:
+      vars: [node, config]
+    cmds:
+    - talosctl validate --mode metal --strict --config "{{.config}}"
+    - talosctl apply-config --nodes "{{.node}}" --file "{{.config}}" --mode "{{.mode}}"
+    - task: health
+      vars:
+        node: "{{.node}}"
+    preconditions:
+    - sh: test -f "{{.config}}"
+      msg: Rendered config not found; run task talos:render first
+    - sh: test -f "$TALOSCONFIG"
+      msg: TALOSCONFIG must point to a valid Talos client config
+    - sh: case "{{.mode}}" in no-reboot|try|staged) exit 0;; *) exit 1;; esac
+      msg: mode must be no-reboot, try, or staged
+
+  health:
+    desc: Verify Talos, Kubernetes, Cilium, and Ceph health after a node change
+    requires:
+      vars: [node]
+    cmds:
+    - talosctl health --nodes "{{.node}}"
+    - kubectl wait --for=condition=Ready nodes --all --timeout=5m
+    - kubectl --namespace kube-system exec daemonset/cilium -- cilium status --brief
+    - test "$(kubectl --namespace rook-ceph get cephcluster rook-ceph --output jsonpath='{.status.ceph.health}')" = HEALTH_OK
+    preconditions:
+    - sh: test -f "$TALOSCONFIG"
+      msg: TALOSCONFIG must point to a valid Talos client config

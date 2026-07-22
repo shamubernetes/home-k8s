@@ -120,6 +120,9 @@ spec:
               identifier: app
               port: http
         - <<: *host
+          host: dash.${HOME_DOMAIN}
+          paths: *paths
+        - <<: *host
           host: listenarr.${HOME_DOMAIN}
           paths: *paths
         - <<: *host

@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app homarr
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
+  values:
+    controllers:
+      homarr:
+        strategy: RollingUpdate
+        rollingUpdate:
+          surge: "0"
+          unavailable: 1
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/homarr-labs/homarr
+              tag: v1.71.0@sha256:ae875bfbcfd6d5cb5d9f40ba656920373c058d73ca3f360d2ffea835c7b76fa9
+            env:
+              AUTH_PROVIDERS: credentials
+              DB_DIALECT: sqlite
+              DB_DRIVER: better-sqlite3
+              DB_URL: /appdata/db.sqlite
+              ENABLE_DOCKER: "false"
+              ENABLE_KUBERNETES: "false"
+              PGID: "568"
+              PUID: "568"
+              TZ: ${TIMEZONE}
+            envFrom:
+            - secretRef:
+                name: homarr-secret
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health/live
+                    port: &port 7575
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 5
+              readiness:
+                <<: *probes
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health/ready
+                    port: *port
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 5
+            securityContext:
+              allowPrivilegeEscalation: false
+            resources:
+              requests:
+                cpu: 25m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *port
+    ingress:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
+          nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Groups
+          nginx.ingress.kubernetes.io/auth-signin: https://$host/oauth2/start?rd=$escaped_request_uri
+          nginx.ingress.kubernetes.io/auth-url: http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth
+        className: internal
+        hosts:
+        - host: dash.${HOME_DOMAIN}
+          paths:
+          - path: /
+            service:
+              identifier: app
+              port: http
+    persistence:
+      config:
+        existingClaim: *app
+        globalMounts:
+        - path: /appdata

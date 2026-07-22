@@ -10,6 +10,7 @@ resources:
 - ./cs2/ks.yaml
 - ./cowtail/ks.yaml
 - ./git-mirror-operator/ks.yaml
+- ./homarr/ks.yaml
 - ./documenso/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./plane/ks.yaml

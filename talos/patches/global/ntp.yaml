@@ -1,4 +1,4 @@
 machine:
   time:
     disabled: false
-    servers: ["time.google.com", "time.cloudflare.com"]
+    servers: ["10.100.47.100", "time.google.com", "time.cloudflare.com"]

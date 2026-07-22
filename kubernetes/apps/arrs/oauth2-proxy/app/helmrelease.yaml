@@ -38,7 +38,7 @@ spec:
               OAUTH2_PROXY_OIDC_ISSUER_URL: https://sso.${HOME_DOMAIN}
               OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
               OAUTH2_PROXY_UPSTREAMS: static://202
-              OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+              OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /config/allowed-emails
               # Pocket ID authenticates the account with its passkey and emits email_verified=false.
               # This is required by Pocket ID's documented OAuth2 Proxy integration examples.
               OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
@@ -102,6 +102,14 @@ spec:
         runAsUser: 2000
         runAsGroup: 2000
         seccompProfile: {type: RuntimeDefault}
+    persistence:
+      allowed-emails:
+        type: secret
+        name: oauth2-proxy-secret
+        globalMounts:
+        - path: /config/allowed-emails
+          subPath: ALLOWED_EMAILS
+          readOnly: true
     service:
       app:
         controller: *app

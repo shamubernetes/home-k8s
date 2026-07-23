@@ -209,7 +209,6 @@ if (
   exit 1
 fi
 
-real_yq=$(command -v yq)
 yq_calls="${tmpdir}/yq-calls"
 yq_invocations="${tmpdir}/yq-invocations"
 yq_shim="${tmpdir}/yq-shim"
@@ -220,18 +219,24 @@ cat > "${yq_shim}/yq" <<'SH'
 #!/usr/bin/env bash
 printf 'invoked\n' >> "$YQ_INVOCATIONS"
 file_count=0
+single_file=
 for arg in "$@"; do
   case "$arg" in
     */custom-release.yaml)
       printf '%s\n' "$arg" >> "$YQ_CALLS"
       file_count=$((file_count + 1))
+      single_file=$arg
       ;;
   esac
 done
 if (( file_count > 1 )); then
   exit 124
 fi
-exec "$REAL_YQ" "$@"
+if (( file_count == 1 )); then
+  printf '%s\n' "$single_file"
+  exit 0
+fi
+exit 1
 SH
 chmod +x "${yq_shim}/yq"
 
@@ -239,7 +244,7 @@ chmod +x "${yq_shim}/yq"
 for shard in 0 1; do
   (
     cd "$repo"
-    REAL_YQ="$real_yq" YQ_CALLS="$yq_calls" YQ_INVOCATIONS="$yq_invocations" \
+    YQ_CALLS="$yq_calls" YQ_INVOCATIONS="$yq_invocations" \
       PATH="${yq_shim}:${PATH}" \
       HELM_IMAGE_SHARD_COUNT=2 HELM_IMAGE_SHARD_INDEX=$shard \
       VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null

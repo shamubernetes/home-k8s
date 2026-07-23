@@ -116,8 +116,8 @@ YAML
 git -C "$repo" add kubernetes/apps/test/malformed/app/helmrelease.yaml
 if (
   cd "$repo"
-  HELM_IMAGE_DISCOVERY_TIMEOUT_SECONDS=2 VALIDATE_CALLS="$calls" \
-    VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+  VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
+    scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
   echo 'malformed HelmRelease candidate YAML was accepted' >&2
   exit 1
@@ -177,6 +177,14 @@ fi
 
 if (
   cd "$repo"
+  HELM_IMAGE_DISCOVERY_JOBS=0 VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
+    scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'zero discovery worker count was accepted' >&2
+  exit 1
+fi
+if (
+  cd "$repo"
   HELM_IMAGE_SHARD_COUNT=0 HELM_IMAGE_SHARD_INDEX=0 \
     VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
@@ -226,8 +234,8 @@ done
 sort -u "$calls" > "${tmpdir}/sharded-calls"
 printf '%s\n' test/alt/app test/second/app > "${tmpdir}/expected-sharded-calls"
 diff -u "${tmpdir}/expected-sharded-calls" "${tmpdir}/sharded-calls"
-if [[ $(awk 'END { print NR }' "$yq_invocations") != 2 ]]; then
-  echo 'each shard did not batch-parse HelmRelease candidates exactly once' >&2
+if [[ $(awk 'END { print NR }' "$yq_invocations") != 4 ]]; then
+  echo 'each shard did not parse every candidate exactly once' >&2
   exit 1
 fi
 if ! awk '
@@ -237,7 +245,7 @@ if ! awk '
     for (file in count) if (count[file] != 2) exit 1
   }
 ' "$yq_calls"; then
-  echo 'each batch parse did not cover every HelmRelease candidate' >&2
+  echo 'candidate discovery did not cover each file once per shard' >&2
   exit 1
 fi
 

@@ -45,9 +45,43 @@ fi
 # without launching two yq processes per candidate in every shard.
 helmrelease_files="${tmpdir}/helmrelease-files"
 mapfile -t candidate_files < "$yaml_files"
-if ! yq eval -r -N \
-  'select(.kind == "HelmRelease") | filename' \
-  "${candidate_files[@]}" > "$helmrelease_files"; then
+discovery_timeout=${HELM_IMAGE_DISCOVERY_TIMEOUT_SECONDS:-30}
+[[ $discovery_timeout =~ ^[1-9][0-9]*$ ]] || {
+  printf 'HELM_IMAGE_DISCOVERY_TIMEOUT_SECONDS must be a positive integer: %s\n' \
+    "$discovery_timeout" >&2
+  exit 1
+}
+if ! python3 - "$helmrelease_files" "$discovery_timeout" "${candidate_files[@]}" <<'PY'
+import subprocess
+import sys
+
+output, timeout, *files = sys.argv[1:]
+command = [
+    "yq",
+    "eval",
+    "-r",
+    "-N",
+    'select(.kind == "HelmRelease") | filename',
+    *files,
+]
+try:
+    with open(output, "w", encoding="utf-8") as stream:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=stream,
+            timeout=int(timeout),
+        )
+except subprocess.TimeoutExpired:
+    print(
+        f"HelmRelease YAML discovery exceeded {timeout} seconds",
+        file=sys.stderr,
+    )
+    raise SystemExit(124)
+except subprocess.CalledProcessError as error:
+    raise SystemExit(error.returncode)
+PY
+then
   echo 'failed to parse tracked Kubernetes YAML while discovering HelmReleases' >&2
   exit 1
 fi

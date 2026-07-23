@@ -116,7 +116,8 @@ YAML
 git -C "$repo" add kubernetes/apps/test/malformed/app/helmrelease.yaml
 if (
   cd "$repo"
-  VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+  HELM_IMAGE_DISCOVERY_TIMEOUT_SECONDS=2 VALIDATE_CALLS="$calls" \
+    VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
   echo 'malformed HelmRelease candidate YAML was accepted' >&2
   exit 1

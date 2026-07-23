@@ -43,6 +43,17 @@ case "${VALIDATE_MODE}" in
   success)
     exit 0
     ;;
+  concurrent)
+    marker=${2//\//_}
+    touch "${VALIDATE_SYNC}/${marker}"
+    for _ in {1..100}; do
+      markers=("${VALIDATE_SYNC}"/*)
+      (( ${#markers[@]} >= 2 )) && exit 0
+      sleep 0.02
+    done
+    echo 'validators did not overlap' >&2
+    exit 1
+    ;;
   *)
     exit 2
     ;;
@@ -96,4 +107,26 @@ if ! grep -Fxq 'test/alt/app' "$calls"; then
   exit 1
 fi
 
-printf 'ok: HelmRelease discovery is kind-based and skips are failure-classified\n'
+mkdir -p "${repo}/kubernetes/apps/test/second/app" "${tmpdir}/sync"
+cp "${repo}/kubernetes/apps/test/alt/app/custom-release.yaml" \
+  "${repo}/kubernetes/apps/test/second/app/custom-release.yaml"
+git -C "$repo" add kubernetes/apps/test/second/app/custom-release.yaml
+(
+  cd "$repo"
+  HELM_IMAGE_JOBS=2 VALIDATE_CALLS="$calls" VALIDATE_MODE=concurrent \
+    VALIDATE_SYNC="${tmpdir}/sync" scripts/check-helmrelease-images >/dev/null
+)
+
+: > "$calls"
+for shard in 0 1; do
+  (
+    cd "$repo"
+    HELM_IMAGE_SHARD_COUNT=2 HELM_IMAGE_SHARD_INDEX=$shard \
+      VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null
+  )
+done
+sort -u "$calls" > "${tmpdir}/sharded-calls"
+printf '%s\n' test/alt/app test/second/app > "${tmpdir}/expected-sharded-calls"
+diff -u "${tmpdir}/expected-sharded-calls" "${tmpdir}/sharded-calls"
+
+printf 'ok: HelmRelease discovery, classified skips, concurrency, and sharding validated\n'

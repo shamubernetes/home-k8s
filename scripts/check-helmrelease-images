@@ -17,6 +17,7 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 yaml_files="${tmpdir}/yaml-files"
 apps_unsorted="${tmpdir}/apps-unsorted"
+all_apps="${tmpdir}/all-apps"
 apps="${tmpdir}/apps"
 actual="${tmpdir}/actual"
 expected="${tmpdir}/expected"
@@ -53,11 +54,24 @@ while IFS= read -r file; do
     dirname "$file" >> "$apps_unsorted"
   fi
 done < "$yaml_files"
-sort -u "$apps_unsorted" | sed 's#^kubernetes/apps/##' > "$apps"
-if [[ ! -s $apps ]]; then
+sort -u "$apps_unsorted" | sed 's#^kubernetes/apps/##' > "$all_apps"
+if [[ ! -s $all_apps ]]; then
   echo 'no tracked HelmRelease resources found' >&2
   exit 1
 fi
+
+shard_count=${HELM_IMAGE_SHARD_COUNT:-1}
+shard_index=${HELM_IMAGE_SHARD_INDEX:-0}
+[[ $shard_count =~ ^[1-9][0-9]*$ && $shard_index =~ ^[0-9]+$ ]] || {
+  echo 'HELM_IMAGE_SHARD_COUNT must be positive and HELM_IMAGE_SHARD_INDEX must be non-negative' >&2
+  exit 1
+}
+(( shard_index < shard_count )) || {
+  printf 'HELM_IMAGE_SHARD_INDEX %s is outside shard count %s\n' "$shard_index" "$shard_count" >&2
+  exit 1
+}
+awk -v count="$shard_count" -v shard="$shard_index" \
+  '((NR - 1) % count) == shard' "$all_apps" > "$apps"
 
 load_skip() {
   local target=$1 app
@@ -95,16 +109,39 @@ matches_expected_skip() {
   (( seen == 1 ))
 }
 
+workers=${HELM_IMAGE_JOBS:-12}
+[[ $workers =~ ^[1-9][0-9]*$ ]] || {
+  printf 'HELM_IMAGE_JOBS must be a positive integer: %s\n' "$workers" >&2
+  exit 1
+}
+
+run_validation() {
+  local app=$1 index=$2 rc
+  if scripts/validate-app --offline "$app" > "${tmpdir}/validate-${index}.log" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  printf '%s\n' "$rc" > "${tmpdir}/validate-${index}.rc"
+}
+
+index=0
+while IFS= read -r app; do
+  [[ -n $app ]] || continue
+  run_validation "$app" "$index" &
+  index=$((index + 1))
+  if (( index % workers == 0 )); then
+    wait
+  fi
+done < "$apps"
+wait
+
 status=0
 index=0
 while IFS= read -r app; do
   [[ -n $app ]] || continue
   log="${tmpdir}/validate-${index}.log"
-  if scripts/validate-app --offline "$app" > "$log" 2>&1; then
-    rc=0
-  else
-    rc=$?
-  fi
+  rc=$(< "${tmpdir}/validate-${index}.rc")
 
   found_unpinned=false
   while IFS= read -r line; do
@@ -159,21 +196,16 @@ while IFS=$'\t' read -r skipped_app expected_failure reason; do
   if [[ -z $expected_failure || -z $reason ]]; then
     printf 'invalid Helm image validation skip entry: %s\n' "$skipped_app" >&2
     status=1
-  elif ! grep -Fxq "$skipped_app" "$apps"; then
+  elif ! grep -Fxq "$skipped_app" "$all_apps"; then
     printf 'Helm image validation skip no longer matches a tracked release directory: %s\n' "$skipped_app" >&2
     status=1
   fi
 done < "$skips"
 
-if grep -vE '^(#|$)' "$baseline" > "$expected"; then
-  :
-else
-  rc=$?
-  if (( rc != 1 )); then
-    exit "$rc"
-  fi
-  : > "$expected"
-fi
+awk -F '\t' '
+  NR == FNR { selected[$1] = 1; next }
+  !/^(#|$)/ && selected[$1]
+' "$apps" "$baseline" > "$expected"
 sort -u "$actual" -o "$actual"
 sort -u "$expected" -o "$expected"
 if ! diff -u "$expected" "$actual"; then

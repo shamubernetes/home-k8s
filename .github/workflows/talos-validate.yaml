@@ -4,12 +4,6 @@ name: "Talos - Validate"
 on:
   pull_request:
     branches: ["main"]
-    paths:
-    - ".github/workflows/talos-validate.yaml"
-    - ".mise.toml"
-    - ".taskfiles/Talos/**"
-    - "Taskfile.yaml"
-    - "talos/**"
   workflow_dispatch:
 
 permissions:
@@ -29,6 +23,9 @@ jobs:
       uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
       with:
         install_args: task talosctl github:budimanjojo/talhelper
+
+    - name: Check coordinated Talos target
+      run: scripts/check-talos-version-sync
 
     - name: Validate Talos machine configs
       run: task talos:validate

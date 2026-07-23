@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+talconfig=${TALCONFIG_PATH:-"${repo_root}/talos/talconfig.yaml"}
+tuppr=${TUPPR_PATH:-"${repo_root}/kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml"}
+
+read_single_version() {
+  local file=$1 key=$2
+  local -a versions=()
+
+  mapfile -t versions < <(awk -v key="${key}" '$1 == key { print $2 }' "${file}")
+  if (( ${#versions[@]} != 1 )) || [[ -z ${versions[0]} ]]; then
+    printf 'expected exactly one nonempty %s in %s\n' "${key}" "${file#"${repo_root}/"}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${versions[0]}"
+}
+
+talconfig_version=$(read_single_version "${talconfig}" 'talosVersion:')
+tuppr_version=$(read_single_version "${tuppr}" 'version:')
+
+if [[ ${talconfig_version} != "v${tuppr_version#v}" ]]; then
+  printf 'Talos versions are not synchronized: talconfig=%s tuppr=%s\n' \
+    "${talconfig_version}" "${tuppr_version}" >&2
+  exit 1
+fi
+
+printf 'ok: Talos config and Tuppr target are synchronized at %s\n' "${talconfig_version}"

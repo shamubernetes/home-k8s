@@ -124,9 +124,10 @@ jobs:
     - name: Run validation fixtures
       run: |
         scripts/tests/test-validation.sh
-        scripts/tests/test-helm-image-inventory.sh
         scripts/tests/test-flux-failure-event.sh
+        scripts/tests/test-helm-image-inventory.sh
         scripts/tests/test-k8s-schemas.sh
+        scripts/tests/test-talos-version-sync.sh
 
   raw-image-pins:
     name: Raw Image Pins

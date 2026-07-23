@@ -40,20 +40,21 @@ if [[ ! -s $yaml_files ]]; then
   exit 1
 fi
 
-# Prefilter by an exact kind line so Helm template source containing unrelated
-# templating is not parsed as Kubernetes YAML. Candidate resources themselves
-# are then parsed by kind, independent of their filename.
+# Parse every exact-line candidate in one yq process. This preserves the old
+# fail-closed full-tree YAML validation and filters textual false positives,
+# without launching two yq processes per candidate in every shard.
+helmrelease_files="${tmpdir}/helmrelease-files"
+mapfile -t candidate_files < "$yaml_files"
+if ! yq eval-all -r -N \
+  'select(.kind == "HelmRelease") | filename' \
+  "${candidate_files[@]}" > "$helmrelease_files"; then
+  echo 'failed to parse tracked Kubernetes YAML while discovering HelmReleases' >&2
+  exit 1
+fi
+sort -u "$helmrelease_files" -o "$helmrelease_files"
 while IFS= read -r file; do
-  if ! yq '.' "$file" >/dev/null; then
-    printf 'failed to parse tracked Kubernetes YAML while discovering HelmReleases: %s\n' "$file" >&2
-    exit 1
-  fi
-  names="${tmpdir}/names"
-  yq -r -N 'select(.kind == "HelmRelease") | .metadata.name' "$file" > "$names"
-  if [[ -s $names ]]; then
-    dirname "$file" >> "$apps_unsorted"
-  fi
-done < "$yaml_files"
+  dirname "$file" >> "$apps_unsorted"
+done < "$helmrelease_files"
 sort -u "$apps_unsorted" | sed 's#^kubernetes/apps/##' > "$all_apps"
 if [[ ! -s $all_apps ]]; then
   echo 'no tracked HelmRelease resources found' >&2

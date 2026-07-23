@@ -107,6 +107,22 @@ if ! grep -Fxq 'test/alt/app' "$calls"; then
   exit 1
 fi
 
+mkdir -p "${repo}/kubernetes/apps/test/malformed/app"
+cat > "${repo}/kubernetes/apps/test/malformed/app/helmrelease.yaml" <<'YAML'
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: [
+YAML
+git -C "$repo" add kubernetes/apps/test/malformed/app/helmrelease.yaml
+if (
+  cd "$repo"
+  VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'malformed HelmRelease candidate YAML was accepted' >&2
+  exit 1
+fi
+git -C "$repo" rm -q -f kubernetes/apps/test/malformed/app/helmrelease.yaml
+
 mkdir -p "${repo}/kubernetes/apps/test/second/app" "${tmpdir}/sync"
 cp "${repo}/kubernetes/apps/test/alt/app/custom-release.yaml" \
   "${repo}/kubernetes/apps/test/second/app/custom-release.yaml"
@@ -175,16 +191,53 @@ if (
   exit 1
 fi
 
+real_yq=$(command -v yq)
+yq_calls="${tmpdir}/yq-calls"
+yq_invocations="${tmpdir}/yq-invocations"
+yq_shim="${tmpdir}/yq-shim"
+mkdir -p "$yq_shim"
+: > "$yq_calls"
+: > "$yq_invocations"
+cat > "${yq_shim}/yq" <<'SH'
+#!/usr/bin/env bash
+printf 'invoked\n' >> "$YQ_INVOCATIONS"
+for arg in "$@"; do
+  case "$arg" in
+    */custom-release.yaml)
+      printf '%s\n' "$arg" >> "$YQ_CALLS"
+      ;;
+  esac
+done
+exec "$REAL_YQ" "$@"
+SH
+chmod +x "${yq_shim}/yq"
+
 : > "$calls"
 for shard in 0 1; do
   (
     cd "$repo"
-    HELM_IMAGE_SHARD_COUNT=2 HELM_IMAGE_SHARD_INDEX=$shard \
+    REAL_YQ="$real_yq" YQ_CALLS="$yq_calls" YQ_INVOCATIONS="$yq_invocations" \
+      PATH="${yq_shim}:${PATH}" \
+      HELM_IMAGE_SHARD_COUNT=2 HELM_IMAGE_SHARD_INDEX=$shard \
       VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null
   )
 done
 sort -u "$calls" > "${tmpdir}/sharded-calls"
 printf '%s\n' test/alt/app test/second/app > "${tmpdir}/expected-sharded-calls"
 diff -u "${tmpdir}/expected-sharded-calls" "${tmpdir}/sharded-calls"
+if [[ $(awk 'END { print NR }' "$yq_invocations") != 2 ]]; then
+  echo 'each shard did not batch-parse HelmRelease candidates exactly once' >&2
+  exit 1
+fi
+if ! awk '
+  { count[$0]++ }
+  END {
+    if (length(count) != 2) exit 1
+    for (file in count) if (count[file] != 2) exit 1
+  }
+' "$yq_calls"; then
+  echo 'each batch parse did not cover every HelmRelease candidate' >&2
+  exit 1
+fi
 
 printf 'ok: HelmRelease discovery, classified skips, concurrency, and balanced dynamic sharding validated\n'

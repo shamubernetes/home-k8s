@@ -93,10 +93,12 @@ tasks:
       vars: ["image"]
 
   check-image-pins:
-    desc: Check app-template images for missing digest pins
+    desc: Check rendered Kubernetes workload images for missing digest pins
     summary: |
-      path: Optional path to scan (default: kubernetes/apps)
-    cmd: '{{.ROOT_DIR}}/scripts/check-image-pins {{.path}}'
+      path: Optional Kustomize path to scan (default: kubernetes/apps). The default also checks all HelmRelease renders.
+    cmds:
+    - '{{.ROOT_DIR}}/scripts/check-image-pins {{.path}}'
+    - 'if [ -z "{{.path}}" ]; then {{.ROOT_DIR}}/scripts/check-helmrelease-images; fi'
     vars:
       path: '{{.path | default ""}}'
 

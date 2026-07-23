@@ -19,6 +19,12 @@ spec:
       strategy: rollback
       retries: 3
   values:
+    deployment:
+      envoyGateway:
+        image:
+          repository: docker.io/envoyproxy/gateway
+          # renovate: datasource=docker depName=docker.io/envoyproxy/gateway
+          tag: v1.8.1@sha256:497df13b71f4e544c7e80414873041e291776c28cd788bcbee0d18421fa5db98
     config:
       envoyGateway:
         provider:

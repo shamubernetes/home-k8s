@@ -4,3 +4,8 @@ kind: Kustomization
 resources:
 # renovate: datasource=github-releases depName=rabbitmq/cluster-operator
 - https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.0/cluster-operator-ghcr-io.yml
+images:
+- name: ghcr.io/rabbitmq/cluster-operator
+  newName: ghcr.io/rabbitmq/cluster-operator
+  newTag: 2.22.0
+  digest: sha256:815f2d2f0d0e9e89b6838c2a41ef2741f8e64e8605ed8896558ec0d357e5eb59

@@ -3,35 +3,102 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/check-image-pins [path ...]
+Usage: scripts/check-image-pins [manifest-or-kustomization ...]
 
-Scans YAML files for image values that are not pinned with a digest.
-If no path is provided, scans kubernetes/apps.
+Checks effective Kubernetes PodSpecs for container images that are not pinned to
+an immutable sha256 digest. Files are read as rendered YAML. Directories are
+rendered with kubectl kustomize. Raw Helm values and disabled chart defaults are
+ignored because they do not create workloads.
 USAGE
 }
 
-if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
+if [[ ${1:-} == '-h' || ${1:-} == '--help' ]]; then
   usage
   exit 0
 fi
 
-need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "missing required command: $1" >&2
+    exit 1
+  }
+}
+need kubectl
 need yq
 
-paths=("${@:-kubernetes/apps}")
+if (( $# == 0 )); then
+  set -- kubernetes/apps
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
 status=0
-while IFS= read -r -d '' file; do
-  while IFS='|' read -r repo tag digest; do
-    [[ -n "${repo:-}" ]] || continue
-    if [[ "$digest" == sha256:* ]]; then
-      continue
-    fi
-    [[ -n "${tag:-}" ]] || continue
-    if [[ "$tag" != *@sha256:* && "$repo" != *@sha256:* ]]; then
-      printf '%s: image is not digest pinned: %s:%s\n' "$file" "$repo" "$tag" >&2
+index=0
+
+check_manifest() {
+  local manifest=$1 label=$2 image images
+  images=$(
+    yq -r -N '
+      (
+        (select(.kind == "Pod") | .spec),
+        .spec.template.spec?,
+        .spec.jobTemplate.spec.template.spec?
+      ) |
+      (.initContainers[]?, .containers[]?, .ephemeralContainers[]?) |
+      .image // ""
+    ' "$manifest"
+  )
+  while IFS= read -r image; do
+    [[ -n $image && $image != null ]] || continue
+    if [[ ! $image =~ @sha256:[[:xdigit:]]{64}$ ]]; then
+      printf '%s: workload image is not digest pinned: %s\n' "$label" "$image" >&2
       status=1
     fi
-  done < <(yq -r '.. | select(has("image") and (.image | type == "!!map")) | [(.image.repository // ""), (.image.tag // ""), (.image.digest // "")] | join("|")' "$file" 2>/dev/null || true)
-done < <(find "${paths[@]}" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0)
+  done <<< "$images"
+}
+
+for input in "$@"; do
+  if [[ -f $input ]]; then
+    check_manifest "$input" "$input"
+    continue
+  fi
+
+  if [[ ! -d $input ]]; then
+    printf 'path does not exist: %s\n' "$input" >&2
+    status=1
+    continue
+  fi
+
+  if [[ -f $input/kustomization.yaml || -f $input/kustomization.yml || -f $input/Kustomization ]]; then
+    rendered="${tmpdir}/render-${index}.yaml"
+    kubectl kustomize "$input" > "$rendered"
+    check_manifest "$rendered" "$input"
+    index=$((index + 1))
+    continue
+  fi
+
+  found=false
+  kustomizations="${tmpdir}/kustomizations-${index}.list"
+  if ! find "$input" -type f \
+    \( -name kustomization.yaml -o -name kustomization.yml -o -name Kustomization \) \
+    -print | sort > "$kustomizations"; then
+    printf 'failed to discover kustomizations under: %s\n' "$input" >&2
+    status=1
+    continue
+  fi
+  while IFS= read -r kustomization; do
+    [[ -n $kustomization ]] || continue
+    found=true
+    rendered="${tmpdir}/render-${index}.yaml"
+    kubectl kustomize "$(dirname "$kustomization")" > "$rendered"
+    check_manifest "$rendered" "$(dirname "$kustomization")"
+    index=$((index + 1))
+  done < "$kustomizations"
+
+  if [[ $found == false ]]; then
+    printf 'no kustomization found under: %s\n' "$input" >&2
+    status=1
+  fi
+done
 
 exit "$status"

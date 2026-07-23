@@ -1,0 +1,109 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: inline
+  namespace: tools
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: bjw-s
+  namespace: tools
+spec:
+  url: https://bjw-s-labs.github.io/helm-charts
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: tagged
+  namespace: tools
+spec:
+  ref:
+    tag: 1.8.1
+  url: oci://docker.io/envoyproxy/gateway-helm
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tagged
+  namespace: tools
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: tagged
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: digested
+  namespace: tools
+spec:
+  ref:
+    digest: sha256:ec37f48d0b97617c4997cab64779ae9ff8f5c8af7f22eeb3d9a91998cb570fe4
+  url: oci://ghcr.io/maudecode/charts/cowbell
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: digested
+  namespace: tools
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: digested
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: semver
+  namespace: tools
+spec:
+  ref:
+    semver: "0.2.x"
+  url: oci://ghcr.io/rafaribe/homelab-assistant-crds
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: semver
+  namespace: tools
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: semver
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: home-kubernetes
+  namespace: flux-system
+spec:
+  url: https://github.com/shamubernetes/home-k8s.git
+  ref:
+    branch: main
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: local-git
+  namespace: tools
+spec:
+  targetNamespace: rendered-tools
+  test:
+    enable: true
+  chart:
+    spec:
+      chart: ./kubernetes/apps/tools/firecrawl/app/chart
+      sourceRef:
+        kind: GitRepository
+        name: home-kubernetes
+        namespace: flux-system

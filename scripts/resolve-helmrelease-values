@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/resolve-helmrelease-values [--offline] <manifests.yaml> <release-name> <namespace> <output.yaml>
+
+Merges HelmRelease spec.valuesFrom entries in Flux order, followed by
+spec.values. In offline mode every required ConfigMap or Secret must be present
+in the rendered manifest context. Online mode fetches missing resources from
+the cluster namespace.
+USAGE
+}
+
+offline=false
+if [[ ${1:-} == '--offline' ]]; then
+  offline=true
+  shift
+fi
+if (( $# != 4 )); then
+  usage >&2
+  exit 1
+fi
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "missing required command: $1" >&2
+    exit 1
+  }
+}
+need yq
+need python3
+if [[ $offline == false ]]; then
+  need kubectl
+fi
+
+manifest=$1
+release_name=$2
+namespace=$3
+output=$4
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+hr="${tmpdir}/helmrelease.yaml"
+RELEASE_NAME="$release_name" RELEASE_NAMESPACE="$namespace" yq '
+  select(
+    .kind == "HelmRelease"
+    and .metadata.name == strenv(RELEASE_NAME)
+    and (.metadata.namespace // strenv(RELEASE_NAMESPACE)) == strenv(RELEASE_NAMESPACE)
+  )
+' "$manifest" > "$hr"
+hr_count=$(RELEASE_NAME="$release_name" RELEASE_NAMESPACE="$namespace" yq -r -N '
+  select(
+    .kind == "HelmRelease"
+    and .metadata.name == strenv(RELEASE_NAME)
+    and (.metadata.namespace // strenv(RELEASE_NAMESPACE)) == strenv(RELEASE_NAMESPACE)
+  ) |
+  .metadata.name
+' "$manifest" | wc -l | tr -d ' ')
+if [[ $hr_count != 1 ]]; then
+  printf 'expected one HelmRelease %s/%s, found %s\n' "$namespace" "$release_name" "$hr_count" >&2
+  exit 1
+fi
+
+printf '{}\n' > "$output"
+target_assignments=()
+ref_count=$(yq -r '.spec.valuesFrom // [] | length' "$hr")
+ref_idx=0
+while (( ref_idx < ref_count )); do
+  kind=$(yq -r ".spec.valuesFrom[${ref_idx}].kind // \"Secret\"" "$hr")
+  name=$(yq -r ".spec.valuesFrom[${ref_idx}].name // \"\"" "$hr")
+  key=$(yq -r ".spec.valuesFrom[${ref_idx}].valuesKey // \"values.yaml\"" "$hr")
+  target=$(yq -r ".spec.valuesFrom[${ref_idx}].targetPath // \"\"" "$hr")
+  optional=$(yq -r ".spec.valuesFrom[${ref_idx}].optional // false" "$hr")
+  literal=$(yq -r ".spec.valuesFrom[${ref_idx}].literal // false" "$hr")
+
+  case "$kind" in
+    ConfigMap|Secret) ;;
+    *)
+      printf 'unsupported valuesFrom kind for %s: %s\n' "$release_name" "$kind" >&2
+      exit 1
+      ;;
+  esac
+  if [[ -z $name ]]; then
+    printf 'valuesFrom entry %s for %s is missing name\n' "$ref_idx" "$release_name" >&2
+    exit 1
+  fi
+
+  resource="${tmpdir}/resource-${ref_idx}.yaml"
+  REF_KIND="$kind" REF_NAME="$name" REF_NAMESPACE="$namespace" yq '
+    select(
+      .kind == strenv(REF_KIND)
+      and .metadata.name == strenv(REF_NAME)
+      and (.metadata.namespace // strenv(REF_NAMESPACE)) == strenv(REF_NAMESPACE)
+    )
+  ' "$manifest" > "$resource"
+  count=$(REF_KIND="$kind" REF_NAME="$name" REF_NAMESPACE="$namespace" yq -r -N '
+    select(
+      .kind == strenv(REF_KIND)
+      and .metadata.name == strenv(REF_NAME)
+      and (.metadata.namespace // strenv(REF_NAMESPACE)) == strenv(REF_NAMESPACE)
+    ) |
+    .metadata.name
+  ' "$manifest" | wc -l | tr -d ' ')
+
+  if [[ $count == 0 && $offline == false ]]; then
+    kubectl_error="${tmpdir}/kubectl-${ref_idx}.err"
+    if kubectl -n "$namespace" get "$kind" "$name" -o yaml > "$resource" 2> "$kubectl_error"; then
+      count=1
+    elif [[ $optional == true ]] && grep -Fq '(NotFound)' "$kubectl_error"; then
+      ref_idx=$((ref_idx + 1))
+      continue
+    else
+      printf 'failed to read valuesFrom %s %s/%s:\n' "$kind" "$namespace" "$name" >&2
+      while IFS= read -r line; do
+        printf '  %s\n' "$line" >&2
+      done < "$kubectl_error"
+      exit 1
+    fi
+  fi
+  if [[ $count == 0 && $optional == true ]]; then
+    ref_idx=$((ref_idx + 1))
+    continue
+  fi
+  if [[ $count != 1 ]]; then
+    printf 'expected one valuesFrom %s %s/%s, found %s\n' "$kind" "$namespace" "$name" "$count" >&2
+    exit 1
+  fi
+
+  raw="${tmpdir}/raw-${ref_idx}.yaml"
+  if [[ $kind == ConfigMap ]]; then
+    if ! VALUE_KEY="$key" yq -er '.data[strenv(VALUE_KEY)]' "$resource" > "$raw"; then
+      printf 'ConfigMap %s/%s is missing values key %s\n' "$namespace" "$name" "$key" >&2
+      exit 1
+    fi
+  else
+    if yq -e '.sops != null' "$resource" >/dev/null 2>&1; then
+      if [[ $offline == true ]]; then
+        printf 'offline validation cannot resolve encrypted Secret %s/%s\n' "$namespace" "$name" >&2
+        exit 1
+      fi
+      kubectl -n "$namespace" get secret "$name" -o yaml > "$resource"
+    fi
+    if VALUE_KEY="$key" yq -e '.stringData[strenv(VALUE_KEY)] != null' "$resource" >/dev/null 2>&1; then
+      VALUE_KEY="$key" yq -er '.stringData[strenv(VALUE_KEY)]' "$resource" > "$raw"
+    else
+      encoded="${tmpdir}/encoded-${ref_idx}"
+      if ! VALUE_KEY="$key" yq -er '.data[strenv(VALUE_KEY)]' "$resource" > "$encoded"; then
+        printf 'Secret %s/%s is missing values key %s\n' "$namespace" "$name" "$key" >&2
+        exit 1
+      fi
+      if ! python3 -c '
+import base64
+import sys
+sys.stdout.write(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True).decode())
+' < "$encoded" > "$raw"; then
+        printf 'Secret %s/%s contains invalid base64 for values key %s\n' "$namespace" "$name" "$key" >&2
+        exit 1
+      fi
+    fi
+  fi
+
+  merged="${tmpdir}/merged-${ref_idx}.yaml"
+  if [[ -n $target ]]; then
+    assignment="${tmpdir}/target-assignment-${ref_idx}.json"
+    TARGET_PATH="$target" TARGET_LITERAL="$literal" python3 -c '
+import json
+import os
+import re
+import sys
+
+path_text = os.environ["TARGET_PATH"]
+literal = os.environ["TARGET_LITERAL"].lower() == "true"
+raw = sys.stdin.read()
+if raw.endswith("\n"):
+    raw = raw[:-1]
+
+def parse_path(text):
+    result = []
+    token = []
+    index = 0
+    after_index = False
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            if after_index:
+                raise ValueError("targetPath is missing a separator after an array index")
+            index += 1
+            if index >= len(text):
+                raise ValueError("targetPath ends with an incomplete escape")
+            token.append(text[index])
+        elif char == ".":
+            if token:
+                result.append("".join(token))
+                token = []
+                after_index = False
+            elif after_index:
+                after_index = False
+            else:
+                raise ValueError("targetPath contains an empty key")
+        elif char == "[":
+            if token:
+                result.append("".join(token))
+                token = []
+            end = text.find("]", index + 1)
+            if end == -1 or not text[index + 1:end].isdigit():
+                raise ValueError("targetPath contains an invalid array index")
+            result.append(int(text[index + 1:end]))
+            index = end
+            after_index = True
+        else:
+            if after_index:
+                raise ValueError("targetPath is missing a separator after an array index")
+            token.append(char)
+        index += 1
+    if token:
+        result.append("".join(token))
+    elif not after_index:
+        raise ValueError("targetPath ends with an empty key")
+    if not result:
+        raise ValueError("targetPath is empty")
+    return result
+
+def unescape(text):
+    result = []
+    escaped = False
+    for char in text:
+        if escaped:
+            result.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        else:
+            result.append(char)
+    if escaped:
+        raise ValueError("value ends with an incomplete escape")
+    return "".join(result)
+
+def split_list(text):
+    result = []
+    token = []
+    escaped = False
+    for char in text:
+        if escaped:
+            token.extend(("\\", char))
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ",":
+            result.append("".join(token))
+            token = []
+        else:
+            token.append(char)
+    if escaped:
+        raise ValueError("value ends with an incomplete escape")
+    result.append("".join(token))
+    return result
+
+def parse_scalar(text):
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("\"", chr(39)):
+        return unescape(text[1:-1])
+    lowered = text.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered in ("null", "~"):
+        return None
+    if re.fullmatch(r"0|-?[1-9][0-9]*", text):
+        return int(text)
+    if len(text) >= 2 and text[0] == "{" and text[-1] == "}":
+        return [parse_scalar(item) for item in split_list(text[1:-1])]
+    # Unescaped separators would be interpreted as additional --set entries by
+    # Helm. Refuse ambiguous input rather than silently rendering another value.
+    escaped = False
+    for char in text:
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char in (",", "="):
+            raise ValueError("non-literal targetPath value contains an unescaped separator")
+    return unescape(text)
+
+try:
+    value = raw if literal else parse_scalar(raw)
+    json.dump({"path": parse_path(path_text), "value": value}, sys.stdout)
+except ValueError as exc:
+    print(f"invalid targetPath assignment: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+' < "$raw" > "$assignment"
+    target_assignments+=("$assignment")
+  else
+    yq -e '.' "$raw" >/dev/null
+    yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$output" "$raw" > "$merged"
+    mv "$merged" "$output"
+  fi
+  ref_idx=$((ref_idx + 1))
+done
+
+inline="${tmpdir}/inline.yaml"
+merged="${tmpdir}/inline-merged.yaml"
+yq '.spec.values // {}' "$hr" > "$inline"
+yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$output" "$inline" > "$merged"
+mv "$merged" "$output"
+
+for assignment in "${target_assignments[@]}"; do
+  ASSIGNMENT_FILE="$assignment" yq \
+    'setpath(load(strenv(ASSIGNMENT_FILE)).path; load(strenv(ASSIGNMENT_FILE)).value)' \
+    "$output" > "$merged"
+  mv "$merged" "$output"
+done

@@ -5,14 +5,6 @@ on:
   workflow_dispatch:
   schedule:
   - cron: "0 0 * * 0"
-  pull_request:
-    branches: ["main"]
-    paths:
-    - ".github/workflows/publish-schemas.yaml"
-    - ".github/workflows/resources/k8s-schemas.sh"
-    - ".github/workflows/resources/k8s-schema-hacks.sh"
-    - ".github/workflows/resources/schema-hacks/*"
-    - ".github/workflows/resources/schemas/*"
   push:
     branches: ["main"]
     paths:
@@ -21,18 +13,18 @@ on:
     - ".github/workflows/resources/k8s-schema-hacks.sh"
     - ".github/workflows/resources/schema-hacks/*"
     - ".github/workflows/resources/schemas/*"
+    - "kubernetes/apps/system-upgrade/tuppr/upgrades/kubernetesupgrade.yaml"
 jobs:
   publish-schemas:
     name: Publish Schemas
     runs-on: ["ghar-set-zoo"]
     permissions:
       contents: read
-      packages: write
     steps:
     - name: Checkout
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
-        token: "${{ secrets.GITHUB_TOKEN }}"
+        persist-credentials: false
 
     - name: Setup Homebrew
       uses: Homebrew/actions/setup-homebrew@097625b28a26ba4b7437926ab03b4d3bd2e6c3d1 # master
@@ -44,12 +36,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
-        python-version: 3.x
-
-    - name: Setup Node
-      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-      with:
-        node-version: 18.x
+        python-version: "3.13"
 
     - name: Write kubeconfig
       id: kubeconfig
@@ -59,10 +46,10 @@ jobs:
         fileName: kubeconfig
 
     - name: Install Python Dependencies
-      run: |
-        echo 'Cython < 3.0' > /tmp/constraint.txt
-        PIP_CONSTRAINT=/tmp/constraint.txt python -m pip install pyyaml==5.4.1
-        pip install openapi2jsonschema
+      env:
+        # renovate: datasource=pypi depName=openapi2jsonschema2
+        SCHEMA_GENERATOR_VERSION: 1.1.37
+      run: python -m pip install "openapi2jsonschema2==${SCHEMA_GENERATOR_VERSION}"
 
     - name: Download and run crd-extractor
       env:

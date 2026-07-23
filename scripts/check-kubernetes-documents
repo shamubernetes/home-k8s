@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( $# == 0 )); then
+  printf 'usage: %s <rendered-manifest.yaml> [...]\n' "$0" >&2
+  exit 1
+fi
+
+command -v yq >/dev/null 2>&1 || {
+  echo 'missing required command: yq' >&2
+  exit 1
+}
+
+status=0
+for manifest in "$@"; do
+  if [[ ! -f $manifest || ! -r $manifest ]]; then
+    printf '%s: rendered manifest is missing or unreadable\n' "$manifest" >&2
+    status=1
+    continue
+  fi
+
+  # Parse separately because yq uses a nonzero status for both "no query match"
+  # and malformed/unreadable input. Operational failures must never pass.
+  if ! yq '.' "$manifest" >/dev/null; then
+    printf '%s: rendered output is not valid YAML\n' "$manifest" >&2
+    status=1
+    continue
+  fi
+
+  if yq -e '
+    select(
+      . != null
+      and . != {}
+      and ((tag != "!!map") or .apiVersion == null or .kind == null)
+      and (
+        (
+          tag == "!!map"
+          and has("Pulled")
+          and has("Digest")
+          and (keys | length) == 2
+        ) |
+        not
+      )
+    )
+  ' "$manifest" >/dev/null 2>&1; then
+    printf '%s: rendered output contains a malformed Kubernetes document\n' "$manifest" >&2
+    status=1
+  else
+    rc=$?
+    if (( rc != 1 )); then
+      printf '%s: failed while inspecting rendered Kubernetes documents\n' "$manifest" >&2
+      status=1
+    fi
+  fi
+done
+
+exit "$status"

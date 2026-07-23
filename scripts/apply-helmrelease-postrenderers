@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( $# != 3 )); then
+  printf 'usage: %s <helmrelease.yaml> <rendered.yaml> <output.yaml>\n' "$0" >&2
+  exit 1
+fi
+
+for command in kubectl yq; do
+  command -v "$command" >/dev/null 2>&1 || {
+    printf 'missing required command: %s\n' "$command" >&2
+    exit 1
+  }
+done
+
+helmrelease=$1
+rendered=$2
+output=$3
+
+if [[ ! -s $rendered ]]; then
+  printf 'rendered Helm manifest is missing or empty: %s\n' "$rendered" >&2
+  exit 1
+fi
+
+count=$(yq -r '.spec.postRenderers // [] | length' "$helmrelease")
+if (( count == 0 )); then
+  cp "$rendered" "$output"
+  exit 0
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+cp "$rendered" "${tmpdir}/render-0.yaml"
+
+for (( index = 0; index < count; index++ )); do
+  renderer="${tmpdir}/renderer-${index}"
+  mkdir -p "$renderer"
+  cp "${tmpdir}/render-${index}.yaml" "${renderer}/helm-output.yaml"
+
+  if ! POST_RENDERER_INDEX="$index" yq -e \
+    '.spec.postRenderers[env(POST_RENDERER_INDEX)].kustomize != null' \
+    "$helmrelease" >/dev/null; then
+    printf 'unsupported Helm post-renderer at index %s\n' "$index" >&2
+    exit 1
+  fi
+
+  # shellcheck disable=SC2016  # yq variables expand inside the expression, not in Bash.
+  POST_RENDERER_INDEX="$index" yq '
+    .spec.postRenderers[env(POST_RENDERER_INDEX)].kustomize as $renderer |
+    {
+      "apiVersion": "kustomize.config.k8s.io/v1beta1",
+      "kind": "Kustomization",
+      "resources": ["helm-output.yaml"],
+      "patches": ($renderer.patches // []),
+      "images": ($renderer.images // [])
+    }
+  ' "$helmrelease" > "${renderer}/kustomization.yaml"
+
+  kubectl kustomize "$renderer" > "${tmpdir}/render-$((index + 1)).yaml"
+done
+
+cp "${tmpdir}/render-${count}.yaml" "$output"

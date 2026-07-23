@@ -1,0 +1,32 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pinned
+spec:
+  selector:
+    matchLabels:
+      app: pinned
+  template:
+    metadata:
+      labels:
+        app: pinned
+    spec:
+      initContainers:
+      - name: init
+        image: ghcr.io/example/init:1.0.0@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      containers:
+      - name: app
+        image: ghcr.io/example/app:1.0.0@sha256:2222222222222222222222222222222222222222222222222222222222222222
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: disabled-default
+spec:
+  values:
+    postgresql:
+      enabled: false
+      image:
+        repository: docker.io/postgres
+        tag: latest

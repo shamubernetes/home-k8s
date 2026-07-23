@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Schema - Validate"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+    - ".github/workflows/schema-validate.yaml"
+    - ".github/workflows/publish-schemas.yaml"
+    - ".github/workflows/resources/k8s-schemas.sh"
+    - ".github/workflows/resources/k8s-schema-hacks.sh"
+    - ".github/workflows/resources/schema-hacks/**"
+    - ".github/workflows/resources/schemas/**"
+    - ".mise.toml"
+    - "kubernetes/apps/system-upgrade/tuppr/upgrades/kubernetesupgrade.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "schema-validate-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Setup tools
+      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      with:
+        install_args: asdf:sudermanjr/asdf-yq
+        cache: true
+
+    - name: Setup Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      with:
+        python-version: "3.13"
+
+    - name: Install schema generator
+      env:
+        # renovate: datasource=pypi depName=openapi2jsonschema2
+        SCHEMA_GENERATOR_VERSION: 1.1.37
+      run: python -m pip install "openapi2jsonschema2==${SCHEMA_GENERATOR_VERSION}"
+
+    - name: Validate schema inputs
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash -n .github/workflows/resources/k8s-schemas.sh
+        bash -n .github/workflows/resources/k8s-schema-hacks.sh
+        version="$(.github/workflows/resources/k8s-schemas.sh --current-version)"
+        curl --fail --silent --show-error --head \
+          "https://raw.githubusercontent.com/kubernetes/kubernetes/${version}/api/openapi-spec/swagger.json" \
+          >/dev/null
+        SCHEMA_OUTPUT_DIR="$RUNNER_TEMP/schemas" \
+          SCHEMA_CACHE_DIR="$RUNNER_TEMP/schema-cache" \
+          K8S_SCHEMA_VERSIONS="$version" \
+          .github/workflows/resources/k8s-schemas.sh
+        test -s "$RUNNER_TEMP/schemas/$version/_definitions.json"
+        printf 'ok: schemas generated for %s\n' "$version"

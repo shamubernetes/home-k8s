@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( $# != 2 )); then
+  printf 'usage: %s <helmrelease.yaml> <fallback-namespace>\n' "$0" >&2
+  exit 1
+fi
+
+command -v yq >/dev/null 2>&1 || {
+  echo 'missing required command: yq' >&2
+  exit 1
+}
+
+helmrelease=$1
+fallback_namespace=$2
+# shellcheck disable=SC2016  # yq expands strenv(), not Bash.
+DEFAULT_NAMESPACE="$fallback_namespace" yq -er -N '
+  (.metadata.namespace // strenv(DEFAULT_NAMESPACE)) as $releaseNamespace |
+  (.spec.targetNamespace // $releaseNamespace) as $targetNamespace |
+  select($releaseNamespace != "" and $targetNamespace != "") |
+  [$releaseNamespace, $targetNamespace, (.spec.test.enable == true)] |
+  @tsv
+' "$helmrelease"

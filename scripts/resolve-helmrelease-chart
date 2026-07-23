@@ -1,0 +1,242 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/resolve-helmrelease-chart <rendered-manifests.yaml> <release-name> [default-namespace]
+
+Prints three tab-separated fields for a rendered HelmRelease:
+  chart-reference<TAB>version<TAB>repository-url
+
+Supports inline spec.chart backed by a repository-declared HelmRepository and
+same-namespace OCIRepository spec.chartRef sources. Digest-pinned OCI sources
+are emitted as oci://...@sha256:... with empty version and repository fields.
+USAGE
+}
+
+if [[ ${1:-} == '-h' || ${1:-} == '--help' ]]; then
+  usage
+  exit 0
+fi
+if (( $# < 2 )); then
+  usage >&2
+  exit 1
+fi
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "missing required command: $1" >&2
+    exit 1
+  }
+}
+need jq
+need yq
+need git
+
+manifest=$1
+release_name=$2
+default_namespace=${3:-default}
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+docs="${tmpdir}/docs.json"
+yq -o=json -I=0 '.' "$manifest" | jq -s '.' > "$docs"
+
+hr_count=$(jq --arg name "$release_name" '[.[] | select(.kind == "HelmRelease" and .metadata.name == $name)] | length' "$docs")
+if [[ $hr_count != 1 ]]; then
+  printf 'expected one HelmRelease named %s, found %s\n' "$release_name" "$hr_count" >&2
+  exit 1
+fi
+
+hr="${tmpdir}/hr.json"
+jq --arg name "$release_name" '.[] | select(.kind == "HelmRelease" and .metadata.name == $name)' "$docs" > "$hr"
+hr_namespace=$(jq -r '.metadata.namespace // empty' "$hr")
+[[ -n $hr_namespace ]] || hr_namespace=$default_namespace
+
+repository_url=''
+source_name=$(jq -r '.spec.chartRef.name // empty' "$hr")
+if [[ -n $source_name ]]; then
+  source_kind=$(jq -r '.spec.chartRef.kind // "OCIRepository"' "$hr")
+  source_namespace=$(jq -r '.spec.chartRef.namespace // empty' "$hr")
+  [[ -n $source_namespace ]] || source_namespace=$hr_namespace
+
+  if [[ $source_kind != OCIRepository ]]; then
+    printf 'unsupported chartRef kind for %s: %s\n' "$release_name" "$source_kind" >&2
+    exit 1
+  fi
+
+  source_count=$(jq \
+    --arg name "$source_name" \
+    --arg namespace "$source_namespace" \
+    '[.[] | select(.kind == "OCIRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace)] | length' \
+    "$docs")
+  if [[ $source_count != 1 ]]; then
+    printf 'expected one OCIRepository %s/%s for HelmRelease %s, found %s\n' \
+      "$source_namespace" "$source_name" "$release_name" "$source_count" >&2
+    exit 1
+  fi
+
+  source="${tmpdir}/source.json"
+  jq \
+    --arg name "$source_name" \
+    --arg namespace "$source_namespace" \
+    '.[] | select(.kind == "OCIRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace)' \
+    "$docs" > "$source"
+
+  chart=$(jq -r '.spec.url' "$source")
+  digest=$(jq -r '.spec.ref.digest // empty' "$source")
+  version=$(jq -r '.spec.ref.tag // .spec.ref.semver // empty' "$source")
+  if [[ -n $digest ]]; then
+    chart="${chart}@${digest}"
+    version=''
+  fi
+else
+  chart=$(jq -r '.spec.chart.spec.chart // empty' "$hr")
+  version=$(jq -r '.spec.chart.spec.version // empty' "$hr")
+  source_kind=$(jq -r '.spec.chart.spec.sourceRef.kind // "HelmRepository"' "$hr")
+  source_name=$(jq -r '.spec.chart.spec.sourceRef.name // empty' "$hr")
+  source_namespace=$(jq -r '.spec.chart.spec.sourceRef.namespace // empty' "$hr")
+  [[ -n $source_namespace ]] || source_namespace=$hr_namespace
+
+  case "$source_kind" in
+    HelmRepository)
+      source_count=$(jq \
+        --arg name "$source_name" \
+        --arg namespace "$source_namespace" \
+        '[.[] | select(.kind == "HelmRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace)] | length' \
+        "$docs")
+      if [[ $source_count != 1 ]]; then
+        printf 'expected one HelmRepository %s/%s for HelmRelease %s, found %s\n' \
+          "$source_namespace" "$source_name" "$release_name" "$source_count" >&2
+        exit 1
+      fi
+
+      repository_url=$(jq -r \
+        --arg name "$source_name" \
+        --arg namespace "$source_namespace" \
+        '.[] | select(.kind == "HelmRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace) | .spec.url // empty' \
+        "$docs")
+      if [[ $repository_url == oci://* ]]; then
+        chart="${repository_url%/}/${chart#./}"
+        repository_url=''
+      elif [[ ! $repository_url =~ ^https?:// ]]; then
+        printf 'unsupported HelmRepository URL for %s: %s\n' "$release_name" "$repository_url" >&2
+        exit 1
+      fi
+      ;;
+    GitRepository)
+      if [[ $chart != ./* ]]; then
+        printf 'GitRepository chart path for %s must be repository-relative: %s\n' "$release_name" "$chart" >&2
+        exit 1
+      fi
+
+      repo_root=$(git rev-parse --show-toplevel)
+      settings="${repo_root}/kubernetes/flux/vars/cluster-settings.yaml"
+      expected_source_name=$(yq -er '.data.KS_GIT_REPO_NAME' "$settings")
+      expected_source_namespace=$(yq -er '.data.KS_NAMESPACE' "$settings")
+      if [[ $source_name != "$expected_source_name" || $source_namespace != "$expected_source_namespace" ]]; then
+        printf 'GitRepository chart for HelmRelease %s must use the current checkout source %s/%s, got %s/%s\n' \
+          "$release_name" "$expected_source_namespace" "$expected_source_name" \
+          "$source_namespace" "$source_name" >&2
+        exit 1
+      fi
+
+      source_count=$(jq \
+        --arg name "$source_name" \
+        --arg namespace "$source_namespace" \
+        '[.[] | select(.kind == "GitRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace)] | length' \
+        "$docs")
+      if [[ $source_count != 1 ]]; then
+        printf 'expected one GitRepository %s/%s for HelmRelease %s, found %s\n' \
+          "$source_namespace" "$source_name" "$release_name" "$source_count" >&2
+        exit 1
+      fi
+
+      if ! jq -e \
+        --arg name "$source_name" \
+        --arg namespace "$source_namespace" \
+        '.[] |
+          select(.kind == "GitRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace) |
+          (.spec.ref | type == "object" and keys == ["branch"] and .branch == "main")' \
+        "$docs" >/dev/null; then
+        printf 'GitRepository %s/%s for HelmRelease %s must track branch main without another ref selector\n' \
+          "$source_namespace" "$source_name" "$release_name" >&2
+        exit 1
+      fi
+
+      source_url=$(jq -r \
+        --arg name "$source_name" \
+        --arg namespace "$source_namespace" \
+        '.[] | select(.kind == "GitRepository" and .metadata.name == $name and (.metadata.namespace // $namespace) == $namespace) | .spec.url // empty' \
+        "$docs")
+      origin_url=$(git -C "$repo_root" remote get-url origin)
+      normalize_git_url() {
+        local url=${1%/}
+        url=${url%.git}
+        case "$url" in
+          git@*:* )
+            scp_url=${url#git@}
+            printf 'https://%s/%s' "${scp_url%%:*}" "${scp_url#*:}"
+            ;;
+          ssh://git@* )
+            printf 'https://%s' "${url#ssh://git@}"
+            ;;
+          http://*|https://* )
+            printf '%s' "$url"
+            ;;
+          * )
+            return 1
+            ;;
+        esac
+      }
+      normalized_source=$(normalize_git_url "$source_url") || {
+        printf 'unsupported GitRepository URL for %s: %s\n' "$release_name" "$source_url" >&2
+        exit 1
+      }
+      normalized_origin=$(normalize_git_url "$origin_url") || {
+        printf 'unsupported checkout origin URL: %s\n' "$origin_url" >&2
+        exit 1
+      }
+      if [[ $normalized_source != "$normalized_origin" ]]; then
+        printf 'GitRepository %s/%s for HelmRelease %s points outside the current checkout: %s\n' \
+          "$source_namespace" "$source_name" "$release_name" "$source_url" >&2
+        exit 1
+      fi
+
+      if ! chart_path=$(cd -- "${repo_root}/${chart#./}" 2>/dev/null && pwd -P); then
+        printf 'GitRepository chart path for %s does not exist: %s\n' "$release_name" "$chart" >&2
+        exit 1
+      fi
+      case "$chart_path" in
+        "$repo_root"/*) ;;
+        *)
+          printf 'GitRepository chart path for %s escapes the current checkout: %s\n' "$release_name" "$chart" >&2
+          exit 1
+          ;;
+      esac
+      if [[ ! -f $chart_path/Chart.yaml ]]; then
+        printf 'GitRepository chart path for %s does not contain Chart.yaml: %s\n' "$release_name" "$chart" >&2
+        exit 1
+      fi
+      chart=$chart_path
+      version=''
+      repository_url=''
+      ;;
+    *)
+      printf 'unsupported inline chart source kind for %s: %s\n' "$release_name" "$source_kind" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+if [[ -z $chart || $chart == / ]]; then
+  printf 'could not resolve chart for HelmRelease %s\n' "$release_name" >&2
+  exit 1
+fi
+if [[ -n $repository_url && ! $repository_url =~ ^https:// ]]; then
+  printf 'unsupported HelmRepository URL for %s: %s\n' "$release_name" "$repository_url" >&2
+  exit 1
+fi
+
+printf '%s\t%s\t%s\n' "$chart" "$version" "$repository_url"

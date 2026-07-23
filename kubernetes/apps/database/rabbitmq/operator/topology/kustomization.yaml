@@ -4,6 +4,11 @@ kind: Kustomization
 resources:
 # renovate: datasource=github-releases depName=rabbitmq/messaging-topology-operator
 - https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.19.3/messaging-topology-operator-ghcr-io.yaml
+images:
+- name: ghcr.io/rabbitmq/messaging-topology-operator
+  newName: ghcr.io/rabbitmq/messaging-topology-operator
+  newTag: 1.19.3
+  digest: sha256:f25d18710bceafc71e48da68a3712d7ca3377d4bf4ee04ba67fc5c2b8422f796
 patches:
 - target:
     group: cert-manager.io

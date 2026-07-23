@@ -1,0 +1,21 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valid
+spec:
+  selector:
+    matchLabels:
+      app: valid
+  template:
+    metadata:
+      labels:
+        app: valid
+    spec:
+      containers:
+      - name: app
+        image: ghcr.io/example/app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+---
+apiVersion: v1
+metadata:
+  name: missing-kind

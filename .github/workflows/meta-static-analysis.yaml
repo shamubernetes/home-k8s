@@ -1,0 +1,165 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Meta - Static Analysis"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+    paths:
+    - ".github/workflows/**"
+    - ".mise.toml"
+    - "scripts/**"
+    - "**/*.sh"
+    - "talos/clusterconfig/**"
+    - "kubernetes/apps/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "static-analysis-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  generated-files:
+    name: Generated File Guard
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Reject generated Talos credentials
+      run: scripts/tests/test-generated-secrets.sh
+
+  lint:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: Actionlint
+          command: actionlint
+          install_args: actionlint shellcheck
+        - name: Zizmor
+          command: zizmor
+          install_args: zizmor
+        - name: ShellCheck
+          command: shellcheck
+          install_args: shellcheck
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Setup Mise
+      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      with:
+        install_args: ${{ matrix.install_args }}
+        cache: true
+
+    - name: Run ${{ matrix.name }}
+      shell: bash
+      env:
+        LINTER: ${{ matrix.command }}
+      run: |
+        set -euo pipefail
+
+        case "${LINTER}" in
+          actionlint)
+            mapfile -t workflows < <(
+              git ls-files \
+                ':(glob).github/workflows/*.yaml' \
+                ':(glob).github/workflows/*.yml'
+            )
+            actionlint "${workflows[@]}"
+            ;;
+          zizmor)
+            zizmor --offline --strict-collection --min-severity high .
+            ;;
+          shellcheck)
+            flux_template='kubernetes/apps/observability/kuberhealthy/checks/scripts/plex-check.sh'
+            mapfile -t scripts < <(
+              while IFS= read -r file; do
+                [[ -f $file ]] || continue
+                IFS= read -r first_line < "$file" || true
+                if [[ $first_line =~ ^\#!.*(ba)?sh([[:space:]]|$) ]]; then
+                  printf '%s\n' "$file"
+                fi
+              done < <(git ls-files)
+            )
+            mapfile -t regular_scripts < <(
+              printf '%s\n' "${scripts[@]}" | grep -vFx "${flux_template}"
+            )
+            shellcheck "${regular_scripts[@]}"
+            # Flux replaces doubled dollar signs before this script executes.
+            shellcheck --exclude=SC2034,SC2157,SC2193 "${flux_template}"
+            ;;
+          *)
+            printf 'Unknown linter: %s\n' "${LINTER}" >&2
+            exit 1
+            ;;
+        esac
+
+  validation-fixtures:
+    name: Validation Fixtures
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Setup validation tools
+      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      with:
+        install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
+        cache: true
+
+    - name: Run validation fixtures
+      run: |
+        scripts/tests/test-validation.sh
+        scripts/tests/test-helm-image-inventory.sh
+        scripts/tests/test-flux-failure-event.sh
+        scripts/tests/test-k8s-schemas.sh
+
+  image-pins:
+    name: Rendered Image Pins
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Setup rendering tools
+      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      with:
+        install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
+        cache: true
+
+    - name: Check rendered workload images
+      run: |
+        scripts/check-image-pins kubernetes/apps
+        scripts/check-helmrelease-images
+
+  success:
+    if: ${{ !cancelled() }}
+    name: Static Analysis - Success
+    needs:
+    - generated-files
+    - image-pins
+    - lint
+    - validation-fixtures
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check required jobs
+      env:
+        RESULTS: ${{ toJSON(needs.*.result) }}
+      run: |
+        jq --exit-status 'all(. == "success")' <<< "$RESULTS"

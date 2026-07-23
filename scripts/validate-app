@@ -3,14 +3,19 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/validate-app <category>/<app> [namespace]
-       scripts/validate-app <category>/<app>/app [namespace]
+Usage: scripts/validate-app [--offline] <category>/<app> [namespace]
+       scripts/validate-app [--offline] <category>/<app>/app [namespace]
 
 Validates a GitOps app without applying it:
   1. kubectl kustomize the app directory
   2. server-side dry-run non-Secret manifests from the app kustomization
-  3. helm template each HelmRelease with Flux-like common substitutions
-  4. server-side dry-run rendered chart output
+  3. resolve repository-declared chart sources and merge Flux valuesFrom inputs
+  4. helm template each HelmRelease with Flux-like common substitutions
+  5. reject malformed chart documents and unpinned rendered images
+  6. server-side dry-run rendered chart output
+
+--offline skips cluster reads and server-side dry-runs. All required valuesFrom
+resources must then be present in the rendered app context.
 
 Runtime app secrets should normally be ExternalSecret resources backed by
 op-secret-store. SOPS Secret manifests are skipped during local dry-run because
@@ -18,7 +23,12 @@ this host may not have the Flux age identity.
 USAGE
 }
 
-if [[ ${1:-} == "-h" || ${1:-} == "--help" || $# -lt 1 ]]; then
+offline=false
+if [[ ${1:-} == '--offline' ]]; then
+  offline=true
+  shift
+fi
+if [[ ${1:-} == '-h' || ${1:-} == '--help' || $# -lt 1 ]]; then
   usage
   exit 0
 fi
@@ -32,12 +42,17 @@ need() {
 
 need kubectl
 need helm
+need jq
 need yq
+need python3
+need flux
 
-repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+repo_root=$(git rev-parse --show-toplevel)
 input=${1#kubernetes/apps/}
 input=${input%/}
-if [[ $input != */app ]]; then
+if [[ -f "${repo_root}/kubernetes/apps/${input}/kustomization.yaml" ]]; then
+  app_path="kubernetes/apps/${input}"
+elif [[ $input != */app ]]; then
   app_path="kubernetes/apps/${input}/app"
 else
   app_path="kubernetes/apps/${input}"
@@ -49,100 +64,272 @@ if [[ ! -f "${abs_app_path}/kustomization.yaml" ]]; then
   exit 1
 fi
 
-category=$(awk -F/ '{print $1}' <<<"${input}")
-app_name=$(awk -F/ '{print $2}' <<<"${input}")
-namespace=${2:-$category}
+category=${input%%/*}
+app_remainder=${input#*/}
+app_name=${app_remainder%%/*}
+ks_path="${repo_root}/kubernetes/apps/${category}/${app_name}/ks.yaml"
+if (( $# >= 2 )); then
+  namespace=$2
+elif [[ -f $ks_path ]]; then
+  namespace=$(APP_PATH="./${app_path}" yq -r -N '
+    select(.kind == "Kustomization" and .spec.path == strenv(APP_PATH)) |
+    .spec.targetNamespace // ""
+  ' "$ks_path")
+  if [[ $namespace == *$'\n'* ]]; then
+    printf 'multiple Flux Kustomizations own app path %s\n' "$app_path" >&2
+    exit 1
+  fi
+  [[ -n $namespace ]] || namespace=$category
+else
+  namespace=$category
+fi
 
 tmpdir=$(mktemp -d)
-cleanup() { rm -rf "$tmpdir"; }
-trap cleanup EXIT
+trap 'rm -rf "$tmpdir"' EXIT
 
 app_rendered="${tmpdir}/app.yaml"
+app_substituted="${tmpdir}/app.subst.yaml"
 non_secret="${tmpdir}/app-non-secret.yaml"
+helm_sources="${tmpdir}/helm-sources.yaml"
+current_git_source="${tmpdir}/current-git-source.yaml"
+app_context="${tmpdir}/app-context.yaml"
+chart_context="${tmpdir}/chart-context.yaml"
+subst_file="${tmpdir}/subst.env"
+recursive_keys="${tmpdir}/recursive-substitution-keys"
+ks_subst="${tmpdir}/kustomization-substitute.env"
 
 printf '==> kustomize %s\n' "$app_path"
 kubectl kustomize "$abs_app_path" > "$app_rendered"
 
-ks_path="${repo_root}/kubernetes/apps/${category}/${app_name}/ks.yaml"
-if yq -e 'select(.kind == "ExternalSecret")' "$app_rendered" >/dev/null 2>&1; then
+: > "$subst_file"
+: > "$recursive_keys"
+printf 'APP=%s\nNAMESPACE=%s\n' "$app_name" "$namespace" >> "$subst_file"
+add_cm_subst() {
+  local name=$1
+  kubectl -n flux-system get cm "$name" -o json 2>/dev/null \
+    | yq -r '.data // {} | to_entries[] | .key + "=" + .value' >> "$subst_file"
+}
+add_secret_subst() {
+  local name=$1
+  kubectl -n flux-system get secret "$name" -o json 2>/dev/null \
+    | python3 -c '
+import base64
+import json
+import sys
+for key, value in json.load(sys.stdin).get("data", {}).items():
+    print(f"{key}={base64.b64decode(value, validate=True).decode()}")
+' >> "$subst_file"
+}
+if [[ $offline == false ]]; then
+  add_cm_subst cluster-settings
+  add_cm_subst cluster-ipam
+  add_cm_subst volsync-schedules
+  add_secret_subst cluster-secrets
+else
+  yq -r '.data // {} | to_entries[] | .key + "=" + .value' \
+    "${repo_root}/kubernetes/flux/vars/cluster-settings.yaml" >> "$subst_file"
+fi
+if [[ -f $ks_path ]]; then
+  APP_PATH="./${app_path}" yq -r '
+    select(.kind == "Kustomization" and .spec.path == strenv(APP_PATH)) |
+    explode(.) |
+    .spec.postBuild.substitute // {} |
+    to_entries[] |
+    .key + "=" + (.value | tostring)
+  ' "$ks_path" > "$ks_subst"
+  cat "$ks_subst" >> "$subst_file"
+  cut -d= -f1 "$ks_subst" >> "$recursive_keys"
+fi
+
+substitute_file() {
+  local in=$1 out=$2
+  python3 - "$subst_file" "$recursive_keys" "$in" "$out" "$offline" <<'PY'
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+environment = os.environ.copy()
+recursive_keys = set(Path(sys.argv[2]).read_text().splitlines())
+managed_keys = []
+for line in Path(sys.argv[1]).read_text().splitlines():
+    if '=' in line:
+        k, v = line.split('=', 1)
+        environment[k] = v
+        if k in recursive_keys:
+            managed_keys.append(k)
+
+offline = sys.argv[5] == 'true'
+
+def render_text(text):
+    substitution_environment = environment.copy()
+    if offline:
+        for name in re.findall(r'(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)\}', text):
+            substitution_environment.setdefault(name, '${' + name + '}')
+    return subprocess.run(
+        ['flux', 'envsubst'],
+        input=text,
+        text=True,
+        stdout=subprocess.PIPE,
+        env=substitution_environment,
+        check=True,
+    ).stdout
+
+# Parent Kustomizations can substitute variables inside a child
+# Kustomization's postBuild.substitute values before the child object exists.
+for _ in range(len(managed_keys) + 1):
+    changed = False
+    for key in managed_keys:
+        value = render_text(environment[key])
+        if value.endswith('\n'):
+            value = value[:-1]
+        if value != environment[key]:
+            environment[key] = value
+            changed = True
+    if not changed:
+        break
+
+source = Path(sys.argv[3]).read_text()
+documents = re.split(r'(?m)^---[ \t]*\n', source)
+rendered = []
+for document in documents:
+    if re.search(
+        r'(?m)^\s*kustomize\.toolkit\.fluxcd\.io/substitute:\s*(?:"disabled"|disabled)\s*$',
+        document,
+    ):
+        rendered.append(document)
+        continue
+
+    rendered.append(render_text(document))
+
+Path(sys.argv[4]).write_text('---\n'.join(rendered))
+PY
+}
+substitute_file "$app_rendered" "$app_substituted"
+
+if yq -e 'select(.kind == "ExternalSecret")' "$app_substituted" >/dev/null 2>&1; then
   if [[ ! -f "$ks_path" ]] || ! yq -e '.spec.dependsOn[]? | select(.name == "external-secrets-secret-store")' "$ks_path" >/dev/null 2>&1; then
     echo "warning: app contains ExternalSecret but ks.yaml does not depend on external-secrets-secret-store" >&2
   fi
 fi
 
-if ! "${repo_root}/scripts/check-image-pins" "$abs_app_path" >/dev/null; then
-  echo "warning: one or more app-template images are not digest pinned" >&2
+if [[ $offline == false ]]; then
+  printf '==> server dry-run app manifests, skipping raw Secret docs\n'
+  yq 'select(.kind != "Secret")' "$app_substituted" > "$non_secret"
+  if [[ -s "$non_secret" ]]; then
+    kubectl apply --dry-run=server -f "$non_secret" >/dev/null
+  fi
+fi
+"${repo_root}/scripts/check-image-pins" "$app_substituted"
+
+kubectl kustomize "${repo_root}/kubernetes/flux/repositories/helm" > "$helm_sources"
+
+settings="${repo_root}/kubernetes/flux/vars/cluster-settings.yaml"
+git_source_name=$(yq -er '.data.KS_GIT_REPO_NAME' "$settings")
+git_source_namespace=$(yq -er '.data.KS_NAMESPACE' "$settings")
+if [[ $offline == false ]]; then
+  kubectl -n "$git_source_namespace" get gitrepository "$git_source_name" -o yaml > "$current_git_source"
+else
+  GIT_SOURCE_NAME="$git_source_name" GIT_SOURCE_NAMESPACE="$git_source_namespace" \
+    yq '
+      select(
+        .kind == "GitRepository" and
+        .metadata.name == strenv(GIT_SOURCE_NAME) and
+        .metadata.namespace == strenv(GIT_SOURCE_NAMESPACE)
+      )
+    ' "${repo_root}/kubernetes/flux/config/cluster.yaml" > "$current_git_source"
+  if [[ ! -s $current_git_source ]]; then
+    printf 'canonical GitRepository %s/%s is missing from kubernetes/flux/config/cluster.yaml\n' \
+      "$git_source_namespace" "$git_source_name" >&2
+    exit 1
+  fi
 fi
 
-printf '==> server dry-run app manifests, skipping raw Secret docs\n'
-yq 'select(.kind != "Secret")' "$app_rendered" > "$non_secret"
-if [[ -s "$non_secret" ]]; then
-  kubectl apply --dry-run=server -f "$non_secret" >/dev/null
-fi
+# Flux targetNamespace applies to the app-local resources as a set, including
+# app-local sources that happen to declare another namespace in raw YAML.
+VALIDATION_NAMESPACE="$namespace" yq '
+  with(
+    select(.kind == "HelmRelease" or .kind == "OCIRepository" or .kind == "GitRepository" or .kind == "ConfigMap" or .kind == "Secret");
+    .metadata.namespace = strenv(VALIDATION_NAMESPACE)
+  )
+' "$app_substituted" > "$app_context"
 
-subst_file="${tmpdir}/subst.env"
-: > "$subst_file"
-add_cm_subst() {
-  local name=$1
-  kubectl -n flux-system get cm "$name" -o json 2>/dev/null \
-    | yq -r '.data // {} | to_entries[] | .key + "=" + .value' >> "$subst_file" || true
-}
-add_cm_subst cluster-settings
-add_cm_subst cluster-ipam
-add_cm_subst volsync-schedules
-home_domain=$(kubectl -n flux-system get secret cluster-secrets -o jsonpath='{.data.HOME_DOMAIN}' 2>/dev/null | base64 --decode 2>/dev/null || true)
-if [[ -n "$home_domain" ]]; then
-  printf 'HOME_DOMAIN=%s\n' "$home_domain" >> "$subst_file"
-fi
+# Repository-global HelmRepository objects are outside the app Kustomization,
+# so their explicit flux-system namespace must remain unchanged.
+{
+  cat "$app_context"
+  printf '\n---\n'
+  cat "$helm_sources"
+  printf '\n---\n'
+  cat "$current_git_source"
+} > "$chart_context"
 
-substitute_file() {
-  local in=$1 out=$2
-  python3 - "$subst_file" "$in" "$out" <<'PY'
-from pathlib import Path
-import sys
-subst = {}
-for line in Path(sys.argv[1]).read_text().splitlines():
-    if '=' in line:
-        k, v = line.split('=', 1)
-        subst[k] = v
-text = Path(sys.argv[2]).read_text()
-for k, v in subst.items():
-    text = text.replace('${' + k + '}', v)
-Path(sys.argv[3]).write_text(text)
-PY
-}
 
-mapfile -t hr_names < <(yq -r -N 'select(.kind == "HelmRelease") | .metadata.name' "$app_rendered")
-if [[ ${#hr_names[@]} -gt 0 ]]; then
-  printf '==> helm template %s HelmRelease(s)\n' "${#hr_names[@]}"
+hr_names="${tmpdir}/helmrelease-names"
+yq -r -N 'select(.kind == "HelmRelease") | .metadata.name' "$chart_context" > "$hr_names"
+hr_count=$(wc -l < "$hr_names" | tr -d ' ')
+if (( hr_count > 0 )); then
+  printf '==> helm template %s HelmRelease(s)\n' "$hr_count"
 fi
 
 idx=0
-for release_name in "${hr_names[@]}"; do
+image_status=0
+while IFS= read -r release_name; do
+  [[ -n $release_name ]] || continue
   hr="${tmpdir}/hr-${idx}.yaml"
   values="${tmpdir}/values-${idx}.yaml"
   values_subst="${tmpdir}/values-${idx}.subst.yaml"
   rendered="${tmpdir}/helm-${idx}.yaml"
-  yq "select(.kind == \"HelmRelease\" and .metadata.name == \"${release_name}\")" "$app_rendered" > "$hr"
+  rendered_pre="${tmpdir}/helm-${idx}.pre-postrender.yaml"
+  rendered_valid="${tmpdir}/helm-${idx}.valid.yaml"
+  RELEASE_NAME="$release_name" yq 'select(.kind == "HelmRelease" and .metadata.name == strenv(RELEASE_NAME))' "$chart_context" > "$hr"
 
-  chart=$(yq -r '.spec.chart.spec.chart' "$hr")
-  version=$(yq -r '.spec.chart.spec.version // ""' "$hr")
-  repo=$(yq -r '.spec.chart.spec.sourceRef.name' "$hr")
-  hr_namespace=$(yq -r '.metadata.namespace // ""' "$hr")
-  [[ -n "$hr_namespace" && "$hr_namespace" != "null" ]] && namespace_for_hr=$hr_namespace || namespace_for_hr=$namespace
+  runtime="${tmpdir}/runtime-${idx}"
+  "${repo_root}/scripts/resolve-helmrelease-runtime" "$hr" "$namespace" > "$runtime"
+  IFS=$'\t' read -r namespace_for_hr target_namespace tests_enabled < "$runtime"
+  resolution="${tmpdir}/chart-resolution-${idx}"
+  "${repo_root}/scripts/resolve-helmrelease-chart" \
+    "$chart_context" "$release_name" "$namespace_for_hr" > "$resolution"
+  IFS=$'\t' read -r chart_ref version repository_url < "$resolution"
 
-  yq '.spec.values // {}' "$hr" > "$values"
+  value_args=()
+  if [[ $offline == true ]]; then
+    value_args+=(--offline)
+  fi
+  "${repo_root}/scripts/resolve-helmrelease-values" "${value_args[@]}" \
+    "$chart_context" "$release_name" "$namespace_for_hr" "$values"
   substitute_file "$values" "$values_subst"
 
-  chart_ref="${repo}/${chart}"
   printf '    %s -> %s (%s)\n' "$release_name" "$chart_ref" "${version:-no explicit version}"
-  if [[ -n "$version" && "$version" != "null" ]]; then
-    helm template "$release_name" "$chart_ref" --version "$version" -n "$namespace_for_hr" -f "$values_subst" > "$rendered"
-  else
-    helm template "$release_name" "$chart_ref" -n "$namespace_for_hr" -f "$values_subst" > "$rendered"
+  helm_args=(template "$release_name" "$chart_ref" -n "$target_namespace" -f "$values_subst")
+  if [[ $tests_enabled != true ]]; then
+    helm_args+=(--skip-tests)
   fi
-  kubectl apply --dry-run=server -n "$namespace_for_hr" -f "$rendered" >/dev/null
-  idx=$((idx + 1))
-done
+  if [[ -n "$version" && "$version" != "null" ]]; then
+    helm_args+=(--version "$version")
+  fi
+  if [[ -n "$repository_url" ]]; then
+    helm_args+=(--repo "$repository_url")
+  fi
+  helm "${helm_args[@]}" > "$rendered"
 
+  "${repo_root}/scripts/check-kubernetes-documents" "$rendered"
+  yq 'select(.apiVersion and .kind)' "$rendered" > "$rendered_pre"
+  "${repo_root}/scripts/apply-helmrelease-postrenderers" "$hr" "$rendered_pre" "$rendered_valid"
+  "${repo_root}/scripts/check-kubernetes-documents" "$rendered_valid"
+  if ! "${repo_root}/scripts/check-image-pins" "$rendered_valid"; then
+    image_status=1
+  fi
+  if [[ $offline == false ]]; then
+    kubectl apply --dry-run=server -n "$target_namespace" -f "$rendered_valid" >/dev/null
+  fi
+  idx=$((idx + 1))
+done < "$hr_names"
+
+if (( image_status != 0 )); then
+  # Exit 3 distinguishes a complete render containing unpinned images from a
+  # chart resolution, values, substitution, or Helm rendering failure.
+  exit 3
+fi
 printf 'ok: %s validated\n' "$app_path"

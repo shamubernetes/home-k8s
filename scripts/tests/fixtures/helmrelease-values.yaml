@@ -1,0 +1,81 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: values-test
+  namespace: tools
+spec:
+  valuesFrom:
+  - kind: ConfigMap
+    name: base-values
+  - kind: ConfigMap
+    name: target-value
+    valuesKey: token
+    targetPath: config.token
+  - kind: ConfigMap
+    name: typed-target
+    valuesKey: enabled
+    targetPath: config.file\.yaml.flags[0].enabled
+  - kind: ConfigMap
+    name: literal-target
+    valuesKey: content
+    targetPath: config.literal
+    literal: true
+  - kind: Secret
+    name: secret-values
+  - kind: ConfigMap
+    name: optional-missing
+    optional: true
+  values:
+    replicaCount: 2
+    inlineWins: true
+    config:
+      token: inline-loses
+      file.yaml:
+        flags:
+        - enabled: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: base-values
+  namespace: tools
+data:
+  values.yaml: |
+    replicaCount: 1
+    nested:
+      fromConfigMap: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: target-value
+  namespace: tools
+data:
+  token: target-secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secret-values
+  namespace: tools
+stringData:
+  values.yaml: |
+    nested:
+      fromSecret: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: typed-target
+  namespace: tools
+data:
+  enabled: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: literal-target
+  namespace: tools
+data:
+  content: a,b=[c]

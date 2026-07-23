@@ -30,7 +30,7 @@ task kubernetes:validate-app app=<category>/<app>
 # Resolve a mutable image tag to an immutable digest reference
 task kubernetes:pin-image image=docker.io/library/nginx:latest
 
-# Check app-template images for missing digest pins
+# Check effective workload images for missing digest pins
 task kubernetes:check-image-pins
 
 # Scaffold a standard app-template app
@@ -81,8 +81,8 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 
 ## Tooling and Python
 
-- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, and Renovate.
-- Do not treat missing `pyenv` or missing system Python packages such as PyYAML as a repo problem. This repository does not declare a Python runtime or Python dependencies.
+- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, Renovate, and Python.
+- Python is pinned through Mise for standard-library-only validation helpers. The repository does not declare third-party Python dependencies such as PyYAML.
 - For YAML inspection and transformation, prefer `yq`, `kubectl kustomize`, `helm template`, and the scripts under `scripts/`.
 - If a helper script uses Python, keep it Python standard-library only unless a Python environment and dependency file are added deliberately.
 - Do not install Python packages globally/Homebrew just to inspect YAML. If a one-off Python dependency is unavoidable, use an isolated temporary environment and do not make it part of the repo workflow without adding explicit project config.
@@ -186,7 +186,9 @@ scripts/validate-app <category>/<app>
 task kubernetes:validate-app app=<category>/<app>
 ```
 
-This renders the app kustomization, server-dry-runs non-Secret manifests, renders HelmReleases with common Flux substitutions, and server-dry-runs the rendered chart output. Raw Secret manifests are skipped during local dry-run because SOPS material may only be available to Flux.
+This renders the app kustomization, derives its effective namespace from the owning Flux Kustomization, server-dry-runs non-Secret manifests, resolves declared HelmRepository, OCI-backed HelmRepository, GitRepository, and same-namespace OCIRepository `chartRef` sources, merges ConfigMap and Secret `valuesFrom` inputs in Flux order, renders HelmReleases with common Flux substitutions, rejects malformed chart documents, checks effective PodSpec images for immutable digests, and server-dry-runs the rendered chart output. Raw Secret manifests are skipped during local dry-run because SOPS material may only be available to Flux. Use `scripts/validate-app --offline <category>/<app>` for credential-free rendering; required `valuesFrom` resources must then be present in the rendered app context.
+
+Repository-wide image validation uses both `scripts/check-image-pins kubernetes/apps` for rendered Kustomize workloads and `scripts/check-helmrelease-images` for Helm-rendered workloads. The Helm check freezes existing legacy tag-only chart defaults in `scripts/helm-image-pin-baseline.txt`; new entries should be digest-pinned rather than added to the baseline. Offline render gaps must be explicit and reasoned in `scripts/helm-image-validation-skips.txt`.
 
 For public images, pin mutable tags before committing:
 

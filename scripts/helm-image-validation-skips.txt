@@ -1,0 +1,4 @@
+# app-directory<TAB>expected diagnostic substring<TAB>reason
+network/ingress-nginx/external	expected one valuesFrom Secret network/nginx-external-maxmind-secret, found 0	required MaxMind Secret is generated outside the app kustomization
+observability/loki/app	expected one valuesFrom ConfigMap observability/loki-bucket, found 0	required loki-bucket ConfigMap is generated outside the app kustomization
+services/hypermind/app	app kustomization not found: kubernetes/apps/services/hypermind/app/kustomization.yaml	HelmRelease file is orphaned and has no rendered kustomization

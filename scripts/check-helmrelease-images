@@ -101,7 +101,7 @@ with open(output, "w", encoding="utf-8") as stream:
     for file in files:
         try:
             result = subprocess.run(
-                ["yq", "-r", "-N", expression, file],
+                ["yq", "eval", "-r", "-N", expression, file],
                 check=True,
                 capture_output=True,
                 text=True,

@@ -116,8 +116,8 @@ YAML
 git -C "$repo" add kubernetes/apps/test/malformed/app/helmrelease.yaml
 if (
   cd "$repo"
-  VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
-    scripts/check-helmrelease-images >/dev/null 2>&1
+  HELM_IMAGE_BATCH_TIMEOUT_SECONDS=1 VALIDATE_CALLS="$calls" \
+    VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
   echo 'malformed HelmRelease candidate YAML was accepted' >&2
   exit 1
@@ -177,10 +177,10 @@ fi
 
 if (
   cd "$repo"
-  HELM_IMAGE_DISCOVERY_JOBS=0 VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
+  HELM_IMAGE_BATCH_TIMEOUT_SECONDS=0 VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
     scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
-  echo 'zero discovery worker count was accepted' >&2
+  echo 'zero batch discovery timeout was accepted' >&2
   exit 1
 fi
 if (
@@ -210,13 +210,18 @@ mkdir -p "$yq_shim"
 cat > "${yq_shim}/yq" <<'SH'
 #!/usr/bin/env bash
 printf 'invoked\n' >> "$YQ_INVOCATIONS"
+file_count=0
 for arg in "$@"; do
   case "$arg" in
     */custom-release.yaml)
       printf '%s\n' "$arg" >> "$YQ_CALLS"
+      file_count=$((file_count + 1))
       ;;
   esac
 done
+if (( file_count > 1 )); then
+  exit 124
+fi
 exec "$REAL_YQ" "$@"
 SH
 chmod +x "${yq_shim}/yq"
@@ -234,18 +239,18 @@ done
 sort -u "$calls" > "${tmpdir}/sharded-calls"
 printf '%s\n' test/alt/app test/second/app > "${tmpdir}/expected-sharded-calls"
 diff -u "${tmpdir}/expected-sharded-calls" "${tmpdir}/sharded-calls"
-if [[ $(awk 'END { print NR }' "$yq_invocations") != 4 ]]; then
-  echo 'each shard did not parse every candidate exactly once' >&2
+if [[ $(awk 'END { print NR }' "$yq_invocations") != 6 ]]; then
+  echo 'batch discovery failure did not retry each candidate per file' >&2
   exit 1
 fi
 if ! awk '
   { count[$0]++ }
   END {
     if (length(count) != 2) exit 1
-    for (file in count) if (count[file] != 2) exit 1
+    for (file in count) if (count[file] != 4) exit 1
   }
 ' "$yq_calls"; then
-  echo 'candidate discovery did not cover each file once per shard' >&2
+  echo 'batch and fallback discovery did not cover every candidate' >&2
   exit 1
 fi
 

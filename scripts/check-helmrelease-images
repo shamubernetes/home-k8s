@@ -40,53 +40,61 @@ if [[ ! -s $yaml_files ]]; then
   exit 1
 fi
 
-# Parse each exact-line candidate once with bounded concurrency. This preserves
-# fail-closed full-tree YAML validation, filters textual false positives, and
-# avoids the original pair of sequential yq launches per candidate.
+# Try one bounded batch parse first, then fall back to isolated per-file parsing
+# for malformed or parser-sensitive inputs. Both paths preserve fail-closed
+# full-tree YAML validation and filter textual false positives.
 helmrelease_files="${tmpdir}/helmrelease-files"
 mapfile -t candidate_files < "$yaml_files"
-discovery_jobs=${HELM_IMAGE_DISCOVERY_JOBS:-8}
-[[ $discovery_jobs =~ ^[1-9][0-9]*$ ]] || {
-  printf 'HELM_IMAGE_DISCOVERY_JOBS must be a positive integer: %s\n' \
-    "$discovery_jobs" >&2
+batch_timeout=${HELM_IMAGE_BATCH_TIMEOUT_SECONDS:-5}
+[[ $batch_timeout =~ ^[1-9][0-9]*$ ]] || {
+  printf 'HELM_IMAGE_BATCH_TIMEOUT_SECONDS must be a positive integer: %s\n' \
+    "$batch_timeout" >&2
   exit 1
 }
 
-run_discovery() {
-  local file=$1 index=$2 rc
-  if yq -r -N 'select(.kind == "HelmRelease") | filename' "$file" \
-    > "${tmpdir}/discover-${index}.out" \
-    2> "${tmpdir}/discover-${index}.err"; then
-    rc=0
-  else
-    rc=$?
-  fi
-  printf '%s\n' "$rc" > "${tmpdir}/discover-${index}.rc"
-}
+batch_output="${tmpdir}/helmrelease-files-batch"
+if python3 - "$batch_output" "$batch_timeout" "${candidate_files[@]}" <<'PY'
+import subprocess
+import sys
 
-discovery_index=0
-for file in "${candidate_files[@]}"; do
-  run_discovery "$file" "$discovery_index" &
-  discovery_index=$((discovery_index + 1))
-  if (( discovery_index % discovery_jobs == 0 )); then
-    wait
-  fi
-done
-wait
-
-: > "$helmrelease_files"
-for (( index = 0; index < discovery_index; index++ )); do
-  rc=$(< "${tmpdir}/discover-${index}.rc")
-  if (( rc != 0 )); then
-    printf 'failed to parse tracked Kubernetes YAML while discovering HelmReleases: %s\n' \
-      "${candidate_files[$index]}" >&2
-    while IFS= read -r line; do
-      printf '  %s\n' "$line" >&2
-    done < "${tmpdir}/discover-${index}.err"
-    exit 1
-  fi
-  cat "${tmpdir}/discover-${index}.out" >> "$helmrelease_files"
-done
+output, timeout, *files = sys.argv[1:]
+command = [
+    "yq",
+    "eval",
+    "-r",
+    "-N",
+    'select(.kind == "HelmRelease") | filename',
+    *files,
+]
+try:
+    with open(output, "w", encoding="utf-8") as stream:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=stream,
+            timeout=int(timeout),
+        )
+except subprocess.TimeoutExpired:
+    raise SystemExit(124)
+except subprocess.CalledProcessError as error:
+    raise SystemExit(error.returncode)
+PY
+then
+  mv "$batch_output" "$helmrelease_files"
+else
+  batch_rc=$?
+  printf 'warning: batch HelmRelease discovery exited %s; retrying per file\n' \
+    "$batch_rc" >&2
+  : > "$helmrelease_files"
+  for file in "${candidate_files[@]}"; do
+    if ! yq -r -N 'select(.kind == "HelmRelease") | filename' "$file" \
+      >> "$helmrelease_files"; then
+      printf 'failed to parse tracked Kubernetes YAML while discovering HelmReleases: %s\n' \
+        "$file" >&2
+      exit 1
+    fi
+  done
+fi
 sort -u "$helmrelease_files" -o "$helmrelease_files"
 while IFS= read -r file; do
   dirname "$file" >> "$apps_unsorted"

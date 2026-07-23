@@ -31,6 +31,31 @@ spec:
         matchType: "="
     - receiver: cowtail-direct
       matchers:
+      - name: alertname
+        value: CephNodeNetworkPacketDrops
+        matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: etcdHighNumberOfLeaderChanges
+        matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: etcdHighNumberOfFailedGRPCRequests
+        matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: etcdDatabaseHighFragmentationRatio
+        matchType: "="
+    - receiver: cowtail-direct
+      matchers:
+      - name: alertname
+        value: CephPGNotDeepScrubbed
+        matchType: "="
+    - receiver: cowtail-investigate
+      matchers:
       - name: severity
         value: warning|critical
         matchType: "=~"
@@ -56,6 +81,17 @@ spec:
   receivers:
   - name: "null"
   - name: cowtail-direct
+    webhookConfigs:
+    - urlSecret:
+        name: alertmanager-secret
+        key: COWTAIL_WEBHOOK_URL
+      httpConfig:
+        authorization:
+          credentials:
+            name: alertmanager-secret
+            key: COWTAIL_ALERTMANAGER_WEBHOOK_TOKEN
+      sendResolved: true
+  - name: cowtail-investigate
     webhookConfigs:
     - urlSecret:
         name: alertmanager-secret

@@ -46,9 +46,15 @@ fi
 helmrelease_files="${tmpdir}/helmrelease-files"
 mapfile -t candidate_files < "$yaml_files"
 batch_timeout=${HELM_IMAGE_BATCH_TIMEOUT_SECONDS:-5}
+fallback_timeout=${HELM_IMAGE_FALLBACK_TIMEOUT_SECONDS:-5}
 [[ $batch_timeout =~ ^[1-9][0-9]*$ ]] || {
   printf 'HELM_IMAGE_BATCH_TIMEOUT_SECONDS must be a positive integer: %s\n' \
     "$batch_timeout" >&2
+  exit 1
+}
+[[ $fallback_timeout =~ ^[1-9][0-9]*$ ]] || {
+  printf 'HELM_IMAGE_FALLBACK_TIMEOUT_SECONDS must be a positive integer: %s\n' \
+    "$fallback_timeout" >&2
   exit 1
 }
 
@@ -85,15 +91,42 @@ else
   batch_rc=$?
   printf 'warning: batch HelmRelease discovery exited %s; retrying per file\n' \
     "$batch_rc" >&2
-  : > "$helmrelease_files"
-  for file in "${candidate_files[@]}"; do
-    if ! yq -r -N 'select(.kind == "HelmRelease") | filename' "$file" \
-      >> "$helmrelease_files"; then
-      printf 'failed to parse tracked Kubernetes YAML while discovering HelmReleases: %s\n' \
-        "$file" >&2
-      exit 1
-    fi
-  done
+  if ! python3 - "$helmrelease_files" "$fallback_timeout" "${candidate_files[@]}" <<'PY'
+import subprocess
+import sys
+
+output, timeout, *files = sys.argv[1:]
+expression = 'select(.kind == "HelmRelease") | filename'
+with open(output, "w", encoding="utf-8") as stream:
+    for file in files:
+        try:
+            result = subprocess.run(
+                ["yq", "-r", "-N", expression, file],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=int(timeout),
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"HelmRelease YAML parsing exceeded {timeout} seconds: {file}",
+                file=sys.stderr,
+            )
+            raise SystemExit(124)
+        except subprocess.CalledProcessError as error:
+            print(
+                f"failed to parse tracked Kubernetes YAML while "
+                f"discovering HelmReleases: {file}",
+                file=sys.stderr,
+            )
+            if error.stderr:
+                print(error.stderr.rstrip(), file=sys.stderr)
+            raise SystemExit(error.returncode)
+        stream.write(result.stdout)
+PY
+  then
+    exit 1
+  fi
 fi
 sort -u "$helmrelease_files" -o "$helmrelease_files"
 while IFS= read -r file; do

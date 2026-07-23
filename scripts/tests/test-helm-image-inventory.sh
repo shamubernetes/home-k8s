@@ -116,8 +116,9 @@ YAML
 git -C "$repo" add kubernetes/apps/test/malformed/app/helmrelease.yaml
 if (
   cd "$repo"
-  HELM_IMAGE_BATCH_TIMEOUT_SECONDS=1 VALIDATE_CALLS="$calls" \
-    VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+  HELM_IMAGE_BATCH_TIMEOUT_SECONDS=1 HELM_IMAGE_FALLBACK_TIMEOUT_SECONDS=1 \
+    VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
+    scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
   echo 'malformed HelmRelease candidate YAML was accepted' >&2
   exit 1
@@ -181,6 +182,14 @@ if (
     scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
   echo 'zero batch discovery timeout was accepted' >&2
+  exit 1
+fi
+if (
+  cd "$repo"
+  HELM_IMAGE_FALLBACK_TIMEOUT_SECONDS=0 VALIDATE_CALLS="$calls" VALIDATE_MODE=success \
+    scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'zero fallback discovery timeout was accepted' >&2
   exit 1
 fi
 if (

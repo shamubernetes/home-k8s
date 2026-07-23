@@ -100,10 +100,12 @@ jobs:
         from pathlib import Path
 
         changed = json.loads(os.environ["CHANGED_FILES"])
+        # Only operator chart changes need private OCI credentials. The n8n
+        # instance directory contains plain GitOps manifests and is safe to diff.
         blocked = (
             "kubernetes/apps/services/cowbell/",
             "kubernetes/apps/services/git-mirror-operator/",
-            "kubernetes/apps/services/n8n-operator/",
+            "kubernetes/apps/services/n8n-operator/operator/",
         )
         unsupported = [path for path in changed if path.startswith(blocked)]
         if unsupported:

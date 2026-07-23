@@ -144,12 +144,16 @@ jobs:
           --allow-missing-secrets \
           --path pull/kubernetes \
           --path-orig default/kubernetes \
-          --output github > rendered.diff
+          --output github > rendered.diff &
+        resource_pid=$!
         flate --no-progress diff images \
           --allow-missing-secrets \
           --path pull/kubernetes \
           --path-orig default/kubernetes \
-          --output json > images.json
+          --output json > images.json &
+        image_pid=$!
+        wait "$resource_pid"
+        wait "$image_pid"
 
     - name: Build rendered review
       id: report

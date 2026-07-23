@@ -146,18 +146,32 @@ jobs:
     - name: Check raw workload images
       run: scripts/check-image-pins kubernetes/apps
 
+  image-plan:
+    name: Helm Image Shard Plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Build balanced shard matrix
+      id: plan
+      env:
+        HELM_IMAGE_APPS_PER_SHARD: "20"
+      run: |
+        matrix=$(scripts/plan-helm-image-shards)
+        printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+
   image-pins:
     name: Rendered Image Pins (${{ matrix.name }})
+    needs: image-plan
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-        - {name: "1/5", index: 0}
-        - {name: "2/5", index: 1}
-        - {name: "3/5", index: 2}
-        - {name: "4/5", index: 3}
-        - {name: "5/5", index: 4}
+      matrix: ${{ fromJSON(needs.image-plan.outputs.matrix) }}
     steps:
     - name: Checkout
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -172,7 +186,8 @@ jobs:
 
     - name: Check rendered workload images
       env:
-        HELM_IMAGE_SHARD_COUNT: "5"
+        HELM_IMAGE_JOBS: ${{ matrix.size }}
+        HELM_IMAGE_SHARD_COUNT: ${{ matrix.count }}
         HELM_IMAGE_SHARD_INDEX: ${{ matrix.index }}
       run: scripts/check-helmrelease-images
 
@@ -182,6 +197,7 @@ jobs:
     needs:
     - generated-files
     - image-pins
+    - image-plan
     - lint
     - raw-image-pins
     - validation-fixtures

@@ -27,7 +27,7 @@ jobs:
         persist-credentials: false
 
     - name: Setup Homebrew
-      uses: Homebrew/actions/setup-homebrew@097625b28a26ba4b7437926ab03b4d3bd2e6c3d1 # master
+      uses: Homebrew/actions/setup-homebrew@df4b09108a1de9d6f995fe68f302b3f68bd6d2ef # master
 
     - name: Setup Workflow Tools
       shell: bash

@@ -31,7 +31,9 @@ jobs:
 
     - name: Setup Workflow Tools
       shell: bash
-      run: brew install kubectl yq jq
+      run: |
+        brew install kubectl yq jq node@24
+        echo "$(brew --prefix node@24)/bin" >> "$GITHUB_PATH"
 
     - name: Setup Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0

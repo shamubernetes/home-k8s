@@ -70,6 +70,11 @@ shard_index=${HELM_IMAGE_SHARD_INDEX:-0}
   printf 'HELM_IMAGE_SHARD_INDEX %s is outside shard count %s\n' "$shard_index" "$shard_count" >&2
   exit 1
 }
+app_count=$(awk 'END { print NR }' "$all_apps")
+(( shard_count <= app_count )) || {
+  printf 'HELM_IMAGE_SHARD_COUNT %s exceeds discovered application count %s\n' "$shard_count" "$app_count" >&2
+  exit 1
+}
 awk -v count="$shard_count" -v shard="$shard_index" \
   '((NR - 1) % count) == shard' "$all_apps" > "$apps"
 

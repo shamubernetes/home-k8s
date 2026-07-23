@@ -117,6 +117,64 @@ git -C "$repo" add kubernetes/apps/test/second/app/custom-release.yaml
     VALIDATE_SYNC="${tmpdir}/sync" scripts/check-helmrelease-images >/dev/null
 )
 
+matrix=$("${repo_root}/scripts/plan-helm-image-shards" 101)
+if ! jq -e '
+  .include | length == 6
+  and map(.size) == [17, 17, 17, 17, 17, 16]
+  and map(.count) == [6, 6, 6, 6, 6, 6]
+  and map(.index) == [0, 1, 2, 3, 4, 5]
+' <<< "$matrix" >/dev/null; then
+  echo '101 applications were not balanced across six shards' >&2
+  exit 1
+fi
+
+discovered_matrix=$(
+  cd "$repo"
+  "${repo_root}/scripts/plan-helm-image-shards"
+)
+if ! jq -e '.include | length == 1 and .[0].size == 2' \
+  <<< "$discovered_matrix" >/dev/null; then
+  echo 'discovery mode did not count the two fixture applications' >&2
+  exit 1
+fi
+
+real_git=$(command -v git)
+mkdir -p "${tmpdir}/shim"
+cat > "${tmpdir}/shim/git" <<'SH'
+#!/usr/bin/env bash
+if [[ ${1:-} == grep ]]; then
+  echo 'kubernetes/apps/test/alt/app/custom-release.yaml'
+  exit 2
+fi
+exec "$REAL_GIT" "$@"
+SH
+chmod +x "${tmpdir}/shim/git"
+if (
+  cd "$repo"
+  REAL_GIT="$real_git" PATH="${tmpdir}/shim:${PATH}" \
+    "${repo_root}/scripts/plan-helm-image-shards" >/dev/null 2>&1
+); then
+  echo 'shard discovery accepted partial output from a failed git producer' >&2
+  exit 1
+fi
+
+if (
+  cd "$repo"
+  HELM_IMAGE_SHARD_COUNT=0 HELM_IMAGE_SHARD_INDEX=0 \
+    VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'zero shard count was accepted' >&2
+  exit 1
+fi
+if (
+  cd "$repo"
+  HELM_IMAGE_SHARD_COUNT=2 HELM_IMAGE_SHARD_INDEX=2 \
+    VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'out-of-range shard index was accepted' >&2
+  exit 1
+fi
+
 : > "$calls"
 for shard in 0 1; do
   (
@@ -129,4 +187,4 @@ sort -u "$calls" > "${tmpdir}/sharded-calls"
 printf '%s\n' test/alt/app test/second/app > "${tmpdir}/expected-sharded-calls"
 diff -u "${tmpdir}/expected-sharded-calls" "${tmpdir}/sharded-calls"
 
-printf 'ok: HelmRelease discovery, classified skips, concurrency, and sharding validated\n'
+printf 'ok: HelmRelease discovery, classified skips, concurrency, and balanced dynamic sharding validated\n'

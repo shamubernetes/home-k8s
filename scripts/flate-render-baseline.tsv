@@ -1,0 +1,7 @@
+failed	HelmRelease	git-mirror-operator-system/git-mirror-operator	secret flux-system/ghcr-pull-secret not found
+failed	HelmRelease	observability/loki	Please define loki.storage.bucketNames.chunks
+failed	HelmRelease	services/cowbell	secret services/ghcr-pull-secret not found
+failed	HelmRelease	services/n8n-operator	secret flux-system/ghcr-pull-secret not found
+failed	HelmRelease	tools/disabled-subchart	dependency not found
+failed	OCIRepository	services/cowbell	secret services/ghcr-pull-secret not found
+blocked	HelmRelease	observability/grafana	blocked by observability/loki

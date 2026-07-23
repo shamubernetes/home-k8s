@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Run Flate full-tree validation and enforce an exact offline exception baseline."""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+STATUS = {"✗": "failed", "⊘": "blocked"}
+LINE = re.compile(
+    r"^\s*([✗⊘])\s+"
+    r"(Kustomization|HelmRelease|GitRepository|OCIRepository|HelmRepository|HelmChart|Bucket)\s+"
+    r"(\S+)\s+(.*)$"
+)
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def load_baseline(path: Path) -> dict[tuple[str, str, str], str]:
+    expected: dict[tuple[str, str, str], str] = {}
+    for number, raw in enumerate(path.read_text().splitlines(), 1):
+        if not raw or raw.startswith("#"):
+            continue
+        fields = raw.split("\t")
+        if len(fields) != 4 or not all(fields):
+            raise ValueError(f"{path}:{number}: expected four nonempty tab-separated fields")
+        key = (fields[0], fields[1], fields[2])
+        if key in expected:
+            raise ValueError(f"{path}:{number}: duplicate baseline entry {key}")
+        expected[key] = fields[3]
+    return expected
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parent.parent
+    baseline = Path(os.environ.get("FLATE_BASELINE", root / "scripts/flate-render-baseline.tsv"))
+    flate = os.environ.get("FLATE_BIN", "flate")
+    cluster_path = os.environ.get("FLATE_PATH", str(root / "kubernetes"))
+
+    try:
+        expected = load_baseline(baseline)
+    except (OSError, ValueError) as err:
+        print(err, file=sys.stderr)
+        return 2
+
+    command = [flate, "--no-progress", "test", "all", "--path", cluster_path]
+    try:
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except OSError as err:
+        print(f"unable to run Flate: {err}", file=sys.stderr)
+        return 2
+
+    output = ANSI.sub("", result.stdout)
+    if "ENC[AES256_GCM" in output:
+        print("Flate output contained SOPS ciphertext; refusing to publish rendered output", file=sys.stderr)
+        return 2
+    print(output, end="")
+
+    if result.returncode not in (0, 1):
+        print(f"Flate exited unexpectedly with status {result.returncode}", file=sys.stderr)
+        return 2
+
+    actual: dict[tuple[str, str, str], str] = {}
+    for raw in output.splitlines():
+        match = LINE.match(raw)
+        if not match:
+            continue
+        key = (STATUS[match.group(1)], match.group(2), match.group(3))
+        if key in actual:
+            print(f"duplicate Flate failure: {key}", file=sys.stderr)
+            return 1
+        actual[key] = match.group(4)
+
+    unexpected = sorted(set(actual) - set(expected))
+    stale = sorted(set(expected) - set(actual))
+    changed = sorted(
+        key for key in set(actual) & set(expected) if expected[key] not in actual[key]
+    )
+
+    for key in unexpected:
+        print(f"unexpected Flate {key[0]} resource: {key[1]} {key[2]}: {actual[key]}", file=sys.stderr)
+    for key in stale:
+        print(f"stale Flate baseline entry: {key[0]} {key[1]} {key[2]}", file=sys.stderr)
+    for key in changed:
+        print(
+            f"Flate failure changed for {key[1]} {key[2]}: "
+            f"expected substring {expected[key]!r}, got {actual[key]!r}",
+            file=sys.stderr,
+        )
+
+    if unexpected or stale or changed:
+        return 1
+    if result.returncode == 0 and expected:
+        print("Flate succeeded but the exception baseline is not empty", file=sys.stderr)
+        return 1
+
+    print(f"ok: Flate full-tree rendering matches {len(expected)} explicit offline exceptions")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

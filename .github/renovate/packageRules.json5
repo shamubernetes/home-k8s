@@ -140,9 +140,9 @@
     {
       "description": ["Talos Group"],
       "groupName": "Talos",
-      "matchPackagePatterns": [
-        "siderolabs/talosctl",
-        "siderolabs/installer"
+      "matchPackageNames": [
+        "ghcr.io/siderolabs/installer",
+        "ghcr.io/siderolabs/talosctl"
       ],
       "matchDatasources": ["docker"],
       "semanticCommitScope": "group",
@@ -173,100 +173,74 @@
       },
       "separateMinorPatch": false,
     },
-    // Auto merge
+    // Deny-by-default automerge. Every opt-in below uses exact package names,
+    // is separated from dependency groups, keeps CI mandatory, and waits long
+    // enough for upstream regressions or yanks to surface.
     {
-      "description": "Auto-merge Pins",
-      "matchUpdateTypes": ["pin", "pinDigest"],
+      "description": "Auto-merge trusted GitHub-owned action digest updates",
+      "matchManagers": ["github-actions"],
+      "matchDatasources": ["github-tags"],
+      "matchPackageNames": ["actions/checkout"],
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": "7 days",
+      "groupName": null,
       "automerge": true,
       "automergeType": "pr",
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
-      "ignoreTests": true,
-    },
-    {
-      "description": "Auto-merge all patch updates",
-      "matchUpdateTypes": ["patch"],
-      "automerge": true,
-      "automergeType": "pr",
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
-    },
-    {
-      "description": "Auto-merge minor updates with 6 hours stability",
-      "matchUpdateTypes": ["minor"],
-      "matchDatasources": ["helm", "helmfile"],
-      "minimumReleaseAge": "6 hours",
-      "automerge": true,
-      "automergeType": "pr",
+      "platformAutomerge": false,
+      "ignoreTests": false,
       "assigneesFromCodeOwners": false,
       "reviewersFromCodeOwners": false,
     },
     {
-      "description": "Auto-merge minor Docker updates (no minimumReleaseAge due to missing registry timestamps)",
-      "matchUpdateTypes": ["minor", "patch", "digest"],
-      "matchDatasources": ["docker"],
-      "automerge": true,
-      "automergeType": "pr",
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
-    },
-    {
-      "matchDatasources": ["custom.grafana-dashboards"],
-      "automerge": true,
-      "automergeType": "pr",
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
-      "matchUpdateTypes": ["major"],
-      "ignoreTests": true
-    },
-    {
-      "description": "Auto merge KPS minors and digests",
-      "matchDatasources": ["helm", "docker"],
-      "automerge": true,
-      "automergeType": "pr",
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
-      "matchUpdateTypes": ["minor", "digest"],
-      "matchPackagePatterns": ["kube-prometheus-stack"],
-    },
-    {
-      "description": "Auto merge mise tool updates",
+      "description": "Auto-merge exact low-risk static-analysis tool patches",
       "matchManagers": ["mise"],
+      "matchPackageNames": ["actionlint", "shellcheck", "zizmor"],
+      "matchUpdateTypes": ["patch"],
+      "minimumReleaseAge": "7 days",
+      "groupName": null,
       "automerge": true,
       "automergeType": "pr",
+      "platformAutomerge": false,
+      "ignoreTests": false,
       "assigneesFromCodeOwners": false,
       "reviewersFromCodeOwners": false,
-      "matchUpdateTypes": ["minor", "patch"],
     },
     {
-      "description": "Never auto-merge n8n image updates after bad digest rollouts",
-      "matchDatasources": ["docker"],
-      "matchDepNames": ["docker.io/n8nio/n8n", "n8nio/n8n"],
-      "minimumReleaseAge": "3 days",
-      "automerge": false,
-      "reviewers": ["kiliantyler"],
-    },
-    {
-      "description": "Never auto-merge curlimages/curl updates used by init and check containers",
-      "matchDatasources": ["docker"],
-      "matchDepNames": ["curlimages/curl"],
-      "minimumReleaseAge": "3 days",
-      "automerge": false,
-      "reviewers": ["kiliantyler"],
-    },
-    {
-      "description": "Never auto-merge Convex image updates",
-      "matchDatasources": ["docker"],
-      "matchDepNames": [
-        "ghcr.io/get-convex/convex-backend",
-        "ghcr.io/get-convex/convex-dashboard"
+      "description": "Never auto-merge high-blast-radius infrastructure",
+      "matchFileNames": [
+        "talos/**",
+        "kubernetes/apps/actions-runner-system/**",
+        "kubernetes/apps/cert-manager/**",
+        "kubernetes/apps/database/**",
+        "kubernetes/apps/external-secrets/**",
+        "kubernetes/apps/flux-system/**",
+        "kubernetes/apps/kube-system/**",
+        "kubernetes/apps/kyverno/**",
+        "kubernetes/apps/network/**",
+        "kubernetes/apps/observability/prometheus-operator-crds/**",
+        "kubernetes/apps/op/**",
+        "kubernetes/apps/openebs-system/**",
+        "kubernetes/apps/rook-ceph/**",
+        "kubernetes/apps/security/**",
+        "kubernetes/apps/system-upgrade/**",
+        "kubernetes/apps/tailscale/**",
+        "kubernetes/apps/volsync-system/**",
+        "kubernetes/apps/**/*-crds*/**",
+        "kubernetes/apps/**/*-operator*/**",
       ],
+      "minimumReleaseAge": "7 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
     },
-    // Request review for non-automerge updates (major versions)
     {
-      "description": "Request review for major updates (not auto-merged)",
+      "description": "Never auto-merge application images",
+      "matchDatasources": ["docker"],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "reviewers": ["kiliantyler"],
+    },
+    {
+      "description": "Never auto-merge major updates or mixed-risk groups",
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "reviewers": ["kiliantyler"],
@@ -274,11 +248,14 @@
     // Schedules for critical infrastructure
     {
       "description": "Talos and Kubernetes upgrades only on 2nd Saturday of month (2-6am)",
-      "matchDepNames": [
+      "matchPackageNames": [
         "ghcr.io/siderolabs/installer",
         "ghcr.io/siderolabs/kubelet"
       ],
       "matchDatasources": ["docker"],
+      "minimumReleaseAge": "7 days",
+      "automerge": false,
+      "reviewers": ["kiliantyler"],
       "schedule": ["* 2-5 8-14 * 6"]
     },
     {

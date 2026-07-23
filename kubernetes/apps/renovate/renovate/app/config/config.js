@@ -21,8 +21,12 @@ module.exports = {
   repositoryCache: "enabled",
 
   // Configurable options
-  automergeStrategy: "merge-commit",
+  // Keep self-hosted defaults deny-by-default. Repository package rules may
+  // opt in only exact low-risk dependencies after CI and release-age gates.
+  automerge: false,
+  automergeStrategy: "squash",
   automergeType: "pr",
+  platformAutomerge: false,
   branchPrefix: "shamubot/",
   branchPrefixOld: "renovate/",
   dependencyDashboard: true,

@@ -128,9 +128,36 @@ jobs:
         scripts/tests/test-flux-failure-event.sh
         scripts/tests/test-k8s-schemas.sh
 
-  image-pins:
-    name: Rendered Image Pins
+  raw-image-pins:
+    name: Raw Image Pins
     runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
+
+    - name: Setup rendering tools
+      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      with:
+        install_args: kubectl asdf:sudermanjr/asdf-yq
+        cache: true
+
+    - name: Check raw workload images
+      run: scripts/check-image-pins kubernetes/apps
+
+  image-pins:
+    name: Rendered Image Pins (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - {name: "1/5", index: 0}
+        - {name: "2/5", index: 1}
+        - {name: "3/5", index: 2}
+        - {name: "4/5", index: 3}
+        - {name: "5/5", index: 4}
     steps:
     - name: Checkout
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -144,9 +171,10 @@ jobs:
         cache: true
 
     - name: Check rendered workload images
-      run: |
-        scripts/check-image-pins kubernetes/apps
-        scripts/check-helmrelease-images
+      env:
+        HELM_IMAGE_SHARD_COUNT: "5"
+        HELM_IMAGE_SHARD_INDEX: ${{ matrix.index }}
+      run: scripts/check-helmrelease-images
 
   success:
     if: ${{ !cancelled() }}
@@ -155,6 +183,7 @@ jobs:
     - generated-files
     - image-pins
     - lint
+    - raw-image-pins
     - validation-fixtures
     runs-on: ubuntu-latest
     steps:

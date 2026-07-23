@@ -45,7 +45,7 @@ fi
 # without launching two yq processes per candidate in every shard.
 helmrelease_files="${tmpdir}/helmrelease-files"
 mapfile -t candidate_files < "$yaml_files"
-if ! yq eval-all -r -N \
+if ! yq eval -r -N \
   'select(.kind == "HelmRelease") | filename' \
   "${candidate_files[@]}" > "$helmrelease_files"; then
   echo 'failed to parse tracked Kubernetes YAML while discovering HelmReleases' >&2

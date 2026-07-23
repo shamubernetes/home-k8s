@@ -2,7 +2,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: firecrawl-init-nuq-schema-v2
+  name: firecrawl-init-nuq-schema-v3
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   backoffLimit: 6
   template:

@@ -6,7 +6,11 @@
   // Avoid mass rebasing every Renovate branch each run. Those updates fan out
   // GitHub Actions jobs and overload the self-hosted ARC dind runner.
   rebaseWhen: "conflicted",
-  platformAutomerge: true,
+  // Renovate is deny-by-default. Narrow package rules may opt in only exact,
+  // low-risk dependencies after their release-age and CI gates pass.
+  automerge: false,
+  automergeStrategy: "squash",
+  platformAutomerge: false,
   // Disable automatic reviewer assignment globally - only add for non-automerge PRs via packageRules
   reviewersFromCodeOwners: false,
   assigneesFromCodeOwners: false,

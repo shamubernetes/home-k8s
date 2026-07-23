@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: "Meta - Flux Local"
+name: "Meta - Flate"
 
 on:
   pull_request:
@@ -14,148 +14,205 @@ permissions:
 
 jobs:
   filter:
-    name: Flux Local - Filter
+    name: Flate - Filter
     runs-on: ubuntu-latest
     outputs:
-      changed-files: ${{ steps.changed-files.outputs.changed_files }}
+      relevant-files: ${{ steps.relevant.outputs.changed_files }}
+      kubernetes-files: ${{ steps.kubernetes.outputs.changed_files }}
     steps:
-      - name: Get Changed Files
-        id: changed-files
-        uses: bjw-s-labs/action-changed-files@a9a36fb08ce06db9b02fbd8026cc2c0945eb9841 # v0.6.0
-        with:
-          patterns: kubernetes/**/*
+    - name: Get Flate-related files
+      id: relevant
+      uses: bjw-s-labs/action-changed-files@a9a36fb08ce06db9b02fbd8026cc2c0945eb9841 # v0.6.0
+      with:
+        patterns: |
+          .github/workflows/meta-flux-diff.yaml
+          .mise.toml
+          kubernetes/**/*
+          scripts/check-flate-render
+          scripts/flate-render-baseline.tsv
+          scripts/tests/test-flate-render.sh
+
+    - name: Get Kubernetes files
+      id: kubernetes
+      uses: bjw-s-labs/action-changed-files@a9a36fb08ce06db9b02fbd8026cc2c0945eb9841 # v0.6.0
+      with:
+        patterns: kubernetes/**/*
 
   test:
-    if: ${{ needs.filter.outputs.changed-files != '[]' }}
+    if: ${{ needs.filter.outputs.relevant-files != '[]' }}
     needs: filter
-    name: Flux Local - Test
+    name: Flate - Test
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
-        id: app-token
-        with:
-          app-id: "${{ secrets.BOT_APP_ID }}"
-          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
-          permission-contents: read
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
 
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-          token: "${{ steps.app-token.outputs.token }}"
+    - name: Setup Flate
+      uses: home-operations/flate/action@bf3405a189626478b0aa6ec98dc4d6f7d419df17 # v0.4.12
+      with:
+        base: ""
+        cache: true
+        version: 0.4.12
 
-      - name: Run flux-local test
-        uses: docker://ghcr.io/allenporter/flux-local:v8.3.0@sha256:dca65e5bcd71cb904216774ebfbc5d1f30a36d0b304293b851dfed2385c01b0c
-        env:
-          GITHUB_TOKEN: "${{ steps.app-token.outputs.token }}"
-        with:
-          args: >-
-            test
-            --all-namespaces
-            --enable-helm
-            --path /github/workspace/kubernetes/flux
-            --verbose
+    - name: Validate full rendered tree
+      env:
+        FLATE_RESTRICT_EGRESS: "true"
+      run: scripts/check-flate-render
 
   diff:
-    if: ${{ needs.filter.outputs.changed-files != '[]' }}
+    if: ${{ needs.filter.outputs.kubernetes-files != '[]' }}
     needs: filter
-    name: Flux Local - Diff
+    name: Flate - Diff
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    strategy:
-      matrix:
-        resource:
-          - helmrelease
-          - kustomization
-      fail-fast: false
     steps:
-      - name: Generate Read Token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
-        id: read-token
-        with:
-          app-id: "${{ secrets.BOT_APP_ID }}"
-          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
-          permission-contents: read
+    - name: Checkout pull request branch
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        path: pull
+        persist-credentials: false
 
-      - name: Checkout Pull Request Branch
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          path: pull
-          persist-credentials: false
-          token: "${{ steps.read-token.outputs.token }}"
+    - name: Checkout default branch
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        path: default
+        persist-credentials: false
+        ref: "${{ github.event.repository.default_branch }}"
 
-      - name: Checkout Default Branch
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          path: default
-          persist-credentials: false
-          ref: "${{ github.event.repository.default_branch }}"
-          token: "${{ steps.read-token.outputs.token }}"
+    - name: Setup Flate
+      uses: home-operations/flate/action@bf3405a189626478b0aa6ec98dc4d6f7d419df17 # v0.4.12
+      with:
+        base: ""
+        cache: true
+        version: 0.4.12
 
-      - name: Run flux-local diff
-        uses: docker://ghcr.io/allenporter/flux-local:v8.3.0@sha256:dca65e5bcd71cb904216774ebfbc5d1f30a36d0b304293b851dfed2385c01b0c
-        env:
-          GITHUB_TOKEN: "${{ steps.read-token.outputs.token }}"
-        with:
-          args: >-
-            diff ${{ matrix.resource }}
-            --unified 6
-            --path /github/workspace/pull/kubernetes/flux
-            --path-orig /github/workspace/default/kubernetes/flux
-            --strip-attrs "helm.sh/chart,checksum/config,app.kubernetes.io/version,chart"
-            --limit-bytes 10000
-            --all-namespaces
-            --output-file diff.patch
+    - name: Prepare credential-free snapshots
+      env:
+        CHANGED_FILES: ${{ needs.filter.outputs.kubernetes-files }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import textwrap
+        from pathlib import Path
 
-      - name: Generate Diff
-        id: diff
-        run: |
-          {
-            echo 'diff<<EOF'
-            cat diff.patch
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo '### Diff'
-            echo '```diff'
-            cat diff.patch
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+        changed = json.loads(os.environ["CHANGED_FILES"])
+        blocked = (
+            "kubernetes/apps/services/cowbell/",
+            "kubernetes/apps/services/git-mirror-operator/",
+            "kubernetes/apps/services/n8n-operator/",
+        )
+        unsupported = [path for path in changed if path.startswith(blocked)]
+        if unsupported:
+            raise SystemExit(
+                "credential-free Flate rendering cannot validate private chart changes: "
+                + ", ".join(unsupported)
+            )
 
-      - if: ${{ steps.diff.outputs.diff != '' }}
-        name: Generate Comment Token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
-        id: comment-token
-        with:
-          app-id: "${{ secrets.BOT_APP_ID }}"
-          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
-          permission-pull-requests: write
+        manifest = textwrap.dedent("""\
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: loki-bucket
+          namespace: observability
+        data:
+          BUCKET_NAME: flate-offline-placeholder
+          BUCKET_REGION: us-east-1
+        """)
+        for checkout in (Path("pull"), Path("default")):
+            values = checkout / "kubernetes/flux/vars/flate-ci-values.yaml"
+            values.write_text(manifest)
+            kustomization = checkout / "kubernetes/flux/vars/kustomization.yaml"
+            content = kustomization.read_text()
+            content = content.replace(
+                "resources:\n",
+                "resources:\n- ./flate-ci-values.yaml\n",
+                1,
+            )
+            kustomization.write_text(content)
+        PY
 
-      - if: ${{ steps.diff.outputs.diff != '' }}
-        name: Add Comment
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
-        with:
-          GITHUB_TOKEN: "${{ steps.comment-token.outputs.token }}"
-          header: "${{ github.event.pull_request.number }}/kubernetes/${{ matrix.resource }}"
-          message: |
-            ```diff
-            ${{ steps.diff.outputs.diff }}
-            ```
+    - name: Render resource and image diffs
+      env:
+        FLATE_RESTRICT_EGRESS: "true"
+      run: |
+        set -euo pipefail
+        flate --no-progress diff all \
+          --allow-missing-secrets \
+          --path pull/kubernetes \
+          --path-orig default/kubernetes \
+          --output github > rendered.diff &
+        resource_pid=$!
+        flate --no-progress diff images \
+          --allow-missing-secrets \
+          --path pull/kubernetes \
+          --path-orig default/kubernetes \
+          --output json > images.json &
+        image_pid=$!
+        wait "$resource_pid"
+        wait "$image_pid"
+
+    - name: Build rendered review
+      id: report
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+
+        rendered = Path("rendered.diff").read_text()
+        inventory = json.dumps(json.loads(Path("images.json").read_text()), indent=2)
+        body = (
+            "### Flate rendered resource diff\n\n```diff\n"
+            + (rendered or "No rendered resource changes.\n")
+            + "```\n\n<details><summary>Changed rendered image inventory</summary>\n\n```json\n"
+            + inventory
+            + "\n```\n</details>\n"
+        )
+        limit = 60_000
+        if len(body.encode()) > limit:
+            encoded = body.encode()[:limit]
+            body = encoded.decode(errors="ignore") + "\n\n_Report truncated; see the job logs._\n"
+        Path("flate-report.md").write_text(body)
+        with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+            summary.write(body)
+        with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+            output.write("body<<FLATE_REPORT_EOF\n")
+            output.write(body)
+            output.write("FLATE_REPORT_EOF\n")
+        PY
+
+    - name: Generate comment token
+      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+      id: comment-token
+      with:
+        app-id: "${{ secrets.BOT_APP_ID }}"
+        private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
+        permission-pull-requests: write
+
+    - name: Add rendered review comment
+      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+      with:
+        GITHUB_TOKEN: "${{ steps.comment-token.outputs.token }}"
+        header: "${{ github.event.pull_request.number }}/kubernetes/flate"
+        message: "${{ steps.report.outputs.body }}"
 
   success:
     if: ${{ !cancelled() }}
     needs:
-      - test
-      - diff
-    name: Flux Local - Success
+    - filter
+    - test
+    - diff
+    name: Flate - Success
     runs-on: ubuntu-latest
     steps:
-      - name: Any jobs failed?
-        if: ${{ contains(needs.*.result, 'failure') }}
-        run: exit 1
-
-      - name: All jobs passed or skipped?
-        if: ${{ !(contains(needs.*.result, 'failure')) }}
-        run: echo "All jobs passed or skipped" && echo "${{ toJSON(needs.*.result) }}"
+    - name: Check required jobs
+      env:
+        RESULTS: ${{ toJSON(needs.*.result) }}
+      run: |
+        jq --exit-status 'all(. == "success" or . == "skipped")' <<< "$RESULTS"

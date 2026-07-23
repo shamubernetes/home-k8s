@@ -32,7 +32,6 @@ spec:
         strategy: RollingUpdate
         serviceAccount:
           identifier: homelab-assistant
-          automountServiceAccountToken: true
         containers:
           app:
             image:
@@ -82,6 +81,7 @@ spec:
               runAsUser: 1000
               runAsGroup: 1000
     defaultPodOptions:
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         seccompProfile:

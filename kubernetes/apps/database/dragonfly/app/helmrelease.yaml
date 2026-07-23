@@ -68,8 +68,8 @@ spec:
               capabilities: {drop: ["ALL"]}
         serviceAccount:
           identifier: *app
-          automountServiceAccountToken: true
     defaultPodOptions:
+      automountServiceAccountToken: true
       labels:
         control-plane: controller-manager
       securityContext:

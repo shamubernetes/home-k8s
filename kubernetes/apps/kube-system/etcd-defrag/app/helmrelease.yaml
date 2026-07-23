@@ -34,7 +34,6 @@ spec:
           failedJobsHistory: 1
         serviceAccount:
           identifier: *app
-          automountServiceAccountToken: true
         containers:
           app:
             image:
@@ -58,6 +57,7 @@ spec:
                 drop:
                   - ALL
         pod:
+          automountServiceAccountToken: true
           securityContext:
             runAsNonRoot: false
             runAsUser: 0

@@ -28,7 +28,6 @@ spec:
         strategy: RollingUpdate
         serviceAccount:
           identifier: *app
-          automountServiceAccountToken: true
         containers:
           app:
             image:
@@ -60,6 +59,7 @@ spec:
               limits:
                 memory: 128Mi
     defaultPodOptions:
+      automountServiceAccountToken: true
       securityContext:
         fsGroup: 1000
         seccompProfile: {type: RuntimeDefault}

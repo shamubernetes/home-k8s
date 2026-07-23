@@ -84,6 +84,7 @@ spec:
         serviceAccount:
           identifier: gatus
     defaultPodOptions:
+      automountServiceAccountToken: true
       dnsConfig:
         options:
         - {name: ndots, value: "1"}

@@ -13,12 +13,9 @@ permissions:
   contents: read
 
 jobs:
-  filter:
-    name: Flate - Filter
+  test:
+    name: Flate - Test
     runs-on: ubuntu-latest
-    outputs:
-      relevant-files: ${{ steps.relevant.outputs.changed_files }}
-      kubernetes-files: ${{ steps.kubernetes.outputs.changed_files }}
     steps:
     - name: Get Flate-related files
       id: relevant
@@ -32,24 +29,14 @@ jobs:
           scripts/flate-render-baseline.tsv
           scripts/tests/test-flate-render.sh
 
-    - name: Get Kubernetes files
-      id: kubernetes
-      uses: bjw-s-labs/action-changed-files@a9a36fb08ce06db9b02fbd8026cc2c0945eb9841 # v0.6.0
-      with:
-        patterns: kubernetes/**/*
-
-  test:
-    if: ${{ needs.filter.outputs.relevant-files != '[]' }}
-    needs: filter
-    name: Flate - Test
-    runs-on: ubuntu-latest
-    steps:
     - name: Checkout
+      if: ${{ steps.relevant.outputs.changed_files != '[]' }}
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         persist-credentials: false
 
     - name: Setup Flate
+      if: ${{ steps.relevant.outputs.changed_files != '[]' }}
       uses: home-operations/flate/action@bf3405a189626478b0aa6ec98dc4d6f7d419df17 # v0.4.12
       with:
         base: ""
@@ -57,25 +44,32 @@ jobs:
         version: 0.4.12
 
     - name: Validate full rendered tree
+      if: ${{ steps.relevant.outputs.changed_files != '[]' }}
       env:
         FLATE_RESTRICT_EGRESS: "true"
       run: scripts/check-flate-render
 
   diff:
-    if: ${{ needs.filter.outputs.kubernetes-files != '[]' }}
-    needs: filter
     name: Flate - Diff
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+    - name: Get Kubernetes files
+      id: kubernetes
+      uses: bjw-s-labs/action-changed-files@a9a36fb08ce06db9b02fbd8026cc2c0945eb9841 # v0.6.0
+      with:
+        patterns: kubernetes/**/*
+
     - name: Checkout pull request branch
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         path: pull
         persist-credentials: false
 
     - name: Checkout default branch
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         path: default
@@ -83,6 +77,7 @@ jobs:
         ref: "${{ github.event.repository.default_branch }}"
 
     - name: Setup Flate
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       uses: home-operations/flate/action@bf3405a189626478b0aa6ec98dc4d6f7d419df17 # v0.4.12
       with:
         base: ""
@@ -90,8 +85,9 @@ jobs:
         version: 0.4.12
 
     - name: Prepare credential-free snapshots
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       env:
-        CHANGED_FILES: ${{ needs.filter.outputs.kubernetes-files }}
+        CHANGED_FILES: ${{ steps.kubernetes.outputs.changed_files }}
       run: |
         python3 - <<'PY'
         import json
@@ -138,6 +134,7 @@ jobs:
         PY
 
     - name: Render resource and image diffs
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       env:
         FLATE_RESTRICT_EGRESS: "true"
       run: |
@@ -158,6 +155,7 @@ jobs:
         wait "$image_pid"
 
     - name: Build rendered review
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       id: report
       run: |
         python3 - <<'PY'
@@ -188,7 +186,7 @@ jobs:
         PY
 
     - name: Generate comment token
-      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' && github.event.pull_request.head.repo.full_name == github.repository }}
       uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
       id: comment-token
       with:
@@ -197,7 +195,7 @@ jobs:
         permission-pull-requests: write
 
     - name: Add rendered review comment
-      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' && github.event.pull_request.head.repo.full_name == github.repository }}
       uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
       with:
         GITHUB_TOKEN: "${{ steps.comment-token.outputs.token }}"
@@ -207,7 +205,6 @@ jobs:
   success:
     if: ${{ !cancelled() }}
     needs:
-    - filter
     - test
     - diff
     name: Flate - Success

@@ -62,7 +62,8 @@ spec:
   - name: rabbitmq-topology-operator
   - name: external-secrets-secret-store
   path: ./kubernetes/apps/database/rabbitmq/cluster
-  prune: true
+  prune: false
+  suspend: true
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"

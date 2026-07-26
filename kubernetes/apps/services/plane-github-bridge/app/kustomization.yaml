@@ -6,3 +6,4 @@ resources:
 - ./deployment.yaml
 - ./service.yaml
 - ./ingress.yaml
+- ./konflate-warning-clusterrolebinding.yaml

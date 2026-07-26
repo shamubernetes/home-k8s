@@ -6,14 +6,14 @@ metadata:
   annotations:
     reloader.stakater.com/auto: "true"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: plane-github-bridge
+      app.kubernetes.io/name: plane-github-bridge-konflate-test
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: plane-github-bridge
+        app.kubernetes.io/name: plane-github-bridge-konflate-test
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -65,7 +65,7 @@ spec:
           timeoutSeconds: 2
           failureThreshold: 3
         securityContext:
-          allowPrivilegeEscalation: false
+          privileged: true
           readOnlyRootFilesystem: true
           capabilities:
             drop: ["ALL"]

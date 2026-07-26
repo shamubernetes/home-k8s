@@ -6,4 +6,3 @@ resources:
 - ./externalsecret-firecrawl.yaml
 - ./cluster.yaml
 - ./topology.yaml
-- ./networkpolicy.yaml

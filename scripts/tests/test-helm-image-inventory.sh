@@ -130,6 +130,11 @@ if [[ $(yq -r '.jobs."image-pins".steps[] | select(.name == "Check rendered work
   echo 'static-analysis workflow shard count does not match its six matrix entries' >&2
   exit 1
 fi
+if [[ $(yq -r '.jobs."image-pins".steps[] | select(.name == "Check rendered workload images") | .env.HELM_IMAGE_MAX_APPS_PER_SHARD' \
+  "${repo_root}/.github/workflows/meta-static-analysis.yaml") != 20 ]]; then
+  echo 'static-analysis workflow does not enforce the twenty-app shard latency budget' >&2
+  exit 1
+fi
 
 if (
   cd "$repo"
@@ -145,6 +150,22 @@ if (
     VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
 ); then
   echo 'out-of-range shard index was accepted' >&2
+  exit 1
+fi
+if (
+  cd "$repo"
+  HELM_IMAGE_MAX_APPS_PER_SHARD=1 HELM_IMAGE_SHARD_COUNT=1 HELM_IMAGE_SHARD_INDEX=0 \
+    VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'an oversized Helm image shard was accepted' >&2
+  exit 1
+fi
+if (
+  cd "$repo"
+  HELM_IMAGE_MAX_APPS_PER_SHARD=0 HELM_IMAGE_SHARD_COUNT=2 HELM_IMAGE_SHARD_INDEX=0 \
+    VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'an invalid Helm image shard latency budget was accepted' >&2
   exit 1
 fi
 

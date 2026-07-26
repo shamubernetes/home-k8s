@@ -176,6 +176,7 @@ jobs:
     - name: Check rendered workload images
       env:
         HELM_IMAGE_JOBS: "20"
+        HELM_IMAGE_MAX_APPS_PER_SHARD: "20"
         HELM_IMAGE_SHARD_COUNT: "6"
         HELM_IMAGE_SHARD_INDEX: ${{ matrix.index }}
       run: scripts/check-helmrelease-images

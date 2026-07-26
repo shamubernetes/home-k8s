@@ -3,6 +3,8 @@ kind: Job
 metadata:
   name: legacy-plan-cleanup
   namespace: system-upgrade
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   ttlSecondsAfterFinished: 300
   template:

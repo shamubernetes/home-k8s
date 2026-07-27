@@ -58,3 +58,24 @@ releases:
   - kube-system/cilium
   - kube-system/coredns
   - kube-system/kubelet-csr-approver
+- name: flux-operator
+  namespace: flux-system
+  createNamespace: true
+  chart: oci://ghcr.io/controlplaneio-fluxcd/charts/flux-operator
+  version: 0.57.0
+  force: false
+  values:
+  - ../kubernetes/apps/flux-system/flux-operator/app/helm-values.yaml
+  needs:
+  - observability/prometheus-operator-crds
+  - kube-system/cilium
+  - kube-system/coredns
+- name: flux-instance
+  namespace: flux-system
+  chart: oci://ghcr.io/controlplaneio-fluxcd/charts/flux-instance
+  version: 0.57.0
+  force: false
+  values:
+  - ../kubernetes/apps/flux-system/flux-instance/app/helm-values.yaml
+  needs:
+  - flux-system/flux-operator

@@ -2,21 +2,21 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: flux-operator
+  name: flux-instance
 spec:
   interval: 10m
-  releaseName: flux-operator
+  releaseName: flux-instance
   chartRef:
     kind: OCIRepository
-    name: flux-operator
+    name: flux-instance
   install:
     remediation:
       retries: 3
   upgrade:
     cleanupOnFail: true
     remediation:
-      strategy: rollback
       retries: 3
+      strategy: rollback
   valuesFrom:
   - kind: ConfigMap
-    name: flux-operator-helm-values
+    name: flux-instance-helm-values

@@ -1,0 +1,16 @@
+# Flux Operator chart values are shared by the GitOps HelmRelease and talos/helmfile recovery path.
+image:
+  repository: ghcr.io/controlplaneio-fluxcd/flux-operator
+  # renovate: datasource=docker depName=ghcr.io/controlplaneio-fluxcd/flux-operator
+  tag: v0.57.0@sha256:7baa2697d3c4d81007c02302c55a8601f02ad2052df5952b95f8a6708c7be131
+priorityClassName: system-cluster-critical
+serviceMonitor:
+  create: true
+  interval: 60s
+  scrapeTimeout: 30s
+web:
+  enabled: false
+  networkPolicy:
+    create: false
+  rbac:
+    createRoles: false

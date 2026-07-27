@@ -35,6 +35,7 @@ spec:
       closedPrTtl: 336h
       statusChecks: true
       statusCheckName: Konflate
+      # Disposable webhook-latency fixture; never merge.
       prComments: true
       publicUrl: https://konflate.${HOME_DOMAIN}
     secret:

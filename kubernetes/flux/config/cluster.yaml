@@ -25,7 +25,8 @@ metadata:
 spec:
   interval: 30m
   path: ./kubernetes/flux
-  prune: true
+  prune: false
+  deletionPolicy: Orphan
   wait: false
   sourceRef:
     kind: GitRepository

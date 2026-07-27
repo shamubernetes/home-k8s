@@ -18,6 +18,8 @@ spec:
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"
+  dependsOn:
+  - name: external-secrets-secret-store
   postBuild:
     substitute:
       APP: *app

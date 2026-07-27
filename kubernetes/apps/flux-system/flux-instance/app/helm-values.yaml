@@ -1,0 +1,211 @@
+# FluxInstance chart values are shared by the GitOps HelmRelease and talos/helmfile recovery path.
+instance:
+  distribution:
+    version: "2.8.8"
+    registry: ghcr.io/fluxcd
+  components:
+  - source-controller
+  - kustomize-controller
+  - helm-controller
+  - notification-controller
+  - image-reflector-controller
+  - image-automation-controller
+  cluster:
+    type: kubernetes
+    multitenant: false
+    networkPolicy: false
+    domain: cluster.local
+  wait: true
+  kustomize:
+    patches:
+    - target:
+        kind: Deployment
+      patch: |
+        - op: remove
+          path: /spec/template/metadata/annotations/cluster-autoscaler.kubernetes.io~1safe-to-evict
+        - op: add
+          path: /spec/template/metadata/labels/app.kubernetes.io~1instance
+          value: flux-system
+        - op: add
+          path: /spec/template/metadata/labels/app.kubernetes.io~1version
+          value: v2.8.8
+    - target:
+        kind: Deployment
+        name: helm-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/args
+          value:
+          - --events-addr=http://notification-controller.$(RUNTIME_NAMESPACE).svc.cluster.local./
+          - --watch-all-namespaces=true
+          - --log-level=info
+          - --log-encoding=json
+          - --enable-leader-election
+          - --concurrent=4
+          - --kube-api-qps=100
+          - --kube-api-burst=200
+          - --requeue-dependency=15s
+          - --feature-gates=OOMWatch=true
+          - --oom-watch-memory-threshold=95
+          - --oom-watch-interval=500ms
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/limits
+          value:
+            cpu: 2000m
+            memory: 2Gi
+    - target:
+        kind: Deployment
+        name: kustomize-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/args
+          value:
+          - --events-addr=http://notification-controller.$(RUNTIME_NAMESPACE).svc.cluster.local./
+          - --watch-all-namespaces=true
+          - --log-level=info
+          - --log-encoding=json
+          - --enable-leader-election
+          - --concurrent=4
+          - --kube-api-qps=100
+          - --kube-api-burst=200
+          - --requeue-dependency=15s
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/limits
+          value:
+            cpu: 2000m
+            memory: 2Gi
+    - target:
+        kind: Deployment
+        name: source-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/args
+          value:
+          - --events-addr=http://notification-controller.$(RUNTIME_NAMESPACE).svc.cluster.local./
+          - --watch-all-namespaces=true
+          - --log-level=info
+          - --log-encoding=json
+          - --enable-leader-election
+          - --storage-path=/data
+          - --storage-adv-addr=source-controller.$(RUNTIME_NAMESPACE).svc.cluster.local.
+          - --concurrent=4
+          - --kube-api-qps=100
+          - --kube-api-burst=200
+          - --requeue-dependency=15s
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/limits
+          value:
+            cpu: 2000m
+            memory: 2Gi
+    - target:
+        kind: Deployment
+        name: image-automation-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/args
+          value:
+          - --events-addr=http://notification-controller.$(RUNTIME_NAMESPACE).svc.cluster.local./
+          - --watch-all-namespaces=true
+          - --log-level=info
+          - --log-encoding=json
+          - --enable-leader-election
+    - target:
+        kind: Deployment
+        name: image-reflector-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/args
+          value:
+          - --events-addr=http://notification-controller.$(RUNTIME_NAMESPACE).svc.cluster.local./
+          - --watch-all-namespaces=true
+          - --log-level=info
+          - --log-encoding=json
+          - --enable-leader-election
+    - target:
+        kind: Deployment
+        name: notification-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/args
+          value:
+          - --watch-all-namespaces=true
+          - --log-level=info
+          - --log-encoding=json
+          - --enable-leader-election
+    - target:
+        kind: CustomResourceDefinition
+        name: alerts.notification.toolkit.fluxcd.io
+      patch: |
+        - op: replace
+          path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/eventSources/items/properties/kind/enum
+          value: &eventSources
+          - Bucket
+          - GitRepository
+          - Kustomization
+          - HelmRelease
+          - HelmChart
+          - HelmRepository
+          - ImageRepository
+          - ImagePolicy
+          - ImageUpdateAutomation
+          - OCIRepository
+          - ArtifactGenerator
+          - ExternalArtifact
+        - op: replace
+          path: /spec/versions/1/schema/openAPIV3Schema/properties/spec/properties/eventSources/items/properties/kind/enum
+          value: *eventSources
+    - target:
+        kind: CustomResourceDefinition
+        name: receivers.notification.toolkit.fluxcd.io
+      patch: |
+        - op: replace
+          path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/resources/items/properties/kind/enum
+          value: &receiverResources
+          - Bucket
+          - GitRepository
+          - Kustomization
+          - HelmRelease
+          - HelmChart
+          - HelmRepository
+          - ImageRepository
+          - ImagePolicy
+          - ImageUpdateAutomation
+          - OCIRepository
+          - ArtifactGenerator
+          - ExternalArtifact
+        - op: replace
+          path: /spec/versions/1/schema/openAPIV3Schema/properties/spec/properties/resources/items/properties/kind/enum
+          value: *receiverResources
+    - target:
+        kind: ClusterRole
+        name: crd-controller-flux-system
+      patch: |
+        - op: replace
+          path: /rules/11
+          value:
+            apiGroups:
+            - ""
+            resources:
+            - serviceaccounts/token
+            verbs:
+            - create
+        - op: replace
+          path: /rules/12
+          value:
+            nonResourceURLs:
+            - /livez/ping
+            verbs:
+            - head
+healthcheck:
+  enabled: true
+  timeout: 5m
+  image:
+    repository: ghcr.io/controlplaneio-fluxcd/flux-operator-cli
+    tag: v0.57.0@sha256:e46ad4e5c00d3853c77887277258d39100dd02580cfbd25168af31d20b46a04f
+    pullSecrets:
+    - name: ghcr-pull-secret
+    imagePullPolicy: IfNotPresent
+  serviceAccount:
+    create: false
+    automount: true
+    name: flux-operator

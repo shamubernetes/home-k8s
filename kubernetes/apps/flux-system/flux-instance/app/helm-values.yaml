@@ -197,15 +197,6 @@ instance:
             verbs:
             - head
 healthcheck:
-  enabled: true
-  timeout: 5m
-  image:
-    repository: ghcr.io/controlplaneio-fluxcd/flux-operator-cli
-    tag: v0.57.0@sha256:e46ad4e5c00d3853c77887277258d39100dd02580cfbd25168af31d20b46a04f
-    pullSecrets:
-    - name: ghcr-pull-secret
-    imagePullPolicy: IfNotPresent
-  serviceAccount:
-    create: false
-    automount: true
-    name: flux-operator
+  # The chart's hook label includes the OCI digest suffix (`+sha`), which Kubernetes rejects.
+  # FluxInstance readiness is verified directly by the owning Kustomization and migration checks.
+  enabled: false

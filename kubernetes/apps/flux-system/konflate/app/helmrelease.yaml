@@ -20,7 +20,7 @@ spec:
     config:
       repo: github://shamubernetes/home-k8s
       clusterPath: ""
-      refreshInterval: 30m
+      refreshInterval: 5m
       rerenderInterval: 12h
       maxDiffConcurrency: 1
       prFilterExpr: '!pr.draft && pr.baseRef == "main"'

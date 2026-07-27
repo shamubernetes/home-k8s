@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 [APPLICATION_COUNT]" >&2
+}
+
+max_per_shard=${HELM_IMAGE_APPS_PER_SHARD:-20}
+[[ $max_per_shard =~ ^[1-9][0-9]*$ ]] || {
+  printf 'HELM_IMAGE_APPS_PER_SHARD must be a positive integer: %s\n' "$max_per_shard" >&2
+  exit 1
+}
+
+if (( $# > 1 )); then
+  usage
+  exit 2
+fi
+
+if (( $# == 1 )); then
+  app_count=$1
+else
+  repo_root=$(git rev-parse --show-toplevel)
+  cd "$repo_root"
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+  candidates="${tmpdir}/candidates"
+  apps_unsorted="${tmpdir}/apps-unsorted"
+  apps="${tmpdir}/apps"
+  : > "$apps_unsorted"
+
+  if git grep -l -E \
+    '^[[:space:]]*kind:[[:space:]]*HelmRelease[[:space:]]*$' -- \
+    'kubernetes/apps/**/*.yaml' 'kubernetes/apps/**/*.yml' > "$candidates"; then
+    :
+  else
+    grep_rc=$?
+    if (( grep_rc != 1 )); then
+      echo 'failed to discover tracked HelmRelease candidate files' >&2
+      exit 1
+    fi
+  fi
+  [[ -s $candidates ]] || {
+    echo 'no tracked HelmRelease candidate files found' >&2
+    exit 1
+  }
+
+  while IFS= read -r file; do
+    dirname "$file" >> "$apps_unsorted"
+  done < "$candidates"
+  sort -u "$apps_unsorted" > "$apps"
+  app_count=$(awk 'END { print NR }' "$apps")
+fi
+
+[[ $app_count =~ ^[1-9][0-9]*$ ]] || {
+  printf 'application count must be a positive integer: %s\n' "$app_count" >&2
+  exit 1
+}
+
+shard_count=$(( (app_count + max_per_shard - 1) / max_per_shard ))
+base_size=$(( app_count / shard_count ))
+remainder=$(( app_count % shard_count ))
+
+printf '{"include":['
+for (( index = 0; index < shard_count; index++ )); do
+  size=$base_size
+  if (( index < remainder )); then
+    size=$((size + 1))
+  fi
+  if (( index > 0 )); then
+    printf ','
+  fi
+  printf '{"name":"%d/%d (%d apps)","index":%d,"count":%d,"size":%d}' \
+    "$((index + 1))" "$shard_count" "$size" "$index" "$shard_count" "$size"
+done
+printf ']}\n'

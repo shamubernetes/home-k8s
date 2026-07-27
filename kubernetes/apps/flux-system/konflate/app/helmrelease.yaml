@@ -33,8 +33,12 @@ spec:
       fetchTimeout: 1m
       closedPrMax: 25
       closedPrTtl: 336h
-      statusChecks: false
-      prComments: false
+      statusChecks: true
+      statusCheckName: Konflate
+      prComments: true
+      publicUrl: https://konflate.${HOME_DOMAIN}
+    secret:
+      existingSecret: konflate-github-app
     serviceAccount:
       create: true
       automount: false

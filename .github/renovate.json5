@@ -3,8 +3,9 @@
   timezone: "America/New_York",
   dependencyDashboard: true,
   pruneStaleBranches: true,
-  prConcurrentLimit: 10,
-  branchConcurrentLimit: 10,
+  prHourlyLimit: 5,
+  prConcurrentLimit: 0,
+  branchConcurrentLimit: 0,
   // Avoid mass rebasing every Renovate branch each run. Those updates fan out
   // GitHub Actions jobs and overload the self-hosted ARC dind runner.
   rebaseWhen: "conflicted",

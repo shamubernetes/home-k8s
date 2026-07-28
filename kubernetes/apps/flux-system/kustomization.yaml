@@ -9,4 +9,5 @@ resources:
 - ./monitoring/ks.yaml
 - ./notifications/ks.yaml
 - ./konflate/ks.yaml
+- ./oci-source-cleanup/ks.yaml
 # - ./capacitor/ks.yaml

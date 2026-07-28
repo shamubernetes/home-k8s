@@ -2,4 +2,10 @@ apiVersion: v2
 name: firecrawl
 description: A Helm chart for deploying the Firecrawl application
 type: application
-version: 0.2.0
+version: 0.2.0-maude.1
+annotations:
+  org.opencontainers.image.source: https://github.com/shamubernetes/firecrawl-helm
+  firecrawl.io/upstream-repository: firecrawl/firecrawl
+  firecrawl.io/upstream-path: examples/kubernetes/firecrawl-helm
+  firecrawl.io/upstream-commit: b4620ad6f43f14d5a28ab8ba2ce219977eda94f3
+  firecrawl.io/downstream-patch: external-services

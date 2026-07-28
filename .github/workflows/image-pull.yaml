@@ -1,0 +1,185 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Talos Image Availability
+
+on:
+  # This default-branch workflow never checks out or executes pull-request code.
+  # It verifies exact-run artifacts, PR provenance, and required checks first.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: ["Image Availability Plan"]
+    types: [completed]
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: talos-image-availability
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Verify provenance and required checks
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.verify.outputs.images }}
+      plan_digest: ${{ steps.verify.outputs.plan_digest }}
+      pull_request: ${{ steps.verify.outputs.pull_request }}
+      head_sha: ${{ steps.verify.outputs.head_sha }}
+    steps:
+    - name: Checkout trusted verifier
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: refs/heads/main
+        persist-credentials: false
+
+    - name: Download and verify source artifact
+      id: verify
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+        SOURCE_ACTOR: ${{ github.event.workflow_run.actor.login }}
+        SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+        SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+        SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      run: |
+        set -euo pipefail
+        [[ $SOURCE_HEAD_REPOSITORY == "$REPOSITORY" ]]
+        source_path=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.path')
+        [[ $source_path == '.github/workflows/image-plan.yaml' ]]
+        case "$SOURCE_EVENT" in
+          pull_request_target) [[ $SOURCE_ACTOR == 'renovate[bot]' ]] ;;
+          workflow_dispatch)
+            [[ $SOURCE_ACTOR == 'MaudeBot' ]]
+            [[ $SOURCE_HEAD_BRANCH == 'main' ]]
+            ;;
+          *) echo "unsupported source event: $SOURCE_EVENT" >&2; exit 1 ;;
+        esac
+
+        artifacts=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100")
+        mapfile -t artifact_ids < <(jq -r '.artifacts[] | select(.expired == false and (.name | startswith("talos-image-plan-"))) | .id' <<<"$artifacts")
+        [[ ${#artifact_ids[@]} -eq 1 ]]
+        artifact_size=$(jq -r '.artifacts[] | select(.id == $id) | .size_in_bytes' --argjson id "${artifact_ids[0]}" <<<"$artifacts")
+        (( artifact_size <= 1048576 ))
+        gh api "repos/${REPOSITORY}/actions/artifacts/${artifact_ids[0]}/zip" > artifact.zip
+        unzip -q artifact.zip -d artifact
+        [[ -f artifact/image-plan.json ]]
+        [[ $(find artifact -type f | wc -l | tr -d ' ') -eq 1 ]]
+
+        pr=$(jq -r '.pull_request' artifact/image-plan.json)
+        head_sha=$(jq -r '.head_sha' artifact/image-plan.json)
+        base_sha=$(jq -r '.base_sha' artifact/image-plan.json)
+        pr_json=$(gh api "repos/${REPOSITORY}/pulls/${pr}")
+        [[ $(jq -r '.state' <<<"$pr_json") == open ]]
+        [[ $(jq -r '.head.repo.full_name' <<<"$pr_json") == "$REPOSITORY" ]]
+        [[ $(jq -r '.head.sha' <<<"$pr_json") == "$head_sha" ]]
+        [[ $(jq -r '.base.sha' <<<"$pr_json") == "$base_sha" ]]
+        if [[ $SOURCE_EVENT == pull_request_target ]]; then
+          [[ $(jq -r '.user.login' <<<"$pr_json") == 'renovate[bot]' ]]
+        fi
+
+        mapfile -t changed_files < <(gh api --paginate "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" --jq '.[].filename')
+        protected='^(\.github/workflows/|scripts/|kubernetes/apps/actions-runner-system/|talos/patches/controlplane/talos-api\.yaml)'
+        for file in "${changed_files[@]}"; do
+          if [[ $file =~ $protected ]]; then
+            echo "privileged boundary changed in source pull request: $file" >&2
+            exit 1
+          fi
+        done
+
+        gh api "repos/${REPOSITORY}/commits/${head_sha}/check-runs?per_page=100" > checks.json
+        python3 - <<'PY'
+        import json
+        checks = json.load(open("checks.json"))["check_runs"]
+        required = {"Static Analysis - Success", "Flate - Success"}
+        passed = {item["name"] for item in checks if item["status"] == "completed" and item["conclusion"] == "success"}
+        missing = sorted(required - passed)
+        if missing:
+            raise SystemExit("required checks are not successful: " + ", ".join(missing))
+        PY
+
+        images=$(scripts/talos-image-plan verify \
+          --plan artifact/image-plan.json \
+          --repository "$REPOSITORY" \
+          --pull-request "$pr" \
+          --base-sha "$base_sha" \
+          --head-sha "$head_sha")
+        artifact_name=$(jq -r '.artifacts[] | select(.id == $id) | .name' --argjson id "${artifact_ids[0]}" <<<"$artifacts")
+        [[ $artifact_name == "talos-image-plan-${head_sha}" ]]
+        plan_digest=$(sha256sum artifact/image-plan.json | cut -d' ' -f1)
+        {
+          printf 'images=%s\n' "$images"
+          printf 'plan_digest=%s\n' "$plan_digest"
+          printf 'pull_request=%s\n' "$pr"
+          printf 'head_sha=%s\n' "$head_sha"
+        } >> "$GITHUB_OUTPUT"
+
+  pull:
+    name: Pull approved images on Talos workers
+    needs: preflight
+    runs-on: ghar-set-talos
+    timeout-minutes: 30
+    environment: talos-image-pull
+    env:
+      IMAGES_JSON: ${{ needs.preflight.outputs.images }}
+      PLAN_DIGEST: ${{ needs.preflight.outputs.plan_digest }}
+      PLAN_HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+      PLAN_PULL_REQUEST: ${{ needs.preflight.outputs.pull_request }}
+      TALOSCONFIG: /var/run/secrets/talos.dev/config
+    steps:
+    - name: Pull and verify approved images
+      shell: bash
+      run: |
+        set -euo pipefail
+        talosctl=/opt/talosctl/talosctl
+        [[ -x $talosctl ]]
+        "$talosctl" version --client --short
+
+        mapfile -t images < <(jq -r '.[]' <<<"$IMAGES_JSON")
+        [[ ${#images[@]} -le 20 ]]
+        nodes=(10.100.47.50 10.100.47.51)
+        max_image_bytes=5000000000
+        max_total_bytes=20000000000
+        total_bytes=0
+
+        size_bytes() {
+          local number=$1 unit=$2 multiplier
+          case "$unit" in
+            B) multiplier=1 ;;
+            KB|kB) multiplier=1000 ;;
+            MB) multiplier=1000000 ;;
+            GB) multiplier=1000000000 ;;
+            TB) multiplier=1000000000000 ;;
+            *) echo "unknown image size unit: $unit" >&2; return 1 ;;
+          esac
+          awk -v number="$number" -v multiplier="$multiplier" 'BEGIN {printf "%.0f", number * multiplier}'
+        }
+
+        printf 'plan=%s pr=%s head=%s images=%s\n' \
+          "$PLAN_DIGEST" "$PLAN_PULL_REQUEST" "$PLAN_HEAD_SHA" "${#images[@]}"
+        for image in "${images[@]}"; do
+          for node in "${nodes[@]}"; do
+            printf 'pull node=%s image=%s\n' "$node" "$image"
+            timeout 10m "$talosctl" --nodes "$node" image pull "$image"
+            read -r size unit < <(
+              "$talosctl" --nodes "$node" image list |
+                awk -v image="$image" '$2 == image {print $4, $5; exit}'
+            )
+            [[ -n ${size:-} && -n ${unit:-} ]]
+            bytes=$(size_bytes "$size" "$unit")
+            if (( bytes > max_image_bytes )); then
+              echo "image exceeds per-image size limit: $image ($size $unit)" >&2
+              exit 1
+            fi
+            total_bytes=$((total_bytes + bytes))
+            if (( total_bytes > max_total_bytes )); then
+              echo "plan exceeds aggregate size limit" >&2
+              exit 1
+            fi
+            printf 'verified node=%s image=%s size=%s%s\n' "$node" "$image" "$size" "$unit"
+          done
+        done
+        printf 'completed plan=%s total_bytes=%s\n' "$PLAN_DIGEST" "$total_bytes"

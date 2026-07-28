@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumnetworkpolicy_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ghar-set-talos
+spec:
+  endpointSelector:
+    matchLabels:
+      actions.github.com/scale-set-name: ghar-set-talos
+  ingress: []
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: ANY
+      rules:
+        dns:
+        - matchPattern: "*"
+  - toFQDNs:
+    - matchName: github.com
+    - matchName: api.github.com
+    - matchPattern: "*.github.com"
+    - matchPattern: "*.githubusercontent.com"
+    - matchPattern: "*.actions.githubusercontent.com"
+    - matchPattern: "*.blob.core.windows.net"
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  - toCIDR:
+    - 10.100.47.50/32
+    - 10.100.47.51/32
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP

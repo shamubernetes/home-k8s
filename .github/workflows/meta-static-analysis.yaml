@@ -109,9 +109,6 @@ jobs:
   validation-fixtures:
     name: Validation Fixtures
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -127,8 +124,8 @@ jobs:
 
     - name: Log in to GHCR for private chart validation
       env:
-        GHCR_TOKEN: ${{ github.token }}
-        GHCR_USERNAME: ${{ github.actor }}
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
       run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 
     - name: Run validation fixtures
@@ -202,6 +199,12 @@ jobs:
       with:
         install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
         cache: true
+
+    - name: Log in to GHCR for private chart rendering
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 
     - name: Check rendered workload images
       env:

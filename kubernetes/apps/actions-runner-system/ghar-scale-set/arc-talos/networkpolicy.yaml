@@ -33,8 +33,11 @@ spec:
         protocol: TCP
   - toCIDR:
     - 10.96.51.110/32 # default/talos; endpoint in generated Talos service-account config
-    - 10.100.47.50/32
-    - 10.100.47.51/32
+    - 10.100.47.35/32 # Talos API service backend (control plane)
+    - 10.100.47.48/32 # Talos API service backend (control plane)
+    - 10.100.47.49/32 # Talos API service backend (control plane)
+    - 10.100.47.50/32 # workflow target (worker)
+    - 10.100.47.51/32 # workflow target (worker)
     toPorts:
     - ports:
       - port: "50000"

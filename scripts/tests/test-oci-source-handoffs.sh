@@ -176,4 +176,36 @@ cp "${tmpdir}/http-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app
   PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_base" >/dev/null
 )
 
+REPOSITORY_URL=oci://ghcr.io/bjw-s-labs/helm yq \
+  '.spec.url = strenv(REPOSITORY_URL) | .spec.type = "oci"' \
+  "${fixture}/kubernetes/flux/repositories/helm/bjw-s.yaml" \
+  > "${tmpdir}/legacy-oci-source.yaml"
+mv "${tmpdir}/legacy-oci-source.yaml" \
+  "${fixture}/kubernetes/flux/repositories/helm/bjw-s.yaml"
+(
+  cd "$fixture"
+  git add .
+  git commit -qm 'legacy OCI HelmRepository source'
+)
+legacy_oci_base=$(git -C "$fixture" rev-parse HEAD)
+cp "${tmpdir}/oci-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml"
+(
+  cd "$fixture"
+  PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$legacy_oci_base" >/dev/null
+)
+
+BAD_OCI_URL=oci://ghcr.io/example/other/app-template yq \
+  '.spec.url = strenv(BAD_OCI_URL)' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/bad-oci-coordinate.yaml"
+mv "${tmpdir}/bad-oci-coordinate.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+if (
+  cd "$fixture"
+  PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$legacy_oci_base" >/dev/null 2>&1
+); then
+  echo 'FAIL OCI handoff accepted a different legacy OCI chart coordinate' >&2
+  exit 1
+fi
+
 printf 'ok: OCI source handoff fixtures passed\n'

@@ -5,11 +5,11 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/check-oci-source-handoffs <base-git-revision>
 
-Checks every changed HelmRelease that moves between an inline HTTP
-HelmRepository source and an app-local OCIRepository chartRef. A source-only
-handoff must preserve every non-source HelmRelease field, keep the exact chart
-version, use the repository OCI house pattern, and resolve to a byte-identical
-chart package.
+Checks every changed HelmRelease that moves between an inline HelmRepository
+source and an app-local OCIRepository chartRef. The legacy HelmRepository may
+use HTTP or OCI transport. A source-only handoff must preserve every non-source
+HelmRelease field, keep the exact chart version, use the repository OCI house
+pattern, and resolve to the same chart package.
 USAGE
 }
 
@@ -108,7 +108,7 @@ for path in "${changed_yaml[@]}"; do
   http_source_name=$(yq -r 'select(.kind == "HelmRelease") | .spec.chart.spec.sourceRef.name // ""' "$http_doc")
   http_source_namespace=$(yq -r 'select(.kind == "HelmRelease") | .spec.chart.spec.sourceRef.namespace // .metadata.namespace // "flux-system"' "$http_doc")
   if [[ -z $chart || -z $version || -z $http_source_name ]]; then
-    printf 'incomplete HTTP Helm source for %s\n' "$release_name" >&2
+    printf 'incomplete legacy Helm source for %s\n' "$release_name" >&2
     exit 1
   fi
 
@@ -123,13 +123,13 @@ for path in "${changed_yaml[@]}"; do
   http_source="${tmpdir}/http-source-${handoffs}.yaml"
   http_source_count=$(yq -r '[select(.kind == "HelmRepository")] | length' "$http_source")
   if [[ $http_source_count != 1 ]]; then
-    printf 'expected one HTTP HelmRepository %s/%s for %s, found %s\n' \
+    printf 'expected one legacy HelmRepository %s/%s for %s, found %s\n' \
       "$http_source_namespace" "$http_source_name" "$release_name" "$http_source_count" >&2
     exit 1
   fi
   repository_url=$(yq -r 'select(.kind == "HelmRepository") | .spec.url // ""' "$http_source")
-  if [[ $repository_url != https://* ]]; then
-    printf 'source-only OCI handoff for %s requires an HTTPS HelmRepository, got %s\n' \
+  if [[ $repository_url != https://* && $repository_url != oci://* ]]; then
+    printf 'source-only OCI handoff for %s requires an HTTPS or OCI HelmRepository, got %s\n' \
       "$release_name" "$repository_url" >&2
     exit 1
   fi
@@ -176,6 +176,14 @@ for path in "${changed_yaml[@]}"; do
       "$release_name" "${oci_url##*/}" "$chart" >&2
     exit 1
   fi
+  if [[ $repository_url == oci://* ]]; then
+    legacy_oci_url="${repository_url%/}/${chart}"
+    if [[ $oci_url != "$legacy_oci_url" ]]; then
+      printf 'OCIRepository coordinate for %s must preserve the legacy OCI chart URL: %s != %s\n' \
+        "$release_name" "$oci_url" "$legacy_oci_url" >&2
+      exit 1
+    fi
+  fi
   if [[ $media_type != application/vnd.cncf.helm.chart.content.v1.tar+gzip || $layer_operation != copy ]]; then
     printf 'OCIRepository %s must select and copy the Helm chart content layer\n' "$release_name" >&2
     exit 1
@@ -184,7 +192,11 @@ for path in "${changed_yaml[@]}"; do
   http_pull="${tmpdir}/http-${handoffs}"
   oci_pull="${tmpdir}/oci-${handoffs}"
   mkdir -p "$http_pull" "$oci_pull"
-  helm pull "$chart" --repo "$repository_url" --version "$version" --destination "$http_pull"
+  if [[ $repository_url == https://* ]]; then
+    helm pull "$chart" --repo "$repository_url" --version "$version" --destination "$http_pull"
+  else
+    helm pull "${repository_url%/}/${chart}" --version "$version" --destination "$http_pull"
+  fi
   helm pull "$oci_url" --version "$version" --destination "$oci_pull"
   mapfile -t http_packages < <(find "$http_pull" -maxdepth 1 -type f -name '*.tgz' -print)
   mapfile -t oci_packages < <(find "$oci_pull" -maxdepth 1 -type f -name '*.tgz' -print)
@@ -193,11 +205,11 @@ for path in "${changed_yaml[@]}"; do
     exit 1
   fi
   if ! cmp -s "${http_packages[0]}" "${oci_packages[0]}"; then
-    printf 'HTTP and OCI chart packages differ for %s %s\n' "$chart" "$version" >&2
+    printf 'legacy and OCI chart packages differ for %s %s\n' "$chart" "$version" >&2
     exit 1
   fi
 
-  printf 'ok: %s source-only handoff uses byte-identical %s %s artifacts\n' \
+  printf 'ok: %s source-only handoff preserves %s %s artifact identity\n' \
     "$release_name" "$chart" "$version"
 done
 

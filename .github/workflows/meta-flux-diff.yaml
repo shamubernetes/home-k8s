@@ -31,7 +31,7 @@ jobs:
 
     - name: Checkout
       if: ${{ steps.relevant.outputs.changed_files != '[]' }}
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
@@ -63,14 +63,14 @@ jobs:
 
     - name: Checkout pull request branch
       if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         path: pull
         persist-credentials: false
 
     - name: Checkout default branch
       if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         path: default
         persist-credentials: false
@@ -96,12 +96,10 @@ jobs:
         from pathlib import Path
 
         changed = json.loads(os.environ["CHANGED_FILES"])
-        # Only operator chart changes need private OCI credentials. The n8n
-        # instance directory contains plain GitOps manifests and is safe to diff.
+        # Cowbell's private OCI chart needs credentials. The Shamubernetes
+        # operator charts are anonymously readable and safe for credential-free diffing.
         blocked = (
             "kubernetes/apps/services/cowbell/",
-            "kubernetes/apps/services/git-mirror-operator/",
-            "kubernetes/apps/services/n8n-operator/operator/",
         )
         unsupported = [path for path in changed if path.startswith(blocked)]
         if unsupported:

@@ -63,17 +63,31 @@ for resource in \
   fi
 done
 
-kubectl -n tools exec deployment/firecrawl-api -- python3 - <<'PY'
-import socket
+kubectl -n tools exec -i deployment/firecrawl-api -- node - <<'JS'
+const net = require("node:net");
+const targets = [
+  ["dragonfly.database.svc.cluster.local", 6379],
+  ["postgres17-pooler.database.svc.cluster.local", 5432],
+  ["rabbitmq.database.svc.cluster.local", 5672],
+];
 
-for host, port in (
-    ("dragonfly.database.svc.cluster.local", 6379),
-    ("postgres17-pooler.database.svc.cluster.local", 5432),
-    ("rabbitmq.database.svc.cluster.local", 5672),
-):
-    with socket.create_connection((host, port), timeout=10):
-        print(f"{host}:{port} ok")
-PY
+Promise.all(targets.map(([host, port]) => new Promise((resolve, reject) => {
+  const socket = net.createConnection({host, port, timeout: 10000});
+  socket.once("connect", () => {
+    console.log(`${host}:${port} ok`);
+    socket.destroy();
+    resolve();
+  });
+  socket.once("timeout", () => {
+    socket.destroy();
+    reject(new Error(`${host}:${port} timed out`));
+  });
+  socket.once("error", reject);
+}))).catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+JS
 
 status=$(curl --retry 5 --retry-delay 2 --silent --show-error --output /dev/null \
   --write-out '%{http_code}' https://firecrawl.thezoo.house)

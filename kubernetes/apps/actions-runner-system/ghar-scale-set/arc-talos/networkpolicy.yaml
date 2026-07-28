@@ -32,6 +32,7 @@ spec:
       - port: "443"
         protocol: TCP
   - toCIDR:
+    - 10.96.51.110/32 # default/talos; endpoint in generated Talos service-account config
     - 10.100.47.50/32
     - 10.100.47.51/32
     toPorts:

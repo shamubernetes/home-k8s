@@ -52,7 +52,7 @@ jobs:
         source_path=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.path')
         [[ $source_path == '.github/workflows/image-plan.yaml' ]]
         case "$SOURCE_EVENT" in
-          pull_request_target) [[ $SOURCE_ACTOR == 'renovate[bot]' ]] ;;
+          pull_request_target) [[ $SOURCE_ACTOR == 'shamubot[bot]' ]] ;;
           workflow_dispatch)
             [[ $SOURCE_ACTOR == 'MaudeBot' ]]
             [[ $SOURCE_HEAD_BRANCH == 'main' ]]
@@ -79,7 +79,7 @@ jobs:
         [[ $(jq -r '.head.sha' <<<"$pr_json") == "$head_sha" ]]
         [[ $(jq -r '.base.sha' <<<"$pr_json") == "$base_sha" ]]
         if [[ $SOURCE_EVENT == pull_request_target ]]; then
-          [[ $(jq -r '.user.login' <<<"$pr_json") == 'renovate[bot]' ]]
+          [[ $(jq -r '.user.login' <<<"$pr_json") == 'shamubot[bot]' ]]
         fi
 
         mapfile -t changed_files < <(gh api --paginate "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" --jq '.[].filename')

@@ -32,7 +32,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login == 'renovate[bot]')
+      github.event.pull_request.user.login == 'shamubot[bot]')
     runs-on: ubuntu-latest
     steps:
     - name: Resolve trusted pull request metadata

@@ -17,4 +17,24 @@ spec:
         command:
         - /bin/sh
         - -c
-        - kubectl delete plan.upgrade.cattle.io talos kubernetes --ignore-not-found=true
+        - |
+          set -eu
+
+          kubectl delete plan.upgrade.cattle.io talos kubernetes --ignore-not-found=true
+
+          for label in plan.upgrade.cattle.io/talos plan.upgrade.cattle.io/kubernetes; do
+            nodes="$(kubectl get nodes -l "${label}" -o name)"
+            for node in ${nodes}; do
+              ready="$(kubectl get "${node}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')"
+              if [ "${ready}" != "True" ]; then
+                echo "Skipping ${node}: node is not Ready" >&2
+                continue
+              fi
+
+              unschedulable="$(kubectl get "${node}" -o jsonpath='{.spec.unschedulable}')"
+              if [ "${unschedulable}" = "true" ]; then
+                kubectl uncordon "${node}"
+              fi
+              kubectl label "${node}" "${label}-"
+            done
+          done

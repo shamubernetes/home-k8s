@@ -5,11 +5,15 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/check-oci-source-handoffs <base-git-revision>
 
-Checks every changed HelmRelease that moves between an inline HTTP
-HelmRepository source and an app-local OCIRepository chartRef. A source-only
-handoff must preserve every non-source HelmRelease field, keep the exact chart
-version, use the repository OCI house pattern, and resolve to a byte-identical
-chart package.
+Checks every changed HelmRelease that moves between an inline HelmRepository
+source and an app-local OCIRepository chartRef. A source-only handoff must
+preserve every non-source HelmRelease field, keep the exact chart version, use
+the repository OCI house pattern, and resolve to a byte-identical chart package.
+
+Intentional rollout-bearing handoffs must annotate the OCIRepository with
+oci.home.arpa/allow-rollout: "true". This explicit exception is required for
+OCI-backed HelmRepository conversions and permits a verified exact-version OCI
+package that differs from its HTTP publication.
 USAGE
 }
 
@@ -128,8 +132,8 @@ for path in "${changed_yaml[@]}"; do
     exit 1
   fi
   repository_url=$(yq -r 'select(.kind == "HelmRepository") | .spec.url // ""' "$http_source")
-  if [[ $repository_url != https://* ]]; then
-    printf 'source-only OCI handoff for %s requires an HTTPS HelmRepository, got %s\n' \
+  if [[ $repository_url != https://* && $repository_url != oci://* ]]; then
+    printf 'OCI handoff for %s requires an HTTPS or OCI HelmRepository, got %s\n' \
       "$release_name" "$repository_url" >&2
     exit 1
   fi
@@ -162,6 +166,7 @@ for path in "${changed_yaml[@]}"; do
   ref_keys=$(yq -o=json -I=0 'select(.kind == "OCIRepository") | .spec.ref | keys' "$oci_source" | jq -r 'join(",")')
   media_type=$(yq -r 'select(.kind == "OCIRepository") | .spec.layerSelector.mediaType // ""' "$oci_source")
   layer_operation=$(yq -r 'select(.kind == "OCIRepository") | .spec.layerSelector.operation // ""' "$oci_source")
+  rollout_allowed=$(yq -r 'select(.kind == "OCIRepository") | .metadata.annotations."oci.home.arpa/allow-rollout" // "false"' "$oci_source")
   if [[ $oci_name != "$release_name" || $oci_url != oci://* ]]; then
     printf 'invalid app-local OCIRepository identity or URL for %s\n' "$release_name" >&2
     exit 1
@@ -184,7 +189,16 @@ for path in "${changed_yaml[@]}"; do
   http_pull="${tmpdir}/http-${handoffs}"
   oci_pull="${tmpdir}/oci-${handoffs}"
   mkdir -p "$http_pull" "$oci_pull"
-  helm pull "$chart" --repo "$repository_url" --version "$version" --destination "$http_pull"
+  if [[ $repository_url == oci://* ]]; then
+    if [[ $rollout_allowed != true ]]; then
+      printf 'OCI-backed HelmRepository conversion for %s requires oci.home.arpa/allow-rollout: "true"\n' \
+        "$release_name" >&2
+      exit 1
+    fi
+    helm pull "${repository_url%/}/${chart}" --version "$version" --destination "$http_pull"
+  else
+    helm pull "$chart" --repo "$repository_url" --version "$version" --destination "$http_pull"
+  fi
   helm pull "$oci_url" --version "$version" --destination "$oci_pull"
   mapfile -t http_packages < <(find "$http_pull" -maxdepth 1 -type f -name '*.tgz' -print)
   mapfile -t oci_packages < <(find "$oci_pull" -maxdepth 1 -type f -name '*.tgz' -print)
@@ -193,11 +207,16 @@ for path in "${changed_yaml[@]}"; do
     exit 1
   fi
   if ! cmp -s "${http_packages[0]}" "${oci_packages[0]}"; then
-    printf 'HTTP and OCI chart packages differ for %s %s\n' "$chart" "$version" >&2
-    exit 1
+    if [[ $rollout_allowed != true ]]; then
+      printf 'HelmRepository and OCI chart packages differ for %s %s\n' "$chart" "$version" >&2
+      exit 1
+    fi
+    printf 'ok: %s rollout-approved handoff uses exact OCI version %s with different package bytes\n' \
+      "$release_name" "$version"
+    continue
   fi
 
-  printf 'ok: %s source-only handoff uses byte-identical %s %s artifacts\n' \
+  printf 'ok: %s OCI handoff uses byte-identical %s %s artifacts\n' \
     "$release_name" "$chart" "$version"
 done
 

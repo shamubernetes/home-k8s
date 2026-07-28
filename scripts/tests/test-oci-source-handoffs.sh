@@ -122,6 +122,7 @@ spec:
       retries: 3
 YAML
 cp "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml" "${tmpdir}/oci-helmrelease.yaml"
+cp "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" "${tmpdir}/oci-source.yaml"
 
 (
   cd "$fixture"
@@ -164,6 +165,22 @@ if (
   exit 1
 fi
 
+ALLOW=true yq '.metadata.annotations."oci.home.arpa/allow-rollout" = strenv(ALLOW)' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/rollout-approved-source.yaml"
+mv "${tmpdir}/rollout-approved-source.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+(
+  cd "$fixture"
+  FAKE_HELM_MISMATCH=true PATH="${tmpdir}/bin:${PATH}" \
+    scripts/check-oci-source-handoffs "$base" >/dev/null
+)
+yq 'del(.metadata.annotations."oci.home.arpa/allow-rollout")' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/source-without-approval.yaml"
+mv "${tmpdir}/source-without-approval.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+
 (
   cd "$fixture"
   git add .
@@ -174,6 +191,41 @@ cp "${tmpdir}/http-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app
 (
   cd "$fixture"
   PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_base" >/dev/null
+)
+
+git -C "$fixture" reset --hard -q "$base"
+URL=oci://ghcr.io/bjw-s-labs/helm yq '.spec.url = strenv(URL)' \
+  "${fixture}/kubernetes/flux/repositories/helm/bjw-s.yaml" \
+  > "${tmpdir}/oci-helmrepository.yaml"
+mv "${tmpdir}/oci-helmrepository.yaml" \
+  "${fixture}/kubernetes/flux/repositories/helm/bjw-s.yaml"
+git -C "$fixture" add .
+git -C "$fixture" commit -qm 'base OCI-backed HelmRepository'
+oci_helmrepo_base=$(git -C "$fixture" rev-parse HEAD)
+cp "${tmpdir}/oci-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml"
+cp "${tmpdir}/oci-source.yaml" "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+cat > "${fixture}/kubernetes/apps/media/pasta/app/kustomization.yaml" <<'YAML'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ocirepository.yaml
+- helmrelease.yaml
+YAML
+if (
+  cd "$fixture"
+  PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_helmrepo_base" >/dev/null 2>&1
+); then
+  echo 'FAIL OCI-backed HelmRepository conversion did not require rollout approval' >&2
+  exit 1
+fi
+ALLOW=true yq '.metadata.annotations."oci.home.arpa/allow-rollout" = strenv(ALLOW)' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/approved-oci-source.yaml"
+mv "${tmpdir}/approved-oci-source.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+(
+  cd "$fixture"
+  PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_helmrepo_base" >/dev/null
 )
 
 printf 'ok: OCI source handoff fixtures passed\n'

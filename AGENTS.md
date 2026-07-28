@@ -203,10 +203,15 @@ handoff, never as a chart upgrade:
 - Run `scripts/check-oci-source-handoffs <base-git-revision>` before commit.
   The guard requires matching source versions, no non-source HelmRelease
   changes, the app-local OCI house pattern, and byte-identical HTTP and OCI
-  chart packages.
-- Require no rendered workload change, pod restart, resource replacement,
-  delete/prune operation, or application downtime. Roll back by restoring only
-  the prior HelmRelease source reference.
+  chart packages by default. For an explicitly approved rollout-bearing
+  migration, annotate the OCIRepository with
+  `oci.home.arpa/allow-rollout: "true"`; this is required for OCI-backed
+  HelmRepository conversions and exact-version package mismatches.
+- Unless a rollout is explicitly approved, require no rendered workload
+  change, pod restart, resource replacement, delete/prune operation, or
+  application downtime. An approved rollout still preserves chart versions,
+  release identity, Services, PVCs, data, and every non-source HelmRelease
+  field.
 - Keep HTTP HelmRepository sources when upstream has no reliable exact OCI
   publication, and document that exception rather than creating a mirror by
   default.

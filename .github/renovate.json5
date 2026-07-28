@@ -27,6 +27,13 @@
     "github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5",
   ],
   labels: ["renovate"],
+  hostRules: [
+    {
+      matchHost: "https://grafana.com/api/",
+      concurrentRequestLimit: 1,
+      maxRequestsPerSecond: 1,
+    },
+  ],
   prCreation: "immediate",
   vulnerabilityAlerts: {
     enabled: true,

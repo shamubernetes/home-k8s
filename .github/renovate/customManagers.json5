@@ -2,10 +2,23 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "customManagers": [
     {
+      customType: "regex",
+      description: "Track Homebrew setup action CalVer releases",
+      managerFilePatterns: ["/^\\.github/workflows/publish-schemas\\.yaml$/"],
+      matchStrings: [
+        "uses: Homebrew/actions/setup-homebrew@(?<currentDigest>[a-f0-9]{40}) # (?<currentValue>\\S+)",
+      ],
+      autoReplaceStringTemplate: "uses: Homebrew/actions/setup-homebrew@{{newDigest}} # {{newValue}}",
+      datasourceTemplate: "github-tags",
+      depNameTemplate: "Homebrew/actions",
+      packageNameTemplate: "Homebrew/actions",
+      versioningTemplate: "loose",
+    },
+    {
       "customType": "regex",
       "description": ["Process Grafana dashboards"],
-      "fileMatch": [
-        "(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$"
+      "managerFilePatterns": [
+        "/(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$/"
       ],
       "matchStrings": [
         "depName=\"(?<depName>.*)\"\\n(?<indentation>\\s+)gnetId: (?<packageName>\\d+)\\n.+revision: (?<currentValue>\\d+)"
@@ -17,8 +30,8 @@
     {
       "customType": "regex",
       "description": ["Process CloudnativePG Postgresql version"],
-      "fileMatch": [
-        "(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$"
+      "managerFilePatterns": [
+        "/(^|/)kubernetes/.+\\.ya?ml(?:\\.j2)?$/"
       ],
       "matchStrings": [
         "imageName: (?<depName>\\S+):(?<currentValue>\\S+)"
@@ -39,7 +52,7 @@
         // foobar_version: v1.0.0
         // # renovate: datasource=docker depName=ghcr.io/foo/bar
         // FOOBAR_VERSION=v1.0.0
-        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n.+(:\\s|=)(&\\S+\\s)?(?<currentValue>\\S+)",
+        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n.+(:\\s|=)(&\\S+\\s)?(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?",
       ],
       datasourceTemplate: "{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}",
     },

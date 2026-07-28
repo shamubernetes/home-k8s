@@ -1,6 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
+    {
+      description: "Cowbell chart promotion is managed by its signed webhook",
+      matchFileNames: ["kubernetes/apps/services/cowbell/app/ocirepository.yaml"],
+      enabled: false,
+    },
+    {
+      description: "Ignore Vector's container image metadata field",
+      matchFileNames: ["kubernetes/apps/observability/vector/app/agent/resources/vector.yaml"],
+      matchPackageNames: ["container_image"],
+      enabled: false,
+    },
+    {
+      description: "Homebrew Actions uses a custom CalVer manager",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["Homebrew/actions"],
+      enabled: false,
+    },
     // Allowed Versions
     {
       "description": "PostgreSQL 17",

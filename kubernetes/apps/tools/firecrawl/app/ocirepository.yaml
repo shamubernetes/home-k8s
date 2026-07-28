@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: firecrawl
+spec:
+  interval: 30m
+  url: oci://ghcr.io/shamubernetes/charts/firecrawl
+  ref:
+    tag: 0.2.0-maude.1
+  secretRef:
+    name: ghcr-pull-secret
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+    - issuer: ^https://token.actions.githubusercontent.com$
+      subject: ^https://github.com/shamubernetes/firecrawl-helm/.*$

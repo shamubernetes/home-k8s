@@ -2,7 +2,7 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
 metadata:
-  name: mc-router
+  name: documenso-gotenberg
 spec:
   interval: 30m
   layerSelector:

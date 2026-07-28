@@ -39,6 +39,16 @@ task kubernetes:new-app category=tools app=example args="--image docker.io/libra
 # Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
 
+# Start a verified, bounded Alertmanager maintenance silence
+export MAINTENANCE_KUBECONFIG="$HOME/.kube/config"
+scripts/cluster-maintenance begin \
+  --reason "planned cluster maintenance" --duration 4h
+
+# Renew, inspect, or end the exact silence returned by begin
+scripts/cluster-maintenance renew --id <silence-id> --duration 4h
+scripts/cluster-maintenance status --id <silence-id>
+scripts/cluster-maintenance end --id <silence-id>
+
 ```
 
 ## Architecture
@@ -166,6 +176,34 @@ Prefer existing shared data platforms before adding embedded sidecars or app-loc
 - Per-node configs: `talos/clusterconfig/`
 - Patches: `talos/patches/global/` and `talos/patches/controlplane/`
 - Encrypted secrets: `talos/talsecret.sops.yaml`
+
+## Cluster Maintenance Windows
+
+Any planned operation that can roll, drain, reboot, reconcile, or otherwise disrupt
+live cluster resources must create a bounded maintenance silence immediately before
+the first live mutation. Use `scripts/cluster-maintenance begin`; do not construct
+ad hoc Alertmanager payloads. The helper coordinates concurrent starts with a
+continuously renewed Kubernetes Lease, then releases it through resource-versioned
+expiration so an earlier operator cannot delete a successor's lock. Release failures
+warn without hiding an already verified silence ID, and the Lease ages out safely.
+The helper fails closed when Alertmanager HA is not ready, an unrelated unsilenced
+warning or critical alert already exists, another owned maintenance window is active,
+or both concrete Alertmanager pods do not report the same active silence and expected
+alert coverage.
+
+The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
+and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.
+The default window is four hours and the hard maximum is 24 hours. Record the exact
+silence ID returned by `begin`, renew only that ID when maintenance must continue,
+and call `end` only after the merged revision, Flux/Tuppr convergence, affected
+workloads, cluster health, and component-relevant routes or APIs are verified. A
+failed rollout keeps the window active only while a protected GitOps rollback is
+being executed and verified. If the operator dies, the finite expiry restores
+alerting automatically.
+
+Run `scripts/cluster-maintenance probe` to exercise Alertmanager's create/read/delete
+lifecycle with a unique, preflighted alert name. The probe rejects any collision,
+verifies both members, and expires itself in cleanup even when verification fails.
 
 ## App-Template (bjw-s) Pattern
 

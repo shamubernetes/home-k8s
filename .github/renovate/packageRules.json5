@@ -18,6 +18,24 @@
       matchPackageNames: ["Homebrew/actions"],
       enabled: false,
     },
+    {
+      description: "GitHub Actions Python versions are not digest-pinnable",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["actions/python-versions"],
+      pinDigests: false,
+    },
+    {
+      description: "Flux OCI sources update tags without synthesizing digest fields",
+      matchManagers: ["flux"],
+      matchFileNames: ["**/ocirepository.yaml"],
+      pinDigests: false,
+    },
+    {
+      description: "Flux manages OCIRepository dependencies without regex duplication",
+      matchManagers: ["custom.regex"],
+      matchFileNames: ["**/ocirepository.yaml"],
+      enabled: false,
+    },
     // Allowed Versions
     {
       "description": "PostgreSQL 17",

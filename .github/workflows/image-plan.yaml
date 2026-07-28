@@ -40,14 +40,13 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         EVENT_NAME: ${{ github.event_name }}
-        EVENT_PATH: ${{ github.event_path }}
         INPUT_PULL_REQUEST: ${{ inputs.pull_request }}
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
         if [[ $EVENT_NAME == pull_request_target ]]; then
-          pr=$(jq -r '.pull_request.number' "$EVENT_PATH")
-          metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$EVENT_PATH")
+          pr=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
+          metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$GITHUB_EVENT_PATH")
         else
           pr=$INPUT_PULL_REQUEST
           metadata=$(gh api "repos/${REPOSITORY}/pulls/${pr}")

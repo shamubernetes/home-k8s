@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/check-oci-source-handoffs <base-git-revision>
+
+Checks every changed HelmRelease that moves between an inline HTTP
+HelmRepository source and an app-local OCIRepository chartRef. A source-only
+handoff must preserve every non-source HelmRelease field, keep the exact chart
+version, use the repository OCI house pattern, and resolve to a byte-identical
+chart package.
+USAGE
+}
+
+if [[ ${1:-} == '-h' || ${1:-} == '--help' ]]; then
+  usage
+  exit 0
+fi
+if (( $# != 1 )); then
+  usage >&2
+  exit 1
+fi
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    printf 'missing required command: %s\n' "$1" >&2
+    exit 1
+  }
+}
+for command in cmp git helm jq kubectl tar yq; do
+  need "$command"
+done
+
+base=$1
+repo_root=$(git rev-parse --show-toplevel)
+git -C "$repo_root" cat-file -e "${base}^{commit}"
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+base_root="${tmpdir}/base"
+mkdir -p "$base_root"
+git -C "$repo_root" archive "$base" kubernetes/apps kubernetes/flux/repositories/helm \
+  | tar -x -C "$base_root"
+
+mapfile -t changed_yaml < <(
+  git -C "$repo_root" diff --name-only --diff-filter=AM "$base" -- \
+    ':(glob)kubernetes/apps/**/*.yaml' \
+    | sort -u
+)
+
+handoffs=0
+for path in "${changed_yaml[@]}"; do
+  [[ -f "${repo_root}/${path}" ]] || continue
+  if ! git -C "$repo_root" cat-file -e "${base}:${path}" 2>/dev/null; then
+    continue
+  fi
+
+  base_doc="${tmpdir}/base-$(printf '%s' "$path" | tr '/ ' '__').yaml"
+  git -C "$repo_root" show "${base}:${path}" > "$base_doc"
+  head_doc="${repo_root}/${path}"
+
+  base_count=$(yq -r '[select(.kind == "HelmRelease")] | length' "$base_doc")
+  head_count=$(yq -r '[select(.kind == "HelmRelease")] | length' "$head_doc")
+  [[ $base_count == 1 && $head_count == 1 ]] || continue
+
+  base_kind=$(yq -r 'select(.kind == "HelmRelease") | .spec.chartRef.kind // .spec.chart.spec.sourceRef.kind // "HelmRepository"' "$base_doc")
+  head_kind=$(yq -r 'select(.kind == "HelmRelease") | .spec.chartRef.kind // .spec.chart.spec.sourceRef.kind // "HelmRepository"' "$head_doc")
+  if [[ ! ( $base_kind == HelmRepository && $head_kind == OCIRepository ) &&
+        ! ( $base_kind == OCIRepository && $head_kind == HelmRepository ) ]]; then
+    continue
+  fi
+
+  handoffs=$((handoffs + 1))
+  release_name=$(yq -r 'select(.kind == "HelmRelease") | .metadata.name' "$head_doc")
+  base_release_name=$(yq -r 'select(.kind == "HelmRelease") | .metadata.name' "$base_doc")
+  if [[ -z $release_name || $release_name != "$base_release_name" ]]; then
+    printf 'OCI source handoff changes HelmRelease identity in %s\n' "$path" >&2
+    exit 1
+  fi
+
+  base_normalized="${tmpdir}/base-normalized-${handoffs}.json"
+  head_normalized="${tmpdir}/head-normalized-${handoffs}.json"
+  yq -o=json -I=0 'select(.kind == "HelmRelease") | del(.spec.chart, .spec.chartRef)' "$base_doc" \
+    | jq -S . > "$base_normalized"
+  yq -o=json -I=0 'select(.kind == "HelmRelease") | del(.spec.chart, .spec.chartRef)' "$head_doc" \
+    | jq -S . > "$head_normalized"
+  if ! cmp -s "$base_normalized" "$head_normalized"; then
+    printf 'OCI source handoff for %s changes non-source HelmRelease fields\n' "$release_name" >&2
+    diff -u "$base_normalized" "$head_normalized" >&2 || true
+    exit 1
+  fi
+
+  if [[ $base_kind == HelmRepository ]]; then
+    http_doc=$base_doc
+    http_root=$base_root
+    oci_doc=$head_doc
+    oci_root=$repo_root
+  else
+    http_doc=$head_doc
+    http_root=$repo_root
+    oci_doc=$base_doc
+    oci_root=$base_root
+  fi
+
+  chart=$(yq -r 'select(.kind == "HelmRelease") | .spec.chart.spec.chart // ""' "$http_doc")
+  version=$(yq -r 'select(.kind == "HelmRelease") | .spec.chart.spec.version // ""' "$http_doc")
+  http_source_name=$(yq -r 'select(.kind == "HelmRelease") | .spec.chart.spec.sourceRef.name // ""' "$http_doc")
+  http_source_namespace=$(yq -r 'select(.kind == "HelmRelease") | .spec.chart.spec.sourceRef.namespace // .metadata.namespace // "flux-system"' "$http_doc")
+  if [[ -z $chart || -z $version || -z $http_source_name ]]; then
+    printf 'incomplete HTTP Helm source for %s\n' "$release_name" >&2
+    exit 1
+  fi
+
+  http_sources="${tmpdir}/http-sources-${handoffs}.yaml"
+  kubectl kustomize "${http_root}/kubernetes/flux/repositories/helm" > "$http_sources"
+  HTTP_SOURCE_NAME=$http_source_name HTTP_SOURCE_NAMESPACE=$http_source_namespace \
+    yq 'select(
+      .kind == "HelmRepository" and
+      .metadata.name == strenv(HTTP_SOURCE_NAME) and
+      (.metadata.namespace // "flux-system") == strenv(HTTP_SOURCE_NAMESPACE)
+    )' "$http_sources" > "${tmpdir}/http-source-${handoffs}.yaml"
+  http_source="${tmpdir}/http-source-${handoffs}.yaml"
+  http_source_count=$(yq -r '[select(.kind == "HelmRepository")] | length' "$http_source")
+  if [[ $http_source_count != 1 ]]; then
+    printf 'expected one HTTP HelmRepository %s/%s for %s, found %s\n' \
+      "$http_source_namespace" "$http_source_name" "$release_name" "$http_source_count" >&2
+    exit 1
+  fi
+  repository_url=$(yq -r 'select(.kind == "HelmRepository") | .spec.url // ""' "$http_source")
+  if [[ $repository_url != https://* ]]; then
+    printf 'source-only OCI handoff for %s requires an HTTPS HelmRepository, got %s\n' \
+      "$release_name" "$repository_url" >&2
+    exit 1
+  fi
+
+  chartref_name=$(yq -r 'select(.kind == "HelmRelease") | .spec.chartRef.name // ""' "$oci_doc")
+  chartref_namespace=$(yq -r 'select(.kind == "HelmRelease") | .spec.chartRef.namespace // ""' "$oci_doc")
+  if [[ $chartref_name != "$release_name" || -n $chartref_namespace ]]; then
+    printf 'OCI chartRef for %s must use the same app-local name with no namespace override\n' "$release_name" >&2
+    exit 1
+  fi
+
+  app_rel=$(dirname "$path")
+  oci_app="${oci_root}/${app_rel}"
+  oci_context="${tmpdir}/oci-context-${handoffs}.yaml"
+  kubectl kustomize "$oci_app" > "$oci_context"
+  OCI_SOURCE_NAME=$chartref_name \
+    yq 'select(.kind == "OCIRepository" and .metadata.name == strenv(OCI_SOURCE_NAME))' \
+      "$oci_context" > "${tmpdir}/oci-source-${handoffs}.yaml"
+  oci_source="${tmpdir}/oci-source-${handoffs}.yaml"
+  oci_source_count=$(yq -r '[select(.kind == "OCIRepository")] | length' "$oci_source")
+  if [[ $oci_source_count != 1 ]]; then
+    printf 'expected one app-local OCIRepository named %s for %s, found %s\n' \
+      "$chartref_name" "$release_name" "$oci_source_count" >&2
+    exit 1
+  fi
+
+  oci_name=$(yq -r 'select(.kind == "OCIRepository") | .metadata.name // ""' "$oci_source")
+  oci_url=$(yq -r 'select(.kind == "OCIRepository") | .spec.url // ""' "$oci_source")
+  oci_tag=$(yq -r 'select(.kind == "OCIRepository") | .spec.ref.tag // ""' "$oci_source")
+  ref_keys=$(yq -o=json -I=0 'select(.kind == "OCIRepository") | .spec.ref | keys' "$oci_source" | jq -r 'join(",")')
+  media_type=$(yq -r 'select(.kind == "OCIRepository") | .spec.layerSelector.mediaType // ""' "$oci_source")
+  layer_operation=$(yq -r 'select(.kind == "OCIRepository") | .spec.layerSelector.operation // ""' "$oci_source")
+  if [[ $oci_name != "$release_name" || $oci_url != oci://* ]]; then
+    printf 'invalid app-local OCIRepository identity or URL for %s\n' "$release_name" >&2
+    exit 1
+  fi
+  if [[ $ref_keys != tag || $oci_tag != "$version" ]]; then
+    printf 'OCIRepository %s must use the prior chart version as its only tag ref: expected %s, got %s\n' \
+      "$release_name" "$version" "${oci_tag:-none}" >&2
+    exit 1
+  fi
+  if [[ ${oci_url##*/} != "$chart" ]]; then
+    printf 'OCI chart basename for %s does not match prior chart name: %s != %s\n' \
+      "$release_name" "${oci_url##*/}" "$chart" >&2
+    exit 1
+  fi
+  if [[ $media_type != application/vnd.cncf.helm.chart.content.v1.tar+gzip || $layer_operation != copy ]]; then
+    printf 'OCIRepository %s must select and copy the Helm chart content layer\n' "$release_name" >&2
+    exit 1
+  fi
+
+  http_pull="${tmpdir}/http-${handoffs}"
+  oci_pull="${tmpdir}/oci-${handoffs}"
+  mkdir -p "$http_pull" "$oci_pull"
+  helm pull "$chart" --repo "$repository_url" --version "$version" --destination "$http_pull"
+  helm pull "$oci_url" --version "$version" --destination "$oci_pull"
+  mapfile -t http_packages < <(find "$http_pull" -maxdepth 1 -type f -name '*.tgz' -print)
+  mapfile -t oci_packages < <(find "$oci_pull" -maxdepth 1 -type f -name '*.tgz' -print)
+  if (( ${#http_packages[@]} != 1 || ${#oci_packages[@]} != 1 )); then
+    printf 'expected one downloaded chart package from each source for %s\n' "$release_name" >&2
+    exit 1
+  fi
+  if ! cmp -s "${http_packages[0]}" "${oci_packages[0]}"; then
+    printf 'HTTP and OCI chart packages differ for %s %s\n' "$chart" "$version" >&2
+    exit 1
+  fi
+
+  printf 'ok: %s source-only handoff uses byte-identical %s %s artifacts\n' \
+    "$release_name" "$chart" "$version"
+done
+
+if (( handoffs == 0 )); then
+  printf 'ok: no HTTP/OCI Helm source handoffs detected\n'
+fi

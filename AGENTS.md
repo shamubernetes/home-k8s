@@ -176,6 +176,41 @@ When using `app-template` charts:
 - Internal ingress: `ingressClassName: internal`
 - LoadBalancers: Use Cilium annotation `io.cilium/lb-ipam-ips: "${IPAM_IP_*}"`
 
+## OCI Helm Chart Sources
+
+Use an app-local `OCIRepository` plus same-namespace
+`HelmRelease.spec.chartRef` whenever upstream publishes the exact chart through
+a reliable public OCI registry. The source and release use the app name, and
+the OCI source must select the Helm chart content layer:
+
+```yaml
+spec:
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    tag: 1.2.3
+  url: oci://registry.example/charts/example
+```
+
+Treat HTTP HelmRepository-to-OCIRepository conversion as a source-only
+handoff, never as a chart upgrade:
+
+- Add and reconcile the OCIRepository before changing the HelmRelease.
+- Preserve the exact chart version, release identity, values, strategies,
+  hooks, post-renderers, target namespace, and every non-source field.
+- Keep the shared HelmRepository through the observation and rollback window.
+- Run `scripts/check-oci-source-handoffs <base-git-revision>` before commit.
+  The guard requires matching source versions, no non-source HelmRelease
+  changes, the app-local OCI house pattern, and byte-identical HTTP and OCI
+  chart packages.
+- Require no rendered workload change, pod restart, resource replacement,
+  delete/prune operation, or application downtime. Roll back by restoring only
+  the prior HelmRelease source reference.
+- Keep HTTP HelmRepository sources when upstream has no reliable exact OCI
+  publication, and document that exception rather than creating a mirror by
+  default.
+
 ## New App Validation
 
 Before committing a new or changed app, run:

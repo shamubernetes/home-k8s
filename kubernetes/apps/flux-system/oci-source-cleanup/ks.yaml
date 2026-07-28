@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: oci-source-cleanup
+  namespace: flux-system
+spec:
+  interval: 30m
+  path: ./kubernetes/apps/flux-system/oci-source-cleanup/app
+  prune: true
+  deletionPolicy: Delete
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: true
+  timeout: 5m

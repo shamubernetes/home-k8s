@@ -137,6 +137,7 @@ jobs:
         scripts/tests/test-helm-image-inventory.sh
         scripts/tests/test-k8s-schemas.sh
         scripts/tests/test-oci-source-handoffs.sh
+        scripts/tests/test-talos-image-plan.sh
         scripts/tests/test-talos-version-sync.sh
 
     - name: Check OCI source-only handoffs

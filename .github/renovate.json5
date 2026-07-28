@@ -10,7 +10,7 @@
     {
       description: "GitHub Actions Helm inputs are version-only",
       matchManagers: ["github-actions"],
-      matchPackageNames: ["helm"],
+      matchPackageNames: ["helm/helm"],
       pinDigests: false,
     },
     {

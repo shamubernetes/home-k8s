@@ -8,6 +8,7 @@ fixture="${tmpdir}/repo"
 mkdir -p \
   "${fixture}/scripts" \
   "${fixture}/kubernetes/apps/media/pasta/app" \
+  "${fixture}/kubernetes/apps/media/pasta/app/chart/templates" \
   "${fixture}/kubernetes/flux/repositories/helm" \
   "${tmpdir}/bin"
 cp "${repo_root}/scripts/check-oci-source-handoffs" "${fixture}/scripts/check-oci-source-handoffs"
@@ -79,12 +80,32 @@ printf '%s\n' "$content" > "${destination}/chart.tgz"
 SH
 chmod +x "${tmpdir}/bin/helm"
 
+cat > "${fixture}/kubernetes/apps/media/pasta/app/chart/templates/configmap.yaml" <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+data:
+  value: {{ .Values.value }}
+YAML
+
 git -C "$fixture" init -q
 git -C "$fixture" config user.email test@example.invalid
 git -C "$fixture" config user.name test
 git -C "$fixture" add .
 git -C "$fixture" commit -qm 'base HTTP chart'
 base=$(git -C "$fixture" rev-parse HEAD)
+
+# A chart template is intentionally invalid as raw YAML. Changing it alongside
+# a handoff must not make the guard feed Helm template syntax to yq.
+cat > "${fixture}/kubernetes/apps/media/pasta/app/chart/templates/configmap.yaml" <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+data:
+  value: {{ default "updated" .Values.value }}
+YAML
 
 cat > "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" <<'YAML'
 apiVersion: source.toolkit.fluxcd.io/v1

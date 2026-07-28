@@ -122,6 +122,12 @@ jobs:
         install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
         cache: true
 
+    - name: Log in to GHCR for private chart validation
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
     - name: Run validation fixtures
       run: |
         scripts/tests/test-validation.sh
@@ -193,6 +199,12 @@ jobs:
       with:
         install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
         cache: true
+
+    - name: Log in to GHCR for private chart rendering
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 
     - name: Check rendered workload images
       env:

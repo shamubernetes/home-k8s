@@ -222,6 +222,16 @@ handoff, never as a chart upgrade:
   the OCI HelmRepository abstraction unless a separately approved rollout is
   intended and validated.
 
+Firecrawl chart promotion is intentionally separate from Renovate. The private,
+signed downstream publisher dispatches `.github/workflows/firecrawl-chart-promotion.yaml`
+with an immutable version and digest. That workflow verifies the package and exact
+OIDC identity, updates only the OCI tag plus its digest comment, opens a ShamuBot
+pull request, and enables automatic merge behind the protected Static Analysis and
+Flate checks. A GitHub push webhook then asks Hermes to run
+`scripts/verify-firecrawl-live <main-commit>` and close the matching
+`firecrawl-promotion` issue only after Flux, Helm, all workloads, the public route,
+and shared Dragonfly, PostgreSQL, and RabbitMQ connections pass.
+
 ## New App Validation
 
 Before committing a new or changed app, run:

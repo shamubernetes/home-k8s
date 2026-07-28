@@ -73,6 +73,11 @@ fi
 
 workflow=.github/workflows/image-plan.yaml
 grep -Fq "if [[ \$EVENT_NAME == pull_request_target ]]; then" "$workflow"
+grep -Fq "jq -r '.pull_request.number' \"\$GITHUB_EVENT_PATH\"" "$workflow"
+if grep -Fq 'github.event_path' "$workflow"; then
+  echo 'unsupported github.event_path context remains in planner' >&2
+  exit 1
+fi
 grep -Fq "github.event.pull_request.user.login == 'shamubot[bot]'" "$workflow"
 grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "$workflow"
 

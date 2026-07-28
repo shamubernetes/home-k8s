@@ -42,6 +42,8 @@ spec:
                   operator: DoesNotExist
         restartPolicy: Never
         securityContext:
+          runAsUser: 1001
+          runAsGroup: 123
           fsGroup: 123
           fsGroupChangePolicy: OnRootMismatch
           seccompProfile:

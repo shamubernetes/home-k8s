@@ -23,6 +23,7 @@ jobs:
     name: Verify provenance and required checks
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       images: ${{ steps.verify.outputs.images }}
       plan_digest: ${{ steps.verify.outputs.plan_digest }}
@@ -90,16 +91,30 @@ jobs:
           fi
         done
 
-        gh api "repos/${REPOSITORY}/commits/${head_sha}/check-runs?per_page=100" > checks.json
-        python3 - <<'PY'
-        import json
-        checks = json.load(open("checks.json"))["check_runs"]
-        required = {"Static Analysis - Success", "Flate - Success"}
-        passed = {item["name"] for item in checks if item["status"] == "completed" and item["conclusion"] == "success"}
-        missing = sorted(required - passed)
-        if missing:
-            raise SystemExit("required checks are not successful: " + ", ".join(missing))
-        PY
+        # Branch protection binds both contexts to GitHub Actions app ID 15368.
+        # The plan workflow can finish first, so wait boundedly for concurrent CI.
+        for attempt in {1..60}; do
+          gh api "repos/${REPOSITORY}/commits/${head_sha}/check-runs?filter=latest&per_page=100" > checks.json
+          set +e
+          check_result=$(scripts/talos-check-gate \
+            --checks checks.json \
+            --app-id 15368 \
+            --required 'Static Analysis - Success' \
+            --required 'Flate - Success' 2>&1)
+          check_status=$?
+          set -e
+          case "$check_status" in
+            0) printf '%s\n' "$check_result"; break ;;
+            10)
+              if (( attempt == 60 )); then
+                printf '%s\n' "$check_result" >&2
+                exit 1
+              fi
+              sleep 10
+              ;;
+            *) printf '%s\n' "$check_result" >&2; exit "$check_status" ;;
+          esac
+        done
 
         images=$(scripts/talos-image-plan verify \
           --plan artifact/image-plan.json \

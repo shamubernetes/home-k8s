@@ -45,7 +45,7 @@ jobs:
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
-        if [[ $EVENT_NAME == pull_request ]]; then
+        if [[ $EVENT_NAME == pull_request_target ]]; then
           pr=$(jq -r '.pull_request.number' "$EVENT_PATH")
           metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$EVENT_PATH")
         else

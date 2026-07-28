@@ -73,10 +73,11 @@ fi
 
 workflow=.github/workflows/image-plan.yaml
 grep -Fq "if [[ \$EVENT_NAME == pull_request_target ]]; then" "$workflow"
-grep -Fq "github.event.pull_request.user.login == 'renovate[bot]'" "$workflow"
+grep -Fq "github.event.pull_request.user.login == 'shamubot[bot]'" "$workflow"
 grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "$workflow"
 
 grep -Fq 'scripts/talos-check-gate' .github/workflows/image-pull.yaml
 grep -Fq -- '--app-id 15368' .github/workflows/image-pull.yaml
+grep -Fq "pull_request_target) [[ \$SOURCE_ACTOR == 'shamubot[bot]' ]]" .github/workflows/image-pull.yaml
 
 printf 'ok: Talos workflow event and trusted-check gates\n'

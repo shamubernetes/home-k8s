@@ -6,9 +6,14 @@ metadata:
   namespace: actions-runner-system
 spec:
   interval: 10m
-  chartRef:
-    kind: OCIRepository
-    name: ghar-set-zoo
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.14.2
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
   driftDetection:
     mode: enabled
   install:

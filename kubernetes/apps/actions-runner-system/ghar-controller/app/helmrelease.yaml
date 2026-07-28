@@ -5,9 +5,14 @@ metadata:
   name: ghar-controller
 spec:
   interval: 10m
-  chartRef:
-    kind: OCIRepository
-    name: ghar-controller
+  chart:
+    spec:
+      chart: gha-runner-scale-set-controller
+      version: 0.14.2
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
   driftDetection:
     mode: enabled
   install:

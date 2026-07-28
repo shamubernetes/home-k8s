@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ./certificate.yaml
+- ./externalsecret.yaml
+- ./ocirepository.yaml
+- ./helmrelease.yaml
+- ./verification-cronjob.yaml
+configMapGenerator:
+- name: mosquitto-config
+  files:
+  - ./resources/mosquitto.conf
+- name: mosquitto-verification
+  files:
+  - ./resources/verify.sh
+generatorOptions:
+  disableNameSuffixHash: true

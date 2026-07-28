@@ -64,6 +64,14 @@ for path in "${changed_yaml[@]}"; do
   git -C "$repo_root" show "${base}:${path}" > "$base_doc"
   head_doc="${repo_root}/${path}"
 
+  # Helm templates use a .yaml extension but are not parseable YAML until Helm
+  # renders them. Ignore changed files that are not themselves HelmRelease docs
+  # before invoking yq.
+  if ! grep -Eq '^kind:[[:space:]]+HelmRelease[[:space:]]*$' "$base_doc" ||
+     ! grep -Eq '^kind:[[:space:]]+HelmRelease[[:space:]]*$' "$head_doc"; then
+    continue
+  fi
+
   base_count=$(yq -r '[select(.kind == "HelmRelease")] | length' "$base_doc")
   head_count=$(yq -r '[select(.kind == "HelmRelease")] | length' "$head_doc")
   [[ $base_count == 1 && $head_count == 1 ]] || continue

@@ -2,6 +2,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./ocirepository.yaml
+- ./gotenberg-ocirepository.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
 - ./gotenberg-helmrelease.yaml

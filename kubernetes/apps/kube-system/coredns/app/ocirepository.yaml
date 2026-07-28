@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  annotations:
+    oci.home.arpa/allow-rollout: "true"
+  name: coredns
+spec:
+  interval: 30m
+  url: oci://ghcr.io/coredns/charts/coredns
+  ref:
+    tag: 1.46.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

@@ -7,7 +7,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/shamubernetes/charts/firecrawl
   ref:
-    tag: 0.2.0-maude.1
+    tag: 0.2.0-maude.2
   secretRef:
     name: ghcr-pull-secret
   layerSelector:

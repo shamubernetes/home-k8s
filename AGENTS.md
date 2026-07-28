@@ -210,6 +210,12 @@ handoff, never as a chart upgrade:
 - Keep HTTP HelmRepository sources when upstream has no reliable exact OCI
   publication, and document that exception rather than creating a mirror by
   default.
+- Do not treat an OCI-backed `HelmRepository` to `OCIRepository` conversion as
+  source-only. Flux decorates OCIRepository chart versions with OCI digest build
+  metadata, which can change templates that reference `.Chart.Version` and roll
+  workloads even when the chart archive is identical. Leave these releases on
+  the OCI HelmRepository abstraction unless a separately approved rollout is
+  intended and validated.
 
 ## New App Validation
 

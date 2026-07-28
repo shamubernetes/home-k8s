@@ -161,12 +161,13 @@ jobs:
         printf 'plan=%s pr=%s head=%s images=%s\n' \
           "$PLAN_DIGEST" "$PLAN_PULL_REQUEST" "$PLAN_HEAD_SHA" "${#images[@]}"
         for image in "${images[@]}"; do
+          digest=${image##*@}
           for node in "${nodes[@]}"; do
             printf 'pull node=%s image=%s\n' "$node" "$image"
             timeout 10m "$talosctl" --nodes "$node" image pull "$image"
             read -r size unit < <(
               "$talosctl" --nodes "$node" image list |
-                awk -v image="$image" '$2 == image {print $4, $5; exit}'
+                awk -v digest="$digest" '$3 == digest {print $4, $5; exit}'
             )
             [[ -n ${size:-} && -n ${unit:-} ]]
             bytes=$(size_bytes "$size" "$unit")

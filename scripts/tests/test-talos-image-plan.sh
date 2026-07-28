@@ -68,3 +68,14 @@ if scripts/talos-image-plan build \
 fi
 
 printf 'ok: Talos image plans bind trusted metadata to immutable approved images\n'
+
+digest='sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a'
+read -r size unit < <(
+  awk -v digest="$digest" '$3 == digest {print $4, $5; exit}' <<'TABLE'
+NODE           IMAGE                                                                 DIGEST                                                                    SIZE     LABELS
+10.100.47.50   registry.k8s.io/pause:3.10                                            sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a   320 kB   io.cri-containerd.image=managed
+10.100.47.50   registry.k8s.io/pause@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a   sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a   320 kB   io.cri-containerd.image=managed
+TABLE
+)
+[[ $size == 320 && $unit == kB ]]
+printf 'ok: Talos image list size lookup\n'

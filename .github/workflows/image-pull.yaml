@@ -212,29 +212,70 @@ jobs:
       checks: write
       contents: read
     steps:
-    - name: Publish exact-head result
+    - name: Build exact-trigger result evidence
+      id: result
       env:
-        GH_TOKEN: ${{ github.token }}
+        CONSUMER_RUN_ID: ${{ github.run_id }}
         HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
         PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+        PULL_REQUEST: ${{ needs.preflight.outputs.pull_request }}
         PULL_RESULT: ${{ needs.pull.result }}
-        REPOSITORY: ${{ github.repository }}
-        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         SOURCE_RUN_ID: ${{ needs.preflight.outputs.source_run_id }}
         TRIGGER_ID: ${{ needs.preflight.outputs.trigger_id }}
       run: |
         set -euo pipefail
         conclusion=failure
-        summary="Talos image pre-pull did not complete successfully."
+        summary='Talos image pre-pull did not complete successfully.'
         if [[ $PREFLIGHT_RESULT == success && $PULL_RESULT == success ]]; then
           conclusion=success
-          summary="All approved images are available on every configured Talos worker."
+          summary='All approved images are available on every configured Talos worker.'
         fi
         jq -n \
           --arg conclusion "$conclusion" \
+          --arg head_sha "$HEAD_SHA" \
+          --arg trigger_id "$TRIGGER_ID" \
+          --argjson consumer_run_id "$CONSUMER_RUN_ID" \
+          --argjson pull_request "$PULL_REQUEST" \
+          --argjson source_run_id "$SOURCE_RUN_ID" \
+          '{
+            schema_version: 1,
+            source_run_id: $source_run_id,
+            consumer_run_id: $consumer_run_id,
+            pull_request: $pull_request,
+            head_sha: $head_sha,
+            trigger_id: $trigger_id,
+            conclusion: $conclusion
+          }' > talos-image-prepull-result.json
+        {
+          printf 'conclusion=%s\n' "$conclusion"
+          printf 'summary=%s\n' "$summary"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Upload exact-trigger result evidence
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: talos-image-prepull-result-${{ github.run_id }}
+        path: talos-image-prepull-result.json
+        if-no-files-found: error
+        retention-days: 1
+
+    - name: Publish exact-head result
+      env:
+        CONCLUSION: ${{ steps.result.outputs.conclusion }}
+        GH_TOKEN: ${{ github.token }}
+        HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        SOURCE_RUN_ID: ${{ needs.preflight.outputs.source_run_id }}
+        SUMMARY: ${{ steps.result.outputs.summary }}
+        TRIGGER_ID: ${{ needs.preflight.outputs.trigger_id }}
+      run: |
+        set -euo pipefail
+        jq -n \
+          --arg conclusion "$CONCLUSION" \
           --arg external_id "talos-image-prepull:${SOURCE_RUN_ID}:${GITHUB_RUN_ID}:${TRIGGER_ID}" \
           --arg head_sha "$HEAD_SHA" \
-          --arg summary "$summary" \
+          --arg summary "$SUMMARY" \
           --arg url "$RUN_URL" \
           '{
             name: "Talos Image Prepull",

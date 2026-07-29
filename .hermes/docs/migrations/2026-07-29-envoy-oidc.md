@@ -1,7 +1,7 @@
 # Workstream H, Envoy Gateway native OIDC migration
 
 Date: 2026-07-29
-Status: H1 complete; isolated Sonarr H2 canary live, interactive identity checks pending
+Status: H1 and isolated Sonarr H2 acceptance complete; canary retired before production cutover
 
 ## Scope boundary
 
@@ -74,7 +74,7 @@ Resources:
 
 The Pocket ID client requires PKCE S256 and registers both the exact authorization callback and root logout callback. The live Envoy 1.38.1 OAuth2 filter generates a verifier and S256 challenge. OIDC cookies are host-only, Secure, HttpOnly, and SameSite=Lax. Access and ID tokens are not forwarded upstream.
 
-PR #4229 deployed the canary at merge revision `2a9f1c95abf12e898f1e0220bee510e80cd1b39b`. PR #4231 added its required CI contract at `4a04f876ed2aa5bd9901a1a91e0227cfd142ad3e`. Flux applied both. Canary DNS resolves to Envoy internal `10.100.47.248`; production Sonarr remains on NGINX internal `10.100.47.250`.
+PR #4229 deployed the canary at merge revision `2a9f1c95abf12e898f1e0220bee510e80cd1b39b`. PR #4231 added its required CI contract at `4a04f876ed2aa5bd9901a1a91e0227cfd142ad3e`. Flux applied both. Kilian completed the allowed-user browser acceptance and reported all exercised behavior working; a nonmember test was accepted as not applicable, and a separate rollback drill was declined. On 2026-07-29 he requested removal because the route targets the real Sonarr backend. The canary resources, dedicated Pocket ID client, and 1Password item were therefore retired before any production cutover. Production Sonarr remains on NGINX internal `10.100.47.250`.
 
 ## Acceptance matrix
 

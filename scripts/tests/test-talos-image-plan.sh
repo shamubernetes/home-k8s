@@ -9,6 +9,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 base_sha=1111111111111111111111111111111111111111
 head_sha=2222222222222222222222222222222222222222
+trigger_id='pull_request_target:42:synchronize:2026-07-29T00:33:35Z'
 image='ghcr.io/example/app:v2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 printf '%s\n' '["ghcr.io/example/app:v1@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]' > "$tmpdir/base.json"
 printf '["%s"]\n' "$image" > "$tmpdir/head.json"
@@ -20,6 +21,7 @@ scripts/talos-image-plan build \
   --pull-request 42 \
   --base-sha "$base_sha" \
   --head-sha "$head_sha" \
+  --trigger-id "$trigger_id" \
   --output "$tmpdir/plan.json"
 
 actual=$(scripts/talos-image-plan verify \
@@ -27,8 +29,21 @@ actual=$(scripts/talos-image-plan verify \
   --repository shamubernetes/home-k8s \
   --pull-request 42 \
   --base-sha "$base_sha" \
-  --head-sha "$head_sha")
+  --head-sha "$head_sha" \
+  --trigger-id "$trigger_id")
 [[ $actual == "[\"${image}\"]" ]]
+
+if scripts/talos-image-plan verify \
+  --plan "$tmpdir/plan.json" \
+  --repository shamubernetes/home-k8s \
+  --pull-request 42 \
+  --base-sha "$base_sha" \
+  --head-sha "$head_sha" \
+  --trigger-id 'pull_request_target:42:reopened:2026-07-29T00:34:00Z' \
+  >/dev/null 2>&1; then
+  echo 'mismatched trigger correlation was accepted' >&2
+  exit 1
+fi
 
 printf '%s\n' '["example/app:v2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]' > "$tmpdir/head.json"
 scripts/talos-image-plan build \
@@ -38,6 +53,7 @@ scripts/talos-image-plan build \
   --pull-request 42 \
   --base-sha "$base_sha" \
   --head-sha "$head_sha" \
+  --trigger-id "$trigger_id" \
   --output "$tmpdir/plan.json"
 grep -Fq 'docker.io/example/app' "$tmpdir/plan.json"
 
@@ -49,6 +65,7 @@ if scripts/talos-image-plan build \
   --pull-request 42 \
   --base-sha "$base_sha" \
   --head-sha "$head_sha" \
+  --trigger-id "$trigger_id" \
   --output "$tmpdir/plan.json" >/dev/null 2>&1; then
   echo 'mutable image was accepted' >&2
   exit 1
@@ -62,6 +79,7 @@ if scripts/talos-image-plan build \
   --pull-request 42 \
   --base-sha "$base_sha" \
   --head-sha "$head_sha" \
+  --trigger-id "$trigger_id" \
   --output "$tmpdir/plan.json" >/dev/null 2>&1; then
   echo 'unapproved registry was accepted' >&2
   exit 1

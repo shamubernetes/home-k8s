@@ -29,16 +29,20 @@ jobs:
     - name: Resolve trusted pull request metadata
       id: metadata
       env:
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
         pr=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
         metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$GITHUB_EVENT_PATH")
+        trigger_id="pull_request_target:${pr}:${EVENT_ACTION}:${EVENT_UPDATED_AT}"
         [[ $(jq -r '.head_repo' <<<"$metadata") == "$REPOSITORY" ]]
         {
           printf 'pull_request=%s\n' "$pr"
           printf 'base_sha=%s\n' "$(jq -r '.base_sha' <<<"$metadata")"
           printf 'head_sha=%s\n' "$(jq -r '.head_sha' <<<"$metadata")"
+          printf 'trigger_id=%s\n' "$trigger_id"
         } >> "$GITHUB_OUTPUT"
 
     - name: Checkout pull request head
@@ -111,6 +115,7 @@ jobs:
         HEAD_SHA: ${{ steps.metadata.outputs.head_sha }}
         PULL_REQUEST: ${{ steps.metadata.outputs.pull_request }}
         REPOSITORY: ${{ github.repository }}
+        TRIGGER_ID: ${{ steps.metadata.outputs.trigger_id }}
       run: |
         set -euo pipefail
         base/scripts/talos-image-plan build \
@@ -120,13 +125,15 @@ jobs:
           --pull-request "$PULL_REQUEST" \
           --base-sha "$BASE_SHA" \
           --head-sha "$HEAD_SHA" \
+          --trigger-id "$TRIGGER_ID" \
           --output image-plan.json
         base/scripts/talos-image-plan verify \
           --plan image-plan.json \
           --repository "$REPOSITORY" \
           --pull-request "$PULL_REQUEST" \
           --base-sha "$BASE_SHA" \
-          --head-sha "$HEAD_SHA" >/dev/null
+          --head-sha "$HEAD_SHA" \
+          --trigger-id "$TRIGGER_ID" >/dev/null
 
     - name: Upload image plan
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -135,3 +142,55 @@ jobs:
         path: image-plan.json
         if-no-files-found: error
         retention-days: 1
+
+  report:
+    name: Report immutable image plan
+    if: ${{ always() && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: plan
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+    steps:
+    - name: Publish exact-trigger plan result
+      env:
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+        GH_TOKEN: ${{ github.token }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PLAN_RESULT: ${{ needs.plan.result }}
+        PULL_REQUEST: ${{ github.event.pull_request.number }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        conclusion=failure
+        summary='The trusted image planner did not complete successfully.'
+        if [[ $PLAN_RESULT == success ]]; then
+          conclusion=success
+          summary='The immutable image plan was rendered and verified.'
+        fi
+        trigger_id="pull_request_target:${PULL_REQUEST}:${EVENT_ACTION}:${EVENT_UPDATED_AT}"
+        jq -n \
+          --arg conclusion "$conclusion" \
+          --arg external_id "talos-image-plan:${RUN_ID}:${trigger_id}" \
+          --arg head_sha "$HEAD_SHA" \
+          --arg summary "$summary" \
+          --arg url "$RUN_URL" \
+          '{
+            name: "Talos Image Plan Attempt",
+            head_sha: $head_sha,
+            status: "completed",
+            conclusion: $conclusion,
+            external_id: $external_id,
+            details_url: $url,
+            output: {
+              title: "Talos Image Plan Attempt",
+              summary: $summary
+            }
+          }' | gh api \
+            "repos/${REPOSITORY}/check-runs" \
+            --method POST \
+            --header 'Accept: application/vnd.github+json' \
+            --input - >/dev/null

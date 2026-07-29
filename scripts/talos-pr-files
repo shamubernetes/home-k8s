@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Extract current and previous paths from a slurped GitHub PR-files response."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import NoReturn
+
+
+def fail(message: str) -> NoReturn:
+    raise SystemExit(message)
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        fail("usage: talos-pr-files FILE")
+
+    try:
+        pages = json.loads(Path(sys.argv[1]).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"invalid pull-request files payload: {exc}")
+
+    if not isinstance(pages, list) or not pages:
+        fail("pull-request files payload must contain at least one page")
+
+    paths: list[str] = []
+    for page in pages:
+        if not isinstance(page, list):
+            fail("pull-request files payload pages must be arrays")
+        for entry in page:
+            if not isinstance(entry, dict):
+                fail("pull-request file entries must be objects")
+            filename = entry.get("filename")
+            if not isinstance(filename, str) or not filename:
+                fail("pull-request file entry is missing filename")
+            paths.append(filename)
+            previous = entry.get("previous_filename")
+            if previous is not None:
+                if not isinstance(previous, str) or not previous:
+                    fail("pull-request file entry has invalid previous_filename")
+                paths.append(previous)
+
+    if not paths:
+        fail("pull request has no changed files")
+
+    print("\n".join(dict.fromkeys(paths)))
+
+
+if __name__ == "__main__":
+    main()

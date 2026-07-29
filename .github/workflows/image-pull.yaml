@@ -14,10 +14,6 @@ permissions:
   contents: read
   pull-requests: read
 
-concurrency:
-  group: talos-image-availability
-  cancel-in-progress: false
-
 jobs:
   preflight:
     name: Verify provenance and required checks
@@ -29,6 +25,8 @@ jobs:
       plan_digest: ${{ steps.verify.outputs.plan_digest }}
       pull_request: ${{ steps.verify.outputs.pull_request }}
       head_sha: ${{ steps.verify.outputs.head_sha }}
+      source_run_id: ${{ steps.verify.outputs.source_run_id }}
+      trigger_id: ${{ steps.verify.outputs.trigger_id }}
     steps:
     - name: Checkout trusted verifier
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,12 +41,13 @@ jobs:
         REPOSITORY: ${{ github.repository }}
         SOURCE_EVENT: ${{ github.event.workflow_run.event }}
         SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+        SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
       run: |
         set -euo pipefail
         [[ $SOURCE_HEAD_REPOSITORY == "$REPOSITORY" ]]
-        source_path=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.path')
-        [[ $source_path == '.github/workflows/image-plan.yaml' ]]
+        source_run=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")
+        [[ $(jq -r '.path' <<<"$source_run") == '.github/workflows/image-plan.yaml' ]]
         [[ $SOURCE_EVENT == pull_request_target ]]
 
         artifacts=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100")
@@ -64,24 +63,25 @@ jobs:
         pr=$(jq -r '.pull_request' artifact/image-plan.json)
         head_sha=$(jq -r '.head_sha' artifact/image-plan.json)
         base_sha=$(jq -r '.base_sha' artifact/image-plan.json)
+        trigger_id=$(jq -r '.trigger_id' artifact/image-plan.json)
         pr_json=$(gh api "repos/${REPOSITORY}/pulls/${pr}")
         [[ $(jq -r '.state' <<<"$pr_json") == open ]]
         [[ $(jq -r '.head.repo.full_name' <<<"$pr_json") == "$REPOSITORY" ]]
         [[ $(jq -r '.head.sha' <<<"$pr_json") == "$head_sha" ]]
         [[ $(jq -r '.base.sha' <<<"$pr_json") == "$base_sha" ]]
+        [[ $SOURCE_HEAD_SHA == "$head_sha" ]]
         {
           printf 'pull_request=%s\n' "$pr"
           printf 'head_sha=%s\n' "$head_sha"
+          printf 'source_run_id=%s\n' "$SOURCE_RUN_ID"
+          printf 'trigger_id=%s\n' "$trigger_id"
         } >> "$GITHUB_OUTPUT"
 
         gh api --paginate --slurp \
-          "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" > pr-files-pages.json
-        jq -e 'type == "array" and length > 0 and all(.[]; type == "array")' \
-          pr-files-pages.json >/dev/null
-        jq -r '.[][] | .filename, (.previous_filename // empty)' \
-          pr-files-pages.json > changed-files.txt
+          "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" \
+          > changed-files.json
+        scripts/talos-pr-files changed-files.json > changed-files.txt
         mapfile -t changed_files < changed-files.txt
-        (( ${#changed_files[@]} > 0 ))
         protected='^(\.github/workflows/|scripts/|kubernetes/apps/actions-runner-system/|talos/patches/controlplane/talos-api\.yaml)'
         for file in "${changed_files[@]}"; do
           if [[ $file =~ $protected ]]; then
@@ -93,7 +93,10 @@ jobs:
         # Branch protection binds both contexts to GitHub Actions app ID 15368.
         # The plan workflow can finish first, so wait boundedly for concurrent CI.
         for attempt in {1..60}; do
-          gh api "repos/${REPOSITORY}/commits/${head_sha}/check-runs?filter=latest&per_page=100" > checks.json
+          gh api --paginate --slurp \
+            "repos/${REPOSITORY}/commits/${head_sha}/check-runs?filter=all&per_page=100" \
+            > check-pages.json
+          jq '{check_runs: [.[].check_runs[]]}' check-pages.json > checks.json
           set +e
           check_result=$(scripts/talos-check-gate \
             --checks checks.json \
@@ -120,7 +123,8 @@ jobs:
           --repository "$REPOSITORY" \
           --pull-request "$pr" \
           --base-sha "$base_sha" \
-          --head-sha "$head_sha")
+          --head-sha "$head_sha" \
+          --trigger-id "$trigger_id")
         artifact_name=$(jq -r '.artifacts[] | select(.id == $id) | .name' --argjson id "${artifact_ids[0]}" <<<"$artifacts")
         [[ $artifact_name == "talos-image-plan-${head_sha}" ]]
         plan_digest=$(sha256sum artifact/image-plan.json | cut -d' ' -f1)
@@ -216,6 +220,8 @@ jobs:
         PULL_RESULT: ${{ needs.pull.result }}
         REPOSITORY: ${{ github.repository }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        SOURCE_RUN_ID: ${{ needs.preflight.outputs.source_run_id }}
+        TRIGGER_ID: ${{ needs.preflight.outputs.trigger_id }}
       run: |
         set -euo pipefail
         conclusion=failure
@@ -226,6 +232,7 @@ jobs:
         fi
         jq -n \
           --arg conclusion "$conclusion" \
+          --arg external_id "talos-image-prepull:${SOURCE_RUN_ID}:${GITHUB_RUN_ID}:${TRIGGER_ID}" \
           --arg head_sha "$HEAD_SHA" \
           --arg summary "$summary" \
           --arg url "$RUN_URL" \
@@ -234,6 +241,7 @@ jobs:
             head_sha: $head_sha,
             status: "completed",
             conclusion: $conclusion,
+            external_id: $external_id,
             details_url: $url,
             output: {
               title: "Talos Image Prepull",

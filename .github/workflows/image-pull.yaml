@@ -52,7 +52,9 @@ jobs:
         source_path=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.path')
         [[ $source_path == '.github/workflows/image-plan.yaml' ]]
         case "$SOURCE_EVENT" in
-          pull_request_target) [[ $SOURCE_ACTOR == 'shamubot[bot]' ]] ;;
+          pull_request_target)
+            [[ $SOURCE_ACTOR == 'shamubot[bot]' || $SOURCE_ACTOR == 'MaudeBot' ]]
+            ;;
           workflow_dispatch)
             [[ $SOURCE_ACTOR == 'MaudeBot' ]]
             [[ $SOURCE_HEAD_BRANCH == 'main' ]]

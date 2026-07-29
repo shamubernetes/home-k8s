@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: zoo-fleet
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: zoo-fleet
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    fullnameOverride: zoo-fleet
+    image:
+      repository: ghcr.io/thezoo-house/zoo-fleet
+      digest: sha256:82d4361fcfa8df12c7f5bef38cff23f26e6aeb0212d450069bf1ad90c34092b3
+    imagePullSecrets:
+    - name: ghcr-pull-secret
+    config:
+      mqtt:
+        url: mqtts://mosquitto.iot.svc.cluster.local:8883
+        tlsServername: mqtt.${HOME_DOMAIN}
+      publicOrigin: https://fleet.${HOME_DOMAIN}
+    databaseInit:
+      enabled: true
+    env:
+      existingSecret: zoo-fleet-secret
+    ingress:
+      enabled: true
+      className: external
+      annotations:
+        external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+        nginx.ingress.kubernetes.io/proxy-body-size: 256m
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+      hosts:
+      - host: fleet.${HOME_DOMAIN}
+        paths:
+        - path: /
+          pathType: Prefix
+    persistence:
+      existingClaim: zoo-fleet-firmware-releases
+    podAnnotations:
+      reloader.stakater.com/auto: "true"

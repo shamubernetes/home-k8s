@@ -251,7 +251,13 @@
     {
       "description": ["Rook-Ceph Group"],
       "groupName": "Rook-Ceph",
-      "matchPackageNames": ["/rook.ceph/"],
+      "matchPackageNames": [
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "docker.io/rook/ceph",
+        "quay.io/cephcsi/ceph-csi-operator",
+        "quay.io/ceph/ceph",
+      ],
       "matchDatasources": ["docker", "helm"],
       "semanticCommitScope": "group",
       "group": {

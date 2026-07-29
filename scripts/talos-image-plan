@@ -11,6 +11,7 @@ from pathlib import Path
 
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 SHA_RE = re.compile(r"[0-9a-f]{40}$")
+TRIGGER_RE = re.compile(r"[A-Za-z0-9_.:@+-]{1,200}$")
 ALLOWED_REGISTRIES = {
     "docker.elastic.co",
     "docker.io",
@@ -63,16 +64,23 @@ def validate_sha(name: str, value: str) -> str:
     return value
 
 
+def validate_trigger(value: str) -> str:
+    if not TRIGGER_RE.fullmatch(value):
+        raise ValueError("trigger_id has invalid characters or length")
+    return value
+
+
 def build(args: argparse.Namespace) -> None:
     base = read_image_inventory(args.base_inventory)
     head = read_image_inventory(args.head_inventory)
     images = validate_images(sorted(head - base))
     plan = {
-        "schema_version": 1,
+        "schema_version": 2,
         "repository": args.repository,
         "pull_request": args.pull_request,
         "base_sha": validate_sha("base_sha", args.base_sha),
         "head_sha": validate_sha("head_sha", args.head_sha),
+        "trigger_id": validate_trigger(args.trigger_id),
         "images": images,
     }
     if plan["base_sha"] == plan["head_sha"]:
@@ -88,17 +96,19 @@ def verify(args: argparse.Namespace) -> None:
         "pull_request",
         "base_sha",
         "head_sha",
+        "trigger_id",
         "images",
     }
     if not isinstance(plan, dict) or set(plan) != expected_keys:
         raise ValueError("plan schema does not match the trusted schema")
-    if plan["schema_version"] != 1:
+    if plan["schema_version"] != 2:
         raise ValueError("unsupported plan schema version")
     expected = {
         "repository": args.repository,
         "pull_request": args.pull_request,
         "base_sha": validate_sha("expected base_sha", args.base_sha),
         "head_sha": validate_sha("expected head_sha", args.head_sha),
+        "trigger_id": validate_trigger(args.trigger_id),
     }
     for key, value in expected.items():
         if plan[key] != value:
@@ -120,6 +130,7 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--pull-request", type=int, required=True)
     build_parser.add_argument("--base-sha", required=True)
     build_parser.add_argument("--head-sha", required=True)
+    build_parser.add_argument("--trigger-id", required=True)
     build_parser.add_argument("--output", type=Path, required=True)
     build_parser.set_defaults(func=build)
 
@@ -129,6 +140,7 @@ def parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--pull-request", type=int, required=True)
     verify_parser.add_argument("--base-sha", required=True)
     verify_parser.add_argument("--head-sha", required=True)
+    verify_parser.add_argument("--trigger-id", required=True)
     verify_parser.set_defaults(func=verify)
     return root
 

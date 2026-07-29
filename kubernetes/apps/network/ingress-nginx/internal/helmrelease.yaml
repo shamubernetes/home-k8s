@@ -6,14 +6,9 @@ metadata:
   namespace: network
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: ingress-nginx
-      version: 4.15.1
-      sourceRef:
-        kind: HelmRepository
-        name: ingress-nginx
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: ingress-nginx-internal
   install:
     remediation:
       retries: 3

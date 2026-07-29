@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/cronjob-batch-v1.json
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mosquitto-verification
+spec:
+  schedule: "0 0 31 2 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1883
+            runAsGroup: 1883
+            fsGroup: 1883
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+          - name: verify
+            image: docker.io/library/eclipse-mosquitto:2.1.2-alpine@sha256:6f8d8a947c506f8a2290ec65cd4bd2bc7cb4d43fb5f6271f861cb013e2ef9797
+            command: ["/bin/sh", "/scripts/verify.sh"]
+            env:
+            - name: MQTT_HOST
+              value: "mqtt.${HOME_DOMAIN}"
+            - name: MQTT_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: admin-username
+            - name: MQTT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: admin-password
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: work
+              mountPath: /work
+          volumes:
+          - name: scripts
+            configMap:
+              name: mosquitto-verification
+              defaultMode: 0555
+          - name: work
+            emptyDir:
+              medium: Memory

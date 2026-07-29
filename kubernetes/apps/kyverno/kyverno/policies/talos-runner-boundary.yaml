@@ -91,129 +91,118 @@ spec:
         value: system:serviceaccount:actions-runner-system:ghar-controller
     validate:
       message: The ARC-created Pod does not match the trusted Talos runner shape.
+      pattern:
+        metadata:
+          labels:
+            actions.github.com/scale-set-name: ghar-set-talos
+          ownerReferences:
+          - apiVersion: actions.github.com/v1alpha1
+            kind: EphemeralRunner
+            controller: true
+        spec:
+          automountServiceAccountToken: false
+          serviceAccountName: ghar-set-talos-gha-rs-no-permission
+          securityContext:
+            runAsUser: 1001
+            runAsGroup: 123
+            fsGroup: 123
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - (name): runner
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              capabilities:
+                drop:
+                - ALL
+            volumeMounts:
+            - (name): talosconfig
+              mountPath: /var/run/secrets/talos.dev
+              readOnly: true
+            - (name): talosctl
+              mountPath: /opt/talosctl
+              readOnly: true
+          initContainers:
+          - (name): install-talosctl
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              capabilities:
+                drop:
+                - ALL
+            volumeMounts:
+            - (name): talosctl-source
+              mountPath: /source
+              readOnly: true
+            - (name): talosctl
+              mountPath: /tools
+          volumes:
+          - (name): talosconfig
+            secret:
+              secretName: ghar-set-talos-talosconfig
+              defaultMode: 288
+          - (name): talosctl
+            emptyDir: {}
+          - (name): talosctl-source
+            image:
+              pullPolicy: IfNotPresent
+  - name: reject-extra-runner-components
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+    preconditions:
+      all:
+      - key: "{{ request.userInfo.username }}"
+        operator: Equals
+        value: system:serviceaccount:actions-runner-system:ghar-controller
+    validate:
+      message: The trusted Talos runner must have exactly one runner, one installer, and three volumes.
       deny:
         conditions:
           any:
-          - key: "{{ request.object.metadata.labels.\"actions.github.com/scale-set-name\" || '' }}"
-            operator: NotEquals
-            value: ghar-set-talos
-          - key: "{{ request.object.metadata.ownerReferences[?apiVersion == 'actions.github.com/v1alpha1' && kind == 'EphemeralRunner' && controller == `true`] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.serviceAccountName || '' }}"
-            operator: NotEquals
-            value: ghar-set-talos-gha-rs-no-permission
-          - key: "{{ request.object.spec.automountServiceAccountToken }}"
-            operator: NotEquals
-            value: false
-          - key: "{{ request.object.spec.securityContext.runAsUser || `0` }}"
-            operator: NotEquals
-            value: 1001
-          - key: "{{ request.object.spec.securityContext.runAsGroup || `0` }}"
-            operator: NotEquals
-            value: 123
-          - key: "{{ request.object.spec.securityContext.fsGroup || `0` }}"
-            operator: NotEquals
-            value: 123
-          - key: "{{ request.object.spec.volumes[?name == 'talosconfig' && secret.secretName == 'ghar-set-talos-talosconfig' && secret.defaultMode == `288`] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner' && securityContext.runAsNonRoot == `true` && securityContext.allowPrivilegeEscalation == `false`] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].volumeMounts[] | [?name == 'talosconfig' && mountPath == '/var/run/secrets/talos.dev' && readOnly == `true`] | length(@) }}"
-            operator: NotEquals
-            value: 1
           - key: "{{ request.object.spec.containers | length(@) }}"
             operator: NotEquals
             value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].command[] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].command[0] | [0] }}"
-            operator: NotEquals
-            value: /home/runner/run.sh
-          - key: "{{ request.object.spec.containers[?name == 'runner'].env[] | length(@) }}"
-            operator: NotEquals
-            value: 4
-          - key: "{{ request.object.spec.containers[?name == 'runner'].env[] | [?name == 'ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER' && value == 'false'] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].env[] | [?name == 'ACTIONS_RUNNER_INPUT_JITCONFIG' && valueFrom.secretKeyRef.key == 'jitToken'] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].env[] | [?name == 'ACTIONS_RUNNER_INPUT_JITCONFIG'].valueFrom.secretKeyRef.name | [0] }}"
-            operator: NotEquals
-            value: "{{ request.object.metadata.name }}"
-          - key: "{{ request.object.spec.containers[?name == 'runner'].env[] | [?name == 'GITHUB_ACTIONS_RUNNER_EXTRA_USER_AGENT'] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].env[] | [?name == 'ACTIONS_RUNNER_RETURN_VERSION_DEPRECATED_EXIT_CODE' && value == '1'] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.containers[?name == 'runner'].volumeMounts[] | length(@) }}"
-            operator: NotEquals
-            value: 2
-          - key: "{{ request.object.spec.containers[?name == 'runner'].volumeMounts[] | [?name == 'talosctl' && mountPath == '/opt/talosctl' && readOnly == `true`] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ contains(request.object.spec.containers[?name == 'runner'].securityContext.capabilities.drop[], 'ALL') }}"
-            operator: NotEquals
-            value: true
           - key: "{{ request.object.spec.initContainers | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].command[] | length(@) }}"
-            operator: NotEquals
-            value: 2
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].command[0] | [0] }}"
-            operator: NotEquals
-            value: /bin/bash
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].command[1] | [0] }}"
-            operator: NotEquals
-            value: -ceu
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].args[] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].args[] | [0] }}"
-            operator: NotEquals
-            value: install -m 0555 /source/talosctl /tools/talosctl
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl' && securityContext.runAsNonRoot == `true` && securityContext.allowPrivilegeEscalation == `false`] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ contains(request.object.spec.initContainers[?name == 'install-talosctl'].securityContext.capabilities.drop[], 'ALL') }}"
-            operator: NotEquals
-            value: true
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].volumeMounts[] | length(@) }}"
-            operator: NotEquals
-            value: 2
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].volumeMounts[] | [?name == 'talosctl-source' && mountPath == '/source' && readOnly == `true`] | length(@) }}"
-            operator: NotEquals
-            value: 1
-          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].volumeMounts[] | [?name == 'talosctl' && mountPath == '/tools'] | length(@) }}"
             operator: NotEquals
             value: 1
           - key: "{{ request.object.spec.volumes | length(@) }}"
             operator: NotEquals
             value: 3
-          - key: "{{ request.object.spec.volumes[?name == 'talosctl' && emptyDir != `null`] | length(@) }}"
+          - key: "{{ request.object.spec.containers[?name == 'runner'].command[] | length(@) }}"
             operator: NotEquals
             value: 1
-          - key: "{{ request.object.spec.restartPolicy || '' }}"
+          - key: "{{ request.object.spec.containers[0].command[0] || '' }}"
             operator: NotEquals
-            value: Never
-          - key: "{{ request.object.spec.securityContext.seccompProfile.type || '' }}"
+            value: /home/runner/run.sh
+          - key: "{{ request.object.spec.containers[?name == 'runner'].volumeMounts[] | length(@) }}"
             operator: NotEquals
-            value: RuntimeDefault
-          - key: "{{ request.object.spec.hostNetwork || `false` }}"
-            operator: Equals
-            value: true
-          - key: "{{ request.object.spec.hostPID || `false` }}"
-            operator: Equals
-            value: true
-          - key: "{{ request.object.spec.hostIPC || `false` }}"
-            operator: Equals
-            value: true
+            value: 2
+          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].command[] | length(@) }}"
+            operator: NotEquals
+            value: 2
+          - key: "{{ request.object.spec.initContainers[0].command[0] || '' }}"
+            operator: NotEquals
+            value: /bin/bash
+          - key: "{{ request.object.spec.initContainers[0].command[1] || '' }}"
+            operator: NotEquals
+            value: -ceu
+          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].args[] | length(@) }}"
+            operator: NotEquals
+            value: 1
+          - key: "{{ request.object.spec.initContainers[0].args[0] || '' }}"
+            operator: NotEquals
+            value: install -m 0555 /source/talosctl /tools/talosctl
+          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].volumeMounts[] | length(@) }}"
+            operator: NotEquals
+            value: 2
   - name: reject-ephemeral-containers
     match:
       any:

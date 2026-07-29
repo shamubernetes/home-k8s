@@ -23,13 +23,13 @@ spec:
   values:
     image:
       repository: docker.io/rook/ceph
-      tag: v1.20.1@sha256:ff1260dd0d015cb09d7ac607a8adfa8ca3e8f1a89144c8d1842d1ee43b1bd344
+      tag: v1.20.3@sha256:da3c5046074ddc01bd2d162f7da3c3098e2f117fa5093df827e55f7e35899add
     ceph-csi-operator:
       controllerManager:
         manager:
           image:
             repository: quay.io/cephcsi/ceph-csi-operator
-            tag: v1.0.1@sha256:51a46b72d11c5f1c9d8288ba50f33806d074a0c1af1bd3300a5df157566bdaac
+            tag: v1.0.4@sha256:c62933fd4083635f969f8a61932af45dba9902d48867e2b5d98a69d8e4344eb6
     csi:
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true

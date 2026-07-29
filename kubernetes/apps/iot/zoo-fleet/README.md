@@ -4,17 +4,12 @@ Zoo Fleet is the generic firmware control plane for The Zoo. It uses the shared
 PostgreSQL 17 service, Mosquitto at `mqtt.thezoo.house`, and the dedicated
 Unraid firmware release share.
 
-## First deployment boundary
+## Deployment boundary
 
 The production-ready `v0.2.0` image is pinned by its exact multi-architecture
-digest in `app/helmrelease.yaml`. The Flux Kustomization remains suspended
-until the required `zoo-fleet` 1Password item exists and External Secrets can
-materialize every runtime value.
-
-To activate the first deployment, verify the required 1Password fields below,
-run `scripts/validate-app --offline iot/zoo-fleet` and
-`scripts/check-image-pins kubernetes/apps/iot/zoo-fleet`, then remove
-`spec.suspend: true` from `ks.yaml` in a reviewed change.
+digest in `app/helmrelease.yaml`. The Flux Kustomization is active and depends
+on External Secrets materializing every runtime value from the required
+`zoo-fleet` 1Password item.
 
 The image runs database migrations under a PostgreSQL advisory lock before
 opening its HTTP listener. Missing migrations, an unavailable database, or

@@ -1,0 +1,20 @@
+apiVersion: v1alpha1
+kind: RegistryAuthConfig
+name: ghcr.io
+username: ENC[AES256_GCM,data:CnpY5vjdHRIvtt8=,iv:NfqfKCpLI67FRxq04+jAmtujxeecKDgu08Av2hFhlHk=,tag:FMEhAa1bCTyPjumyZvFc0w==,type:str]
+password: ENC[AES256_GCM,data:2Sh7+5wetU+/BxT93R6hXEZJQGj6pgXANniEuX8rWkMOfbyvWH9FDQ==,iv:54JtJiE7rxIe3npuBX5LkV1hDiScM8EiOApDKYF3G2M=,tag:kDljldk3Zed4ajSuPQcbIw==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAwOXpkZ1FJVjZNN2NKZTlY
+            Yk1ka3MrUFlxbEwyV2lHTkdCQVVvblg2b25RCk1OdW9UaHJqdjNyUjhrZHZ1YWVX
+            MW4waGNuY0ZldTBtN2wwVXV4MjNoajQKLS0tIGVlT1hIVjRmOEtzYkJLaHN2Q1B1
+            UmhXOTg4ZlNwQ3oxRDNUZUlSYVFKcnMKusg7un482kq8emAs25sPM+TqgF3Q41p/
+            ItLrypAMfOdfwyQRNDuJ3AwxN05ErhJr0vii+q/nDZHcIwtB1wrH0Q==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1tk7tw0625mspavxe8lvv348p58ydqw6r04sxcjq76m98nan2lsnq3dhvxd
+    encrypted_regex: ^(username|password)$
+    lastmodified: "2026-07-29T02:12:51Z"
+    mac: ENC[AES256_GCM,data:iWqa+vKfwjVyVqQ1exacbAy5sdMLDwuB99WIU8ST2kSK5BPH8GULO8uCgRpN0pkEEQKTKZo0fZWVJLuxX6CI+1pkUmWiTAux5tg256G7ruJkZJmm1KAtuHgZptZP44938+BtlS09KTomlw4Hv4L31z46W24pWqBMNTnC/QzIqTM=,iv:HAVgvXPQKY4KUazXRe3D+IHDQLk3fqSiXlC7ueSFoaQ=,tag:rT1ngwA5v9Mpq2YlV4svIw==,type:str]
+    version: 3.13.1

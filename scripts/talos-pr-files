@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Validate and extract paths from a slurped GitHub PR-files response."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import NoReturn
+
+
+MAX_GITHUB_PR_FILES = 3000
+
+
+def fail(message: str) -> NoReturn:
+    raise SystemExit(message)
+
+
+def main() -> None:
+    if len(sys.argv) != 4 or sys.argv[1] != "--expected-count":
+        fail("usage: talos-pr-files --expected-count COUNT FILE")
+
+    try:
+        expected_count = int(sys.argv[2])
+    except ValueError:
+        fail("expected pull-request file count must be an integer")
+    if expected_count < 1:
+        fail("expected pull-request file count must be positive")
+    if expected_count > MAX_GITHUB_PR_FILES:
+        fail("pull request exceeds GitHub's 3,000-file API limit")
+
+    try:
+        pages = json.loads(Path(sys.argv[3]).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"invalid pull-request files payload: {exc}")
+
+    if not isinstance(pages, list) or not pages:
+        fail("pull-request files payload must contain at least one page")
+
+    filenames: list[str] = []
+    paths: list[str] = []
+    for page in pages:
+        if not isinstance(page, list):
+            fail("pull-request files payload pages must be arrays")
+        for entry in page:
+            if not isinstance(entry, dict):
+                fail("pull-request file entries must be objects")
+            filename = entry.get("filename")
+            if not isinstance(filename, str) or not filename:
+                fail("pull-request file entry is missing filename")
+            filenames.append(filename)
+            paths.append(filename)
+            previous = entry.get("previous_filename")
+            if previous is not None:
+                if not isinstance(previous, str) or not previous:
+                    fail("pull-request file entry has invalid previous_filename")
+                paths.append(previous)
+
+    if len(filenames) != expected_count:
+        fail(
+            "pull-request files response is incomplete: "
+            f"expected {expected_count}, received {len(filenames)}"
+        )
+    if len(set(filenames)) != len(filenames):
+        fail("pull-request files response contains duplicate filenames")
+
+    print("\n".join(dict.fromkeys(paths)))
+
+
+if __name__ == "__main__":
+    main()

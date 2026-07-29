@@ -1,8 +1,8 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: &app zoo-fleet
+  name: zoo-fleet
 spec:
   interval: 10m
   chartRef:
@@ -17,184 +17,35 @@ spec:
       strategy: rollback
       retries: 3
   values:
-    controllers:
-      zoo-fleet:
-        strategy: RollingUpdate
-        annotations:
-          reloader.stakater.com/auto: "true"
-        initContainers:
-          init-db:
-            image:
-              repository: ghcr.io/home-operations/postgres-init
-              tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
-            env:
-              INIT_POSTGRES_DBNAME:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: INIT_POSTGRES_DBNAME
-              INIT_POSTGRES_HOST:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: INIT_POSTGRES_HOST
-              INIT_POSTGRES_PASS:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: INIT_POSTGRES_PASS
-              INIT_POSTGRES_SUPER_PASS:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: INIT_POSTGRES_SUPER_PASS
-              INIT_POSTGRES_USER:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: INIT_POSTGRES_USER
-            securityContext:
-              allowPrivilegeEscalation: false
-              readOnlyRootFilesystem: true
-              capabilities: {drop: ["ALL"]}
-        containers:
-          app:
-            image:
-              repository: ghcr.io/thezoo-house/zoo-fleet
-              tag: 0.2.0@sha256:df6cb678f1a12e65eb2be342bb5b1b9a3be0b4bbd5778d04013fd100984871d5
-            env:
-              DATABASE_URL:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: DATABASE_URL
-              FLEET_MIGRATIONS_ROOT: /app/migrations
-              FLEET_MQTT_PASSWORD:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_MQTT_PASSWORD
-              FLEET_MQTT_URL: "mqtts://mqtt.${HOME_DOMAIN}"
-              FLEET_MQTT_USERNAME:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_MQTT_USERNAME
-              FLEET_OPERATOR_TOKEN_SHA256:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_OPERATOR_TOKEN_SHA256
-              FLEET_PUBLIC_ORIGIN: "https://fleet.${HOME_DOMAIN}"
-              FLEET_PUBLISH_TOKEN_SHA256:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_PUBLISH_TOKEN_SHA256
-              FLEET_REQUIRE_PRODUCTION_CONFIG: "true"
-              FLEET_SIGNING_KEY_ID:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_SIGNING_KEY_ID
-              FLEET_SIGNING_PRIVATE_KEY_REF:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_SIGNING_PRIVATE_KEY_REF
-              FLEET_SIGNING_PUBLIC_KEY_BASE64:
-                valueFrom:
-                  secretKeyRef:
-                    name: zoo-fleet-secret
-                    key: FLEET_SIGNING_PUBLIC_KEY_BASE64
-              FLEET_STORAGE_ROOT: /srv/zoo-fleet
-              PORT: &port 3000
-            probes:
-              startup:
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /readyz
-                    port: *port
-                  periodSeconds: 2
-                  timeoutSeconds: 1
-                  failureThreshold: 60
-              liveness: &probes
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /healthz
-                    port: *port
-                  periodSeconds: 10
-                  timeoutSeconds: 2
-                  failureThreshold: 3
-              readiness:
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /readyz
-                    port: *port
-                  periodSeconds: 5
-                  timeoutSeconds: 2
-                  failureThreshold: 3
-            resources:
-              requests:
-                cpu: 25m
-                memory: 128Mi
-              limits:
-                memory: 512Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              readOnlyRootFilesystem: true
-              capabilities: {drop: ["ALL"]}
-    defaultPodOptions:
-      automountServiceAccountToken: false
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile: {type: RuntimeDefault}
-    service:
-      app:
-        controller: *app
-        ports:
-          http:
-            primary: true
-            port: *port
+    fullnameOverride: zoo-fleet
+    image:
+      repository: ghcr.io/thezoo-house/zoo-fleet
+      digest: sha256:6b1623fc9f7292399ca4a12ece771ff08d88fb26cc598c86c026331a4cec90ae
+    imagePullSecrets:
+    - name: ghcr-pull-secret
+    config:
+      mqtt:
+        url: mqtts://mosquitto.iot.svc.cluster.local:8883
+        tlsServername: mqtt.${HOME_DOMAIN}
+      publicOrigin: https://fleet.${HOME_DOMAIN}
+    databaseInit:
+      enabled: true
+    env:
+      existingSecret: zoo-fleet-secret
     ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/proxy-body-size: 256m
-          nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-          nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-        className: external
-        hosts:
-        - host: "fleet.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
+      enabled: true
+      className: external
+      annotations:
+        external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
+        nginx.ingress.kubernetes.io/proxy-body-size: 256m
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+      hosts:
+      - host: fleet.${HOME_DOMAIN}
+        paths:
+        - path: /
+          pathType: Prefix
     persistence:
-      releases:
-        existingClaim: zoo-fleet-firmware-releases
-        advancedMounts:
-          zoo-fleet:
-            app:
-            - path: /srv/zoo-fleet
-      tmp:
-        type: emptyDir
-        medium: Memory
-        sizeLimit: 32Mi
-        advancedMounts:
-          zoo-fleet:
-            init-db:
-            - path: /tmp
-            app:
-            - path: /tmp
+      existingClaim: zoo-fleet-firmware-releases
+    podAnnotations:
+      reloader.stakater.com/auto: "true"

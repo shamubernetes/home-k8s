@@ -83,7 +83,8 @@ grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "$
 
 grep -Fq 'scripts/talos-check-gate' .github/workflows/image-pull.yaml
 grep -Fq -- '--app-id 15368' .github/workflows/image-pull.yaml
-grep -Fq "pull_request_target) [[ \$SOURCE_ACTOR == 'shamubot[bot]' ]]" .github/workflows/image-pull.yaml
+grep -Fq "\$SOURCE_ACTOR == 'shamubot[bot]' || \$SOURCE_ACTOR == 'MaudeBot'" \
+  .github/workflows/image-pull.yaml
 grep -Fq 'name: "Talos Image Prepull"' .github/workflows/image-pull.yaml
 grep -Fq 'checks: write' .github/workflows/image-pull.yaml
 grep -Fq "always() && needs.preflight.outputs.head_sha != ''" .github/workflows/image-pull.yaml

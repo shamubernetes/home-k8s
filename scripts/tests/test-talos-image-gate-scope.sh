@@ -5,6 +5,10 @@ repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
 [[ $(printf '%s\n' 'kubernetes/apps/services/vector/app/helmrelease.yaml' | scripts/talos-image-gate-scope) == applicable ]]
+[[ $(printf '%s\n' \
+  'kubernetes/apps/observability/loki/app/helmrelease.yaml' \
+  'scripts/flate-render-baseline.tsv' |
+  scripts/talos-image-gate-scope) == applicable ]]
 [[ $(printf '%s\n' '.github/workflows/image-gate.yaml' 'scripts/talos-image-gate-scope' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'README.md' | scripts/talos-image-gate-scope) == not-applicable ]]

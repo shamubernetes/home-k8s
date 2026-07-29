@@ -8,6 +8,7 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
+  actions: read
   checks: write
   contents: read
   pull-requests: read
@@ -66,6 +67,7 @@ jobs:
     - name: Require fresh trusted image pre-pull when applicable
       id: evaluate
       env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
         EVENT_ACTION: ${{ github.event.action }}
         EVENT_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
         GH_TOKEN: ${{ github.token }}
@@ -90,6 +92,32 @@ jobs:
           exit 0
         fi
 
+        download_exact_artifact() {
+          local run_id=$1 artifact_name=$2 zip_path=$3 output_dir=$4 expected_file=$5 max_bytes=$6
+          local artifacts artifact_size
+          local -a artifact_ids entries
+          artifacts=$(gh api "repos/${REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100") || return 1
+          mapfile -t artifact_ids < <(jq -r \
+            --arg name "$artifact_name" \
+            '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+            <<<"$artifacts")
+          [[ ${#artifact_ids[@]} -eq 1 ]] || return 1
+          artifact_size=$(jq -er \
+            --argjson id "${artifact_ids[0]}" \
+            '.artifacts[] | select(.id == $id) | .size_in_bytes' \
+            <<<"$artifacts") || return 1
+          [[ $artifact_size =~ ^[0-9]+$ ]] || return 1
+          (( artifact_size <= max_bytes )) || return 1
+          gh api "repos/${REPOSITORY}/actions/artifacts/${artifact_ids[0]}/zip" > "$zip_path" || return 1
+          unzip -tq "$zip_path" >/dev/null || return 1
+          mapfile -t entries < <(zipinfo -1 "$zip_path")
+          [[ ${#entries[@]} -eq 1 && ${entries[0]} == "$expected_file" ]] || return 1
+          rm -rf "$output_dir"
+          mkdir -p "$output_dir"
+          unzip -q "$zip_path" -d "$output_dir" || return 1
+          [[ -f $output_dir/$expected_file ]] || return 1
+        }
+
         for attempt in {1..320}; do
           gh api --paginate --slurp \
             "repos/${REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=all&per_page=100" \
@@ -100,8 +128,8 @@ jobs:
             select(.name != "Talos Image Prepull")]}' \
             checks.json > current-checks.json
 
-          while IFS=$'\t' read -r check_id external_id details_url check_conclusion; do
-            [[ -n $check_id && -n $external_id && -n $details_url ]] || continue
+          while IFS=$'\t' read -r check_id external_id check_conclusion; do
+            [[ -n $check_id && -n $external_id && -n $check_conclusion ]] || continue
             remainder=${external_id#talos-image-plan:}
             source_run_id=${remainder%%:*}
             trigger_id=${remainder#*:}
@@ -112,8 +140,21 @@ jobs:
             [[ $(jq -r '.path' <<<"$source_run") == '.github/workflows/image-plan.yaml' ]] || continue
             [[ $(jq -r '.event' <<<"$source_run") == pull_request_target ]] || continue
             [[ $(jq -r '.head_sha' <<<"$source_run") == "$HEAD_SHA" ]] || continue
-            [[ $(jq -r '.html_url' <<<"$source_run") == "$details_url" ]] || continue
             [[ $(jq -r '.conclusion // ""' <<<"$source_run") == "$check_conclusion" ]] || continue
+            download_exact_artifact \
+              "$source_run_id" \
+              "talos-image-plan-${HEAD_SHA}" \
+              "plan-${source_run_id}.zip" \
+              "plan-${source_run_id}" \
+              image-plan.json \
+              1048576 || continue
+            trusted/scripts/talos-image-plan verify \
+              --plan "plan-${source_run_id}/image-plan.json" \
+              --repository "$REPOSITORY" \
+              --pull-request "$PULL_REQUEST" \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$HEAD_SHA" \
+              --trigger-id "$expected_trigger" >/dev/null || continue
             jq --argjson id "$check_id" --slurpfile all checks.json \
               '.check_runs += [$all[0].check_runs[] | select(.id == $id)]' \
               current-checks.json > fresh-checks.json
@@ -123,11 +164,11 @@ jobs:
               select(.name == "Talos Image Plan Attempt") |
               select(.app.id == 15368) |
               select((.external_id // "") | startswith("talos-image-plan:")) |
-              [.id, .external_id, .details_url, .conclusion] | @tsv' checks.json
+              [.id, .external_id, .conclusion] | @tsv' checks.json
           )
 
-          while IFS=$'\t' read -r check_id external_id details_url check_conclusion; do
-            [[ -n $check_id && -n $external_id && -n $details_url ]] || continue
+          while IFS=$'\t' read -r check_id external_id check_conclusion; do
+            [[ -n $check_id && -n $external_id && -n $check_conclusion ]] || continue
             remainder=${external_id#talos-image-prepull:}
             source_run_id=${remainder%%:*}
             remainder=${remainder#*:}
@@ -146,8 +187,30 @@ jobs:
             [[ $(jq -r '.conclusion // ""' <<<"$source_run") == success ]] || continue
             [[ $(jq -r '.path' <<<"$consumer_run") == '.github/workflows/image-pull.yaml' ]] || continue
             [[ $(jq -r '.event' <<<"$consumer_run") == workflow_run ]] || continue
-            [[ $(jq -r '.html_url' <<<"$consumer_run") == "$details_url" ]] || continue
             [[ $(jq -r '.conclusion // ""' <<<"$consumer_run") == "$check_conclusion" ]] || continue
+            download_exact_artifact \
+              "$consumer_run_id" \
+              "talos-image-prepull-result-${consumer_run_id}" \
+              "prepull-${consumer_run_id}.zip" \
+              "prepull-${consumer_run_id}" \
+              talos-image-prepull-result.json \
+              65536 || continue
+            jq -e \
+              --arg conclusion "$check_conclusion" \
+              --arg head_sha "$HEAD_SHA" \
+              --arg trigger_id "$expected_trigger" \
+              --argjson consumer_run_id "$consumer_run_id" \
+              --argjson pull_request "$PULL_REQUEST" \
+              --argjson source_run_id "$source_run_id" \
+              'type == "object" and
+               .schema_version == 1 and
+               .source_run_id == $source_run_id and
+               .consumer_run_id == $consumer_run_id and
+               .pull_request == $pull_request and
+               .head_sha == $head_sha and
+               .trigger_id == $trigger_id and
+               .conclusion == $conclusion' \
+              "prepull-${consumer_run_id}/talos-image-prepull-result.json" >/dev/null || continue
             jq --argjson id "$check_id" --slurpfile all checks.json \
               '.check_runs += [$all[0].check_runs[] | select(.id == $id)]' \
               current-checks.json > fresh-checks.json
@@ -157,7 +220,7 @@ jobs:
               select(.name == "Talos Image Prepull") |
               select(.app.id == 15368) |
               select((.external_id // "") | startswith("talos-image-prepull:")) |
-              [.id, .external_id, .details_url, .conclusion] | @tsv' checks.json
+              [.id, .external_id, .conclusion] | @tsv' checks.json
           )
 
           set +e

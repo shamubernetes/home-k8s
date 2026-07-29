@@ -102,7 +102,7 @@ spec:
     enable: true
   chart:
     spec:
-      chart: ./kubernetes/apps/tools/firecrawl/app/chart
+      chart: ./scripts/tests/fixtures/local-chart
       sourceRef:
         kind: GitRepository
         name: home-kubernetes

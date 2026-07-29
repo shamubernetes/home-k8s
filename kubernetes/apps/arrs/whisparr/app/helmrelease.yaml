@@ -5,14 +5,9 @@ metadata:
   name: &app ${APP}
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: app-template
-      version: 5.0.1
-      sourceRef:
-        kind: HelmRepository
-        name: bjw-s
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: ${APP}
   install:
     remediation:
       retries: 3
@@ -41,12 +36,11 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/whisparr-eros
-              tag: 3.0.2.1859@sha256:52fd2d58cb840dc9dec5fb483c1e2b1976628615469e6c881d9c874b2c8d40ff
+              tag: 3.3.7-release.979@sha256:9002dd8e29471d65f0b1a03802a3bf48bb58212435a053bbbe8971f2d2253194
             env:
               WHISPARR__ANALYTICS_ENABLED: "False"
               WHISPARR__AUTHENTICATION_METHOD: External
               WHISPARR__AUTHENTICATION_REQUIRED: DisabledForLocalAddresses
-              WHISPARR__BRANCH: develop
               WHISPARR__INSTANCE_NAME: Whisparr
               WHISPARR__LOG_LEVEL: info
               WHISPARR__PORT: &port 80

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+manifest="$root/kubernetes/apps/tools/firecrawl/app/ocirepository.yaml"
+expected_git_revision=${1:-}
+if [[ -n $expected_git_revision && ! $expected_git_revision =~ ^[0-9a-f]{40}$ ]]; then
+  printf 'invalid expected Git revision: %s\n' "$expected_git_revision" >&2
+  exit 2
+fi
+version=$(awk '$1 == "tag:" {print $2; exit}' "$manifest")
+digest=$(sed -n 's/^[[:space:]]*# firecrawl-oci-digest: //p' "$manifest")
+[[ -n $version && $digest =~ ^sha256:[[:xdigit:]]{64}$ ]] || {
+  printf 'Firecrawl OCI version or expected digest is missing\n' >&2
+  exit 1
+}
+
+if [[ -n $expected_git_revision ]]; then
+  deadline=$((SECONDS + 1200))
+  until kubectl -n flux-system get gitrepository home-kubernetes \
+    -o jsonpath='{.status.artifact.revision}' | grep -Fq "$expected_git_revision"; do
+    if (( SECONDS >= deadline )); then
+      printf 'timed out waiting for home-kubernetes Git revision %s\n' "$expected_git_revision" >&2
+      exit 1
+    fi
+    sleep 10
+  done
+fi
+
+kubectl -n flux-system wait --for=condition=Ready kustomization/firecrawl --timeout=1200s
+kubectl -n tools wait --for=condition=Ready ocirepository/firecrawl --timeout=600s
+source_revision=$(kubectl -n tools get ocirepository firecrawl -o jsonpath='{.status.artifact.revision}')
+[[ $source_revision == "${version}@${digest}" ]] || {
+  printf 'unexpected Firecrawl source revision: %s\n' "$source_revision" >&2
+  exit 1
+}
+
+kubectl -n tools wait --for=condition=Ready helmrelease/firecrawl --timeout=900s
+chart_version=$(kubectl -n tools get helmrelease firecrawl -o jsonpath='{.status.history[0].chartVersion}')
+[[ $chart_version == "$version" || $chart_version == "${version}+"* ]] || {
+  printf 'unexpected live Firecrawl chart version: %s\n' "$chart_version" >&2
+  exit 1
+}
+
+for deployment in \
+  firecrawl-api \
+  firecrawl-worker \
+  firecrawl-extract-worker \
+  firecrawl-nuq-worker \
+  firecrawl-nuq-prefetch-worker \
+  firecrawl-playwright; do
+  kubectl -n tools rollout status "deployment/$deployment" --timeout=600s
+done
+kubectl -n tools wait --for=condition=Ready externalsecret/firecrawl --timeout=300s
+
+for resource in \
+  deployment/firecrawl-redis service/firecrawl-redis \
+  deployment/firecrawl-rabbitmq service/firecrawl-rabbitmq \
+  deployment/firecrawl-nuq-postgres service/firecrawl-nuq-postgres; do
+  if kubectl -n tools get "$resource" >/dev/null 2>&1; then
+    printf 'bundled dependency unexpectedly exists: %s\n' "$resource" >&2
+    exit 1
+  fi
+done
+
+kubectl -n tools exec -i deployment/firecrawl-api -- node - <<'JS'
+const net = require("node:net");
+const targets = [
+  ["dragonfly.database.svc.cluster.local", 6379],
+  ["postgres17-pooler.database.svc.cluster.local", 5432],
+  ["rabbitmq.database.svc.cluster.local", 5672],
+];
+
+Promise.all(targets.map(([host, port]) => new Promise((resolve, reject) => {
+  const socket = net.createConnection({host, port, timeout: 10000});
+  socket.once("connect", () => {
+    console.log(`${host}:${port} ok`);
+    socket.destroy();
+    resolve();
+  });
+  socket.once("timeout", () => {
+    socket.destroy();
+    reject(new Error(`${host}:${port} timed out`));
+  });
+  socket.once("error", reject);
+}))).catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+JS
+
+status=$(curl --retry 5 --retry-delay 2 --silent --show-error --output /dev/null \
+  --write-out '%{http_code}' https://firecrawl.thezoo.house)
+[[ $status == 200 ]] || { printf 'Firecrawl route returned HTTP %s\n' "$status" >&2; exit 1; }
+
+printf 'Firecrawl %s verified live at %s\n' "$version" "$digest"

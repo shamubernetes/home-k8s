@@ -61,7 +61,7 @@ spec:
           app:
             image:
               repository: ghcr.io/thezoo-house/zoo-fleet
-              tag: RELEASE_TAG@sha256:RELEASE_DIGEST
+              tag: 0.2.0@sha256:df6cb678f1a12e65eb2be342bb5b1b9a3be0b4bbd5778d04013fd100984871d5
             env:
               DATABASE_URL:
                 valueFrom:

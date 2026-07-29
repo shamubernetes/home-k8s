@@ -5,8 +5,8 @@ metadata:
   name: &app zoo-fleet
   namespace: "${KS_NAMESPACE}"
 spec:
-  # FLEET-11 intentionally leaves this suspended until a release containing
-  # the production migration startup is published and pinned by digest.
+  # Zoo Fleet v0.2.0 is pinned, but first activation remains suspended until
+  # the required External Secrets source item exists.
   suspend: true
   targetNamespace: &namespace iot
   commonMetadata:

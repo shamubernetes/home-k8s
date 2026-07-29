@@ -1,0 +1,273 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kyverno.io/clusterpolicy_v1.json
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-talos-runner-boundary
+  annotations:
+    policies.kyverno.io/title: Restrict Talos runner boundary
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/minversion: 1.18.0
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/subject: Pod,ServiceAccount
+    policies.kyverno.io/description: >-
+      Allows only the ARC controller to create the exact ephemeral Talos runner Pod,
+      rejects ordinary workload controllers in the privileged namespace, and limits
+      Talos Kubernetes credentials there to the committed os:operator account.
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  admission: true
+  background: false
+  validationFailureAction: Enforce
+  rules:
+  - name: reject-non-arc-runner-pods
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+    preconditions:
+      all:
+      - key: "{{ request.userInfo.username }}"
+        operator: NotEquals
+        value: system:serviceaccount:actions-runner-system:ghar-controller
+    validate:
+      message: Only the ARC controller may create Pods in actions-runner-talos.
+      deny:
+        conditions:
+          all:
+          - key: true
+            operator: Equals
+            value: true
+  - name: pin-trusted-runner-images-and-tools
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+    preconditions:
+      all:
+      - key: "{{ request.userInfo.username }}"
+        operator: Equals
+        value: system:serviceaccount:actions-runner-system:ghar-controller
+    validate:
+      message: The Talos runner must use the pinned runner and Talos tool images.
+      pattern:
+        spec:
+          containers:
+          - (name): runner
+            # renovate: datasource=docker depName=ghcr.io/home-operations/actions-runner
+            image: ghcr.io/home-operations/actions-runner:2.335.1@sha256:3d544e5eed58722c0b6a97212a31eada0f9f2e99f189c41911a5573a23d7386a
+          initContainers:
+          - (name): install-talosctl
+            # renovate: datasource=docker depName=ghcr.io/home-operations/actions-runner
+            image: ghcr.io/home-operations/actions-runner:2.335.1@sha256:3d544e5eed58722c0b6a97212a31eada0f9f2e99f189c41911a5573a23d7386a
+          volumes:
+          - (name): talosctl-source
+            image:
+              # renovate: datasource=docker depName=ghcr.io/siderolabs/talosctl
+              reference: ghcr.io/siderolabs/talosctl:v1.13.7@sha256:e824808e0a9c8138c2f7b17f21cfebee2f1442a336d812eb0034c9c897059302
+  - name: require-exact-arc-runner-pod
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+    preconditions:
+      all:
+      - key: "{{ request.userInfo.username }}"
+        operator: Equals
+        value: system:serviceaccount:actions-runner-system:ghar-controller
+    validate:
+      message: The ARC-created Pod does not match the trusted Talos runner shape.
+      pattern:
+        metadata:
+          labels:
+            actions.github.com/scale-set-name: ghar-set-talos
+          ownerReferences:
+          - apiVersion: actions.github.com/v1alpha1
+            kind: EphemeralRunner
+            controller: true
+        spec:
+          automountServiceAccountToken: false
+          serviceAccountName: ghar-set-talos-gha-rs-no-permission
+          securityContext:
+            runAsUser: 1001
+            runAsGroup: 123
+            fsGroup: 123
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - (name): runner
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              capabilities:
+                drop:
+                - ALL
+            volumeMounts:
+            - (name): talosconfig
+              mountPath: /var/run/secrets/talos.dev
+              readOnly: true
+            - (name): talosctl
+              mountPath: /opt/talosctl
+              readOnly: true
+          initContainers:
+          - (name): install-talosctl
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              capabilities:
+                drop:
+                - ALL
+            volumeMounts:
+            - (name): talosctl-source
+              mountPath: /source
+              readOnly: true
+            - (name): talosctl
+              mountPath: /tools
+          volumes:
+          - (name): talosconfig
+            secret:
+              secretName: ghar-set-talos-talosconfig
+              defaultMode: 288
+          - (name): talosctl
+            emptyDir: {}
+          - (name): talosctl-source
+            image:
+              pullPolicy: IfNotPresent
+  - name: reject-extra-runner-components
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+    preconditions:
+      all:
+      - key: "{{ request.userInfo.username }}"
+        operator: Equals
+        value: system:serviceaccount:actions-runner-system:ghar-controller
+    validate:
+      message: The trusted Talos runner must have exactly one runner, one installer, and three volumes.
+      deny:
+        conditions:
+          any:
+          - key: "{{ request.object.spec.containers | length(@) }}"
+            operator: NotEquals
+            value: 1
+          - key: "{{ request.object.spec.initContainers | length(@) }}"
+            operator: NotEquals
+            value: 1
+          - key: "{{ request.object.spec.volumes | length(@) }}"
+            operator: NotEquals
+            value: 3
+          - key: "{{ request.object.spec.containers[?name == 'runner'].command[] | length(@) }}"
+            operator: NotEquals
+            value: 1
+          - key: "{{ request.object.spec.containers[0].command[0] || '' }}"
+            operator: NotEquals
+            value: /home/runner/run.sh
+          - key: "{{ request.object.spec.containers[?name == 'runner'].volumeMounts[] | length(@) }}"
+            operator: NotEquals
+            value: 2
+          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].command[] | length(@) }}"
+            operator: NotEquals
+            value: 2
+          - key: "{{ request.object.spec.initContainers[0].command[0] || '' }}"
+            operator: NotEquals
+            value: /bin/bash
+          - key: "{{ request.object.spec.initContainers[0].command[1] || '' }}"
+            operator: NotEquals
+            value: -ceu
+          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].args[] | length(@) }}"
+            operator: NotEquals
+            value: 1
+          - key: "{{ request.object.spec.initContainers[0].args[0] || '' }}"
+            operator: NotEquals
+            value: install -m 0555 /source/talosctl /tools/talosctl
+          - key: "{{ request.object.spec.initContainers[?name == 'install-talosctl'].volumeMounts[] | length(@) }}"
+            operator: NotEquals
+            value: 2
+  - name: reject-ephemeral-containers
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod/ephemeralcontainers
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - UPDATE
+    validate:
+      message: Ephemeral containers are forbidden in actions-runner-talos.
+      deny:
+        conditions:
+          all:
+          - key: true
+            operator: Equals
+            value: true
+  - name: reject-ordinary-workload-controllers
+    match:
+      any:
+      - resources:
+          kinds:
+          - CronJob
+          - DaemonSet
+          - Deployment
+          - Job
+          - ReplicaSet
+          - ReplicationController
+          - StatefulSet
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+          - UPDATE
+    validate:
+      message: Ordinary workload controllers are forbidden in actions-runner-talos.
+      deny:
+        conditions:
+          all:
+          - key: true
+            operator: Equals
+            value: true
+  - name: restrict-talos-service-account-role
+    match:
+      any:
+      - resources:
+          kinds:
+          - talos.dev/v1alpha1/ServiceAccount
+          namespaces:
+          - actions-runner-talos
+          operations:
+          - CREATE
+          - UPDATE
+    validate:
+      message: actions-runner-talos may contain only ghar-set-talos-talosconfig with the os:operator role.
+      deny:
+        conditions:
+          any:
+          - key: "{{ request.object.metadata.name }}"
+            operator: NotEquals
+            value: ghar-set-talos-talosconfig
+          - key: "{{ request.object.spec.roles || `[]` | length(@) }}"
+            operator: NotEquals
+            value: 1
+          - key: "{{ request.object.spec.roles[0] || '' }}"
+            operator: NotEquals
+            value: os:operator

@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: zoo-fleet
+spec:
+  interval: 15m
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    digest: sha256:29eba0f70e04a2c4e9ff3bcb9a0691c6a1185557d0e097e90703a8da162a6789
+  secretRef:
+    name: ghcr-pull-secret
+  url: oci://ghcr.io/thezoo-house/charts/zoo-fleet

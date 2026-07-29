@@ -56,5 +56,20 @@
       ],
       datasourceTemplate: "{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}",
     },
+    {
+      customType: "regex",
+      description: "Track the Talosctl OCI image volume used by the trusted runner",
+      managerFilePatterns: [
+        "/^kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease\\.yaml$/",
+      ],
+      matchStrings: [
+        "reference: ghcr\\.io/siderolabs/talosctl:(?<currentValue>v\\d+\\.\\d+\\.\\d+)@(?<currentDigest>sha256:[a-f0-9]{64})",
+      ],
+      autoReplaceStringTemplate: "reference: ghcr.io/siderolabs/talosctl:{{newValue}}@{{newDigest}}",
+      datasourceTemplate: "docker",
+      depNameTemplate: "ghcr.io/siderolabs/talosctl",
+      packageNameTemplate: "ghcr.io/siderolabs/talosctl",
+      versioningTemplate: "docker",
+    },
   ],
 }

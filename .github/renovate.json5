@@ -8,6 +8,12 @@
   branchConcurrentLimit: 0,
   packageRules: [
     {
+      description: "GitHub Actions Helm inputs are version-only",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["helm/helm"],
+      pinDigests: false,
+    },
+    {
       description: "Plane chart values do not support synthesized image digests",
       matchManagers: ["kubernetes"],
       matchFileNames: ["kubernetes/apps/services/plane/app/helmrelease.yaml"],

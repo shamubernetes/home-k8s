@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+config_file="${1:-.github/labels.json}"
+repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+
+label_url() {
+    jq -rn --arg label "$1" '$label | @uri'
+}
+
+label_exists() {
+    gh api "repos/${repo}/labels/$(label_url "$1")" >/dev/null 2>&1
+}
+
+jq -c '.[]' "$config_file" | while IFS= read -r label; do
+    name="$(jq -r '.name' <<<"$label")"
+    color="$(jq -r '.color | ltrimstr("#")' <<<"$label")"
+    description="$(jq -r '.description // ""' <<<"$label")"
+
+    if ! label_exists "$name"; then
+        while IFS= read -r alias; do
+            if label_exists "$alias"; then
+                gh api --method PATCH "repos/${repo}/labels/$(label_url "$alias")" \
+                    -f new_name="$name" -f color="$color" -f description="$description" >/dev/null
+                break
+            fi
+        done < <(jq -r '.aliases[]?' <<<"$label")
+    fi
+
+    if label_exists "$name"; then
+        gh api --method PATCH "repos/${repo}/labels/$(label_url "$name")" \
+            -f new_name="$name" -f color="$color" -f description="$description" >/dev/null
+    else
+        gh api --method POST "repos/${repo}/labels" \
+            -f name="$name" -f color="$color" -f description="$description" >/dev/null
+    fi
+done
+
+configured_names="$(jq -c '[.[].name]' "$config_file")"
+gh api --paginate "repos/${repo}/labels?per_page=100" --jq '.[].name' | while IFS= read -r name; do
+    if ! jq -e --arg name "$name" 'index($name) != null' <<<"$configured_names" >/dev/null; then
+        gh api --method DELETE "repos/${repo}/labels/$(label_url "$name")" >/dev/null
+    fi
+done

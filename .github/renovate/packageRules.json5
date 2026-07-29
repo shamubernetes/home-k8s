@@ -31,6 +31,21 @@
       pinDigests: false,
     },
     {
+      description: "Grouped OCI charts do not publish release timestamps",
+      matchDatasources: ["docker"],
+      matchPackageNames: [
+        "quay.io/cilium/charts/cilium",
+        "ghcr.io/coredns/charts/coredns",
+        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "ghcr.io/shamubernetes/charts/git-mirror-operator",
+      ],
+      minimumReleaseAgeBehaviour: "timestamp-optional",
+    },
+    {
       description: "Flux manages OCIRepository dependencies without regex duplication",
       matchManagers: ["custom.regex"],
       matchFileNames: ["**/ocirepository.yaml"],
@@ -40,7 +55,11 @@
     {
       "description": "PostgreSQL 17",
       "matchDatasources": ["docker"],
-      "matchPackagePatterns": ["postgresql", "postgres-init"],
+      "matchPackageNames": [
+        "docker.io/library/postgres",
+        "ghcr.io/cloudnative-pg/postgresql",
+        "ghcr.io/home-operations/postgres-init",
+      ],
       "allowedVersions": "<18"
     },
     // Versions
@@ -48,19 +67,19 @@
       "description": ["Custom versioning for http-https-echo"],
       "matchDatasources": ["docker"],
       "versioning": "regex:^(?<major>\\d+)$",
-      "matchPackagePatterns": ["mendhak/http-https-echo"],
+      "matchPackageNames": ["/mendhak/http-https-echo/"],
     },
     {
       "description": ["Loose versioning for plex"],
       "matchDatasources": ["docker"],
       "versioning": "loose",
-      "matchPackagePatterns": ["plex"]
+      "matchPackageNames": ["/plex/"]
     },
     // Groups
     {
       "description": ["Actions Runner Controller Group"],
       "groupName": "Actions Runner Controller",
-      "matchPackagePatterns": ["gha-runner-scale-set"],
+      "matchPackageNames": ["/gha-runner-scale-set/"],
       "matchDatasources": ["docker", "helm"],
       "semanticCommitScope": "group",
       "group": {
@@ -73,6 +92,7 @@
       "groupName": "cilium",
       "matchDepNames": [
         "quay.io/cilium/cilium",
+        "quay.io/cilium/charts/cilium",
         "quay.io/cilium/operator-generic",
         "cilium",
       ],
@@ -81,23 +101,101 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
+    },
+    {
+      "description": "Prometheus Operator CRDs chart sources",
+      "groupName": "prometheus-operator-crds",
+      "matchPackageNames": [
+        "prometheus-operator-crds",
+        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
+      ],
+      "matchDatasources": ["helm", "docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "Envoy Gateway image and chart",
+      "groupName": "envoy-gateway",
+      "matchPackageNames": [
+        "docker.io/envoyproxy/gateway",
+        "docker.io/envoyproxy/gateway-helm",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "MariaDB Operator and CRDs charts",
+      "groupName": "mariadb-operator",
+      "matchPackageNames": [
+        "ghcr.io/mariadb-operator/charts/mariadb-operator",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "Git Mirror Operator release artifacts",
+      "groupName": "git-mirror-operator",
+      "matchPackageNames": [
+        "ghcr.io/shamubernetes/charts/git-mirror-operator",
+        "ghcr.io/shamubernetes/git-mirror-operator",
+        "ghcr.io/shamubernetes/git-mirror-sync",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 3,
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "Convex runtime image digests",
+      "groupName": "convex-runtime",
+      "matchPackageNames": [
+        "ghcr.io/get-convex/convex-backend",
+        "ghcr.io/get-convex/convex-dashboard",
+      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
     },
     {
       "description": ["CoreDNS Group"],
       "groupName": "coredns",
-      "matchPackagePatterns": ["coredns"],
+      "matchPackageNames": ["/coredns/"],
       "matchDatasources": ["helm", "docker", "helmfile"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true
     },
     {
       "description": ["Kubelet CSR Approver Group"],
       "groupName": "kubelet-csr-approver",
-      "matchPackagePatterns": ["kubelet-csr-approver"],
+      "matchPackageNames": ["/kubelet-csr-approver/"],
       "matchDatasources": ["helm", "helmfile"],
       "semanticCommitScope": "group",
       "group": {
@@ -108,7 +206,7 @@
     {
       "description": ["Dragonfly Operator Group"],
       "groupName": "Dragonfly Operator",
-      "matchPackagePatterns": ["dragonfly(?:db)?.operator"],
+      "matchPackageNames": ["/dragonfly(?:db)?.operator/"],
       "matchDatasources": ["docker", "github-releases"],
       "semanticCommitScope": "group",
       "group": {
@@ -119,7 +217,7 @@
     {
       "description": ["Flux Group"],
       "groupName": "Flux",
-      "matchPackagePatterns": ["fluxcd"],
+      "matchPackageNames": ["/fluxcd/"],
       "matchDatasources": ["docker", "github-tags"],
       "semanticCommitScope": "group",
       "versioning": "semver",
@@ -131,7 +229,7 @@
     {
       "description": ["Intel Device Plugins Group"],
       "groupName": "Intel-Device-Plugins",
-      "matchPackagePatterns": ["intel-device-plugins"],
+      "matchPackageNames": ["/intel-device-plugins/"],
       "matchDatasources": ["helm"],
       "semanticCommitScope": "group",
       "group": {
@@ -142,7 +240,7 @@
     {
       "description": ["Spegel Group"],
       "groupName": "spegel",
-      "matchPackagePatterns": ["spegel"],
+      "matchPackageNames": ["/spegel/"],
       "matchDatasources": ["helm", "docker", "helmfile"],
       "semanticCommitScope": "group",
       "group": {
@@ -153,18 +251,25 @@
     {
       "description": ["Rook-Ceph Group"],
       "groupName": "Rook-Ceph",
-      "matchPackagePatterns": ["rook.ceph"],
+      "matchPackageNames": [
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "docker.io/rook/ceph",
+        "quay.io/cephcsi/ceph-csi-operator",
+        "quay.io/ceph/ceph",
+      ],
       "matchDatasources": ["docker", "helm"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true
     },
     {
       "description": ["System Upgrade Controller Group"],
       "groupName": "System Upgrade Controller",
-      "matchPackagePatterns": ["system-upgrade-controller"],
+      "matchPackageNames": ["/system-upgrade-controller/"],
       "matchDatasources": ["docker", "github-releases"],
       "semanticCommitScope": "group",
       "group": {
@@ -187,9 +292,20 @@
       "separateMinorPatch": true
     },
     {
+      "description": "Keep Mise and trusted-runner Talosctl releases synchronized",
+      "groupName": "Talosctl tooling",
+      "matchDepNames": [
+        "talosctl",
+        "ghcr.io/siderolabs/talosctl",
+      ],
+      "matchManagers": ["mise", "custom.regex"],
+      "semanticCommitScope": "group",
+      "separateMinorPatch": false,
+    },
+    {
       "description": "Thanos Group - mismatched versions",
       "groupName": "Thanos",
-      "matchPackagePatterns": ["thanos"],
+      "matchPackageNames": ["/thanos/"],
       "matchDatasources": ["docker", "github-releases", "helm"],
       "semanticCommitScope": "group",
       "group": {
@@ -200,7 +316,7 @@
     {
       "description": "Vector Group - mismatched versions",
       "groupName": "Vector",
-      "matchPackagePatterns": ["vector"],
+      "matchPackageNames": ["/vector/"],
       "matchDatasources": ["docker", "github-releases", "helm"],
       "semanticCommitScope": "group",
       "group": {
@@ -242,6 +358,11 @@
     },
     {
       "description": "Never auto-merge high-blast-radius infrastructure",
+      "matchPackageNames": [
+        "!docker.io/rook/ceph",
+        "!quay.io/cephcsi/ceph-csi-operator",
+        "!quay.io/ceph/ceph",
+      ],
       "matchFileNames": [
         "talos/**",
         "kubernetes/apps/actions-runner-system/**",
@@ -270,6 +391,11 @@
     {
       "description": "Never auto-merge application images",
       "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "!docker.io/rook/ceph",
+        "!quay.io/cephcsi/ceph-csi-operator",
+        "!quay.io/ceph/ceph",
+      ],
       "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
@@ -295,7 +421,11 @@
     },
     {
       "description": "Wait 3 days before updating critical infrastructure",
-      "matchPackagePatterns": ["cilium", "rook.ceph"],
+      "matchPackageNames": [
+        "/cilium/",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+      ],
       "minimumReleaseAge": "3 days"
     },
   ],

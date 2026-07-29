@@ -66,7 +66,9 @@ jobs:
       env:
         GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
-      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+      run: |
+        printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+        printf '%s' "$GHCR_TOKEN" | cosign login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 
     - name: Verify and pin immutable chart
       run: scripts/promote-firecrawl-chart "$CHART_VERSION" "$CHART_DIGEST"

@@ -77,6 +77,7 @@
       "groupName": "cilium",
       "matchDepNames": [
         "quay.io/cilium/cilium",
+        "quay.io/cilium/charts/cilium",
         "quay.io/cilium/operator-generic",
         "cilium",
       ],
@@ -86,6 +87,77 @@
         "commitMessageTopic": "{{{groupName}}}",
       },
       "separateMinorPatch": true,
+    },
+    {
+      "description": "Prometheus Operator CRDs chart sources",
+      "groupName": "prometheus-operator-crds",
+      "matchPackageNames": [
+        "prometheus-operator-crds",
+        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
+      ],
+      "matchDatasources": ["helm", "docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "Envoy Gateway image and chart",
+      "groupName": "envoy-gateway",
+      "matchPackageNames": [
+        "docker.io/envoyproxy/gateway",
+        "docker.io/envoyproxy/gateway-helm",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "MariaDB Operator and CRDs charts",
+      "groupName": "mariadb-operator",
+      "matchPackageNames": [
+        "ghcr.io/mariadb-operator/charts/mariadb-operator",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "Git Mirror Operator release artifacts",
+      "groupName": "git-mirror-operator",
+      "matchPackageNames": [
+        "ghcr.io/shamubernetes/charts/git-mirror-operator",
+        "ghcr.io/shamubernetes/git-mirror-operator",
+        "ghcr.io/shamubernetes/git-mirror-sync",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "separateMinorPatch": true,
+    },
+    {
+      "description": "Convex runtime image digests",
+      "groupName": "convex-runtime",
+      "matchPackageNames": [
+        "ghcr.io/get-convex/convex-backend",
+        "ghcr.io/get-convex/convex-dashboard",
+      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
     },
     {
       "description": ["CoreDNS Group"],

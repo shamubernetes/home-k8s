@@ -1,6 +1,4 @@
-failed	HelmRelease	observability/loki	Please define loki.storage.bucketNames.chunks
 failed	HelmRelease	services/cowbell	secret services/ghcr-pull-secret not found
 failed	HelmRelease	tools/firecrawl	secret tools/ghcr-pull-secret not found
 failed	OCIRepository	services/cowbell	secret services/ghcr-pull-secret not found
 failed	OCIRepository	tools/firecrawl	secret tools/ghcr-pull-secret not found
-blocked	HelmRelease	observability/grafana	blocked by observability/loki

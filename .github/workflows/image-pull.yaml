@@ -89,14 +89,8 @@ jobs:
           "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" \
           > changed-files.json
         scripts/talos-pr-files changed-files.json > changed-files.txt
-        mapfile -t changed_files < changed-files.txt
-        protected='^(\.github/workflows/|scripts/|kubernetes/apps/actions-runner-system/|talos/patches/controlplane/talos-api\.yaml)'
-        for file in "${changed_files[@]}"; do
-          if [[ $file =~ $protected ]]; then
-            echo "privileged boundary changed in source pull request: $file" >&2
-            exit 1
-          fi
-        done
+        scope=$(scripts/talos-image-gate-scope < changed-files.txt)
+        [[ $scope == applicable ]]
 
         # Branch protection binds both contexts to GitHub Actions app ID 15368.
         # The plan workflow can finish first, so wait boundedly for concurrent CI.

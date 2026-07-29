@@ -97,8 +97,14 @@ grep -Fq 'scripts/talos-check-gate' .github/workflows/image-pull.yaml
 grep -Fq -- '--app-id 15368' .github/workflows/image-pull.yaml
 grep -Fq "[[ \$SOURCE_EVENT == pull_request_target ]]" .github/workflows/image-pull.yaml
 grep -Fq -- '--paginate --slurp' .github/workflows/image-pull.yaml
-grep -Fq 'mapfile -t changed_files < changed-files.txt' .github/workflows/image-pull.yaml
 grep -Fq 'scripts/talos-pr-files changed-files.json' .github/workflows/image-pull.yaml
+grep -Fq "scope=\$(scripts/talos-image-gate-scope < changed-files.txt)" \
+  .github/workflows/image-pull.yaml
+grep -Fq "[[ \$scope == applicable ]]" .github/workflows/image-pull.yaml
+if grep -Fq "protected='^(" .github/workflows/image-pull.yaml; then
+  echo 'consumer duplicates the shared privileged-boundary classifier' >&2
+  exit 1
+fi
 grep -Fq 'SOURCE_HEAD_SHA' .github/workflows/image-pull.yaml
 grep -Fq "[[ \$(jq -r '.base.ref' <<<\"\$pr_json\") == main ]]" \
   .github/workflows/image-pull.yaml

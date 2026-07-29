@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ./externalsecret.yaml
+- ./ocirepository.yaml
+- ./storage.yaml
+# helmrelease.yaml is added here only after the release-first procedure in
+# ../README.md resolves an immutable Zoo Fleet image digest.

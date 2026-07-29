@@ -26,7 +26,7 @@ spec:
       prFilterExpr: '!pr.draft && pr.baseRef == "main"'
       renderForkPrs: false
       restrictEgress: "true"
-      mcp: false
+      mcp: true
       verifyImages: false
       kubeVersion: "1.36.2"
       diffTimeout: 5m

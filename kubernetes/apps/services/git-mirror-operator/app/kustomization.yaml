@@ -4,4 +4,3 @@ kind: Kustomization
 resources:
 - ./externalsecret.yaml
 - ./ingress.yaml
-- ./gitmirror.yaml

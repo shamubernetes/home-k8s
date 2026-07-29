@@ -13,10 +13,25 @@ tasks:
       tmp="$(mktemp -d)"
       trap 'rm -rf "$tmp"' EXIT
 
-      talhelper validate talconfig "{{.TALOS_DIR}}/talconfig.yaml"
+      auth_patch="{{.TALOS_DIR}}/patches/global/ghcr-auth.sops.yaml"
+      grep -Eq '^username: ENC\[' "$auth_patch"
+      grep -Eq '^password: ENC\[' "$auth_patch"
+
+      mkdir -p "$tmp/talos"
+      cp "{{.TALOS_DIR}}/talconfig.yaml" "$tmp/talos/talconfig.yaml"
+      cp -R "{{.TALOS_DIR}}/patches" "$tmp/talos/patches"
+      cat > "$tmp/talos/patches/global/ghcr-auth.sops.yaml" <<'EOF'
+      apiVersion: v1alpha1
+      kind: RegistryAuthConfig
+      name: ghcr.io
+      username: ci-validation
+      password: ci-validation-placeholder
+      EOF
+
+      talhelper validate talconfig "$tmp/talos/talconfig.yaml"
       talhelper gensecret > "$tmp/talsecret.yaml"
       talhelper genconfig \
-        --config-file "{{.TALOS_DIR}}/talconfig.yaml" \
+        --config-file "$tmp/talos/talconfig.yaml" \
         --secret-file "$tmp/talsecret.yaml" \
         --out-dir "$tmp/clusterconfig" \
         --no-gitignore

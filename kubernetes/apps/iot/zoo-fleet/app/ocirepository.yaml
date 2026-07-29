@@ -4,10 +4,12 @@ kind: OCIRepository
 metadata:
   name: zoo-fleet
 spec:
-  interval: 30m
+  interval: 15m
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    tag: 5.0.1
-  url: oci://ghcr.io/bjw-s-labs/helm/app-template
+    digest: sha256:bf0ecf7f9b6ca71194a5fd55d43c2d14e2f35b66109843f7530c85bd627ce246
+  secretRef:
+    name: ghcr-pull-secret
+  url: oci://ghcr.io/thezoo-house/charts/zoo-fleet

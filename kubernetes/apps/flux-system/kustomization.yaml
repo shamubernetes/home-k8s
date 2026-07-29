@@ -7,6 +7,5 @@ resources:
 - ./flux-instance/ks.yaml
 - ./webhooks/ks.yaml
 - ./monitoring/ks.yaml
-- ./notifications/ks.yaml
 - ./konflate/ks.yaml
 # - ./capacitor/ks.yaml

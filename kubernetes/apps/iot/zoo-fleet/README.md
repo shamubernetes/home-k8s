@@ -1,20 +1,15 @@
 # Zoo Fleet
 
 Zoo Fleet is the generic firmware control plane for The Zoo. It uses the shared
-PostgreSQL 17 service, Mosquitto at `mqtt.thezoo.house`, and the dedicated
-Unraid firmware release share.
+PostgreSQL 17 service, Mosquitto through its in-cluster service, and the
+dedicated Unraid firmware release share.
 
-## First deployment boundary
+## Deployment boundary
 
-The production-ready `v0.2.0` image is pinned by its exact multi-architecture
-digest in `app/helmrelease.yaml`. The Flux Kustomization remains suspended
-until the required `zoo-fleet` 1Password item exists and External Secrets can
-materialize every runtime value.
-
-To activate the first deployment, verify the required 1Password fields below,
-run `scripts/validate-app --offline iot/zoo-fleet` and
-`scripts/check-image-pins kubernetes/apps/iot/zoo-fleet`, then remove
-`spec.suspend: true` from `ks.yaml` in a reviewed change.
+The first-party `v0.2.8` Zoo Fleet chart and production image are both pinned
+by exact OCI digests. The Flux Kustomization is active and depends on External
+Secrets materializing every runtime value from the required `zoo-fleet`
+1Password item.
 
 The image runs database migrations under a PostgreSQL advisory lock before
 opening its HTTP listener. Missing migrations, an unavailable database, or
@@ -67,16 +62,19 @@ External Secrets materializes the required runtime values as
 
 ## Upgrades and rollback
 
-Every upgrade is a reviewed digest change. Flux uses a rolling update and Helm
-rollback remediation. Zoo Fleet applies only forward, immutable SQL migrations
-before becoming ready, so application rollback must use an older image that
-remains compatible with the already-applied schema. Database migrations are
-never rolled back automatically.
+Every upgrade is a reviewed image and chart digest change. The first-party
+chart uses a `Recreate` strategy because Zoo Fleet has one durable MQTT client
+identity; overlapping replicas would disconnect each other. Helm rollback
+remediation remains enabled. Zoo Fleet applies only forward, immutable SQL
+migrations before becoming ready, so application rollback must use an older
+image that remains compatible with the already-applied schema. Database
+migrations are never rolled back automatically.
 
 If a release fails startup or readiness, keep the prior digest in Git or revert
 the digest change. Do not delete the retained NFS PVC, change immutable release
 files, or manually edit `schema_migrations`.
 
 Public HTTPS for `fleet.thezoo.house` is provided by the external ingress and
-cluster TLS pattern. MQTT TLS remains owned by the Mosquitto deployment at
-`mqtt.thezoo.house`.
+cluster TLS pattern. Zoo Fleet connects to
+`mosquitto.iot.svc.cluster.local:8883`, while TLS validates the certificate
+identity for `mqtt.thezoo.house`.

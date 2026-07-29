@@ -1,6 +1,11 @@
 creation_rules:
-- # IMPORTANT: This rule MUST be above the others
-  path_regex: talos/.*\.sops\.ya?ml
+# IMPORTANT: Keep specific Talos rules above the general Talos rule.
+- path_regex: talos/patches/global/ghcr-auth\.sops\.ya?ml
+  encrypted_regex: "^(username|password)$"
+  key_groups:
+  - age:
+    - "age1tk7tw0625mspavxe8lvv348p58ydqw6r04sxcjq76m98nan2lsnq3dhvxd"
+- path_regex: talos/.*\.sops\.ya?ml
   key_groups:
   - age:
     - "age1tk7tw0625mspavxe8lvv348p58ydqw6r04sxcjq76m98nan2lsnq3dhvxd"

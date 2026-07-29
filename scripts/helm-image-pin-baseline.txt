@@ -49,9 +49,6 @@ op/onepassword-connect/app	1password/connect-sync:1.8.2
 openebs-system/openebs/app	docker.io/grafana/alloy:v1.8.1
 openebs-system/openebs/app	quay.io/openebs/provisioner-localpv:4.5.1
 openebs-system/openebs/app	quay.io/prometheus-operator/prometheus-config-reloader:v0.81.0
-rook-ceph/rook-ceph/app	docker.io/rook/ceph:v1.20.1
-rook-ceph/rook-ceph/app	quay.io/cephcsi/ceph-csi-operator:v1.0.1
-rook-ceph/rook-ceph/cluster	quay.io/ceph/ceph:v20.2.1
 services/n8n-operator/operator	ghcr.io/shamubernetes/n8n-operator:0.13.0
 services/plane/app	busybox
 services/plane/app	makeplane/admin-commercial:v2.6.3

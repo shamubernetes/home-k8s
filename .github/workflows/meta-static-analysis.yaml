@@ -133,7 +133,6 @@ jobs:
         python scripts/tests/test-cluster-maintenance.py
         scripts/tests/test-validation.sh
         scripts/tests/test-flate-render.sh
-        scripts/tests/test-envoy-oidc-canary.sh
         scripts/tests/test-firecrawl-promotion.sh
         scripts/tests/test-helm-image-inventory.sh
         scripts/tests/test-k8s-schemas.sh

@@ -78,9 +78,12 @@ if grep -Fq 'github.event_path' "$workflow"; then
   exit 1
 fi
 grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "$workflow"
-grep -Fq 'Checkout trusted pull request base' "$workflow"
-grep -Fq 'base/scripts/talos-image-plan build' "$workflow"
-grep -Fq 'base/scripts/talos-image-plan verify' "$workflow"
+grep -Fq 'Checkout exact pull request base' "$workflow"
+grep -Fq 'Checkout current trusted verifier' "$workflow"
+grep -Fq 'ref: refs/heads/main' "$workflow"
+grep -Fq 'path: trusted' "$workflow"
+grep -Fq 'trusted/scripts/talos-image-plan build' "$workflow"
+grep -Fq 'trusted/scripts/talos-image-plan verify' "$workflow"
 grep -Fq 'name: Report immutable image plan' "$workflow"
 grep -Fq 'name: "Talos Image Plan Attempt"' "$workflow"
 grep -Fq "talos-image-plan:\${RUN_ID}:\${trigger_id}" "$workflow"

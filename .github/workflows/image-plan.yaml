@@ -52,11 +52,18 @@ jobs:
         path: head
         persist-credentials: false
 
-    - name: Checkout trusted pull request base
+    - name: Checkout exact pull request base
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ steps.metadata.outputs.base_sha }}
         path: base
+        persist-credentials: false
+
+    - name: Checkout current trusted verifier
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: refs/heads/main
+        path: trusted
         persist-credentials: false
 
     - name: Setup Flate
@@ -118,7 +125,7 @@ jobs:
         TRIGGER_ID: ${{ steps.metadata.outputs.trigger_id }}
       run: |
         set -euo pipefail
-        base/scripts/talos-image-plan build \
+        trusted/scripts/talos-image-plan build \
           --base-inventory base-images.json \
           --head-inventory head-images.json \
           --repository "$REPOSITORY" \
@@ -127,7 +134,7 @@ jobs:
           --head-sha "$HEAD_SHA" \
           --trigger-id "$TRIGGER_ID" \
           --output image-plan.json
-        base/scripts/talos-image-plan verify \
+        trusted/scripts/talos-image-plan verify \
           --plan image-plan.json \
           --repository "$REPOSITORY" \
           --pull-request "$PULL_REQUEST" \

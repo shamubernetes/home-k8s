@@ -100,6 +100,15 @@ grep -Fq -- '--paginate --slurp' .github/workflows/image-pull.yaml
 grep -Fq 'mapfile -t changed_files < changed-files.txt' .github/workflows/image-pull.yaml
 grep -Fq 'scripts/talos-pr-files changed-files.json' .github/workflows/image-pull.yaml
 grep -Fq 'SOURCE_HEAD_SHA' .github/workflows/image-pull.yaml
+grep -Fq "[[ \$(jq -r '.base.ref' <<<\"\$pr_json\") == main ]]" \
+  .github/workflows/image-pull.yaml
+grep -Fq "compare/\${base_sha}...\${current_base_sha}" .github/workflows/image-pull.yaml
+grep -Fq 'identical|ahead)' .github/workflows/image-pull.yaml
+if grep -Fq "'.base.sha' <<<\"\$pr_json\") == \"\$base_sha\"" \
+  .github/workflows/image-pull.yaml; then
+  echo 'consumer still requires a live base SHA equality that races default-branch updates' >&2
+  exit 1
+fi
 if grep -Eq 'SOURCE_ACTOR|workflow_dispatch|shamubot\[bot\]' \
   .github/workflows/image-pull.yaml; then
   echo 'privileged consumer still depends on a manual or author-specific path' >&2

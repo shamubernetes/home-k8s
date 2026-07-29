@@ -68,7 +68,15 @@ jobs:
         [[ $(jq -r '.state' <<<"$pr_json") == open ]]
         [[ $(jq -r '.head.repo.full_name' <<<"$pr_json") == "$REPOSITORY" ]]
         [[ $(jq -r '.head.sha' <<<"$pr_json") == "$head_sha" ]]
-        [[ $(jq -r '.base.sha' <<<"$pr_json") == "$base_sha" ]]
+        [[ $(jq -r '.base.ref' <<<"$pr_json") == main ]]
+        [[ $base_sha =~ ^[0-9a-f]{40}$ ]]
+        current_base_sha=$(jq -r '.base.sha' <<<"$pr_json")
+        base_compare=$(gh api \
+          "repos/${REPOSITORY}/compare/${base_sha}...${current_base_sha}")
+        case $(jq -r '.status' <<<"$base_compare") in
+          identical|ahead) ;;
+          *) echo "planned base is not an ancestor of current protected base" >&2; exit 1 ;;
+        esac
         [[ $SOURCE_HEAD_SHA == "$head_sha" ]]
         {
           printf 'pull_request=%s\n' "$pr"

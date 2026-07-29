@@ -41,9 +41,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         REPOSITORY: ${{ github.repository }}
-        SOURCE_ACTOR: ${{ github.event.workflow_run.actor.login }}
         SOURCE_EVENT: ${{ github.event.workflow_run.event }}
-        SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         SOURCE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
         SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
       run: |
@@ -51,16 +49,7 @@ jobs:
         [[ $SOURCE_HEAD_REPOSITORY == "$REPOSITORY" ]]
         source_path=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.path')
         [[ $source_path == '.github/workflows/image-plan.yaml' ]]
-        case "$SOURCE_EVENT" in
-          pull_request_target)
-            [[ $SOURCE_ACTOR == 'shamubot[bot]' || $SOURCE_ACTOR == 'MaudeBot' ]]
-            ;;
-          workflow_dispatch)
-            [[ $SOURCE_ACTOR == 'MaudeBot' ]]
-            [[ $SOURCE_HEAD_BRANCH == 'main' ]]
-            ;;
-          *) echo "unsupported source event: $SOURCE_EVENT" >&2; exit 1 ;;
-        esac
+        [[ $SOURCE_EVENT == pull_request_target ]]
 
         artifacts=$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100")
         mapfile -t artifact_ids < <(jq -r '.artifacts[] | select(.expired == false and (.name | startswith("talos-image-plan-"))) | .id' <<<"$artifacts")
@@ -80,15 +69,19 @@ jobs:
         [[ $(jq -r '.head.repo.full_name' <<<"$pr_json") == "$REPOSITORY" ]]
         [[ $(jq -r '.head.sha' <<<"$pr_json") == "$head_sha" ]]
         [[ $(jq -r '.base.sha' <<<"$pr_json") == "$base_sha" ]]
-        if [[ $SOURCE_EVENT == pull_request_target ]]; then
-          [[ $(jq -r '.user.login' <<<"$pr_json") == 'shamubot[bot]' ]]
-        fi
         {
           printf 'pull_request=%s\n' "$pr"
           printf 'head_sha=%s\n' "$head_sha"
         } >> "$GITHUB_OUTPUT"
 
-        mapfile -t changed_files < <(gh api --paginate "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" --jq '.[].filename')
+        gh api --paginate --slurp \
+          "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" > pr-files-pages.json
+        jq -e 'type == "array" and length > 0 and all(.[]; type == "array")' \
+          pr-files-pages.json >/dev/null
+        jq -r '.[][] | .filename, (.previous_filename // empty)' \
+          pr-files-pages.json > changed-files.txt
+        mapfile -t changed_files < changed-files.txt
+        (( ${#changed_files[@]} > 0 ))
         protected='^(\.github/workflows/|scripts/|kubernetes/apps/actions-runner-system/|talos/patches/controlplane/talos-api\.yaml)'
         for file in "${changed_files[@]}"; do
           if [[ $file =~ $protected ]]; then

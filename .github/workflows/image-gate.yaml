@@ -35,7 +35,6 @@ jobs:
         HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         PULL_REQUEST: ${{ github.event.pull_request.number }}
-        PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
@@ -43,15 +42,15 @@ jobs:
           echo 'Talos pre-pull is not available to fork pull requests.'
           exit 0
         fi
-        if [[ $PULL_REQUEST_AUTHOR != 'shamubot[bot]' ]]; then
-          echo 'A trusted workflow dispatch is required for this same-repository pull request.'
-        fi
-
-        mapfile -t changed_files < <(
-          gh api --paginate \
-            "repos/${REPOSITORY}/pulls/${PULL_REQUEST}/files?per_page=100" \
-            --jq '.[].filename'
-        )
+        gh api --paginate --slurp \
+          "repos/${REPOSITORY}/pulls/${PULL_REQUEST}/files?per_page=100" \
+          > pr-files-pages.json
+        jq -e 'type == "array" and length > 0 and all(.[]; type == "array")' \
+          pr-files-pages.json >/dev/null
+        jq -r '.[][] | .filename, (.previous_filename // empty)' \
+          pr-files-pages.json > changed-files.txt
+        mapfile -t changed_files < changed-files.txt
+        (( ${#changed_files[@]} > 0 ))
         scope=$(printf '%s\n' "${changed_files[@]}" |
           trusted/scripts/talos-image-gate-scope)
         if [[ $scope != applicable ]]; then

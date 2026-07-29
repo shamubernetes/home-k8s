@@ -66,8 +66,8 @@ def main() -> int:
 
     try:
         images = json.loads(args.images_json)
-        if not isinstance(images, list) or not images or len(images) > 20:
-            raise ValueError("images must be a nonempty JSON array with at most 20 entries")
+        if not isinstance(images, list) or len(images) > 20:
+            raise ValueError("images must be a JSON array with at most 20 entries")
         if args.node_count < 1 or args.node_count > 20:
             raise ValueError("node-count must be between 1 and 20")
         crane = os.environ.get("CRANE", "crane")

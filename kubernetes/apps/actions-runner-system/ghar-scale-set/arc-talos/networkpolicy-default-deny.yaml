@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumnetworkpolicy_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: actions-runner-talos-default-deny
+spec:
+  endpointSelector: {}
+  ingress: []
+  egress: []

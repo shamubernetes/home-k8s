@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+images_json=${IMAGES_JSON:?IMAGES_JSON is required}
+preflight_fleet_bytes=${PREFLIGHT_FLEET_BYTES:?PREFLIGHT_FLEET_BYTES is required}
+talosctl=${TALOSCTL:-/opt/talosctl/talosctl}
+max_image_bytes=5000000000
+max_total_bytes=20000000000
+nodes=(10.100.47.50 10.100.47.51)
+if [[ -n ${TALOS_NODES:-} ]]; then
+  IFS=',' read -r -a nodes <<< "$TALOS_NODES"
+fi
+
+[[ -x $talosctl ]]
+[[ $preflight_fleet_bytes =~ ^[0-9]+$ ]]
+(( preflight_fleet_bytes <= max_total_bytes ))
+mapfile -t images < <(jq -r '.[]' <<< "$images_json")
+[[ ${#images[@]} -ge 1 && ${#images[@]} -le 20 ]]
+
+declare -a cleanup_nodes=()
+declare -a cleanup_images=()
+succeeded=false
+
+size_bytes() {
+  local number=$1 unit=$2 multiplier
+  case "$unit" in
+    B) multiplier=1 ;;
+    KB|kB) multiplier=1000 ;;
+    MB) multiplier=1000000 ;;
+    GB) multiplier=1000000000 ;;
+    TB) multiplier=1000000000000 ;;
+    *) echo "unknown image size unit: $unit" >&2; return 1 ;;
+  esac
+  awk -v number="$number" -v multiplier="$multiplier" 'BEGIN {printf "%.0f", number * multiplier}'
+}
+
+image_size() {
+  local node=$1 digest=$2
+  "$talosctl" --nodes "$node" image list |
+    awk -v digest="$digest" '$3 == digest {print $4, $5; exit}'
+}
+
+cleanup_new_images() {
+  local index node image digest size unit
+  [[ $succeeded == true ]] && return 0
+  set +e
+  for ((index=${#cleanup_nodes[@]} - 1; index >= 0; index--)); do
+    node=${cleanup_nodes[$index]}
+    image=${cleanup_images[$index]}
+    digest=${image##*@}
+    size=''
+    unit=''
+    read -r size unit < <(image_size "$node" "$digest") || true
+    if [[ -n ${size:-} && -n ${unit:-} ]]; then
+      printf 'cleanup node=%s image=%s\n' "$node" "$image" >&2
+      "$talosctl" --nodes "$node" image remove "$image" >&2
+    fi
+  done
+}
+trap cleanup_new_images EXIT
+
+"$talosctl" version --client --short
+printf 'preflight_fleet_bytes=%s images=%s nodes=%s\n' \
+  "$preflight_fleet_bytes" "${#images[@]}" "${#nodes[@]}"
+
+total_bytes=0
+for image in "${images[@]}"; do
+  [[ $image =~ @sha256:[0-9a-f]{64}$ ]]
+  digest=${image##*@}
+  for node in "${nodes[@]}"; do
+    before_size=''
+    before_unit=''
+    read -r before_size before_unit < <(image_size "$node" "$digest") || true
+    if [[ -z ${before_size:-} || -z ${before_unit:-} ]]; then
+      cleanup_nodes+=("$node")
+      cleanup_images+=("$image")
+    fi
+    printf 'pull node=%s image=%s\n' "$node" "$image"
+    timeout 10m "$talosctl" --nodes "$node" image pull "$image"
+    read -r size unit < <(image_size "$node" "$digest")
+    [[ -n ${size:-} && -n ${unit:-} ]]
+    bytes=$(size_bytes "$size" "$unit")
+    if (( bytes > max_image_bytes )); then
+      echo "image exceeds post-pull per-image size limit: $image ($size $unit)" >&2
+      exit 1
+    fi
+    total_bytes=$((total_bytes + bytes))
+    if (( total_bytes > max_total_bytes )); then
+      echo "plan exceeds post-pull aggregate size limit" >&2
+      exit 1
+    fi
+    printf 'verified node=%s image=%s size=%s%s\n' "$node" "$image" "$size" "$unit"
+  done
+done
+succeeded=true
+printf 'completed total_bytes=%s\n' "$total_bytes"

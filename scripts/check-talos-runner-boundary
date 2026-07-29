@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+allowed_prefix='kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/'
+allowed_exact=(
+  'kubernetes/apps/actions-runner-system/namespace-talos.yaml'
+  'kubernetes/apps/actions-runner-system/ghar-scale-set/talos-ks.yaml'
+  'kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml'
+)
+
+is_allowed() {
+  local path=$1 allowed
+  [[ $path == "$allowed_prefix"* ]] && return 0
+  for allowed in "${allowed_exact[@]}"; do
+    [[ $path == "$allowed" ]] && return 0
+  done
+  return 1
+}
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+references="$tmpdir/references"
+if git grep --untracked -l -E 'actions-runner-talos|ghar-set-talos-talosconfig' -- \
+  'kubernetes/**/*.yaml' 'kubernetes/**/*.yml' > "$references"; then
+  :
+else
+  status=$?
+  (( status == 1 )) || {
+    echo 'failed to inventory privileged Talos runner references' >&2
+    exit 1
+  }
+fi
+[[ -s $references ]] || {
+  echo 'privileged Talos runner references disappeared' >&2
+  exit 1
+}
+
+status=0
+while IFS= read -r path; do
+  if ! is_allowed "$path"; then
+    printf 'privileged Talos runner reference outside owned source path: %s\n' "$path" >&2
+    status=1
+  fi
+done < "$references"
+(( status == 0 )) || exit "$status"
+
+yq -e '.metadata.name == "ghar-talos" and
+  .spec.targetNamespace == "actions-runner-talos" and
+  .spec.path == "./kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos"' \
+  kubernetes/apps/actions-runner-system/ghar-scale-set/talos-ks.yaml >/dev/null
+yq -e '.kind == "Namespace" and .metadata.name == "actions-runner-talos"' \
+  kubernetes/apps/actions-runner-system/namespace-talos.yaml >/dev/null
+
+rendered="$tmpdir/rendered.yaml"
+kubectl kustomize kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos > "$rendered"
+yq -e 'select(document_index == 0) | true' "$rendered" >/dev/null
+mapfile -t identities < <(
+  yq -r -N 'select(.apiVersion and .kind and .metadata.name) | [.kind, .metadata.name] | @tsv' "$rendered" | sort
+)
+expected=(
+  $'CiliumNetworkPolicy\tactions-runner-talos-default-deny'
+  $'CiliumNetworkPolicy\tghar-set-talos'
+  $'ExternalSecret\tactions-runner-controller-auth'
+  $'HelmRelease\tghar-set-talos'
+  $'OCIRepository\tghar-set-talos'
+  $'ServiceAccount\tghar-set-talos-talosconfig'
+)
+printf '%s\n' "${expected[@]}" | sort > "$tmpdir/expected"
+printf '%s\n' "${identities[@]}" > "$tmpdir/actual"
+diff -u "$tmpdir/expected" "$tmpdir/actual"
+
+printf 'ok: privileged Talos runner sources and rendered identities are exclusively owned\n'

@@ -4,23 +4,17 @@ Zoo Fleet is the generic firmware control plane for The Zoo. It uses the shared
 PostgreSQL 17 service, Mosquitto at `mqtt.thezoo.house`, and the dedicated
 Unraid firmware release share.
 
-## Release-first deployment boundary
+## First deployment boundary
 
-The Flux Kustomization is intentionally suspended and the HelmRelease is kept
-as `app/helmrelease.release-required.yaml.tmpl`. The existing `v0.1.1` image
-does not contain the production startup work in FLEET-11, and no digest is
-fabricated here.
+The production-ready `v0.2.0` image is pinned by its exact multi-architecture
+digest in `app/helmrelease.yaml`. The Flux Kustomization remains suspended
+until the required `zoo-fleet` 1Password item exists and External Secrets can
+materialize every runtime value.
 
-To activate the first deployment:
-
-1. Merge and publish a new stable Zoo Fleet tag.
-2. Copy the exact multi-architecture image digest emitted by the release job.
-3. Copy `helmrelease.release-required.yaml.tmpl` to `helmrelease.yaml` and
-   replace `RELEASE_TAG@sha256:RELEASE_DIGEST` with that release tag and digest.
-4. Add `./helmrelease.yaml` to `app/kustomization.yaml`.
-5. Run `scripts/validate-app --offline iot/zoo-fleet` and
-   `scripts/check-image-pins kubernetes/apps/iot/zoo-fleet`.
-6. Remove `spec.suspend: true` from `ks.yaml` in the same reviewed change.
+To activate the first deployment, verify the required 1Password fields below,
+run `scripts/validate-app --offline iot/zoo-fleet` and
+`scripts/check-image-pins kubernetes/apps/iot/zoo-fleet`, then remove
+`spec.suspend: true` from `ks.yaml` in a reviewed change.
 
 The image runs database migrations under a PostgreSQL advisory lock before
 opening its HTTP listener. Missing migrations, an unavailable database, or

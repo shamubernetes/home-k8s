@@ -24,7 +24,6 @@
   {"name": "size/L", "color": "ee9900"},
   {"name": "size/XL", "color": "ee5500"},
   {"name": "size/XXL", "color": "ee0000"},
-  {"name": "flux/failure", "color": "ee0701", "description": "Flux deployment failure requiring investigation"},
   {"name": "image-not-found", "color": "ee0701"},
   {"name": "bug", "color": "ee0701"},
   {"name": "do-not-merge", "color": "ee0701"},

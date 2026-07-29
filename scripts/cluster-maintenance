@@ -1,0 +1,998 @@
+#!/usr/bin/env python3
+"""Manage verified, bounded Alertmanager silences for home-k8s maintenance."""
+
+import argparse
+import contextlib
+import datetime as dt
+import fcntl
+import json
+import os
+import queue
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+import uuid
+from pathlib import Path
+
+UTC = dt.timezone.utc
+DEFAULT_DURATION = dt.timedelta(hours=4)
+MAX_DURATION = dt.timedelta(hours=24)
+MANAGED_BY = "home-k8s cluster-maintenance"
+COMMENT_PREFIX = "cluster-maintenance: "
+EXCLUDED_ALERTS = {"Watchdog", "InfoInhibitor"}
+MAINTENANCE_MATCHERS = [
+    {"name": "alertname", "value": ".+", "isRegex": True, "isEqual": True},
+    {
+        "name": "alertname",
+        "value": "Watchdog|InfoInhibitor",
+        "isRegex": True,
+        "isEqual": False,
+    },
+]
+VERIFY_TIMEOUT_SECONDS = float(os.environ.get("MAINTENANCE_VERIFY_TIMEOUT_SECONDS", "20"))
+LEASE_NAME = "cluster-maintenance-begin-lock"
+LEASE_DURATION_SECONDS = 120
+LEASE_RENEW_INTERVAL_SECONDS = 30
+
+
+class MaintenanceError(RuntimeError):
+    pass
+
+
+def utc_now():
+    return dt.datetime.now(UTC)
+
+
+def timestamp(value):
+    return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def lease_timestamp(value):
+    return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def parse_timestamp(value):
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def parse_duration(value):
+    suffixes = {"m": dt.timedelta(minutes=1), "h": dt.timedelta(hours=1)}
+    if len(value) < 2 or value[-1] not in suffixes:
+        raise argparse.ArgumentTypeError("duration must use whole minutes or hours, such as 30m or 4h")
+    try:
+        amount = int(value[:-1])
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("duration must use whole minutes or hours, such as 30m or 4h") from exc
+    duration = amount * suffixes[value[-1]]
+    if duration <= dt.timedelta(0):
+        raise argparse.ArgumentTypeError("duration must be greater than zero")
+    if duration > MAX_DURATION:
+        raise argparse.ArgumentTypeError("duration must not exceed 24h")
+    return duration
+
+
+def compact_alert(alert):
+    labels = alert.get("labels", {})
+    return {
+        "alertname": labels.get("alertname", "unknown"),
+        "severity": labels.get("severity", "unknown"),
+        "namespace": labels.get("namespace"),
+        "node": labels.get("node") or labels.get("kubernetes_node"),
+        "device": labels.get("device"),
+    }
+
+
+def parse_alert_selector(value):
+    labels = {}
+    for item in value.split(","):
+        name, separator, expected = item.partition("=")
+        name = name.strip()
+        expected = expected.strip()
+        if not separator or not name or not expected:
+            raise argparse.ArgumentTypeError(
+                "active-alert selectors must use label=value pairs separated by commas"
+            )
+        labels[name] = expected
+    if "alertname" not in labels or len(labels) < 2:
+        raise argparse.ArgumentTypeError(
+            "active-alert selectors must include alertname and at least one scoping label"
+        )
+    return labels
+
+
+def alert_matches_selector(alert, selector):
+    labels = alert.get("labels", {})
+    return all(labels.get(name) == expected for name, expected in selector.items())
+
+
+def matcher_signature(matchers):
+    return sorted(
+        (
+            matcher.get("name"),
+            matcher.get("value"),
+            bool(matcher.get("isRegex")),
+            bool(matcher.get("isEqual", True)),
+        )
+        for matcher in matchers
+    )
+
+
+def require_canonical_matchers(silence):
+    if matcher_signature(silence.get("matchers", [])) != matcher_signature(MAINTENANCE_MATCHERS):
+        raise MaintenanceError(
+            f"silence {silence.get('id', 'unknown')} does not have the canonical maintenance matchers"
+        )
+
+
+def kubectl_base():
+    command = [os.environ.get("KUBECTL_BIN", "kubectl")]
+    kubeconfig = os.environ.get("MAINTENANCE_KUBECONFIG")
+    if kubeconfig:
+        command.extend(["--kubeconfig", str(Path(kubeconfig).expanduser())])
+    return command
+
+
+def run_kubectl(args, input_text=None):
+    try:
+        return subprocess.run(
+            [*kubectl_base(), *args],
+            input=input_text,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise MaintenanceError(f"kubectl command failed: {exc}") from exc
+
+
+class AlertmanagerApi:
+    def __init__(self, base_url, name):
+        self.base_url = base_url.rstrip("/")
+        self.name = name
+
+    def request(self, path, method="GET", payload=None):
+        body = None
+        headers = {"Accept": "application/json"}
+        if payload is not None:
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            self.base_url + path, data=body, headers=headers, method=method
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                response_body = response.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")
+            raise MaintenanceError(
+                f"Alertmanager member {self.name} {method} {path} returned HTTP {exc.code}: {detail[:500]}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise MaintenanceError(
+                f"Alertmanager member {self.name} {method} {path} failed: {exc.reason}"
+            ) from exc
+        if not response_body:
+            return None
+        try:
+            return json.loads(response_body)
+        except json.JSONDecodeError as exc:
+            raise MaintenanceError(
+                f"Alertmanager member {self.name} {method} {path} returned non-JSON data"
+            ) from exc
+
+    def get_status(self):
+        return self.request("/api/v2/status")
+
+    def get_alerts(self):
+        return self.request("/api/v2/alerts")
+
+    def get_silences(self):
+        return self.request("/api/v2/silences")
+
+    def get_silence(self, silence_id):
+        return self.request(f"/api/v2/silence/{silence_id}")
+
+    def put_silence(self, silence):
+        result = self.request("/api/v2/silences", method="POST", payload=silence)
+        silence_id = (result or {}).get("silenceID")
+        if not silence_id:
+            raise MaintenanceError("Alertmanager did not return a silence ID")
+        return silence_id
+
+    def delete_silence(self, silence_id):
+        self.request(f"/api/v2/silence/{silence_id}", method="DELETE")
+
+
+class AlertmanagerCluster:
+    def __init__(self, members):
+        if not members:
+            raise MaintenanceError("no Alertmanager members were configured")
+        self.members = members
+
+    @property
+    def primary(self):
+        return self.members[0]
+
+    def require_healthy(self):
+        for member in self.members:
+            status = member.get_status().get("cluster", {})
+            peers = status.get("peers") or []
+            if status.get("status") != "ready" or len(peers) < 2:
+                raise MaintenanceError(
+                    "Alertmanager must report a ready HA cluster with at least two ready peers "
+                    f"on every member ({member.name}: status={status.get('status')!r}, peers={len(peers)})"
+                )
+        if len(self.members) < 2:
+            raise MaintenanceError(
+                "maintenance requires direct verification against at least two Alertmanager members"
+            )
+        return len(self.members)
+
+    def all_alerts(self):
+        return [(member, member.get_alerts()) for member in self.members]
+
+    def all_silences(self):
+        return [(member, member.get_silences()) for member in self.members]
+
+    def get_silences(self, silence_id):
+        return [(member, member.get_silence(silence_id)) for member in self.members]
+
+    def put_silence(self, payload):
+        return self.primary.put_silence(payload)
+
+    def delete_silence(self, silence_id):
+        self.primary.delete_silence(silence_id)
+
+
+class PortForward:
+    def __init__(self, target):
+        self.target = target
+        self.process = None
+        self.output = []
+
+    @staticmethod
+    def free_port():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return sock.getsockname()[1]
+
+    def __enter__(self):
+        port = self.free_port()
+        namespace = os.environ.get("ALERTMANAGER_NAMESPACE", "observability")
+        command = [
+            *kubectl_base(),
+            "-n",
+            namespace,
+            "port-forward",
+            "--address=127.0.0.1",
+            self.target,
+            f"{port}:9093",
+        ]
+        try:
+            self.process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+        except OSError as exc:
+            raise MaintenanceError(f"could not start kubectl port-forward: {exc}") from exc
+
+        messages = queue.Queue()
+
+        def read_output():
+            assert self.process is not None and self.process.stdout is not None
+            for line in self.process.stdout:
+                self.output.append(line.rstrip())
+                messages.put(line)
+            messages.put(None)
+
+        threading.Thread(target=read_output, daemon=True).start()
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            try:
+                line = messages.get(timeout=max(0.1, deadline - time.monotonic()))
+            except queue.Empty:
+                break
+            if line is None:
+                break
+            if "Forwarding from" in line:
+                return f"http://127.0.0.1:{port}"
+        details = "\n".join(self.output[-10:]) or "no output"
+        self.close()
+        raise MaintenanceError(f"kubectl port-forward did not become ready: {details}")
+
+    def close(self):
+        if self.process is None:
+            return
+        if self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=5)
+        self.process = None
+
+    def __exit__(self, exc_type, exc, traceback):
+        del exc_type, exc, traceback
+        self.close()
+
+
+def discover_alertmanager_pods():
+    namespace = os.environ.get("ALERTMANAGER_NAMESPACE", "observability")
+    result = run_kubectl(
+        [
+            "-n",
+            namespace,
+            "get",
+            "pods",
+            "-l",
+            "app.kubernetes.io/name=alertmanager",
+            "-o",
+            "json",
+        ]
+    )
+    if result.returncode != 0:
+        raise MaintenanceError(f"could not discover Alertmanager pods: {result.stderr.strip()}")
+    try:
+        items = json.loads(result.stdout).get("items", [])
+    except json.JSONDecodeError as exc:
+        raise MaintenanceError("kubectl returned non-JSON Alertmanager pod data") from exc
+    ready = []
+    for item in items:
+        conditions = item.get("status", {}).get("conditions", [])
+        if any(
+            condition.get("type") == "Ready" and condition.get("status") == "True"
+            for condition in conditions
+        ):
+            ready.append(item.get("metadata", {}).get("name"))
+    ready = sorted(name for name in ready if name)
+    if len(ready) < 2:
+        raise MaintenanceError(
+            f"maintenance requires at least two Ready Alertmanager pods; found {len(ready)}"
+        )
+    return ready
+
+
+@contextlib.contextmanager
+def alertmanager_cluster():
+    configured = os.environ.get("ALERTMANAGER_URLS")
+    if configured:
+        urls = [url.strip() for url in configured.split(",") if url.strip()]
+        if len(urls) < 2:
+            raise MaintenanceError("ALERTMANAGER_URLS must contain at least two member URLs")
+        if len(set(urls)) < 2 and not os.environ.get("MAINTENANCE_ALLOW_DUPLICATE_MEMBERS"):
+            raise MaintenanceError("ALERTMANAGER_URLS must identify distinct members")
+        yield AlertmanagerCluster(
+            [AlertmanagerApi(url, f"configured-{index + 1}") for index, url in enumerate(urls)]
+        )
+        return
+    with contextlib.ExitStack() as stack:
+        members = []
+        for pod in discover_alertmanager_pods():
+            url = stack.enter_context(PortForward(f"pod/{pod}"))
+            members.append(AlertmanagerApi(url, pod))
+        yield AlertmanagerCluster(members)
+
+
+class FileBeginLock:
+    def __init__(self, path):
+        self.path = path
+        self.handle = None
+
+    def __enter__(self):
+        self.handle = open(self.path, "a+", encoding="utf-8")
+        fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        del exc_type, exc, traceback
+        if self.handle is not None:
+            fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
+            self.handle.close()
+
+    def assert_healthy(self):
+        return
+
+
+class KubernetesBeginLock:
+    def __init__(self):
+        self.namespace = os.environ.get("ALERTMANAGER_NAMESPACE", "observability")
+        self.identity = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4()}"
+        self.acquired = False
+        self.stop_renewal = threading.Event()
+        self.renewal_thread = None
+        self.renewal_error = None
+
+    def manifest(self, resource_version=None):
+        metadata = {"name": LEASE_NAME, "namespace": self.namespace}
+        if resource_version:
+            metadata["resourceVersion"] = resource_version
+        return {
+            "apiVersion": "coordination.k8s.io/v1",
+            "kind": "Lease",
+            "metadata": metadata,
+            "spec": {
+                "holderIdentity": self.identity,
+                "leaseDurationSeconds": LEASE_DURATION_SECONDS,
+                "acquireTime": lease_timestamp(utc_now()),
+                "renewTime": lease_timestamp(utc_now()),
+            },
+        }
+
+    def get(self):
+        return run_kubectl(
+            ["-n", self.namespace, "get", "lease", LEASE_NAME, "-o", "json"]
+        )
+
+    def start_renewal(self):
+        self.renewal_thread = threading.Thread(target=self.renew_loop, daemon=True)
+        self.renewal_thread.start()
+
+    def renew_loop(self):
+        while not self.stop_renewal.wait(LEASE_RENEW_INTERVAL_SECONDS):
+            try:
+                current = self.get()
+                if current.returncode != 0:
+                    raise MaintenanceError(
+                        f"could not renew maintenance Lease: {current.stderr.strip()}"
+                    )
+                lease = json.loads(current.stdout)
+                if lease.get("spec", {}).get("holderIdentity") != self.identity:
+                    raise MaintenanceError("maintenance Lease ownership was lost")
+                lease["spec"]["renewTime"] = lease_timestamp(utc_now())
+                lease["spec"]["leaseDurationSeconds"] = LEASE_DURATION_SECONDS
+                renewed = run_kubectl(["replace", "-f", "-"], json.dumps(lease))
+                if renewed.returncode != 0:
+                    raise MaintenanceError(
+                        f"could not renew maintenance Lease: {renewed.stderr.strip()}"
+                    )
+            except (MaintenanceError, json.JSONDecodeError) as exc:
+                self.renewal_error = MaintenanceError(str(exc))
+                return
+
+    def assert_healthy(self):
+        if self.renewal_error:
+            raise self.renewal_error
+
+    def __enter__(self):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            current = self.get()
+            if current.returncode != 0:
+                if "NotFound" not in current.stderr and "not found" not in current.stderr.lower():
+                    raise MaintenanceError(
+                        f"could not read maintenance Lease: {current.stderr.strip()}"
+                    )
+                created = run_kubectl(
+                    ["create", "-f", "-"], json.dumps(self.manifest())
+                )
+                if created.returncode == 0:
+                    self.acquired = True
+                    self.start_renewal()
+                    return self
+                if "AlreadyExists" in created.stderr:
+                    continue
+                raise MaintenanceError(
+                    f"could not create maintenance Lease: {created.stderr.strip()}"
+                )
+
+            try:
+                lease = json.loads(current.stdout)
+            except json.JSONDecodeError as exc:
+                raise MaintenanceError("kubectl returned non-JSON Lease data") from exc
+            spec = lease.get("spec", {})
+            renew_time = spec.get("renewTime") or spec.get("acquireTime")
+            duration = int(spec.get("leaseDurationSeconds") or LEASE_DURATION_SECONDS)
+            active = renew_time and parse_timestamp(renew_time) + dt.timedelta(seconds=duration) > utc_now()
+            if active:
+                raise MaintenanceError(
+                    f"another cluster-maintenance begin operation holds the Lease ({spec.get('holderIdentity')})"
+                )
+            replaced = run_kubectl(
+                ["replace", "-f", "-"],
+                json.dumps(self.manifest(lease.get("metadata", {}).get("resourceVersion"))),
+            )
+            if replaced.returncode == 0:
+                self.acquired = True
+                self.start_renewal()
+                return self
+            if "Conflict" not in replaced.stderr:
+                raise MaintenanceError(
+                    f"could not acquire maintenance Lease: {replaced.stderr.strip()}"
+                )
+        raise MaintenanceError("timed out acquiring the cluster-maintenance begin Lease")
+
+    def __exit__(self, exc_type, exc, traceback):
+        del exc_type, exc, traceback
+        if not self.acquired:
+            return
+        self.stop_renewal.set()
+        if self.renewal_thread is not None:
+            self.renewal_thread.join(timeout=5)
+        current = self.get()
+        if current.returncode != 0:
+            print(
+                "warning: could not read maintenance Lease during release; "
+                f"it will expire safely: {current.stderr.strip()}",
+                file=sys.stderr,
+            )
+            return
+        try:
+            lease = json.loads(current.stdout)
+        except json.JSONDecodeError:
+            print(
+                "warning: kubectl returned non-JSON Lease data during release; "
+                "it will expire safely",
+                file=sys.stderr,
+            )
+            return
+        if lease.get("spec", {}).get("holderIdentity") != self.identity:
+            return
+        lease["spec"]["holderIdentity"] = f"{self.identity}-released"
+        lease["spec"]["leaseDurationSeconds"] = 1
+        lease["spec"]["renewTime"] = lease_timestamp(
+            utc_now() - dt.timedelta(seconds=2)
+        )
+        released = run_kubectl(["replace", "-f", "-"], json.dumps(lease))
+        if released.returncode != 0:
+            print(
+                "warning: could not expire maintenance Lease; "
+                f"it will age out safely: {released.stderr.strip()}",
+                file=sys.stderr,
+            )
+
+
+def begin_lock():
+    path = os.environ.get("MAINTENANCE_LOCK_FILE")
+    return FileBeginLock(path) if path else KubernetesBeginLock()
+
+
+def active_owned_silences(cluster):
+    found = {}
+    for _, silences in cluster.all_silences():
+        for silence in silences:
+            if (
+                silence.get("status", {}).get("state") == "active"
+                and silence.get("createdBy") == MANAGED_BY
+                and silence.get("comment", "").startswith(COMMENT_PREFIX)
+            ):
+                found[silence.get("id", "unknown")] = silence
+    return list(found.values())
+
+
+def unsilenced_blockers(cluster, allowed_alerts=None):
+    allowed_alerts = allowed_alerts or []
+    blockers = {}
+    allowed = {}
+    for _, alerts in cluster.all_alerts():
+        for alert in alerts:
+            status = alert.get("status", {})
+            labels = alert.get("labels", {})
+            if (
+                status.get("state") == "active"
+                and labels.get("severity") in {"warning", "critical"}
+                and not status.get("silencedBy")
+                and labels.get("alertname") not in EXCLUDED_ALERTS
+            ):
+                item = compact_alert(alert)
+                if any(alert_matches_selector(alert, selector) for selector in allowed_alerts):
+                    allowed[json.dumps(item, sort_keys=True)] = item
+                else:
+                    blockers[json.dumps(item, sort_keys=True)] = item
+    return list(blockers.values()), list(allowed.values())
+
+
+def member_coverage(member, silence_id):
+    silence = member.get_silence(silence_id)
+    require_canonical_matchers(silence)
+    if silence.get("status", {}).get("state") != "active":
+        raise MaintenanceError(
+            f"maintenance silence {silence_id} is not active on {member.name} "
+            f"(state={silence.get('status', {}).get('state')!r})"
+        )
+    covered = []
+    excluded = []
+    unmatched = []
+    wrongly_silenced = []
+    for alert in member.get_alerts():
+        name = alert.get("labels", {}).get("alertname", "unknown")
+        silenced_by = alert.get("status", {}).get("silencedBy") or []
+        if name in EXCLUDED_ALERTS:
+            excluded.append(name)
+            if silence_id in silenced_by:
+                wrongly_silenced.append(name)
+        elif silence_id in silenced_by:
+            covered.append(name)
+        else:
+            unmatched.append(name)
+    if unmatched or wrongly_silenced:
+        raise MaintenanceError(
+            f"coverage failed on {member.name}: unmatched={sorted(set(unmatched))}, "
+            f"excluded-but-silenced={sorted(set(wrongly_silenced))}"
+        )
+    return silence, set(covered), set(excluded)
+
+
+def verify_coverage(cluster, silence_id):
+    deadline = time.monotonic() + VERIFY_TIMEOUT_SECONDS
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            results = [member_coverage(member, silence_id) for member in cluster.members]
+            signatures = {
+                (
+                    result[0].get("startsAt"),
+                    result[0].get("endsAt"),
+                    result[0].get("createdBy"),
+                    result[0].get("comment"),
+                    tuple(matcher_signature(result[0].get("matchers", []))),
+                )
+                for result in results
+            }
+            if len(signatures) != 1:
+                raise MaintenanceError("Alertmanager members report divergent silence definitions")
+            covered = set().union(*(result[1] for result in results))
+            excluded = set().union(*(result[2] for result in results))
+            return results[0][0], sorted(covered), sorted(excluded)
+        except MaintenanceError as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise MaintenanceError(
+        f"maintenance coverage verification failed on every HA member: {last_error}"
+    )
+
+
+def owned_silences(cluster, silence_id, canonical=False):
+    deadline = time.monotonic() + VERIFY_TIMEOUT_SECONDS
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            silences = cluster.get_silences(silence_id)
+            for member, silence in silences:
+                if (
+                    silence.get("createdBy") != MANAGED_BY
+                    or not silence.get("comment", "").startswith(COMMENT_PREFIX)
+                ):
+                    raise MaintenanceError(
+                        f"silence {silence_id} on {member.name} is not owned by {MANAGED_BY}"
+                    )
+                if canonical:
+                    require_canonical_matchers(silence)
+            return silences
+        except MaintenanceError as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise MaintenanceError(f"could not verify owned silence {silence_id} on every member: {last_error}")
+
+
+def mutable_silence(silence):
+    return {
+        key: value
+        for key, value in silence.items()
+        if key in {"id", "matchers", "startsAt", "endsAt", "createdBy", "comment"}
+    }
+
+
+def expire_silence(cluster, silence_id):
+    cluster.delete_silence(silence_id)
+    deadline = time.monotonic() + VERIFY_TIMEOUT_SECONDS
+    last_states = {}
+    while time.monotonic() < deadline:
+        try:
+            states = {
+                member.name: silence.get("status", {}).get("state")
+                for member, silence in cluster.get_silences(silence_id)
+            }
+        except MaintenanceError:
+            time.sleep(0.5)
+            continue
+        last_states = states
+        if states and all(state == "expired" for state in states.values()):
+            return cluster.get_silences(silence_id)[0][1]
+        time.sleep(0.5)
+    raise MaintenanceError(
+        f"silence {silence_id} did not expire on every Alertmanager member: {last_states}"
+    )
+
+
+def begin(cluster, reason, duration, allowed_alerts=None):
+    with begin_lock() as lock:
+        lock.assert_healthy()
+        peers = cluster.require_healthy()
+        existing = active_owned_silences(cluster)
+        if existing:
+            ids = ", ".join(silence.get("id", "unknown") for silence in existing)
+            raise MaintenanceError(
+                f"an owned maintenance silence is already active ({ids}); renew or end it explicitly"
+            )
+        blockers, allowed = unsilenced_blockers(cluster, allowed_alerts)
+        if blockers:
+            names = ", ".join(item["alertname"] for item in blockers)
+            raise MaintenanceError(
+                "refusing routine maintenance while unrelated unsilenced warning/critical "
+                f"alerts are active: {names}"
+            )
+        now = utc_now()
+        payload = {
+            "matchers": MAINTENANCE_MATCHERS,
+            "startsAt": timestamp(now),
+            "endsAt": timestamp(now + duration),
+            "createdBy": MANAGED_BY,
+            "comment": COMMENT_PREFIX + reason,
+        }
+        silence_id = cluster.put_silence(payload)
+        try:
+            silence, covered, excluded = verify_coverage(cluster, silence_id)
+            lock.assert_healthy()
+        except Exception:
+            try:
+                expire_silence(cluster, silence_id)
+            except Exception as cleanup_error:
+                print(
+                    f"warning: failed to expire unverified silence {silence_id}: {cleanup_error}",
+                    file=sys.stderr,
+                )
+            raise
+        return {
+            "silenceId": silence_id,
+            "state": silence["status"]["state"],
+            "startsAt": silence["startsAt"],
+            "endsAt": silence["endsAt"],
+            "reason": reason,
+            "alertmanagerMembers": peers,
+            "coveredAlerts": len(covered),
+            "coveredAlertNames": covered,
+            "excludedAlerts": excluded,
+            "allowedBaselineAlerts": allowed,
+        }
+
+
+def renew(cluster, silence_id, duration):
+    cluster.require_healthy()
+    silences = owned_silences(cluster, silence_id, canonical=True)
+    if any(silence.get("status", {}).get("state") != "active" for _, silence in silences):
+        states = {member.name: silence.get("status", {}).get("state") for member, silence in silences}
+        raise MaintenanceError(f"silence {silence_id} is not active on every member: {states}")
+    payload = mutable_silence(silences[0][1])
+    payload["endsAt"] = timestamp(utc_now() + duration)
+    cluster.put_silence(payload)
+    try:
+        verified, covered, excluded = verify_coverage(cluster, silence_id)
+    except Exception:
+        try:
+            expire_silence(cluster, silence_id)
+        except Exception as cleanup_error:
+            print(
+                f"warning: failed to expire unverified renewed silence {silence_id}: {cleanup_error}",
+                file=sys.stderr,
+            )
+        raise
+    return {
+        "silenceId": silence_id,
+        "state": verified["status"]["state"],
+        "startsAt": verified["startsAt"],
+        "endsAt": verified["endsAt"],
+        "coveredAlerts": len(covered),
+        "coveredAlertNames": covered,
+        "excludedAlerts": excluded,
+    }
+
+
+def end(cluster, silence_id):
+    silences = owned_silences(cluster, silence_id)
+    result = expire_silence(cluster, silence_id)
+    return {
+        "silenceId": silence_id,
+        "state": result["status"]["state"],
+        "endedAt": result["endsAt"],
+        "reason": silences[0][1]["comment"][len(COMMENT_PREFIX) :],
+    }
+
+
+def status(cluster, silence_id):
+    silences = owned_silences(cluster, silence_id)
+    states = {member.name: silence.get("status", {}).get("state") for member, silence in silences}
+    if len(set(states.values())) != 1:
+        raise MaintenanceError(f"Alertmanager members report divergent silence states: {states}")
+    silence = silences[0][1]
+    return {
+        "silenceId": silence_id,
+        "state": next(iter(states.values())),
+        "memberStates": states,
+        "startsAt": silence.get("startsAt"),
+        "endsAt": silence.get("endsAt"),
+        "reason": silence["comment"][len(COMMENT_PREFIX) :],
+        "matchers": silence.get("matchers", []),
+    }
+
+
+def _probe(cluster, lock):
+    lock.assert_healthy()
+    peers = cluster.require_healthy()
+    probe_name = os.environ.get(
+        "MAINTENANCE_PROBE_ALERTNAME",
+        f"__ClusterMaintenanceLifecycleProbe_{uuid.uuid4().hex}__",
+    )
+    for member, alerts in cluster.all_alerts():
+        if any(alert.get("labels", {}).get("alertname") == probe_name for alert in alerts):
+            raise MaintenanceError(
+                f"probe alert name collision exists on {member.name}; no silence was created"
+            )
+    now = utc_now()
+    payload = {
+        "matchers": [
+            {"name": "alertname", "value": probe_name, "isRegex": False, "isEqual": True}
+        ],
+        "startsAt": timestamp(now),
+        "endsAt": timestamp(now + dt.timedelta(minutes=2)),
+        "createdBy": MANAGED_BY,
+        "comment": COMMENT_PREFIX + "API lifecycle probe",
+    }
+    silence_id = None
+    action_error = None
+    result = None
+    try:
+        silence_id = cluster.put_silence(payload)
+        deadline = time.monotonic() + VERIFY_TIMEOUT_SECONDS
+        states = {}
+        definitions_match = False
+        definition_details = []
+        while time.monotonic() < deadline:
+            try:
+                silences = cluster.get_silences(silence_id)
+                definition_details = [
+                    {
+                        "member": member.name,
+                        "matchers": matcher_signature(silence.get("matchers", [])),
+                        "startsAt": silence.get("startsAt"),
+                        "endsAt": silence.get("endsAt"),
+                        "createdBy": silence.get("createdBy"),
+                        "comment": silence.get("comment"),
+                    }
+                    for member, silence in silences
+                ]
+                member_definitions = {
+                    (
+                        tuple(matcher_signature(silence.get("matchers", []))),
+                        silence.get("startsAt"),
+                        silence.get("endsAt"),
+                        silence.get("createdBy"),
+                        silence.get("comment"),
+                    )
+                    for _, silence in silences
+                }
+                expected_start = parse_timestamp(payload["startsAt"])
+                expected_end = parse_timestamp(payload["endsAt"])
+                definitions_match = len(member_definitions) == 1 and all(
+                    matcher_signature(silence.get("matchers", []))
+                    == matcher_signature(payload["matchers"])
+                    and silence.get("createdBy") == payload["createdBy"]
+                    and silence.get("comment") == payload["comment"]
+                    and expected_start
+                    <= parse_timestamp(silence.get("startsAt"))
+                    <= expected_start + dt.timedelta(seconds=5)
+                    and parse_timestamp(silence.get("endsAt")) == expected_end
+                    for _, silence in silences
+                )
+                states = {
+                    member.name: silence.get("status", {}).get("state")
+                    for member, silence in silences
+                }
+                if (
+                    definitions_match
+                    and states
+                    and all(state == "active" for state in states.values())
+                ):
+                    break
+            except MaintenanceError:
+                pass
+            time.sleep(0.5)
+        else:
+            raise MaintenanceError(
+                f"probe silence {silence_id} did not converge on every member: "
+                f"definitionsMatch={definitions_match}, states={states}, "
+                f"definitions={definition_details}"
+            )
+        matching = []
+        for member, alerts in cluster.all_alerts():
+            for alert in alerts:
+                if silence_id in (alert.get("status", {}).get("silencedBy") or []):
+                    matching.append({"member": member.name, **compact_alert(alert)})
+        if matching:
+            raise MaintenanceError(f"probe silence unexpectedly matched active alerts: {matching}")
+        lock.assert_healthy()
+        result = {
+            "silenceId": silence_id,
+            "createdState": "active",
+            "matchedAlerts": 0,
+            "alertmanagerMembers": peers,
+        }
+    except Exception as exc:
+        action_error = exc
+    finally:
+        cleanup_error = None
+        if silence_id:
+            try:
+                expired = expire_silence(cluster, silence_id)
+                if result is not None:
+                    result["finalState"] = expired["status"]["state"]
+            except Exception as exc:
+                cleanup_error = exc
+        if cleanup_error:
+            if action_error:
+                raise MaintenanceError(
+                    f"probe failed ({action_error}) and cleanup failed ({cleanup_error})"
+                ) from action_error
+            raise cleanup_error
+        if action_error:
+            raise action_error
+    return result
+
+
+def probe(cluster):
+    with begin_lock() as lock:
+        return _probe(cluster, lock)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Manage verified, bounded Alertmanager silences for home-k8s maintenance."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    begin_parser = subparsers.add_parser("begin", help="start and verify a maintenance silence")
+    begin_parser.add_argument("--reason", required=True, help="human-readable maintenance reason")
+    begin_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
+    begin_parser.add_argument(
+        "--allow-active-alert",
+        action="append",
+        type=parse_alert_selector,
+        default=[],
+        metavar="LABEL=VALUE,...",
+        help=(
+            "allow one exact, known baseline warning/critical alert during admission; "
+            "repeatable and must include alertname plus a scoping label"
+        ),
+    )
+    renew_parser = subparsers.add_parser("renew", help="extend an active owned silence")
+    renew_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
+    renew_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
+    end_parser = subparsers.add_parser("end", help="expire an owned maintenance silence")
+    end_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
+    status_parser = subparsers.add_parser("status", help="inspect an owned maintenance silence")
+    status_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
+    subparsers.add_parser(
+        "probe", help="exercise the live silence lifecycle with a unique preflighted matcher"
+    )
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+    try:
+        with alertmanager_cluster() as cluster:
+            if args.command == "begin":
+                result = begin(cluster, args.reason, args.duration, args.allow_active_alert)
+            elif args.command == "renew":
+                result = renew(cluster, args.id, args.duration)
+            elif args.command == "end":
+                result = end(cluster, args.id)
+            elif args.command == "probe":
+                result = probe(cluster)
+            else:
+                result = status(cluster, args.id)
+    except MaintenanceError as exc:
+        print(f"cluster-maintenance: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

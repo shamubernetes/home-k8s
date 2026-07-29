@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Build and verify immutable Talos image pull plans."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
+SHA_RE = re.compile(r"[0-9a-f]{40}$")
+TRIGGER_RE = re.compile(r"[A-Za-z0-9_.:@+-]{1,200}$")
+ALLOWED_REGISTRIES = {
+    "docker.elastic.co",
+    "docker.io",
+    "ghcr.io",
+    "quay.io",
+    "reg.kyverno.io",
+    "registry.k8s.io",
+}
+MAX_IMAGES = 20
+
+
+def normalize_image(image: str) -> str:
+    if not image or any(char.isspace() for char in image):
+        raise ValueError(f"invalid image reference: {image!r}")
+    first = image.split("/", 1)[0]
+    if "/" not in image or not ("." in first or ":" in first or first == "localhost"):
+        return f"docker.io/{image}"
+    return image
+
+
+def validate_images(images: list[object]) -> list[str]:
+    if len(images) > MAX_IMAGES:
+        raise ValueError(f"image count {len(images)} exceeds limit {MAX_IMAGES}")
+    normalized: list[str] = []
+    for raw in images:
+        if not isinstance(raw, str):
+            raise ValueError("every image reference must be a string")
+        image = normalize_image(raw)
+        if not DIGEST_RE.search(image):
+            raise ValueError(f"mutable or invalid image reference: {image}")
+        registry = image.split("/", 1)[0]
+        if registry not in ALLOWED_REGISTRIES:
+            raise ValueError(f"registry is not approved: {registry}")
+        normalized.append(image)
+    if normalized != sorted(set(normalized)):
+        raise ValueError("image list must be sorted and contain no duplicates")
+    return normalized
+
+
+def read_image_inventory(path: Path) -> set[str]:
+    value = json.loads(path.read_text())
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{path} must contain a JSON array of image references")
+    return {normalize_image(item) for item in value}
+
+
+def validate_sha(name: str, value: str) -> str:
+    if not SHA_RE.fullmatch(value):
+        raise ValueError(f"{name} must be a full lowercase commit SHA")
+    return value
+
+
+def validate_trigger(value: str) -> str:
+    if not TRIGGER_RE.fullmatch(value):
+        raise ValueError("trigger_id has invalid characters or length")
+    return value
+
+
+def build(args: argparse.Namespace) -> None:
+    base = read_image_inventory(args.base_inventory)
+    head = read_image_inventory(args.head_inventory)
+    images = validate_images(sorted(head - base))
+    plan = {
+        "schema_version": 2,
+        "repository": args.repository,
+        "pull_request": args.pull_request,
+        "base_sha": validate_sha("base_sha", args.base_sha),
+        "head_sha": validate_sha("head_sha", args.head_sha),
+        "trigger_id": validate_trigger(args.trigger_id),
+        "images": images,
+    }
+    if plan["base_sha"] == plan["head_sha"]:
+        raise ValueError("base_sha and head_sha must differ")
+    args.output.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+
+
+def verify(args: argparse.Namespace) -> None:
+    plan = json.loads(args.plan.read_text())
+    expected_keys = {
+        "schema_version",
+        "repository",
+        "pull_request",
+        "base_sha",
+        "head_sha",
+        "trigger_id",
+        "images",
+    }
+    if not isinstance(plan, dict) or set(plan) != expected_keys:
+        raise ValueError("plan schema does not match the trusted schema")
+    if plan["schema_version"] != 2:
+        raise ValueError("unsupported plan schema version")
+    expected = {
+        "repository": args.repository,
+        "pull_request": args.pull_request,
+        "base_sha": validate_sha("expected base_sha", args.base_sha),
+        "head_sha": validate_sha("expected head_sha", args.head_sha),
+        "trigger_id": validate_trigger(args.trigger_id),
+    }
+    for key, value in expected.items():
+        if plan[key] != value:
+            raise ValueError(f"plan {key} does not match trusted metadata")
+    validate_sha("plan base_sha", plan["base_sha"])
+    validate_sha("plan head_sha", plan["head_sha"])
+    images = validate_images(plan["images"])
+    print(json.dumps(images, separators=(",", ":")))
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser()
+    commands = root.add_subparsers(dest="command", required=True)
+
+    build_parser = commands.add_parser("build")
+    build_parser.add_argument("--base-inventory", type=Path, required=True)
+    build_parser.add_argument("--head-inventory", type=Path, required=True)
+    build_parser.add_argument("--repository", required=True)
+    build_parser.add_argument("--pull-request", type=int, required=True)
+    build_parser.add_argument("--base-sha", required=True)
+    build_parser.add_argument("--head-sha", required=True)
+    build_parser.add_argument("--trigger-id", required=True)
+    build_parser.add_argument("--output", type=Path, required=True)
+    build_parser.set_defaults(func=build)
+
+    verify_parser = commands.add_parser("verify")
+    verify_parser.add_argument("--plan", type=Path, required=True)
+    verify_parser.add_argument("--repository", required=True)
+    verify_parser.add_argument("--pull-request", type=int, required=True)
+    verify_parser.add_argument("--base-sha", required=True)
+    verify_parser.add_argument("--head-sha", required=True)
+    verify_parser.add_argument("--trigger-id", required=True)
+    verify_parser.set_defaults(func=verify)
+    return root
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        args.func(args)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"talos-image-plan: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

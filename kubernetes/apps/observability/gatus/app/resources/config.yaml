@@ -38,6 +38,17 @@ endpoints:
   interval: 1m
   conditions:
   - "[CONNECTED] == true"
+- name: NFS
+  group: storage
+  url: tcp://${IPAM_IP_NFS}:2049
+  interval: 1m
+  client:
+    timeout: 5s
+  conditions:
+  - "[CONNECTED] == true"
+  - "[RESPONSE_TIME] < 1000"
+  alerts:
+  - type: pagerduty
 ui:
   title: TheZoo Status
   header: TheZoo Status

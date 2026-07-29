@@ -408,6 +408,8 @@
       "description": "Wait 3 days before updating critical infrastructure",
       "matchPackageNames": [
         "/cilium/",
+        "coredns",
+        "prometheus-operator-crds",
         "ghcr.io/rook/rook-ceph",
         "ghcr.io/rook/rook-ceph-cluster",
       ],

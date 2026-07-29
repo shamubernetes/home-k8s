@@ -97,7 +97,10 @@ grep -Fq 'scripts/talos-check-gate' .github/workflows/image-pull.yaml
 grep -Fq -- '--app-id 15368' .github/workflows/image-pull.yaml
 grep -Fq "[[ \$SOURCE_EVENT == pull_request_target ]]" .github/workflows/image-pull.yaml
 grep -Fq -- '--paginate --slurp' .github/workflows/image-pull.yaml
-grep -Fq 'scripts/talos-pr-files changed-files.json' .github/workflows/image-pull.yaml
+grep -Fq -- "--expected-count \"\$expected_file_count\"" .github/workflows/image-pull.yaml
+grep -Fq 'changed-files.json > changed-files.txt' .github/workflows/image-pull.yaml
+grep -Fq "'.changed_files | select(type == \"number\" and . >= 1 and floor == .)'" \
+  .github/workflows/image-pull.yaml
 grep -Fq "scope=\$(scripts/talos-image-gate-scope < changed-files.txt)" \
   .github/workflows/image-pull.yaml
 grep -Fq "[[ \$scope == applicable ]]" .github/workflows/image-pull.yaml
@@ -124,7 +127,6 @@ grep -Fq 'name: "Talos Image Prepull"' .github/workflows/image-pull.yaml
 grep -Fq 'checks: write' .github/workflows/image-pull.yaml
 grep -Fq "always() && needs.preflight.outputs.head_sha != ''" .github/workflows/image-pull.yaml
 grep -Fq 'gh api --paginate --slurp' .github/workflows/image-pull.yaml
-grep -Fq 'scripts/talos-pr-files changed-files.json' .github/workflows/image-pull.yaml
 grep -Fq "external_id: \$external_id" .github/workflows/image-pull.yaml
 grep -Fq "talos-image-prepull:\${SOURCE_RUN_ID}:\${GITHUB_RUN_ID}" \
   .github/workflows/image-pull.yaml
@@ -149,7 +151,9 @@ grep -Fq 'Complete exact-head gate' "$gate"
 grep -Fq "talos-image-availability:\${RUN_ID}:\${RUN_ATTEMPT}" "$gate"
 grep -Fq "HEAD_REPOSITORY != \"\$REPOSITORY\"" "$gate"
 grep -Fq 'gh api --paginate --slurp' "$gate"
-grep -Fq 'trusted/scripts/talos-pr-files changed-files.json' "$gate"
+grep -Fq "pr_json=\$(gh api \"repos/\${REPOSITORY}/pulls/\${PULL_REQUEST}\")" "$gate"
+grep -Fq -- "--expected-count \"\$expected_file_count\"" "$gate"
+grep -Fq 'changed-files.json > changed-files.txt' "$gate"
 grep -Fq 'trusted/scripts/talos-image-gate-scope' "$gate"
 grep -Fq -- '--paginate --slurp' "$gate"
 if grep -Eq 'trusted workflow dispatch|required for this same-repository|PULL_REQUEST_AUTHOR' "$gate"; then

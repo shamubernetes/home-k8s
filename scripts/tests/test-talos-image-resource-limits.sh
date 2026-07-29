@@ -98,6 +98,11 @@ case "$command" in
       IFS=' ' read -r digest size unit < "$state"
       printf 'cri image %s %s %s\n' "$digest" "$size" "$unit"
     done
+    if [[ ${FAKE_LIST_TRAILING:-} == 1 ]]; then
+      for _ in $(seq 1 10000); do
+        printf 'cri image sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 1 MB\n'
+      done
+    fi
     ;;
   pull)
     image=$5
@@ -130,7 +135,7 @@ run_pull() {
   local state=$1 log=$2 image=$3 bytes=${4:-1000}
   mkdir -p "$state"
   PATH="$tmpdir:$PATH" FAKE_STATE="$state" FAKE_LOG="$log" TALOSCTL="$tmpdir/talosctl" \
-    FAKE_LIST_FAILURE="${FAKE_LIST_FAILURE:-}" \
+    FAKE_LIST_FAILURE="${FAKE_LIST_FAILURE:-}" FAKE_LIST_TRAILING="${FAKE_LIST_TRAILING:-}" \
     TALOS_NODES=node1,node2 IMAGES_JSON="[\"$image\"]" \
     PREFLIGHT_FLEET_BYTES="$bytes" scripts/talos-image-pull
 }
@@ -164,6 +169,15 @@ if grep -Eq 'image (pull|remove)' "$tmpdir/list-failure.log"; then
   exit 1
 fi
 [[ -e $list_failure_state/node1-${small_digest//:/_} ]]
+
+trailing_state="$tmpdir/trailing-state"
+mkdir -p "$trailing_state"
+printf '%s %s %s\n' "$small_digest" 1 MB > "$trailing_state/node1-${small_digest//:/_}"
+FAKE_LIST_TRAILING=1 run_pull "$trailing_state" "$tmpdir/trailing.log" "$small" >/dev/null
+if grep -q 'image remove' "$tmpdir/trailing.log"; then
+  echo 'complete inventory output caused a false cleanup claim' >&2
+  exit 1
+fi
 
 oversize="registry.k8s.io/oversize@$large_digest"
 if run_pull "$tmpdir/oversize-state" "$tmpdir/oversize.log" "$oversize" >/dev/null 2>&1; then

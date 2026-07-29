@@ -38,7 +38,7 @@ size_bytes() {
 image_size() {
   local node=$1 digest=$2
   "$talosctl" --nodes "$node" image list |
-    awk -v digest="$digest" '$3 == digest {print $4, $5; exit}'
+    awk -v digest="$digest" '$3 == digest && !found {print $4, $5; found=1}'
 }
 
 cleanup_new_images() {

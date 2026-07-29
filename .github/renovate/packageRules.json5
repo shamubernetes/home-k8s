@@ -369,7 +369,7 @@
         "kubernetes/apps/**/*-crds*/**",
         "kubernetes/apps/**/*-operator*/**",
       ],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
     },
@@ -399,7 +399,7 @@
         "ghcr.io/siderolabs/kubelet"
       ],
       "matchDatasources": ["docker"],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
       "schedule": ["* 2-5 8-14 * 6"]

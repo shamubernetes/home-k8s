@@ -78,9 +78,12 @@ if grep -Fq 'github.event_path' "$workflow"; then
   exit 1
 fi
 grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "$workflow"
-grep -Fq 'Checkout trusted pull request base' "$workflow"
-grep -Fq 'base/scripts/talos-image-plan build' "$workflow"
-grep -Fq 'base/scripts/talos-image-plan verify' "$workflow"
+grep -Fq 'Checkout exact pull request base' "$workflow"
+grep -Fq 'Checkout current trusted verifier' "$workflow"
+grep -Fq 'ref: refs/heads/main' "$workflow"
+grep -Fq 'path: trusted' "$workflow"
+grep -Fq 'trusted/scripts/talos-image-plan build' "$workflow"
+grep -Fq 'trusted/scripts/talos-image-plan verify' "$workflow"
 grep -Fq 'name: Report immutable image plan' "$workflow"
 grep -Fq 'name: "Talos Image Plan Attempt"' "$workflow"
 grep -Fq "talos-image-plan:\${RUN_ID}:\${trigger_id}" "$workflow"
@@ -97,6 +100,15 @@ grep -Fq -- '--paginate --slurp' .github/workflows/image-pull.yaml
 grep -Fq 'mapfile -t changed_files < changed-files.txt' .github/workflows/image-pull.yaml
 grep -Fq 'scripts/talos-pr-files changed-files.json' .github/workflows/image-pull.yaml
 grep -Fq 'SOURCE_HEAD_SHA' .github/workflows/image-pull.yaml
+grep -Fq "[[ \$(jq -r '.base.ref' <<<\"\$pr_json\") == main ]]" \
+  .github/workflows/image-pull.yaml
+grep -Fq "compare/\${base_sha}...\${current_base_sha}" .github/workflows/image-pull.yaml
+grep -Fq 'identical|ahead)' .github/workflows/image-pull.yaml
+if grep -Fq "'.base.sha' <<<\"\$pr_json\") == \"\$base_sha\"" \
+  .github/workflows/image-pull.yaml; then
+  echo 'consumer still requires a live base SHA equality that races default-branch updates' >&2
+  exit 1
+fi
 if grep -Eq 'SOURCE_ACTOR|workflow_dispatch|shamubot\[bot\]' \
   .github/workflows/image-pull.yaml; then
   echo 'privileged consumer still depends on a manual or author-specific path' >&2
@@ -111,6 +123,10 @@ grep -Fq "external_id: \$external_id" .github/workflows/image-pull.yaml
 grep -Fq "talos-image-prepull:\${SOURCE_RUN_ID}:\${GITHUB_RUN_ID}" \
   .github/workflows/image-pull.yaml
 grep -Fq ":\${TRIGGER_ID}" .github/workflows/image-pull.yaml
+grep -Fq "name: talos-image-prepull-result-\${{ github.run_id }}" \
+  .github/workflows/image-pull.yaml
+grep -Fq 'talos-image-prepull-result.json' .github/workflows/image-pull.yaml
+grep -Fq "consumer_run_id: \$consumer_run_id" .github/workflows/image-pull.yaml
 if grep -Fq 'group: talos-image-availability' .github/workflows/image-pull.yaml; then
   echo 'Talos image pulls remain globally serialized ahead of the one-runner queue' >&2
   exit 1
@@ -141,8 +157,15 @@ grep -Fq '.github/workflows/image-plan.yaml' "$gate"
 grep -Fq '.github/workflows/image-pull.yaml' "$gate"
 grep -Fq 'talos-image-plan:' "$gate"
 grep -Fq 'check-runs?filter=all&per_page=100' "$gate"
-grep -Fq "[[ \$(jq -r '.html_url' <<<\"\$source_run\") == \"\$details_url\" ]]" "$gate"
-grep -Fq "[[ \$(jq -r '.html_url' <<<\"\$consumer_run\") == \"\$details_url\" ]]" "$gate"
+grep -Fq 'actions: read' "$gate"
+grep -Fq 'download_exact_artifact' "$gate"
+grep -Fq 'trusted/scripts/talos-image-plan verify' "$gate"
+grep -Fq "talos-image-prepull-result-\${consumer_run_id}" "$gate"
+grep -Fq ".consumer_run_id == \$consumer_run_id" "$gate"
+if grep -Fq "'.html_url'" "$gate"; then
+  echo 'gate still trusts GitHub-rewritten custom-check details URLs' >&2
+  exit 1
+fi
 grep -Fq 'startsWith("talos-image-prepull:")' "$gate" || \
   grep -Fq 'startswith("talos-image-prepull:")' "$gate"
 if grep -Fq 'actions/checkout' "$gate" && ! grep -Fq 'path: trusted' "$gate"; then

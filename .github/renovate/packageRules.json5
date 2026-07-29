@@ -264,8 +264,6 @@
         "commitMessageTopic": "{{{groupName}}}"
       },
       "minimumGroupSize": 2,
-      "minimumReleaseAge": "0 days",
-      "minimumReleaseAgeBehaviour": "timestamp-optional",
       "separateMinorPatch": true
     },
     {
@@ -360,6 +358,11 @@
     },
     {
       "description": "Never auto-merge high-blast-radius infrastructure",
+      "matchPackageNames": [
+        "!docker.io/rook/ceph",
+        "!quay.io/cephcsi/ceph-csi-operator",
+        "!quay.io/ceph/ceph",
+      ],
       "matchFileNames": [
         "talos/**",
         "kubernetes/apps/actions-runner-system/**",
@@ -388,6 +391,11 @@
     {
       "description": "Never auto-merge application images",
       "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "!docker.io/rook/ceph",
+        "!quay.io/cephcsi/ceph-csi-operator",
+        "!quay.io/ceph/ceph",
+      ],
       "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
@@ -413,7 +421,11 @@
     },
     {
       "description": "Wait 3 days before updating critical infrastructure",
-      "matchPackageNames": ["/cilium/", "/rook.ceph/"],
+      "matchPackageNames": [
+        "/cilium/",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+      ],
       "minimumReleaseAge": "3 days"
     },
   ],

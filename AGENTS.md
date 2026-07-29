@@ -44,6 +44,13 @@ export MAINTENANCE_KUBECONFIG="$HOME/.kube/config"
 scripts/cluster-maintenance begin \
   --reason "planned cluster maintenance" --duration 4h
 
+# Admit the exact known persistent SMART interface-speed baseline while still
+# failing closed on every other warning or critical alert.
+scripts/cluster-maintenance begin \
+  --reason "planned cluster maintenance" --duration 4h \
+  --allow-active-alert \
+  alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda
+
 # Renew, inspect, or end the exact silence returned by begin
 scripts/cluster-maintenance renew --id <silence-id> --duration 4h
 scripts/cluster-maintenance status --id <silence-id>
@@ -189,7 +196,12 @@ warn without hiding an already verified silence ID, and the Lease ages out safel
 The helper fails closed when Alertmanager HA is not ready, an unrelated unsilenced
 warning or critical alert already exists, another owned maintenance window is active,
 or both concrete Alertmanager pods do not report the same active silence and expected
-alert coverage.
+alert coverage. A known persistent baseline may be admitted with a repeatable exact
+`--allow-active-alert` selector containing `alertname` plus at least one scoping label.
+The established Renovate baseline is
+`alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda`. This is an
+admission exception only: keep the alert visible, verify its identity has not changed,
+and continue to reject every additional warning or critical alert.
 
 The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
 and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.

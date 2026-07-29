@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Evaluate trusted required check runs for the Talos image workflow."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+PENDING_EXIT = 10
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--checks", required=True, type=Path)
+    parser.add_argument("--app-id", required=True, type=int)
+    parser.add_argument("--required", action="append", required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    payload = json.loads(args.checks.read_text())
+    runs = payload.get("check_runs")
+    if not isinstance(runs, list):
+        raise SystemExit("check-runs payload is missing check_runs")
+
+    pending: list[str] = []
+    failed: list[str] = []
+    for name in args.required:
+        trusted = [
+            run
+            for run in runs
+            if run.get("name") == name
+            and run.get("app", {}).get("id") == args.app_id
+        ]
+        if not trusted:
+            pending.append(f"{name} (trusted app has not reported)")
+            continue
+
+        latest = max(trusted, key=lambda run: int(run.get("id", 0)))
+        status = latest.get("status")
+        conclusion = latest.get("conclusion")
+        if status != "completed":
+            pending.append(f"{name} ({status or 'unknown'})")
+        elif conclusion != "success":
+            failed.append(f"{name} ({conclusion or 'unknown'})")
+
+    if failed:
+        print("required checks failed: " + ", ".join(failed), file=sys.stderr)
+        return 1
+    if pending:
+        print("required checks pending: " + ", ".join(pending), file=sys.stderr)
+        return PENDING_EXIT
+
+    print("required checks passed from trusted app")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

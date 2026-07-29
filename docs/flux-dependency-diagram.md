@@ -132,8 +132,6 @@ graph TB
     subgraph FluxSystem["🔵 Flux System"]
         FluxMonitoring["`**flux-monitoring**
         PrometheusRules`"]
-        FluxNotifications["`**flux-notifications**
-        Alerts/Providers`"]
         FluxWebhooks["`**flux-webhooks**
         Receivers`"]
     end
@@ -206,7 +204,6 @@ graph TB
 
     %% Flux System Dependencies
     ClusterApps --> FluxMonitoring
-    SecretStore --> FluxNotifications
     SecretStore --> FluxWebhooks
 
     %% Styling
@@ -218,7 +215,7 @@ graph TB
     class GitRepo,OCIRepo,HelmRepos sourceStyle
     class Cluster,ClusterApps,FluxKust rootStyle
     class OPConnect,ExternalSecrets,SecretStore,CertManager,CertIssuers,Cilium,CiliumConfig,NFD,NFDRules,ExternalDNS,ExternalDNSUnifi,RookCeph,RookCluster,VolSync,SnapshotCtrl,CNPG,CNPGCluster,Dragonfly,DragonflyCluster,IngressCerts,IngressExt,IngressInt,Cloudflared infraStyle
-    class AdGuard,Plex,Radarr,Sonarr,HomeAssistant,GHARController,GHARZoo,KubePromStack,Loki,Vector,Gatus,Grafana,FluxMonitoring,FluxNotifications,FluxWebhooks appStyle
+    class AdGuard,Plex,Radarr,Sonarr,HomeAssistant,GHARController,GHARZoo,KubePromStack,Loki,Vector,Gatus,Grafana,FluxMonitoring,FluxWebhooks appStyle
 ```
 
 ## Dependency Flow Summary

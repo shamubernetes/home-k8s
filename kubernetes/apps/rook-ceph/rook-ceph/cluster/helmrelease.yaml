@@ -6,14 +6,9 @@ metadata:
 spec:
   interval: 30m
   timeout: 15m
-  chart:
-    spec:
-      chart: rook-ceph-cluster
-      version: v1.20.1
-      sourceRef:
-        kind: HelmRepository
-        name: rook-ceph
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: rook-ceph-cluster
   install:
     remediation:
       retries: 3
@@ -28,6 +23,9 @@ spec:
   - name: snapshot-controller
     namespace: volsync-system
   values:
+    cephImage:
+      repository: quay.io/ceph/ceph
+      tag: v20.2.2@sha256:6b4b5ae33acd3d736eb26d2a19238bce71a22f9cfb99cca887ba6312d0957644
     monitoring:
       enabled: true
       createPrometheusRules: true

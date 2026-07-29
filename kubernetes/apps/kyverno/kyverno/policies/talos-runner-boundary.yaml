@@ -63,16 +63,13 @@ spec:
         spec:
           containers:
           - (name): runner
-            # renovate: datasource=docker depName=ghcr.io/home-operations/actions-runner
             image: ghcr.io/home-operations/actions-runner:2.335.1@sha256:3d544e5eed58722c0b6a97212a31eada0f9f2e99f189c41911a5573a23d7386a
           initContainers:
           - (name): install-talosctl
-            # renovate: datasource=docker depName=ghcr.io/home-operations/actions-runner
             image: ghcr.io/home-operations/actions-runner:2.335.1@sha256:3d544e5eed58722c0b6a97212a31eada0f9f2e99f189c41911a5573a23d7386a
           volumes:
           - (name): talosctl-source
             image:
-              # renovate: datasource=docker depName=ghcr.io/siderolabs/talosctl
               reference: ghcr.io/siderolabs/talosctl:v1.13.7@sha256:e824808e0a9c8138c2f7b17f21cfebee2f1442a336d812eb0034c9c897059302
   - name: require-exact-arc-runner-pod
     match:

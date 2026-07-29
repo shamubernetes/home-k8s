@@ -48,7 +48,13 @@ talosctl_image=$(yq -r '.spec.values.template.spec.volumes[] | select(.name == "
   .validate.pattern.spec.volumes[] | select(.["(name)"] == "talosctl-source") | .image.reference' \
   kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml) == "$talosctl_image" ]]
 
-yq -e '(.spec.endpointSelector | length) == 0 and (.spec.ingress | length) == 0 and (.spec.egress | length) == 0' \
+yq -e '.kind == "NetworkPolicy" and
+  (.spec.podSelector | length) == 0 and
+  (.spec.ingress | length) == 0 and
+  (.spec.egress | length) == 0 and
+  (.spec.policyTypes | length) == 2 and
+  .spec.policyTypes[0] == "Ingress" and
+  .spec.policyTypes[1] == "Egress"' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/networkpolicy-default-deny.yaml >/dev/null
 yq -e '.spec.endpointSelector.matchLabels."actions.github.com/scale-set-name" == "ghar-set-talos"' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/networkpolicy.yaml >/dev/null

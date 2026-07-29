@@ -61,7 +61,7 @@ mapfile -t identities < <(
   yq -r -N 'select(.apiVersion and .kind and .metadata.name) | [.kind, .metadata.name] | @tsv' "$rendered" | sort
 )
 expected=(
-  $'CiliumNetworkPolicy\tactions-runner-talos-default-deny'
+  $'NetworkPolicy\tactions-runner-talos-default-deny'
   $'CiliumNetworkPolicy\tghar-set-talos'
   $'ExternalSecret\tactions-runner-controller-auth'
   $'HelmRelease\tghar-set-talos'

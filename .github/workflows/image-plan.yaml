@@ -2,14 +2,8 @@
 name: Image Availability Plan
 
 on:
-  workflow_dispatch:
-    inputs:
-      pull_request:
-        description: Open pull request to plan manually
-        required: true
-        type: number
   # The workflow definition and secret handling stay on the trusted default branch.
-  # Rendered pull-request content is constrained to a same-repository Renovate PR.
+  # Every same-repository Kubernetes PR is planned automatically.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     branches: ["main"]
     types: [opened, reopened, synchronize, ready_for_review]
@@ -23,35 +17,23 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: "image-plan-${{ github.event.pull_request.number || inputs.pull_request }}"
+  group: "image-plan-${{ github.event.pull_request.number }}"
   cancel-in-progress: true
 
 jobs:
   plan:
     name: Render immutable image plan
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login == 'shamubot[bot]')
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
     - name: Resolve trusted pull request metadata
       id: metadata
       env:
-        GH_TOKEN: ${{ github.token }}
-        EVENT_NAME: ${{ github.event_name }}
-        INPUT_PULL_REQUEST: ${{ inputs.pull_request }}
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
-        if [[ $EVENT_NAME == pull_request_target ]]; then
-          pr=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
-          metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$GITHUB_EVENT_PATH")
-        else
-          pr=$INPUT_PULL_REQUEST
-          metadata=$(gh api "repos/${REPOSITORY}/pulls/${pr}")
-          metadata=$(jq -c '{number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' <<<"$metadata")
-        fi
+        pr=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
+        metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$GITHUB_EVENT_PATH")
         [[ $(jq -r '.head_repo' <<<"$metadata") == "$REPOSITORY" ]]
         {
           printf 'pull_request=%s\n' "$pr"
@@ -66,7 +48,7 @@ jobs:
         path: head
         persist-credentials: false
 
-    - name: Checkout pull request base
+    - name: Checkout trusted pull request base
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ steps.metadata.outputs.base_sha }}
@@ -131,7 +113,7 @@ jobs:
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
-        head/scripts/talos-image-plan build \
+        base/scripts/talos-image-plan build \
           --base-inventory base-images.json \
           --head-inventory head-images.json \
           --repository "$REPOSITORY" \
@@ -139,7 +121,7 @@ jobs:
           --base-sha "$BASE_SHA" \
           --head-sha "$HEAD_SHA" \
           --output image-plan.json
-        head/scripts/talos-image-plan verify \
+        base/scripts/talos-image-plan verify \
           --plan image-plan.json \
           --repository "$REPOSITORY" \
           --pull-request "$PULL_REQUEST" \

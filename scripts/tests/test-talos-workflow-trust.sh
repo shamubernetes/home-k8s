@@ -72,19 +72,32 @@ if [[ $status -ne 1 ]]; then
 fi
 
 workflow=.github/workflows/image-plan.yaml
-grep -Fq "if [[ \$EVENT_NAME == pull_request_target ]]; then" "$workflow"
 grep -Fq "jq -r '.pull_request.number' \"\$GITHUB_EVENT_PATH\"" "$workflow"
 if grep -Fq 'github.event_path' "$workflow"; then
   echo 'unsupported github.event_path context remains in planner' >&2
   exit 1
 fi
-grep -Fq "github.event.pull_request.user.login == 'shamubot[bot]'" "$workflow"
 grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "$workflow"
+grep -Fq 'Checkout trusted pull request base' "$workflow"
+grep -Fq 'base/scripts/talos-image-plan build' "$workflow"
+grep -Fq 'base/scripts/talos-image-plan verify' "$workflow"
+if grep -Fq 'workflow_dispatch:' "$workflow" || grep -Fq 'shamubot[bot]' "$workflow"; then
+  echo 'planner still contains a manual or author-specific execution path' >&2
+  exit 1
+fi
 
 grep -Fq 'scripts/talos-check-gate' .github/workflows/image-pull.yaml
 grep -Fq -- '--app-id 15368' .github/workflows/image-pull.yaml
-grep -Fq "\$SOURCE_ACTOR == 'shamubot[bot]' || \$SOURCE_ACTOR == 'MaudeBot'" \
-  .github/workflows/image-pull.yaml
+grep -Fq "[[ \$SOURCE_EVENT == pull_request_target ]]" .github/workflows/image-pull.yaml
+grep -Fq '(.previous_filename // empty)' .github/workflows/image-pull.yaml
+grep -Fq -- '--paginate --slurp' .github/workflows/image-pull.yaml
+grep -Fq 'mapfile -t changed_files < changed-files.txt' .github/workflows/image-pull.yaml
+grep -Fq "(( \${#changed_files[@]} > 0 ))" .github/workflows/image-pull.yaml
+if grep -Eq 'SOURCE_ACTOR|workflow_dispatch|shamubot\[bot\]' \
+  .github/workflows/image-pull.yaml; then
+  echo 'privileged consumer still depends on a manual or author-specific path' >&2
+  exit 1
+fi
 grep -Fq 'name: "Talos Image Prepull"' .github/workflows/image-pull.yaml
 grep -Fq 'checks: write' .github/workflows/image-pull.yaml
 grep -Fq "always() && needs.preflight.outputs.head_sha != ''" .github/workflows/image-pull.yaml
@@ -94,8 +107,15 @@ grep -Fq 'pull_request_target:' "$gate"
 grep -Fq 'ref: refs/heads/main' "$gate"
 grep -Fq 'name: Talos Image Availability' "$gate"
 grep -Fq "HEAD_REPOSITORY != \"\$REPOSITORY\"" "$gate"
-grep -Fq 'A trusted workflow dispatch is required' "$gate"
 grep -Fq 'trusted/scripts/talos-image-gate-scope' "$gate"
+grep -Fq '(.previous_filename // empty)' "$gate"
+grep -Fq -- '--paginate --slurp' "$gate"
+grep -Fq 'mapfile -t changed_files < changed-files.txt' "$gate"
+grep -Fq "(( \${#changed_files[@]} > 0 ))" "$gate"
+if grep -Eq 'trusted workflow dispatch|required for this same-repository|PULL_REQUEST_AUTHOR' "$gate"; then
+  echo 'required gate still advertises manual planning' >&2
+  exit 1
+fi
 grep -Fq -- "--required 'Talos Image Prepull'" "$gate"
 grep -Fq -- "--required 'Render immutable image plan'" "$gate"
 if grep -Fq 'actions/checkout' "$gate" && ! grep -Fq 'path: trusted' "$gate"; then

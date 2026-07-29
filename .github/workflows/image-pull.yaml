@@ -69,6 +69,9 @@ jobs:
         [[ $(jq -r '.head.repo.full_name' <<<"$pr_json") == "$REPOSITORY" ]]
         [[ $(jq -r '.head.sha' <<<"$pr_json") == "$head_sha" ]]
         [[ $(jq -r '.base.ref' <<<"$pr_json") == main ]]
+        expected_file_count=$(jq -er \
+          '.changed_files | select(type == "number" and . >= 1 and floor == .)' \
+          <<<"$pr_json")
         [[ $base_sha =~ ^[0-9a-f]{40}$ ]]
         current_base_sha=$(jq -r '.base.sha' <<<"$pr_json")
         base_compare=$(gh api \
@@ -88,7 +91,9 @@ jobs:
         gh api --paginate --slurp \
           "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" \
           > changed-files.json
-        scripts/talos-pr-files changed-files.json > changed-files.txt
+        scripts/talos-pr-files \
+          --expected-count "$expected_file_count" \
+          changed-files.json > changed-files.txt
         scope=$(scripts/talos-image-gate-scope < changed-files.txt)
         [[ $scope == applicable ]]
 

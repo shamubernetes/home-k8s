@@ -82,10 +82,17 @@ jobs:
           echo 'Talos pre-pull is not available to fork pull requests.'
           exit 0
         fi
+        pr_json=$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}")
+        [[ $(jq -r '.head.sha' <<<"$pr_json") == "$HEAD_SHA" ]]
+        expected_file_count=$(jq -er \
+          '.changed_files | select(type == "number" and . >= 1 and floor == .)' \
+          <<<"$pr_json")
         gh api --paginate --slurp \
           "repos/${REPOSITORY}/pulls/${PULL_REQUEST}/files?per_page=100" \
           > changed-files.json
-        trusted/scripts/talos-pr-files changed-files.json > changed-files.txt
+        trusted/scripts/talos-pr-files \
+          --expected-count "$expected_file_count" \
+          changed-files.json > changed-files.txt
         scope=$(trusted/scripts/talos-image-gate-scope < changed-files.txt)
         if [[ $scope != applicable ]]; then
           echo 'No eligible Kubernetes application changes require Talos image availability.'

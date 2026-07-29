@@ -92,7 +92,7 @@ gate=.github/workflows/image-gate.yaml
 grep -Fq 'pull_request_target:' "$gate"
 grep -Fq 'ref: refs/heads/main' "$gate"
 grep -Fq 'name: Talos Image Availability' "$gate"
-grep -Fq 'HEAD_REPOSITORY != "$REPOSITORY"' "$gate"
+grep -Fq "HEAD_REPOSITORY != \"\$REPOSITORY\"" "$gate"
 grep -Fq 'A trusted workflow dispatch is required' "$gate"
 grep -Fq 'trusted/scripts/talos-image-gate-scope' "$gate"
 grep -Fq -- "--required 'Talos Image Prepull'" "$gate"

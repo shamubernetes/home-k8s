@@ -40,7 +40,11 @@
     {
       "description": "PostgreSQL 17",
       "matchDatasources": ["docker"],
-      "matchPackageNames": ["/postgresql/", "/postgres-init/"],
+      "matchPackageNames": [
+        "docker.io/library/postgres",
+        "ghcr.io/cloudnative-pg/postgresql",
+        "ghcr.io/home-operations/postgres-init",
+      ],
       "allowedVersions": "<18"
     },
     // Versions

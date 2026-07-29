@@ -9,7 +9,7 @@ import sys
 PROTECTED = re.compile(
     r"^(\.github/workflows/|scripts/|"
     r"kubernetes/apps/actions-runner-system/|"
-    r"talos/patches/controlplane/talos-api\.yaml)"
+    r"kubernetes/apps/kyverno/|talos/)"
 )
 NON_EXECUTABLE_DATA = frozenset(
     {

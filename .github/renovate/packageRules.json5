@@ -264,6 +264,8 @@
         "commitMessageTopic": "{{{groupName}}}"
       },
       "minimumGroupSize": 2,
+      "minimumReleaseAge": "0 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
       "separateMinorPatch": true
     },
     {

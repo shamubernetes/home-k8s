@@ -52,7 +52,7 @@ actual=$($resolver "$helmreleases" semver tools)
 assert_eq $'oci://ghcr.io/rafaribe/homelab-assistant-crds\t0.2.x\t' "$actual" 'semver OCIRepository chartRef'
 
 actual=$($resolver "$helmreleases" local-git tools)
-local_chart="${repo_root}/kubernetes/apps/tools/firecrawl/app/chart"
+local_chart="${repo_root}/scripts/tests/fixtures/local-chart"
 assert_eq "${local_chart}"$'\t\t' "$actual" 'current-checkout GitRepository chart'
 helm template local-git "$local_chart" --skip-tests > "${tmpdir}/local-git-render.yaml"
 $document_check "${tmpdir}/local-git-render.yaml"

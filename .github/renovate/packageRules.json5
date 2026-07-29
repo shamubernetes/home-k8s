@@ -31,6 +31,21 @@
       pinDigests: false,
     },
     {
+      description: "Grouped OCI charts do not publish release timestamps",
+      matchDatasources: ["docker"],
+      matchPackageNames: [
+        "quay.io/cilium/charts/cilium",
+        "ghcr.io/coredns/charts/coredns",
+        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "ghcr.io/shamubernetes/charts/git-mirror-operator",
+      ],
+      minimumReleaseAgeBehaviour: "timestamp-optional",
+    },
+    {
       description: "Flux manages OCIRepository dependencies without regex duplication",
       matchManagers: ["custom.regex"],
       matchFileNames: ["**/ocirepository.yaml"],
@@ -86,6 +101,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -100,6 +116,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -114,6 +131,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -128,6 +146,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -143,6 +162,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 3,
       "separateMinorPatch": true,
     },
     {
@@ -158,6 +178,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
     },
     {
       "description": ["CoreDNS Group"],
@@ -168,6 +189,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true
     },
     {
@@ -235,6 +257,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true
     },
     {

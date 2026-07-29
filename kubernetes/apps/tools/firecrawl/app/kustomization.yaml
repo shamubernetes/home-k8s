@@ -6,5 +6,6 @@ resources:
 - ./init-db-job.yaml
 - ./nuq-schema-configmap.yaml
 - ./init-nuq-schema-job.yaml
+- ./ocirepository.yaml
 - ./helmrelease.yaml
 - ./ingress.yaml

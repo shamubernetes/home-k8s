@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Classify whether a PR is eligible for Talos application image pre-pull."""
+
+from __future__ import annotations
+
+import re
+import sys
+
+PROTECTED = re.compile(
+    r"^(\.github/workflows/|scripts/|"
+    r"kubernetes/apps/actions-runner-system/|"
+    r"talos/patches/controlplane/talos-api\.yaml)"
+)
+
+
+def main() -> int:
+    files = [line.strip() for line in sys.stdin if line.strip()]
+    protected_boundary = any(PROTECTED.match(path) for path in files)
+    applicable = any(
+        path.startswith("kubernetes/") and not PROTECTED.match(path) for path in files
+    )
+
+    if protected_boundary and applicable:
+        print(
+            "split privileged-boundary and application changes into separate pull requests",
+            file=sys.stderr,
+        )
+        return 1
+    print("applicable" if applicable else "not-applicable")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

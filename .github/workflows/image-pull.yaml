@@ -81,6 +81,10 @@ jobs:
         if [[ $SOURCE_EVENT == pull_request_target ]]; then
           [[ $(jq -r '.user.login' <<<"$pr_json") == 'shamubot[bot]' ]]
         fi
+        {
+          printf 'pull_request=%s\n' "$pr"
+          printf 'head_sha=%s\n' "$head_sha"
+        } >> "$GITHUB_OUTPUT"
 
         mapfile -t changed_files < <(gh api --paginate "repos/${REPOSITORY}/pulls/${pr}/files?per_page=100" --jq '.[].filename')
         protected='^(\.github/workflows/|scripts/|kubernetes/apps/actions-runner-system/|talos/patches/controlplane/talos-api\.yaml)'
@@ -128,8 +132,6 @@ jobs:
         {
           printf 'images=%s\n' "$images"
           printf 'plan_digest=%s\n' "$plan_digest"
-          printf 'pull_request=%s\n' "$pr"
-          printf 'head_sha=%s\n' "$head_sha"
         } >> "$GITHUB_OUTPUT"
 
   pull:
@@ -199,3 +201,51 @@ jobs:
           done
         done
         printf 'completed plan=%s total_bytes=%s\n' "$PLAN_DIGEST" "$total_bytes"
+
+  report:
+    name: Report trusted image pre-pull
+    if: ${{ always() && needs.preflight.outputs.head_sha != '' }}
+    needs:
+    - preflight
+    - pull
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+    steps:
+    - name: Publish exact-head result
+      env:
+        GH_TOKEN: ${{ github.token }}
+        HEAD_SHA: ${{ needs.preflight.outputs.head_sha }}
+        PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+        PULL_RESULT: ${{ needs.pull.result }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        conclusion=failure
+        summary="Talos image pre-pull did not complete successfully."
+        if [[ $PREFLIGHT_RESULT == success && $PULL_RESULT == success ]]; then
+          conclusion=success
+          summary="All approved images are available on every configured Talos worker."
+        fi
+        jq -n \
+          --arg conclusion "$conclusion" \
+          --arg head_sha "$HEAD_SHA" \
+          --arg summary "$summary" \
+          --arg url "$RUN_URL" \
+          '{
+            name: "Talos Image Prepull",
+            head_sha: $head_sha,
+            status: "completed",
+            conclusion: $conclusion,
+            details_url: $url,
+            output: {
+              title: "Talos Image Prepull",
+              summary: $summary
+            }
+          }' | gh api \
+            "repos/${REPOSITORY}/check-runs" \
+            --method POST \
+            --header 'Accept: application/vnd.github+json' \
+            --input - >/dev/null

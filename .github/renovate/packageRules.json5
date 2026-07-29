@@ -187,6 +187,17 @@
       "separateMinorPatch": true
     },
     {
+      "description": "Keep Mise and trusted-runner Talosctl releases synchronized",
+      "groupName": "Talosctl tooling",
+      "matchDepNames": [
+        "talosctl",
+        "ghcr.io/siderolabs/talosctl",
+      ],
+      "matchManagers": ["mise", "custom.regex"],
+      "semanticCommitScope": "group",
+      "separateMinorPatch": false,
+    },
+    {
       "description": "Thanos Group - mismatched versions",
       "groupName": "Thanos",
       "matchPackageNames": ["/thanos/"],

@@ -6,7 +6,7 @@ dedicated Unraid firmware release share.
 
 ## Deployment boundary
 
-The first-party `v0.2.7` Zoo Fleet chart and production image are both pinned
+The first-party `v0.2.8` Zoo Fleet chart and production image are both pinned
 by exact OCI digests. The Flux Kustomization is active and depends on External
 Secrets materializing every runtime value from the required `zoo-fleet`
 1Password item.

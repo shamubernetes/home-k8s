@@ -20,7 +20,7 @@ spec:
     fullnameOverride: zoo-fleet
     image:
       repository: ghcr.io/thezoo-house/zoo-fleet
-      digest: sha256:449909b2c285b8e002bb59cd61e108b707509c12142133fc8c2171b2926fb205
+      digest: sha256:a6154c49950d2a25ff3ab0911dc649d76e69b3c4c9123f311e7f2a9474c31ba1
     imagePullSecrets:
     - name: ghcr-pull-secret
     config:

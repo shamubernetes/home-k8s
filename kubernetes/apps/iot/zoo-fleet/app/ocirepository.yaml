@@ -9,7 +9,7 @@ spec:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    digest: sha256:b2700547a3470e16eec17c8568262c6f40c26bac3c22aa9a5a79cd77d466fcc6
+    digest: sha256:d75f04ebfbbaf5741be1d1487d00a2edf16eaf3b065c72d44be196bf23d67f85
   secretRef:
     name: ghcr-pull-secret
   url: oci://ghcr.io/thezoo-house/charts/zoo-fleet

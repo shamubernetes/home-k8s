@@ -11,3 +11,4 @@ resources:
 - ./plane-objectstoreuser.yaml
 - ./plane-uploads-ingress.yaml
 - ./httproute-dashboard-envoy.yaml
+- ./httproute-storage-envoy.yaml

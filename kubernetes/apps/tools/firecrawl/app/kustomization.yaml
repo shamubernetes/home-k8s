@@ -8,4 +8,5 @@ resources:
 - ./init-nuq-schema-job.yaml
 - ./ocirepository.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ./ingress.yaml

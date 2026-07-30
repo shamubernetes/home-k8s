@@ -125,6 +125,8 @@ validate_split_app() {
   yq -e '
     .kind == "ExternalSecret" and
     .metadata.name == strenv(oidc_item) and
+    .spec.secretStoreRef.kind == "ClusterSecretStore" and
+    .spec.secretStoreRef.name == "op-secret-store" and
     .spec.target.name == strenv(oidc_secret) and
     .spec.target.creationPolicy == "Owner" and
     .spec.target.deletionPolicy == "Retain" and

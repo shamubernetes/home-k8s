@@ -70,12 +70,12 @@ validate_full_host() {
     .spec.data[0].remoteRef.property == "client-id" and .spec.data[1].secretKey == "client-secret" and
     .spec.data[1].remoteRef.key == strenv(oidc_item) and .spec.data[1].remoteRef.property == "client-secret"
   ' "$app/externalsecret-oidc.yaml" >/dev/null
-  local app_controller api_controller state
+  local app_controller api_controller app_ingress_present api_ingress_present state
   app_controller=$(yq -r '.spec.values.ingress.app.annotations."external-dns.alpha.kubernetes.io/controller" // ""' "$app/helmrelease.yaml")
   api_controller=$(yq -r '.spec.values.ingress.api.annotations."external-dns.alpha.kubernetes.io/controller" // ""' "$app/helmrelease.yaml")
+  app_ingress_present=$(yq -r '.spec.values.ingress.app != null' "$app/helmrelease.yaml")
+  api_ingress_present=$(yq -r '.spec.values.ingress.api != null' "$app/helmrelease.yaml")
   if [[ -f $dns_resource ]]; then
-    [[ $app_controller == ignore ]]
-    if yq -e '.spec.values.ingress.api != null' "$app/helmrelease.yaml" >/dev/null; then [[ $api_controller == ignore ]]; fi
     grep -Fqx -- '- ./service-envoy-dns.yaml' "$app/kustomization.yaml"
     yq -e '
       .kind == "Service" and .metadata.name == (strenv(resource_name) + "-envoy-dns") and
@@ -83,11 +83,22 @@ validate_full_host() {
       .metadata.annotations."external-dns.alpha.kubernetes.io/target" == "${IPAM_IP_ENVOY_INTERNAL}" and
       .spec.type == "ExternalName" and .spec.externalName == "envoy-internal.network.svc.cluster.local"
     ' "$dns_resource" >/dev/null
-    state=cutover
+    if [[ $app_ingress_present == true || $api_ingress_present == true ]]; then
+      [[ $app_ingress_present == true ]]
+      [[ $app_controller == ignore ]]
+      if [[ $api_ingress_present == true ]]; then [[ $api_controller == ignore ]]; fi
+      yq -e '.spec.values.ingress.app.annotations."nginx.ingress.kubernetes.io/auth-url" == "http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth" and .spec.values.ingress.app.hosts[0].paths[0].path == "/"' "$app/helmrelease.yaml" >/dev/null
+      state=cutover-with-nginx-rollback
+    else
+      [[ -z $app_controller ]]
+      [[ -z $api_controller ]]
+      state=cutover-retired
+    fi
   else
-    [[ -z $app_controller ]]; state=staged
+    [[ $app_ingress_present == true ]]
+    [[ -z $app_controller ]]
+    state=staged
   fi
-  yq -e '.spec.values.ingress.app.annotations."nginx.ingress.kubernetes.io/auth-url" == "http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth" and .spec.values.ingress.app.hosts[0].paths[0].path == "/"' "$app/helmrelease.yaml" >/dev/null
   printf 'ok: %s full-host Envoy OIDC contract (%s)\n' "$resource_name" "$state"
 }
 validate_full_host arrs listenarr listenarr listenarr listenarr 4545

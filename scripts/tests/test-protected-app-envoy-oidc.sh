@@ -140,13 +140,13 @@ validate_split_app() {
     .spec.data[1].remoteRef.property == "client-secret"
   ' "$app/externalsecret-oidc.yaml" >/dev/null
 
-  local app_controller api_controller state
+  local app_controller api_controller app_ingress_present api_ingress_present state
   app_controller=$(yq -r '.spec.values.ingress.app.annotations."external-dns.alpha.kubernetes.io/controller" // ""' "$app/helmrelease.yaml")
   api_controller=$(yq -r '.spec.values.ingress.api.annotations."external-dns.alpha.kubernetes.io/controller" // ""' "$app/helmrelease.yaml")
+  app_ingress_present=$(yq -r '.spec.values.ingress.app != null' "$app/helmrelease.yaml")
+  api_ingress_present=$(yq -r '.spec.values.ingress.api != null' "$app/helmrelease.yaml")
 
   if [[ -f $dns_resource ]]; then
-    [[ $app_controller == ignore ]]
-    [[ $api_controller == ignore ]]
     grep -Fqx -- '- ./service-envoy-dns.yaml' "$app/kustomization.yaml"
     yq -e '
       .kind == "Service" and
@@ -156,8 +156,26 @@ validate_split_app() {
       .spec.type == "ExternalName" and
       .spec.externalName == "envoy-internal.network.svc.cluster.local"
     ' "$dns_resource" >/dev/null
-    state=cutover
+
+    if [[ $app_ingress_present == true || $api_ingress_present == true ]]; then
+      [[ $app_ingress_present == true ]]
+      [[ $api_ingress_present == true ]]
+      [[ $app_controller == ignore ]]
+      [[ $api_controller == ignore ]]
+      yq -e '
+        .spec.values.ingress.app.annotations."nginx.ingress.kubernetes.io/auth-url" == "http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth" and
+        .spec.values.ingress.app.hosts[0].paths[0].path == "/" and
+        .spec.values.ingress.api.hosts[0].paths[0].path == "/api"
+      ' "$app/helmrelease.yaml" >/dev/null
+      state=cutover-with-nginx-rollback
+    else
+      [[ -z $app_controller ]]
+      [[ -z $api_controller ]]
+      state=cutover-retired
+    fi
   else
+    [[ $app_ingress_present == true ]]
+    [[ $api_ingress_present == true ]]
     [[ -z $app_controller ]]
     [[ -z $api_controller ]]
     if grep -Fqx -- '- ./service-envoy-dns.yaml' "$app/kustomization.yaml"; then
@@ -167,19 +185,13 @@ validate_split_app() {
     state=staged
   fi
 
-  yq -e '
-    .spec.values.ingress.app.annotations."nginx.ingress.kubernetes.io/auth-url" == "http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth" and
-    .spec.values.ingress.app.hosts[0].paths[0].path == "/" and
-    .spec.values.ingress.api.hosts[0].paths[0].path == "/api"
-  ' "$app/helmrelease.yaml" >/dev/null
-
   printf 'ok: %s Envoy OIDC contract (%s)\n' "$resource_name" "$state"
 }
 
 validate_split_app sonarr sonarr sonarr sonarr 80 true
-validate_split_app radarr radarr radarr radarr 80 false
-validate_split_app radarr-3d radarr-3d radarr-3d radarr-3d 80 false
-validate_split_app prowlarr prowlarr prowlarr prowlarr 80 false
-validate_split_app sabnzbd sabnzbd sab sabnzbd 80 false
-validate_split_app bazarr bazarr bazarr bazarr 6767 false
-validate_split_app whisparr whisparr whisparr whisparr 80 false
+validate_split_app radarr radarr radarr radarr 80 true
+validate_split_app radarr-3d radarr-3d radarr-3d radarr-3d 80 true
+validate_split_app prowlarr prowlarr prowlarr prowlarr 80 true
+validate_split_app sabnzbd sabnzbd sab sabnzbd 80 true
+validate_split_app bazarr bazarr bazarr bazarr 6767 true
+validate_split_app whisparr whisparr whisparr whisparr 80 true

@@ -32,19 +32,6 @@ spec:
       enabled: true
     env:
       existingSecret: zoo-fleet-secret
-    ingress:
-      enabled: true
-      className: external
-      annotations:
-        external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-        nginx.ingress.kubernetes.io/proxy-body-size: 256m
-        nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-        nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-      hosts:
-      - host: fleet.${HOME_DOMAIN}
-        paths:
-        - path: /
-          pathType: Prefix
     persistence:
       existingClaim: zoo-fleet-firmware-releases
     podAnnotations:

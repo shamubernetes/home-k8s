@@ -1,22 +1,22 @@
 # Workstream H, Envoy Gateway native OIDC migration
 
 Date: 2026-07-29
-Status: H1 and isolated H2 complete; production Sonarr cut over to Envoy; authenticated production browser acceptance pending
+Status: Protected production cohort complete; OAuth2 Proxy and protected NGINX rollback resources retired; unused legacy provider and vault credentials retained pending explicit deletion approval
 
 ## Scope boundary
 
-The current cluster has 72 Ingress objects. Workstream H initially owns 10 OAuth2 Proxy-protected browser Ingresses, eight separate machine/API Ingresses, and the OAuth2 Proxy Ingress. Fifty-three unrelated Ingresses remain after that protected set moves, including 20 Ingresses with NGINX-specific behavior. OAuth2 Proxy retirement and NGINX controller retirement are therefore separate gates.
+The H1 baseline had 72 Ingress objects. Workstream H owned 10 OAuth2 Proxy-protected browser Ingresses, eight separate machine/API Ingresses, and the OAuth2 Proxy Ingress. The protected set is now retired; 53 unrelated Ingresses remain, including 20 Ingresses with NGINX-specific behavior. OAuth2 Proxy retirement is complete, while NGINX controller retirement remains a separate gate.
 
-## Current shared authentication boundary
+## Baseline shared authentication boundary
 
-All ten browser hosts currently use the same NGINX/OAuth2 Proxy design:
+At the H1 baseline, all ten browser hosts used the same NGINX/OAuth2 Proxy design:
 
 - Unauthenticated browser requests redirect to same-host `/oauth2/start` with the original URI.
 - Same-host `/oauth2/*` routes to the shared OAuth2 Proxy.
 - OAuth2 Proxy authenticates against Pocket ID with PKCE, permits Pocket ID's `email_verified=false`, enforces the existing email allowlist, and emits `X-Auth-Request-*` headers.
 - Native Envoy OIDC must preserve deep-link return, callback/logout behavior, unverified-email compatibility, and the authorization boundary. Successful authentication alone is not parity.
 
-Primary source: `kubernetes/apps/arrs/oauth2-proxy/app/helmrelease.yaml` and each protected application's ingress block.
+Historical primary source before retirement: `kubernetes/apps/arrs/oauth2-proxy/app/helmrelease.yaml` and each protected application's former ingress block.
 
 ## Protected application route and backend-auth matrix
 
@@ -24,7 +24,7 @@ Primary source: `kubernetes/apps/arrs/oauth2-proxy/app/helmrelease.yaml` and eac
 |---|---|---|---|
 | Bazarr | OIDC on `/`, except the more-specific API route | `/api/*` | Uses `X-API-KEY`; missing and invalid keys return 401. Bazarr calls Sonarr and Radarr through cluster-local Services with API keys. |
 | Listenarr | OIDC on the entire host, including `/api`, SPA assets, and SignalR/WebSockets | No safe bypass currently | Live `AuthenticationRequired=false`; `/api/library` returned 200 with missing, invalid, and valid keys. Do not create an unprotected `/api` route unless backend enforcement is enabled and proven. |
-| Profilarr | OIDC on the entire host for the next migration design | Current NGINX `/api/*` bypass is unsafe and must not be copied | Manifest sets `AUTH=off`; live status, database, and Arr API operations returned 200 with no or invalid key. No Arr instances are registered. Hermes sends `X-Api-Key`, but Profilarr does not currently enforce it. |
+| Profilarr | OIDC on the entire host except the more-specific Hermes machine route | `/api/*` only when `X-Api-Key` is present and Envoy sees source `10.0.10.95/32` | Profilarr remains `AUTH=off`, so its header is a route selector rather than the enforcement boundary. `SecurityPolicy/profilarr-hermes-machine` defaults to deny and allows only the repository-owned Hermes Mac CIDR. Missing-header requests use browser OIDC; a keyed non-Hermes source receives 403. |
 | Prowlarr | OIDC on `/`, except API | `/api/v1/*` under `/api` | Missing and invalid API keys return 401. Its Radarr, Radarr-3D, Sonarr, and Whisparr applications use cluster-local Service DNS and API keys. |
 | Radarr | OIDC on `/`, except API | `/api/v3/*` under `/api` | Missing and invalid API keys return 401. Prowlarr and Homarr use Service DNS; downloads go to SABnzbd category `movies`. |
 | Radarr-3D | OIDC on `/`, except API | `/api/v3/*` under `/api` | Missing and invalid API keys return 401. Prowlarr and Homarr use Service DNS. No live download client is configured. |
@@ -39,7 +39,7 @@ Current manifests do not consume `X-Auth-Request-User`, `X-Auth-Request-Email`, 
 
 | Caller | Destination and path | Credential and route behavior |
 |---|---|---|
-| Hermes typed media tool on the Mac | Bazarr, Profilarr, Prowlarr, Radarr, Radarr-3D, SABnzbd, and Sonarr through HTTPS machine routes | Uses service-specific API-key headers or SABnzbd's `apikey` query field. Profilarr is presently anonymous despite the header. |
+| Hermes typed media tool on the Mac | Bazarr, Profilarr, Prowlarr, Radarr, Radarr-3D, SABnzbd, and Sonarr through HTTPS machine routes | Uses service-specific API-key headers or SABnzbd's `apikey` query field. Profilarr additionally requires the real Envoy client source to be `10.0.10.95/32`; its backend remains `AUTH=off`, so source authorization is the effective boundary. |
 | Prowlarr | Radarr, Radarr-3D, Sonarr, and Whisparr through `*.arrs.svc.cluster.local` | API key; never traverses browser OIDC. |
 | Prowlarr | SABnzbd Service `/api` | API key, category `prowlarr`. |
 | Bazarr | Sonarr and Radarr Services | API keys; never traverses browser OIDC. |
@@ -116,13 +116,22 @@ A real browser reached Pocket ID's `Sign in to Sonarr` interaction. No credentia
 
 Production rollback removes `service-envoy-dns.yaml` from the Sonarr Kustomization and removes `external-dns.alpha.kubernetes.io/controller: ignore` from both Ingresses. ExternalDNS then republishes the unchanged NGINX route at `10.100.47.250`. Do not remove the production routes, policy, Pocket ID client, or 1Password item during this rollback; they remain staged for diagnosis and retry.
 
-## Remaining cohort unknowns
+## Final production state, 2026-07-30
 
-These do not block the Sonarr canary, but must be resolved before their respective migrations:
+PR #4252 completed the ten-host Envoy cohort. PRs #4253, #4254, and #4255 established the transition-safe retirement contracts; PR #4256 removed all 17 protected NGINX Ingresses and the complete OAuth2 Proxy GitOps tree. PRs #4257 and #4258 established the Profilarr machine-route contract, and PR #4259 added the header-specific, Mac-only route after live verification found that full-host OIDC had blocked Hermes automation.
 
-- Exact Listenarr SignalR hub paths.
-- Intended Radarr-3D download workflow while no client is configured.
-- Whether Profilarr authentication will be enabled or its browser and machine operations will remain entirely under OIDC.
-- Exact Homarr health exceptions, if any are needed externally.
+Flux applied cleanup revision `974671ec809aa37fb1e439fa4ee870ca16a54588` and Profilarr machine-route revision `e08ddfc88ebe37cc706b81f20cbb7e07bb479c32`. Final live evidence:
 
-OAuth2 Proxy remains deployed until all protected production hosts pass. NGINX retirement remains a later, separate migration for the entire remaining Ingress estate.
+- All ten protected hostnames resolve only to Envoy internal `10.100.47.248`; all browser roots return 302 to Pocket ID.
+- All 17 protected HTTPRoutes report Accepted and ResolvedRefs; all ten OIDC SecurityPolicies and `profilarr-hermes-machine` report Accepted.
+- Seven split-route APIs return native backend 401/403 without OIDC when credentials are missing. Listenarr and Homarr remain full-host OIDC.
+- Profilarr browser and no-header API requests use OIDC. Keyed requests from `10.0.10.95` return JSON and the typed `profilarr.status` action passes; the same keyed request from a non-Hermes pod receives 403.
+- All ten protected application Pods are Ready with zero restarts. Typed Sonarr, both Radarr instances, Prowlarr, Bazarr, SABnzbd, and Profilarr checks pass.
+- The cluster retains 53 unrelated Ingresses, with zero protected Ingresses, zero `oauth2-proxy` auth references, and no OAuth2 Proxy Kustomization, HelmRelease, Deployment, Service, ExternalSecret, generated Secret, OCI source, PDB, or Ingress.
+- Ten dedicated Pocket ID clients remain confidential, PKCE-enabled, and restricted to the one-member `protected-apps` group. The earlier allowed-user Sonarr canary browser acceptance remains the interactive identity proof; no new passkey action was performed during final cohort automation.
+
+The unused legacy Pocket ID client `arrs` (`ARR Stack`) and 1Password item `Kubernetes/oauth2-proxy` have no remaining consumer. Explicit approval to delete/archive them was requested but not received, so they remain intact. This is the only deferred OAuth2 Proxy retirement step.
+
+## Remaining boundary
+
+The general NGINX estate is outside the protected-auth milestone. Fifty-three unrelated Ingresses remain and must be migrated with their application-specific body-size, buffering, timeout, backend-protocol, and rate-limit behavior before either NGINX controller can be retired.

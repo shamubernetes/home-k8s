@@ -5,14 +5,9 @@ metadata:
   name: &app plane
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: plane-enterprise
-      version: 2.6.1
-      sourceRef:
-        kind: HelmRepository
-        name: makeplane
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: plane
   install:
     remediation:
       retries: 3
@@ -109,13 +104,7 @@ spec:
     license:
       licenseDomain: plane.${HOME_DOMAIN}
     ingress:
-      enabled: true
-      ingressClass: nginx
-      minioHost: ""
-      rabbitmqHost: ""
-      ingress_annotations:
-        external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        nginx.ingress.kubernetes.io/proxy-body-size: 20m
+      enabled: false
     ssl:
       createIssuer: false
       generateCerts: false

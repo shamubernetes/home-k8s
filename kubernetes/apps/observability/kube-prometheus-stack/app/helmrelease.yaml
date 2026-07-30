@@ -6,14 +6,9 @@ metadata:
 spec:
   interval: 10m
   timeout: 15m
-  chart:
-    spec:
-      chart: kube-prometheus-stack
-      version: 86.3.2
-      sourceRef:
-        kind: HelmRepository
-        name: prometheus-community
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: kube-prometheus-stack
   install:
     crds: Skip
     remediation:
@@ -34,13 +29,6 @@ spec:
       enabled: false
     cleanPrometheusOperatorObjectNames: true
     alertmanager:
-      ingress:
-        enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        pathType: Prefix
-        ingressClassName: internal
-        hosts: ["alertmanager.${HOME_DOMAIN}"]
       alertmanagerSpec:
         replicas: 2
         alertmanagerConfiguration:
@@ -81,11 +69,6 @@ spec:
     kubeProxy:
       enabled: false
     prometheus:
-      ingress:
-        enabled: true
-        ingressClassName: internal
-        pathType: Prefix
-        hosts: ["prometheus.${HOME_DOMAIN}"]
       prometheusSpec:
         replicas: 2
         podMonitorSelectorNilUsesHelmValues: false

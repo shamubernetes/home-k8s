@@ -6,14 +6,9 @@ metadata:
 spec:
   interval: 30m
   timeout: 15m
-  chart:
-    spec:
-      chart: rook-ceph
-      version: v1.20.1
-      sourceRef:
-        kind: HelmRepository
-        name: rook-ceph
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: rook-ceph-operator
   install:
     remediation:
       retries: 3
@@ -26,6 +21,15 @@ spec:
   - name: snapshot-controller
     namespace: volsync-system
   values:
+    image:
+      repository: docker.io/rook/ceph
+      tag: v1.20.3@sha256:da3c5046074ddc01bd2d162f7da3c3098e2f117fa5093df827e55f7e35899add
+    ceph-csi-operator:
+      controllerManager:
+        manager:
+          image:
+            repository: quay.io/cephcsi/ceph-csi-operator
+            tag: v1.0.4@sha256:c62933fd4083635f969f8a61932af45dba9902d48867e2b5d98a69d8e4344eb6
     csi:
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true
@@ -37,4 +41,5 @@ spec:
       requests:
         memory: 128Mi # unchangable
         cpu: 100m # unchangable
-      limits: {}
+      limits:
+        memory: 1Gi

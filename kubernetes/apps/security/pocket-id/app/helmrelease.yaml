@@ -113,18 +113,6 @@ spec:
         ports:
           http:
             port: &port 1411
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: sso.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       tmp:
         type: emptyDir

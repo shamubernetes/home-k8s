@@ -2,8 +2,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./ocirepository.yaml
 - ./alertmanagerconfig.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
 - ./gatus-alertmanager.yaml

@@ -135,17 +135,22 @@ spec:
           host: prowlarr.${HOME_DOMAIN}
           paths: *paths
         - <<: *host
+          host: sab.${HOME_DOMAIN}
+          paths: *paths
+        - <<: *host
+          host: whisparr.${HOME_DOMAIN}
+          paths: *paths
+      rollback:
+        annotations:
+          external-dns.alpha.kubernetes.io/controller: ignore
+        className: internal
+        hosts:
+        - <<: *host
           host: radarr.${HOME_DOMAIN}
           paths: *paths
         - <<: *host
           host: radarr-3d.${HOME_DOMAIN}
           paths: *paths
         - <<: *host
-          host: sab.${HOME_DOMAIN}
-          paths: *paths
-        - <<: *host
           host: sonarr.${HOME_DOMAIN}
-          paths: *paths
-        - <<: *host
-          host: whisparr.${HOME_DOMAIN}
           paths: *paths

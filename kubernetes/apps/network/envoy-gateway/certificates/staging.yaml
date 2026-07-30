@@ -2,11 +2,11 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: "${HOME_DOMAIN/./-}-production"
+  name: "${HOME_DOMAIN/./-}-staging"
 spec:
-  secretName: "${HOME_DOMAIN/./-}-production-tls"
+  secretName: "${HOME_DOMAIN/./-}-staging-tls"
   issuerRef:
-    name: letsencrypt-production
+    name: letsencrypt-staging
     kind: ClusterIssuer
   commonName: "${HOME_DOMAIN}"
   dnsNames:
@@ -23,11 +23,11 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: "${GAME_DOMAIN/./-}-production"
+  name: "${GAME_DOMAIN/./-}-staging"
 spec:
-  secretName: "${GAME_DOMAIN/./-}-production-tls"
+  secretName: "${GAME_DOMAIN/./-}-staging-tls"
   issuerRef:
-    name: letsencrypt-production
+    name: letsencrypt-staging
     kind: ClusterIssuer
   commonName: "${GAME_DOMAIN}"
   dnsNames:
@@ -39,11 +39,11 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: "${DEV_DOMAIN/./-}-production"
+  name: "${DEV_DOMAIN/./-}-staging"
 spec:
-  secretName: "${DEV_DOMAIN/./-}-production-tls"
+  secretName: "${DEV_DOMAIN/./-}-staging-tls"
   issuerRef:
-    name: letsencrypt-production
+    name: letsencrypt-staging
     kind: ClusterIssuer
   commonName: "${DEV_DOMAIN}"
   dnsNames:

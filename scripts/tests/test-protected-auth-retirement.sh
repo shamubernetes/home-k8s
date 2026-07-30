@@ -22,7 +22,7 @@ arrs_kustomization=kubernetes/apps/arrs/kustomization.yaml
 rollback_count=0
 
 for manifest in "${protected_helmreleases[@]}"; do
-  if yq -e '.spec.values.ingress != null' "$manifest" >/dev/null; then
+  if yq -e '.spec.values.ingress != null' "$manifest" >/dev/null 2>&1; then
     ((rollback_count += 1))
     yq -e '
       .spec.values.ingress.app.annotations."external-dns.alpha.kubernetes.io/controller" == "ignore" and

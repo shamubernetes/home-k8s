@@ -6,4 +6,5 @@ resources:
 - ./externalsecret.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./httproute-webhook-envoy.yaml
 - ./webhook-ingress.yaml

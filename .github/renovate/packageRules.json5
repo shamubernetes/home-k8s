@@ -86,6 +86,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -100,6 +101,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -114,6 +116,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -128,6 +131,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true,
     },
     {
@@ -143,6 +147,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 3,
       "separateMinorPatch": true,
     },
     {
@@ -158,6 +163,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}",
       },
+      "minimumGroupSize": 2,
     },
     {
       "description": ["CoreDNS Group"],
@@ -168,6 +174,7 @@
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true
     },
     {
@@ -229,12 +236,19 @@
     {
       "description": ["Rook-Ceph Group"],
       "groupName": "Rook-Ceph",
-      "matchPackageNames": ["/rook.ceph/"],
+      "matchPackageNames": [
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "docker.io/rook/ceph",
+        "quay.io/cephcsi/ceph-csi-operator",
+        "quay.io/ceph/ceph",
+      ],
       "matchDatasources": ["docker", "helm"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
       },
+      "minimumGroupSize": 2,
       "separateMinorPatch": true
     },
     {
@@ -329,6 +343,11 @@
     },
     {
       "description": "Never auto-merge high-blast-radius infrastructure",
+      "matchPackageNames": [
+        "!docker.io/rook/ceph",
+        "!quay.io/cephcsi/ceph-csi-operator",
+        "!quay.io/ceph/ceph",
+      ],
       "matchFileNames": [
         "talos/**",
         "kubernetes/apps/actions-runner-system/**",
@@ -350,13 +369,18 @@
         "kubernetes/apps/**/*-crds*/**",
         "kubernetes/apps/**/*-operator*/**",
       ],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
     },
     {
       "description": "Never auto-merge application images",
       "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "!docker.io/rook/ceph",
+        "!quay.io/cephcsi/ceph-csi-operator",
+        "!quay.io/ceph/ceph",
+      ],
       "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
@@ -375,15 +399,36 @@
         "ghcr.io/siderolabs/kubelet"
       ],
       "matchDatasources": ["docker"],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
       "schedule": ["* 2-5 8-14 * 6"]
     },
     {
       "description": "Wait 3 days before updating critical infrastructure",
-      "matchPackageNames": ["/cilium/", "/rook.ceph/"],
+      "matchPackageNames": [
+        "/cilium/",
+        "coredns",
+        "prometheus-operator-crds",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+      ],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Grouped OCI charts rely on their atomic partners for release age",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "quay.io/cilium/charts/cilium",
+        "ghcr.io/coredns/charts/coredns",
+        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "ghcr.io/shamubernetes/charts/git-mirror-operator",
+      ],
+      "minimumReleaseAge": "0 days"
     },
   ],
 }

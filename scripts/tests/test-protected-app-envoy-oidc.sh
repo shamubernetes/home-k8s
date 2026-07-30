@@ -16,7 +16,8 @@ validate_split_app() {
   local resource_name=$2
   local host_name=$3
   local backend_name=$4
-  local required=$5
+  local backend_port=$5
+  local required=$6
   local app="kubernetes/apps/arrs/${app_dir}/app"
   local host="${host_name}.\${HOME_DOMAIN}"
   local oidc_item="${resource_name}-oidc"
@@ -55,7 +56,7 @@ validate_split_app() {
     grep -Fqx -- "- ./${resource}" "$app/kustomization.yaml"
   done
 
-  export host backend_name browser_route api_route resource_name oidc_item oidc_secret
+  export host backend_name backend_port browser_route api_route resource_name oidc_item oidc_secret
 
   local common_route='
     .kind == "HTTPRoute" and
@@ -74,7 +75,7 @@ validate_split_app() {
     .spec.rules[0].backendRefs[0].group == "" and
     .spec.rules[0].backendRefs[0].kind == "Service" and
     .spec.rules[0].backendRefs[0].name == strenv(backend_name) and
-    .spec.rules[0].backendRefs[0].port == 80 and
+    .spec.rules[0].backendRefs[0].port == (strenv(backend_port) | tonumber) and
     (.spec.rules[0].filters | length) == 1 and
     .spec.rules[0].filters[0].type == "RequestHeaderModifier"
   '
@@ -175,10 +176,10 @@ validate_split_app() {
   printf 'ok: %s Envoy OIDC contract (%s)\n' "$resource_name" "$state"
 }
 
-validate_split_app sonarr sonarr sonarr sonarr true
-validate_split_app radarr radarr radarr radarr false
-validate_split_app radarr-3d radarr-3d radarr-3d radarr-3d false
-validate_split_app prowlarr prowlarr prowlarr prowlarr false
-validate_split_app sabnzbd sabnzbd sab sabnzbd false
-validate_split_app bazarr bazarr bazarr bazarr false
-validate_split_app whisparr whisparr whisparr whisparr false
+validate_split_app sonarr sonarr sonarr sonarr 80 true
+validate_split_app radarr radarr radarr radarr 80 false
+validate_split_app radarr-3d radarr-3d radarr-3d radarr-3d 80 false
+validate_split_app prowlarr prowlarr prowlarr prowlarr 80 false
+validate_split_app sabnzbd sabnzbd sab sabnzbd 80 false
+validate_split_app bazarr bazarr bazarr bazarr 6767 false
+validate_split_app whisparr whisparr whisparr whisparr 80 false

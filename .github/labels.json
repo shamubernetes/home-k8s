@@ -3,7 +3,6 @@
   {"name": "area/docs", "color": "0e8a16"},
   {"name": "area/k8s", "color": "0e8a16"},
   {"name": "area/task", "color": "0e8a16"},
-  {"name": "area/trunk", "color": "0e8a16"},
   {"name": "distro/talos", "color": "ffc300"},
   {"name": "renovate/ci", "color": "027fa0"},
   {"name": "renovate/container", "color": "027fa0"},

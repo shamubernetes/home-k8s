@@ -177,33 +177,3 @@ spec:
           apps.kubernetes.io/pod-index: "2"
         annotations:
           io.cilium/lb-ipam-ips: "${IPAM_IP_ADGUARD_2}"
-    ingress:
-      origin: &ingress
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: "adguard.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: origin
-              port: http
-      secondary:
-        <<: *ingress
-        hosts:
-        - host: adguard-secondary.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: secondary
-              port: http
-      tertiary:
-        <<: *ingress
-        hosts:
-        - host: adguard-tertiary.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: tertiary
-              port: http

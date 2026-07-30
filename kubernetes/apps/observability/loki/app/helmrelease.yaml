@@ -149,14 +149,6 @@ spec:
                 matchLabels:
                   titans/network-intensive: "true"
               topologyKey: kubernetes.io/hostname
-      ingress:
-        enabled: true
-        ingressClassName: internal
-        hosts:
-        - host: loki.${HOME_DOMAIN}
-          paths:
-          - path: /
-            pathType: Prefix
     read:
       replicas: 2
       podLabels:

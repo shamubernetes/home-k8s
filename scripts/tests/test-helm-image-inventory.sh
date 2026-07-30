@@ -107,6 +107,29 @@ if ! grep -Fxq 'test/alt/app' "$calls"; then
   exit 1
 fi
 
+cat > "${repo}/scripts/helm-image-validation-skips.txt" <<'TXT'
+# app-directory<TAB>expected diagnostic substring<TAB>reason
+test/retired/app	retired release is not rendered	retired: fixture release removed after GitOps prune
+TXT
+(
+  cd "$repo"
+  VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null
+)
+cat > "${repo}/scripts/helm-image-validation-skips.txt" <<'TXT'
+# app-directory<TAB>expected diagnostic substring<TAB>reason
+test/stale/app	stale release is not rendered	ordinary stale fixture
+TXT
+if (
+  cd "$repo"
+  VALIDATE_CALLS="$calls" VALIDATE_MODE=success scripts/check-helmrelease-images >/dev/null 2>&1
+); then
+  echo 'ordinary stale Helm image validation skip was accepted' >&2
+  exit 1
+fi
+cat > "${repo}/scripts/helm-image-validation-skips.txt" <<'TXT'
+# app-directory<TAB>expected diagnostic substring<TAB>reason
+TXT
+
 mkdir -p "${repo}/kubernetes/apps/test/second/app" "${tmpdir}/sync"
 cp "${repo}/kubernetes/apps/test/alt/app/custom-release.yaml" \
   "${repo}/kubernetes/apps/test/second/app/custom-release.yaml"

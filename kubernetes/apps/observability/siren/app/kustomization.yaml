@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded

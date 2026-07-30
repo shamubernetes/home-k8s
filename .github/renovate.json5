@@ -2,11 +2,20 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   timezone: "America/New_York",
   dependencyDashboard: true,
+  ignorePaths: [
+    "kubernetes/apps/iot/zoo-fleet/app/ocirepository.yaml",
+  ],
   pruneStaleBranches: true,
   prHourlyLimit: 5,
   prConcurrentLimit: 0,
   branchConcurrentLimit: 0,
   packageRules: [
+    {
+      description: "GitHub Actions Helm inputs are version-only",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["helm/helm"],
+      pinDigests: false,
+    },
     {
       description: "Plane chart values do not support synthesized image digests",
       matchManagers: ["kubernetes"],

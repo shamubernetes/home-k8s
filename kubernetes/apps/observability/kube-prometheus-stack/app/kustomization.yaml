@@ -6,5 +6,6 @@ resources:
 - ./alertmanagerconfig.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
 - ./gatus-alertmanager.yaml

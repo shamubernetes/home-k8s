@@ -5,5 +5,11 @@ resources:
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./externalsecret.yaml
+- ./externalsecret-oidc.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy-browser.yaml
+- ./httproute-envoy-api-hermes.yaml
+- ./securitypolicy-oidc.yaml
+- ./securitypolicy-hermes-machine.yaml
+- ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded

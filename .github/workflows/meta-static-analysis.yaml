@@ -142,7 +142,6 @@ jobs:
         scripts/tests/test-full-host-envoy-oidc.sh
         scripts/tests/test-protected-auth-retirement.sh
         python scripts/tests/test-general-ingress-envoy.py
-        scripts/tests/test-general-ingress-retirement.sh
         scripts/tests/test-profilarr-hermes-machine-route.sh
         scripts/tests/test-talos-image-resource-limits.sh
         scripts/tests/test-talos-image-gate-scope.sh

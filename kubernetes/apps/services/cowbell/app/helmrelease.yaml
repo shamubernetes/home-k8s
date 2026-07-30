@@ -26,16 +26,6 @@ spec:
       replicaCount: 1
     env:
       existingSecret: cowbell-secret
-    ingress:
-      enabled: true
-      className: external
-      annotations:
-        external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-      hosts:
-      - host: issue.${HOME_DOMAIN}
-        paths:
-        - path: /
-          pathType: Prefix
     podAnnotations:
       reloader.stakater.com/auto: "true"
     podDisruptionBudget:

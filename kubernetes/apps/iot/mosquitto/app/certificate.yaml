@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cert-manager.io/certificate_v1.json
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mosquitto
+spec:
+  secretName: mosquitto-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-production
+  commonName: "mqtt.${HOME_DOMAIN}"
+  dnsNames:
+  - "mqtt.${HOME_DOMAIN}"

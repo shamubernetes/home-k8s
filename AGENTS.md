@@ -27,6 +27,9 @@ task kubernetes:sync-secrets ns=<namespace> secret=<name>
 # Validate a GitOps app without applying it
 task kubernetes:validate-app app=<category>/<app>
 
+# Run focused schema validation on YAML files or directories
+task kubernetes:validate-yaml path=<path>
+
 # Resolve a mutable image tag to an immutable digest reference
 task kubernetes:pin-image image=docker.io/library/nginx:latest
 
@@ -38,6 +41,23 @@ task kubernetes:new-app category=tools app=example args="--image docker.io/libra
 
 # Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
+
+# Start a verified, bounded Alertmanager maintenance silence
+export MAINTENANCE_KUBECONFIG="$HOME/.kube/config"
+scripts/cluster-maintenance begin \
+  --reason "planned cluster maintenance" --duration 4h
+
+# Admit the exact known persistent SMART interface-speed baseline while still
+# failing closed on every other warning or critical alert.
+scripts/cluster-maintenance begin \
+  --reason "planned cluster maintenance" --duration 4h \
+  --allow-active-alert \
+  alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda
+
+# Renew, inspect, or end the exact silence returned by begin
+scripts/cluster-maintenance renew --id <silence-id> --duration 4h
+scripts/cluster-maintenance status --id <silence-id>
+scripts/cluster-maintenance end --id <silence-id>
 
 ```
 
@@ -81,9 +101,10 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 
 ## Tooling and Python
 
-- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, Renovate, and Python.
+- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, Renovate, `yayamlls`, and Python.
 - Python is pinned through Mise for standard-library-only validation helpers. The repository does not declare third-party Python dependencies such as PyYAML.
 - For YAML inspection and transformation, prefer `yq`, `kubectl kustomize`, `helm template`, and the scripts under `scripts/`.
+- Use `yayamlls` for focused schema and language-server validation. It does not format YAML; preserve the repository's existing YAML style when editing.
 - If a helper script uses Python, keep it Python standard-library only unless a Python environment and dependency file are added deliberately.
 - Do not install Python packages globally/Homebrew just to inspect YAML. If a one-off Python dependency is unavoidable, use an isolated temporary environment and do not make it part of the repo workflow without adding explicit project config.
 
@@ -167,6 +188,39 @@ Prefer existing shared data platforms before adding embedded sidecars or app-loc
 - Patches: `talos/patches/global/` and `talos/patches/controlplane/`
 - Encrypted secrets: `talos/talsecret.sops.yaml`
 
+## Cluster Maintenance Windows
+
+Any planned operation that can roll, drain, reboot, reconcile, or otherwise disrupt
+live cluster resources must create a bounded maintenance silence immediately before
+the first live mutation. Use `scripts/cluster-maintenance begin`; do not construct
+ad hoc Alertmanager payloads. The helper coordinates concurrent starts with a
+continuously renewed Kubernetes Lease, then releases it through resource-versioned
+expiration so an earlier operator cannot delete a successor's lock. Release failures
+warn without hiding an already verified silence ID, and the Lease ages out safely.
+The helper fails closed when Alertmanager HA is not ready, an unrelated unsilenced
+warning or critical alert already exists, another owned maintenance window is active,
+or both concrete Alertmanager pods do not report the same active silence and expected
+alert coverage. A known persistent baseline may be admitted with a repeatable exact
+`--allow-active-alert` selector containing `alertname` plus at least one scoping label.
+The established Renovate baseline is
+`alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda`. This is an
+admission exception only: keep the alert visible, verify its identity has not changed,
+and continue to reject every additional warning or critical alert.
+
+The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
+and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.
+The default window is four hours and the hard maximum is 24 hours. Record the exact
+silence ID returned by `begin`, renew only that ID when maintenance must continue,
+and call `end` only after the merged revision, Flux/Tuppr convergence, affected
+workloads, cluster health, and component-relevant routes or APIs are verified. A
+failed rollout keeps the window active only while a protected GitOps rollback is
+being executed and verified. If the operator dies, the finite expiry restores
+alerting automatically.
+
+Run `scripts/cluster-maintenance probe` to exercise Alertmanager's create/read/delete
+lifecycle with a unique, preflighted alert name. The probe rejects any collision,
+verifies both members, and expires itself in cleanup even when verification fails.
+
 ## App-Template (bjw-s) Pattern
 
 When using `app-template` charts:
@@ -221,6 +275,16 @@ handoff, never as a chart upgrade:
   workloads even when the chart archive is identical. Leave these releases on
   the OCI HelmRepository abstraction unless a separately approved rollout is
   intended and validated.
+
+Firecrawl chart promotion is intentionally separate from Renovate. The private,
+signed downstream publisher dispatches `.github/workflows/firecrawl-chart-promotion.yaml`
+with an immutable version and digest. That workflow verifies the package and exact
+OIDC identity, updates only the OCI tag plus its digest comment, opens a ShamuBot
+pull request, and enables automatic merge behind the protected Static Analysis and
+Flate checks. A GitHub push webhook then asks Hermes to run
+`scripts/verify-firecrawl-live <main-commit>` and close the matching
+`firecrawl-promotion` issue only after Flux, Helm, all workloads, the public route,
+and shared Dragonfly, PostgreSQL, and RabbitMQ connections pass.
 
 ## New App Validation
 

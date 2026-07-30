@@ -91,6 +91,11 @@
       "addLabels": ["renovate/mise"]
     },
     {
+      "matchManagers": ["mise"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "commitMessageExtra": ""
+    },
+    {
       "matchManagers": ["github-actions"],
       "addLabels": ["renovate/ci"]
     },

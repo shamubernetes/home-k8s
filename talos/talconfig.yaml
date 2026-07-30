@@ -111,6 +111,7 @@ patches:
 - "@./patches/global/containerd.yaml"
 - "@./patches/global/coredns.yaml"
 - "@./patches/global/dns-resolution.yaml"
+- "@./patches/global/ghcr-auth.sops.yaml"
 - "@./patches/global/kubelet.yaml"
 - "@./patches/global/nameserver.yaml"
 - "@./patches/global/nfs.yaml"

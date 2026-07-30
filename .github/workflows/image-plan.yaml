@@ -1,0 +1,203 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Image Availability Plan
+
+on:
+  # The workflow definition and secret handling stay on the trusted default branch.
+  # Every same-repository Kubernetes PR is planned automatically.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    branches: ["main"]
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+    - "kubernetes/**"
+    - "scripts/talos-image-plan"
+    - ".github/workflows/image-plan.yaml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: "image-plan-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Render immutable image plan
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+    - name: Resolve trusted pull request metadata
+      id: metadata
+      env:
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        pr=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
+        metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$GITHUB_EVENT_PATH")
+        trigger_id="pull_request_target:${pr}:${EVENT_ACTION}:${EVENT_UPDATED_AT}"
+        [[ $(jq -r '.head_repo' <<<"$metadata") == "$REPOSITORY" ]]
+        {
+          printf 'pull_request=%s\n' "$pr"
+          printf 'base_sha=%s\n' "$(jq -r '.base_sha' <<<"$metadata")"
+          printf 'head_sha=%s\n' "$(jq -r '.head_sha' <<<"$metadata")"
+          printf 'trigger_id=%s\n' "$trigger_id"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Checkout pull request head
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ steps.metadata.outputs.head_sha }}
+        path: head
+        persist-credentials: false
+
+    - name: Checkout exact pull request base
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ steps.metadata.outputs.base_sha }}
+        path: base
+        persist-credentials: false
+
+    - name: Checkout current trusted verifier
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: refs/heads/main
+        path: trusted
+        persist-credentials: false
+
+    - name: Setup Flate
+      uses: home-operations/flate/action@bf3405a189626478b0aa6ec98dc4d6f7d419df17 # v0.4.12
+      with:
+        base: ""
+        cache: true
+
+    - name: Render base and head image inventories
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: |
+        set -euo pipefail
+        registry_config=$(mktemp)
+        trap 'rm -f "$registry_config"' EXIT
+        auth=$(printf '%s:%s' "$GHCR_USERNAME" "$GHCR_TOKEN" | base64 | tr -d '\n')
+        jq -n --arg auth "$auth" '{auths:{"ghcr.io":{auth:$auth}}}' > "$registry_config"
+
+        python3 - <<'PY'
+        from pathlib import Path
+        manifest = """apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: loki-bucket
+          namespace: observability
+        data:
+          BUCKET_NAME: flate-offline-placeholder
+          BUCKET_REGION: us-east-1
+        """
+        for checkout in (Path("base"), Path("head")):
+            values = checkout / "kubernetes/flux/vars/flate-ci-values.yaml"
+            values.write_text(manifest)
+            kustomization = checkout / "kubernetes/flux/vars/kustomization.yaml"
+            content = kustomization.read_text().replace(
+                "resources:\n", "resources:\n- ./flate-ci-values.yaml\n", 1
+            )
+            kustomization.write_text(content)
+        PY
+
+        for checkout in base head; do
+          (
+            cd "$checkout"
+            flate --no-progress get images \
+              --allow-missing-secrets \
+              --restrict-egress \
+              --registry-config "$registry_config" \
+              --path kubernetes \
+              --output json > "../${checkout}-images.json"
+          )
+        done
+
+    - name: Build commit-bound image plan
+      env:
+        BASE_SHA: ${{ steps.metadata.outputs.base_sha }}
+        HEAD_SHA: ${{ steps.metadata.outputs.head_sha }}
+        PULL_REQUEST: ${{ steps.metadata.outputs.pull_request }}
+        REPOSITORY: ${{ github.repository }}
+        TRIGGER_ID: ${{ steps.metadata.outputs.trigger_id }}
+      run: |
+        set -euo pipefail
+        trusted/scripts/talos-image-plan build \
+          --base-inventory base-images.json \
+          --head-inventory head-images.json \
+          --repository "$REPOSITORY" \
+          --pull-request "$PULL_REQUEST" \
+          --base-sha "$BASE_SHA" \
+          --head-sha "$HEAD_SHA" \
+          --trigger-id "$TRIGGER_ID" \
+          --output image-plan.json
+        trusted/scripts/talos-image-plan verify \
+          --plan image-plan.json \
+          --repository "$REPOSITORY" \
+          --pull-request "$PULL_REQUEST" \
+          --base-sha "$BASE_SHA" \
+          --head-sha "$HEAD_SHA" \
+          --trigger-id "$TRIGGER_ID" >/dev/null
+
+    - name: Upload image plan
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: talos-image-plan-${{ steps.metadata.outputs.head_sha }}
+        path: image-plan.json
+        if-no-files-found: error
+        retention-days: 1
+
+  report:
+    name: Report immutable image plan
+    if: ${{ always() && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: plan
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+    steps:
+    - name: Publish exact-trigger plan result
+      env:
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+        GH_TOKEN: ${{ github.token }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PLAN_RESULT: ${{ needs.plan.result }}
+        PULL_REQUEST: ${{ github.event.pull_request.number }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        conclusion=failure
+        summary='The trusted image planner did not complete successfully.'
+        if [[ $PLAN_RESULT == success ]]; then
+          conclusion=success
+          summary='The immutable image plan was rendered and verified.'
+        fi
+        trigger_id="pull_request_target:${PULL_REQUEST}:${EVENT_ACTION}:${EVENT_UPDATED_AT}"
+        jq -n \
+          --arg conclusion "$conclusion" \
+          --arg external_id "talos-image-plan:${RUN_ID}:${trigger_id}" \
+          --arg head_sha "$HEAD_SHA" \
+          --arg summary "$summary" \
+          --arg url "$RUN_URL" \
+          '{
+            name: "Talos Image Plan Attempt",
+            head_sha: $head_sha,
+            status: "completed",
+            conclusion: $conclusion,
+            external_id: $external_id,
+            details_url: $url,
+            output: {
+              title: "Talos Image Plan Attempt",
+              summary: $summary
+            }
+          }' | gh api \
+            "repos/${REPOSITORY}/check-runs" \
+            --method POST \
+            --header 'Accept: application/vnd.github+json' \
+            --input - >/dev/null

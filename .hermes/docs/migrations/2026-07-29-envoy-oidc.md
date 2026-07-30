@@ -1,7 +1,7 @@
 # Workstream H, Envoy Gateway native OIDC migration
 
 Date: 2026-07-29
-Status: H1 and isolated Sonarr H2 acceptance complete; canary retired before production cutover
+Status: H1 and isolated H2 complete; production Sonarr cut over to Envoy; authenticated production browser acceptance pending
 
 ## Scope boundary
 
@@ -74,11 +74,11 @@ Resources:
 
 The Pocket ID client requires PKCE S256 and registers both the exact authorization callback and root logout callback. The live Envoy 1.38.1 OAuth2 filter generates a verifier and S256 challenge. OIDC cookies are host-only, Secure, HttpOnly, and SameSite=Lax. Access and ID tokens are not forwarded upstream.
 
-PR #4229 deployed the canary at merge revision `2a9f1c95abf12e898f1e0220bee510e80cd1b39b`. PR #4231 added its required CI contract at `4a04f876ed2aa5bd9901a1a91e0227cfd142ad3e`. Flux applied both. Kilian completed the allowed-user browser acceptance and reported all exercised behavior working; a nonmember test was accepted as not applicable, and a separate rollback drill was declined. On 2026-07-29 he requested removal because the route targets the real Sonarr backend. The canary resources, dedicated Pocket ID client, and 1Password item were therefore retired before any production cutover. Production Sonarr remains on NGINX internal `10.100.47.250`.
+PR #4229 deployed the canary at merge revision `2a9f1c95abf12e898f1e0220bee510e80cd1b39b`. PR #4231 added its required CI contract at `4a04f876ed2aa5bd9901a1a91e0227cfd142ad3e`. Flux applied both. Kilian completed the allowed-user browser acceptance and reported all exercised behavior working; a nonmember test was accepted as not applicable, and a separate rollback drill was declined. On 2026-07-29 he requested removal because the route targets the real Sonarr backend. The canary resources, dedicated Pocket ID client, and 1Password item were therefore retired before production cutover. Production Sonarr subsequently moved to Envoy through the staged H3 process recorded below; both NGINX Ingresses remain available at internal `10.100.47.250` as rollback.
 
 ## Acceptance matrix
 
-All items must pass before production Sonarr routing changes:
+Automated items passed before DNS cutover. Interactive items remain required before starting the Radarr cohort:
 
 1. [x] Unauthenticated browser request redirects to Pocket ID with the dedicated client ID, exact callback, state cookies, and PKCE S256.
 2. [ ] The allowed Pocket ID identity completes login and returns to the original Sonarr deep link.
@@ -90,13 +90,31 @@ All items must pass before production Sonarr routing changes:
 8. [x] `/oauth2/logout` invokes Pocket ID's end-session endpoint. Full post-login cookie clearing remains part of the interactive check.
 9. [ ] Authenticated UI, assets, browser API calls, and SignalR/WebSocket traffic work.
 10. [x] Pre-login state cookies are host-only, Secure, HttpOnly, and SameSite=Lax. Authenticated session-cookie scope remains part of the interactive check.
-11. [ ] A live rollback removes only the five declared canary objects and their generated Secret/DNS records while production Sonarr remains healthy.
+11. [x] The retained NGINX browser and API routes pass direct checks at `10.100.47.250`; the GitOps rollback reverses only DNS ownership. A live production DNS rollback was not exercised.
 
 ## Rollback ownership
 
 Rollback before production cutover is removal of the five declared canary objects from the Sonarr app kustomization followed by Flux reconciliation. This removes both HTTPRoutes, the SecurityPolicy, ExternalSecret-owned generated Secret, and DNS shim without changing production Ingresses. UniFi ExternalDNS `policy=sync` removes its owned LAN record. The dedicated Pocket ID client and 1Password item are archived only after Kubernetes and DNS cleanup are verified.
 
 The canary targets the existing Sonarr Service, so it is an edge-routing canary, not an isolated application instance. Any application or database mutation performed through the canary affects production Sonarr data and is outside edge rollback.
+
+## Production Sonarr cutover, 2026-07-30
+
+The production migration used three protected, separately classified PRs:
+
+- PR #4237 staged `HTTPRoute/sonarr-envoy-api`, `HTTPRoute/sonarr-envoy-browser`, `SecurityPolicy/sonarr-oidc`, and `ExternalSecret/sonarr-oidc` without changing DNS or NGINX. It merged as `a3f896e6321d1cb65c7ddbe842ca3f3c7166783b`.
+- PR #4239 added `scripts/tests/test-sonarr-envoy-oidc.sh` to required Static Analysis. The contract accepts exactly the staged state or an atomic cutover state with one Envoy DNS publisher and both retained Ingresses excluded from ExternalDNS. It merged as `76a08db800591eecbc184e174b9f0196b3c409b2`.
+- PR #4240 added `Service/sonarr-envoy-dns` and `external-dns.alpha.kubernetes.io/controller: ignore` to both NGINX Ingresses. It merged as `8236ce8afe35eaf290790ea7ef5e20a3628fac25`.
+
+The dedicated `sonarr-envoy` Pocket ID client is confidential, PKCE-enabled, and restricted to the one-member Protected Apps group. `ExternalSecret/sonarr-oidc` reads only `client-id` and `client-secret` from the dedicated `sonarr-oidc` 1Password item. The generated Secret is Ready, both HTTPRoutes are Accepted with ResolvedRefs, and the SecurityPolicy is Accepted.
+
+Before DNS cutover, direct Envoy testing at `10.100.47.248` passed PKCE S256, Secure/HttpOnly/SameSite=Lax state cookies, invalid-state rejection, spoofed-header denial, unauthenticated WebSocket protection, logout, and missing/invalid/valid API-key behavior. Konflate showed that PR #4240 changed only the two Ingress annotations, their HelmRelease values, and the DNS-only Service. No Deployment, Pod, PVC, VolSync, or storage resource changed.
+
+After Flux applied `8236ce8a`, UniFi ExternalDNS moved `sonarr.thezoo.house` from NGINX `10.100.47.250` to Envoy `10.100.47.248`. The same Sonarr Pod remained Ready with zero restarts. The complete automated matrix passed again through normal DNS, and direct NGINX browser/API checks preserved rollback. Sonarr retained four pre-existing completed queue items and no active commands. SABnzbd, Prowlarr indexers, and Prowlarr's Sonarr application continue to use cluster-local Service DNS.
+
+A real browser reached Pocket ID's `Sign in to Sonarr` interaction. No credential or passkey action was taken. The allowed-user production round trip, authenticated UI/assets/session-cookie behavior, and authenticated SignalR/WebSocket behavior remain the gate before Radarr begins.
+
+Production rollback removes `service-envoy-dns.yaml` from the Sonarr Kustomization and removes `external-dns.alpha.kubernetes.io/controller: ignore` from both Ingresses. ExternalDNS then republishes the unchanged NGINX route at `10.100.47.250`. Do not remove the production routes, policy, Pocket ID client, or 1Password item during this rollback; they remain staged for diagnosis and retry.
 
 ## Remaining cohort unknowns
 

@@ -5,5 +5,4 @@ resources:
 - ./credential-seeder.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
-- ./httproute-envoy.yaml
 - ./pvc.yaml

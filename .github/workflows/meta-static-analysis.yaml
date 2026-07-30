@@ -138,6 +138,7 @@ jobs:
         scripts/tests/test-k8s-schemas.sh
         scripts/tests/test-talos-arc-boundary.sh
         scripts/tests/test-oci-source-handoffs.sh
+        scripts/tests/test-sonarr-envoy-oidc.sh
         scripts/tests/test-talos-image-resource-limits.sh
         scripts/tests/test-talos-image-gate-scope.sh
         scripts/tests/test-talos-image-plan.sh

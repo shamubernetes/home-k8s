@@ -99,6 +99,8 @@ spec:
     ingress:
       dashboard:
         ingressClassName: internal
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
         host:
           name: rook.${HOME_DOMAIN}
           path: /
@@ -327,6 +329,7 @@ spec:
         enabled: true
         ingressClassName: internal
         annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
           nginx.ingress.kubernetes.io/proxy-body-size: "0"
           nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
         host:

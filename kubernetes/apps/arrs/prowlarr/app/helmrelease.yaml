@@ -84,6 +84,7 @@ spec:
     ingress:
       app:
         annotations:
+          external-dns.alpha.kubernetes.io/controller: ignore
           external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
           nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Groups
           nginx.ingress.kubernetes.io/auth-signin: https://$host/oauth2/start?rd=$escaped_request_uri
@@ -97,6 +98,8 @@ spec:
               identifier: app
               port: http
       api:
+        annotations:
+          external-dns.alpha.kubernetes.io/controller: ignore
         className: internal
         hosts:
         - host: "{{ .Release.Name }}.${HOME_DOMAIN}"

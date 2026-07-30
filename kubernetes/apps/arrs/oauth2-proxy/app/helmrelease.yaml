@@ -132,12 +132,6 @@ spec:
           host: profilarr.${HOME_DOMAIN}
           paths: *paths
         - <<: *host
-          host: prowlarr.${HOME_DOMAIN}
-          paths: *paths
-        - <<: *host
-          host: sab.${HOME_DOMAIN}
-          paths: *paths
-        - <<: *host
           host: whisparr.${HOME_DOMAIN}
           paths: *paths
       rollback:
@@ -153,4 +147,10 @@ spec:
           paths: *paths
         - <<: *host
           host: sonarr.${HOME_DOMAIN}
+          paths: *paths
+        - <<: *host
+          host: prowlarr.${HOME_DOMAIN}
+          paths: *paths
+        - <<: *host
+          host: sab.${HOME_DOMAIN}
           paths: *paths

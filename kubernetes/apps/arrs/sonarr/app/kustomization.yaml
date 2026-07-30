@@ -10,6 +10,7 @@ resources:
 - ./httproute-envoy-api.yaml
 - ./httproute-envoy-browser.yaml
 - ./securitypolicy-oidc.yaml
+- ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
 configMapGenerator:
 - name: sonarr-configmap

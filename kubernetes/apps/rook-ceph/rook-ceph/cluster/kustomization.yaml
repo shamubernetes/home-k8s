@@ -10,3 +10,4 @@ resources:
 - ./convex-objectstoreuser.yaml
 - ./plane-objectstoreuser.yaml
 - ./plane-uploads-ingress.yaml
+- ./httproute-dashboard-envoy.yaml

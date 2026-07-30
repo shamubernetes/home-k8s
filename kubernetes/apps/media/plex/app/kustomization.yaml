@@ -6,6 +6,7 @@ resources:
 - ./pvc.yaml
 - ../../../../templates/volsync
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ../../../../templates/gatus/external
 configMapGenerator:
 - name: plex-loki-rules

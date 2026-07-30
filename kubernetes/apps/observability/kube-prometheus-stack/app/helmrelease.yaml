@@ -29,13 +29,6 @@ spec:
       enabled: false
     cleanPrometheusOperatorObjectNames: true
     alertmanager:
-      ingress:
-        enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        pathType: Prefix
-        ingressClassName: internal
-        hosts: ["alertmanager.${HOME_DOMAIN}"]
       alertmanagerSpec:
         replicas: 2
         alertmanagerConfiguration:
@@ -76,13 +69,6 @@ spec:
     kubeProxy:
       enabled: false
     prometheus:
-      ingress:
-        enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        ingressClassName: internal
-        pathType: Prefix
-        hosts: ["prometheus.${HOME_DOMAIN}"]
       prometheusSpec:
         replicas: 2
         podMonitorSelectorNilUsesHelmValues: false

@@ -96,14 +96,6 @@ spec:
                 )[10m:]
               ) > 0.01
             )
-    ingress:
-      dashboard:
-        ingressClassName: internal
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        host:
-          name: rook.${HOME_DOMAIN}
-          path: /
     toolbox:
       enabled: true
     configOverride: |

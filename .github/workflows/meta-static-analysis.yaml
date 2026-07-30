@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
@@ -53,12 +53,12 @@ jobs:
           install_args: shellcheck
     steps:
     - name: Checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
     - name: Setup Mise
-      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
       with:
         install_args: ${{ matrix.install_args }}
         cache: true
@@ -111,25 +111,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
         persist-credentials: false
 
     - name: Setup validation tools
-      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
       with:
-        install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
+        install_args: crane flux2 helm jq kubectl kyverno python asdf:sudermanjr/asdf-yq
         cache: true
+
+    - name: Log in to GHCR for private chart validation
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 
     - name: Run validation fixtures
       run: |
+        python scripts/tests/test-cluster-maintenance.py
         scripts/tests/test-validation.sh
         scripts/tests/test-flate-render.sh
-        scripts/tests/test-flux-failure-event.sh
+        scripts/tests/test-firecrawl-promotion.sh
         scripts/tests/test-helm-image-inventory.sh
         scripts/tests/test-k8s-schemas.sh
+        scripts/tests/test-talos-arc-boundary.sh
         scripts/tests/test-oci-source-handoffs.sh
+        scripts/tests/test-protected-app-envoy-oidc.sh
+        scripts/tests/test-full-host-envoy-oidc.sh
+        scripts/tests/test-protected-auth-retirement.sh
+        python scripts/tests/test-general-ingress-envoy.py
+        scripts/tests/test-general-ingress-retirement.sh
+        scripts/tests/test-profilarr-hermes-machine-route.sh
+        scripts/tests/test-talos-image-resource-limits.sh
+        scripts/tests/test-talos-image-gate-scope.sh
+        scripts/tests/test-talos-image-plan.sh
+        scripts/tests/test-talos-pr-files.sh
+        scripts/tests/test-talos-tooling-sync.sh
+        scripts/tests/test-talos-workflow-trust.sh
         scripts/tests/test-talos-version-sync.sh
 
     - name: Check OCI source-only handoffs
@@ -143,12 +163,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
     - name: Setup rendering tools
-      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
       with:
         install_args: kubectl asdf:sudermanjr/asdf-yq
         cache: true
@@ -163,7 +183,7 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
     - name: Checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
@@ -184,15 +204,21 @@ jobs:
       matrix: ${{ fromJSON(needs.image-plan.outputs.matrix) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
     - name: Setup rendering tools
-      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
       with:
         install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
         cache: true
+
+    - name: Log in to GHCR for private chart rendering
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 
     - name: Check rendered workload images
       env:

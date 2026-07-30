@@ -5,14 +5,9 @@ metadata:
   name: &app external-dns-cloudflare
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: external-dns
-      version: 1.21.1
-      sourceRef:
-        kind: HelmRepository
-        name: external-dns
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: external-dns-cloudflare
   install:
     crds: CreateReplace
     remediation:
@@ -38,11 +33,13 @@ spec:
     - --events
     - --ingress-class=external
     - --ignore-ingress-tls-spec
+    - --gateway-name=envoy-external
+    - --gateway-namespace=network
     - --cloudflare-proxied
     - --crd-source-apiversion=externaldns.k8s.io/v1alpha1
     - --crd-source-kind=DNSEndpoint
     policy: sync
-    sources: ["crd", "ingress"]
+    sources: ["crd", "gateway-httproute", "ingress"]
     txtPrefix: k8s.
     txtOwnerId: default
     domainFilters: ["${HOME_DOMAIN}", "${GAME_DOMAIN}", "${DEV_DOMAIN}"]

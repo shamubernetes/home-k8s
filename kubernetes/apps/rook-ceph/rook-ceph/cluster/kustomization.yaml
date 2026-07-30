@@ -2,10 +2,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./ocirepository.yaml
 - ./helmrelease.yaml
 - ./gatus-rook.yaml
 - ./gatus-rwg.yaml
 - ./fs-fuse.yaml
 - ./convex-objectstoreuser.yaml
 - ./plane-objectstoreuser.yaml
-- ./plane-uploads-ingress.yaml
+- ./httproute-dashboard-envoy.yaml
+- ./httproute-storage-envoy.yaml

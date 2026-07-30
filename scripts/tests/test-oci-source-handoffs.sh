@@ -8,6 +8,7 @@ fixture="${tmpdir}/repo"
 mkdir -p \
   "${fixture}/scripts" \
   "${fixture}/kubernetes/apps/media/pasta/app" \
+  "${fixture}/kubernetes/apps/media/pasta/app/chart/templates" \
   "${fixture}/kubernetes/flux/repositories/helm" \
   "${tmpdir}/bin"
 cp "${repo_root}/scripts/check-oci-source-handoffs" "${fixture}/scripts/check-oci-source-handoffs"
@@ -58,7 +59,7 @@ cp "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml" "${tmpdir}/http
 cat > "${tmpdir}/bin/helm" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ ${1:-} == pull ]]
+operation=${1:-}
 chart=${2:-}
 destination=''
 while (( $# > 0 )); do
@@ -71,6 +72,15 @@ while (( $# > 0 )); do
 done
 [[ -n $destination ]]
 mkdir -p "$destination"
+if [[ $operation == package ]]; then
+  tar -czf "${destination}/chart.tgz" -C "$(dirname "$chart")" "$(basename "$chart")"
+  exit 0
+fi
+[[ $operation == pull ]]
+if [[ -n ${FAKE_HELM_PACKAGE_PATH:-} ]]; then
+  cp "$FAKE_HELM_PACKAGE_PATH" "${destination}/chart.tgz"
+  exit 0
+fi
 content=same-package
 if [[ ${FAKE_HELM_MISMATCH:-false} == true && $chart == oci://* ]]; then
   content=different-package
@@ -79,12 +89,32 @@ printf '%s\n' "$content" > "${destination}/chart.tgz"
 SH
 chmod +x "${tmpdir}/bin/helm"
 
+cat > "${fixture}/kubernetes/apps/media/pasta/app/chart/templates/configmap.yaml" <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+data:
+  value: {{ .Values.value }}
+YAML
+
 git -C "$fixture" init -q
 git -C "$fixture" config user.email test@example.invalid
 git -C "$fixture" config user.name test
 git -C "$fixture" add .
 git -C "$fixture" commit -qm 'base HTTP chart'
 base=$(git -C "$fixture" rev-parse HEAD)
+
+# A chart template is intentionally invalid as raw YAML. Changing it alongside
+# a handoff must not make the guard feed Helm template syntax to yq.
+cat > "${fixture}/kubernetes/apps/media/pasta/app/chart/templates/configmap.yaml" <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+data:
+  value: {{ default "updated" .Values.value }}
+YAML
 
 cat > "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" <<'YAML'
 apiVersion: source.toolkit.fluxcd.io/v1
@@ -122,6 +152,7 @@ spec:
       retries: 3
 YAML
 cp "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml" "${tmpdir}/oci-helmrelease.yaml"
+cp "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" "${tmpdir}/oci-source.yaml"
 
 (
   cd "$fixture"
@@ -164,6 +195,22 @@ if (
   exit 1
 fi
 
+ALLOW=true yq '.metadata.annotations."oci.home.arpa/allow-rollout" = strenv(ALLOW)' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/rollout-approved-source.yaml"
+mv "${tmpdir}/rollout-approved-source.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+(
+  cd "$fixture"
+  FAKE_HELM_MISMATCH=true PATH="${tmpdir}/bin:${PATH}" \
+    scripts/check-oci-source-handoffs "$base" >/dev/null
+)
+yq 'del(.metadata.annotations."oci.home.arpa/allow-rollout")' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/source-without-approval.yaml"
+mv "${tmpdir}/source-without-approval.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+
 (
   cd "$fixture"
   git add .
@@ -174,6 +221,87 @@ cp "${tmpdir}/http-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app
 (
   cd "$fixture"
   PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_base" >/dev/null
+)
+
+git -C "$fixture" reset --hard -q "$base"
+URL=oci://ghcr.io/bjw-s-labs/helm yq '.spec.url = strenv(URL)' \
+  "${fixture}/kubernetes/flux/repositories/helm/bjw-s.yaml" \
+  > "${tmpdir}/oci-helmrepository.yaml"
+mv "${tmpdir}/oci-helmrepository.yaml" \
+  "${fixture}/kubernetes/flux/repositories/helm/bjw-s.yaml"
+git -C "$fixture" add .
+git -C "$fixture" commit -qm 'base OCI-backed HelmRepository'
+oci_helmrepo_base=$(git -C "$fixture" rev-parse HEAD)
+cp "${tmpdir}/oci-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml"
+cp "${tmpdir}/oci-source.yaml" "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+cat > "${fixture}/kubernetes/apps/media/pasta/app/kustomization.yaml" <<'YAML'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ocirepository.yaml
+- helmrelease.yaml
+YAML
+if (
+  cd "$fixture"
+  PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_helmrepo_base" >/dev/null 2>&1
+); then
+  echo 'FAIL OCI-backed HelmRepository conversion did not require rollout approval' >&2
+  exit 1
+fi
+ALLOW=true yq '.metadata.annotations."oci.home.arpa/allow-rollout" = strenv(ALLOW)' \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml" \
+  > "${tmpdir}/approved-oci-source.yaml"
+mv "${tmpdir}/approved-oci-source.yaml" \
+  "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+(
+  cd "$fixture"
+  PATH="${tmpdir}/bin:${PATH}" scripts/check-oci-source-handoffs "$oci_helmrepo_base" >/dev/null
+)
+
+git -C "$fixture" reset --hard -q "$base"
+cat > "${fixture}/kubernetes/apps/media/pasta/app/chart/Chart.yaml" <<'YAML'
+apiVersion: v2
+name: app-template
+version: 5.0.1
+YAML
+cat > "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml" <<'YAML'
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: pasta
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: ./kubernetes/apps/media/pasta/app/chart
+      sourceRef:
+        kind: GitRepository
+        name: home-kubernetes
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+YAML
+git -C "$fixture" add .
+git -C "$fixture" commit -qm 'base repository-local chart'
+git_chart_base=$(git -C "$fixture" rev-parse HEAD)
+mkdir -p "${tmpdir}/git-package"
+PATH="${tmpdir}/bin:${PATH}" helm package \
+  "${fixture}/kubernetes/apps/media/pasta/app/chart" \
+  --destination "${tmpdir}/git-package"
+cp "${tmpdir}/oci-helmrelease.yaml" "${fixture}/kubernetes/apps/media/pasta/app/helmrelease.yaml"
+cp "${tmpdir}/oci-source.yaml" "${fixture}/kubernetes/apps/media/pasta/app/ocirepository.yaml"
+cat > "${fixture}/kubernetes/apps/media/pasta/app/kustomization.yaml" <<'YAML'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ocirepository.yaml
+- helmrelease.yaml
+YAML
+(
+  cd "$fixture"
+  FAKE_HELM_PACKAGE_PATH="${tmpdir}/git-package/chart.tgz" PATH="${tmpdir}/bin:${PATH}" \
+    scripts/check-oci-source-handoffs "$git_chart_base" >/dev/null
 )
 
 printf 'ok: OCI source handoff fixtures passed\n'

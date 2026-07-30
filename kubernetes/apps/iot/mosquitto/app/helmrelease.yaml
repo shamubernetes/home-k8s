@@ -1,0 +1,149 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app mosquitto
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: mosquitto
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      mosquitto:
+        strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          initialize-dynamic-security:
+            image:
+              repository: &imageRepository docker.io/library/eclipse-mosquitto
+              tag: &imageTag 2.1.2-alpine@sha256:6f8d8a947c506f8a2290ec65cd4bd2bc7cb4d43fb5f6271f861cb013e2ef9797
+            command: ["/bin/sh", "-ec"]
+            args:
+            - |
+              config=/mosquitto/data/dynamic-security.json
+              if [ -s "$config" ]; then
+                exit 0
+              fi
+              umask 077
+              printf '%s\n%s\n' "$MOSQUITTO_ADMIN_PASSWORD" "$MOSQUITTO_ADMIN_PASSWORD" |
+                mosquitto_ctrl dynsec init "$config" "$MOSQUITTO_ADMIN_USERNAME"
+              sed -i \
+                -e 's/"publishClientReceive": true/"publishClientReceive": false/' \
+                -e 's/"unsubscribe": true/"unsubscribe": false/' \
+                "$config"
+              grep -q '"publishClientReceive": false' "$config"
+              grep -q '"unsubscribe": false' "$config"
+            env:
+              MOSQUITTO_ADMIN_USERNAME:
+                valueFrom:
+                  secretKeyRef:
+                    name: mosquitto-secret
+                    key: admin-username
+              MOSQUITTO_ADMIN_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: mosquitto-secret
+                    key: admin-password
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+        containers:
+          app:
+            image:
+              repository: *imageRepository
+              tag: *imageTag
+            args:
+            - mosquitto
+            - -c
+            - /mosquitto/config/mosquitto.conf
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: &mqttPort 8883
+                  initialDelaySeconds: 10
+                  periodSeconds: 20
+                  timeoutSeconds: 3
+                  failureThreshold: 3
+              readiness: *probes
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1883
+        runAsGroup: 1883
+        fsGroup: 1883
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        type: LoadBalancer
+        annotations:
+          external-dns.alpha.kubernetes.io/hostname: "mqtt.${HOME_DOMAIN}"
+          io.cilium/lb-ipam-ips: "${IPAM_IP_MOSQUITTO}"
+        ports:
+          mqtt:
+            port: *mqttPort
+            protocol: TCP
+    persistence:
+      config:
+        type: configMap
+        name: mosquitto-config
+        advancedMounts:
+          mosquitto:
+            app:
+            - path: /mosquitto/config/mosquitto.conf
+              subPath: mosquitto.conf
+              readOnly: true
+      data:
+        type: persistentVolumeClaim
+        storageClass: ceph-block
+        accessMode: ReadWriteOnce
+        retain: true
+        size: 1Gi
+        advancedMounts:
+          mosquitto:
+            initialize-dynamic-security:
+            - path: /mosquitto/data
+            app:
+            - path: /mosquitto/data
+      tls:
+        type: secret
+        name: mosquitto-tls
+        advancedMounts:
+          mosquitto:
+            app:
+            - path: /mosquitto/tls
+              readOnly: true
+      tmp:
+        type: emptyDir
+        medium: Memory
+        advancedMounts:
+          mosquitto:
+            initialize-dynamic-security:
+            - path: /tmp
+            app:
+            - path: /tmp

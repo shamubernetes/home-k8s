@@ -101,19 +101,6 @@ spec:
           http:
             primary: true
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/proxy-body-size: 100m
-        className: internal
-        hosts:
-        - host: documenso.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       tmp:
         type: emptyDir

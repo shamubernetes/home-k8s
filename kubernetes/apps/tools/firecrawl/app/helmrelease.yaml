@@ -5,13 +5,9 @@ metadata:
   name: firecrawl
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: ./kubernetes/apps/tools/firecrawl/app/chart
-      sourceRef:
-        kind: GitRepository
-        name: "${KS_GIT_REPO_NAME}"
-        namespace: "${KS_NAMESPACE}"
+  chartRef:
+    kind: OCIRepository
+    name: firecrawl
   install:
     remediation:
       retries: 3

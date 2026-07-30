@@ -29,10 +29,11 @@ servers:
       pods insecure
       fallthrough in-addr.arpa ip6.arpa
   # Internal DNS entries for split-horizon DNS
-  # This allows internal services to resolve *.thezoo.house to the internal ingress
+  # This keeps cluster callers on internal service paths.
   - name: hosts
     configBlock: |-
-      ${IPAM_IP_NGINX_INTERNAL} sso.${HOME_DOMAIN}
+      ${IPAM_IP_ENVOY_INTERNAL} sso.${HOME_DOMAIN}
+      ${IPAM_IP_MOSQUITTO} mqtt.${HOME_DOMAIN}
       10.0.10.95 hermes-gateway.thezoo.house
       fallthrough
   - name: forward

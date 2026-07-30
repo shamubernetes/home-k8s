@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf 'Usage: scripts/promote-firecrawl-chart <version> <sha256-digest>\n' >&2
+}
+
+[[ $# -eq 2 ]] || { usage; exit 2; }
+version=$1
+digest=$2
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?-maude\.[1-9][0-9]*$ ]] || {
+  printf 'invalid downstream chart version: %s\n' "$version" >&2
+  exit 2
+}
+[[ $digest =~ ^sha256:[[:xdigit:]]{64}$ ]] || {
+  printf 'invalid OCI digest: %s\n' "$digest" >&2
+  exit 2
+}
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+manifest=${FIRECRAWL_OCI_MANIFEST:-"$root/kubernetes/apps/tools/firecrawl/app/ocirepository.yaml"}
+repository=ghcr.io/shamubernetes/charts/firecrawl
+tmp=$(mktemp -d -t hermes-firecrawl-promotion-XXXXXX)
+trap 'rm -rf "$tmp"' EXIT
+
+pull_output=$(helm pull "oci://${repository}" --version "$version" --destination "$tmp" 2>&1)
+printf '%s\n' "$pull_output"
+actual_digest=$(grep -Eo 'sha256:[[:xdigit:]]{64}' <<<"$pull_output" | tail -n 1)
+[[ $actual_digest == "$digest" ]] || {
+  printf 'published digest mismatch: expected %s, got %s\n' "$digest" "${actual_digest:-none}" >&2
+  exit 1
+}
+
+package="$tmp/firecrawl-${version}.tgz"
+[[ -s $package ]] || { printf 'Helm did not download %s\n' "$package" >&2; exit 1; }
+chart_version=$(tar -xOf "$package" firecrawl/Chart.yaml | awk '$1 == "version:" {print $2; exit}')
+[[ $chart_version == "$version" ]] || {
+  printf 'chart metadata version mismatch: expected %s, got %s\n' "$version" "$chart_version" >&2
+  exit 1
+}
+
+cosign verify \
+  --certificate-identity 'https://github.com/shamubernetes/firecrawl-helm/.github/workflows/release.yaml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "${repository}@${digest}" >/dev/null
+
+python3 - "$manifest" "$version" "$digest" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+version, digest = sys.argv[2:]
+lines = path.read_text().splitlines()
+tag_indexes = [index for index, line in enumerate(lines) if line.lstrip().startswith('tag: ')]
+if len(tag_indexes) != 1:
+    raise SystemExit('expected exactly one Firecrawl OCI tag')
+index = tag_indexes[0]
+indent = lines[index][:-len(lines[index].lstrip())]
+digest_line = f'{indent}# firecrawl-oci-digest: {digest}'
+if index > 0 and lines[index - 1].lstrip().startswith('# firecrawl-oci-digest:'):
+    lines[index - 1] = digest_line
+else:
+    lines.insert(index, digest_line)
+    index += 1
+lines[index] = f'{indent}tag: {version}'
+path.write_text('\n'.join(lines) + '\n')
+PY
+
+printf 'promoted_firecrawl_chart=%s@%s\n' "$version" "$digest"

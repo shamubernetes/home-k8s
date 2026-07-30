@@ -54,10 +54,10 @@ class FakeAlertmanager:
         self.thread.join(timeout=5)
         self.server.server_close()
 
-    def add_alert(self, alertname, severity="warning", silenced_by=None):
+    def add_alert(self, alertname, severity="warning", silenced_by=None, **labels):
         self.alerts.append(
             {
-                "labels": {"alertname": alertname, "severity": severity},
+                "labels": {"alertname": alertname, "severity": severity, **labels},
                 "status": {
                     "state": "suppressed" if silenced_by else "active",
                     "silencedBy": list(silenced_by or []),
@@ -283,6 +283,64 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         self.assertIn("CephHealthError", result.stderr)
         self.assertEqual(self.alertmanager.posts, [])
+
+    def test_begin_allows_one_exact_known_baseline_alert(self):
+        self.alertmanager.add_alert(
+            "SmartDeviceInterfaceSlow",
+            severity="critical",
+            kubernetes_node="k8s-rhea",
+            device="sda",
+        )
+        result = self.run_command(
+            "begin",
+            "--reason",
+            "routine maintenance",
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda",
+        )
+        output = json.loads(result.stdout)
+        self.assertEqual(output["state"], "active")
+        self.assertEqual(
+            output["allowedBaselineAlerts"],
+            [
+                {
+                    "alertname": "SmartDeviceInterfaceSlow",
+                    "severity": "critical",
+                    "namespace": None,
+                    "node": "k8s-rhea",
+                    "device": "sda",
+                }
+            ],
+        )
+
+    def test_begin_rejects_alert_outside_exact_baseline_selector(self):
+        self.alertmanager.add_alert(
+            "SmartDeviceInterfaceSlow",
+            severity="critical",
+            kubernetes_node="k8s-coeus",
+            device="sda",
+        )
+        result = self.run_command(
+            "begin",
+            "--reason",
+            "routine maintenance",
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda",
+            expected=1,
+        )
+        self.assertIn("SmartDeviceInterfaceSlow", result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
+
+    def test_begin_rejects_unscoped_baseline_selector(self):
+        result = self.run_command(
+            "begin",
+            "--reason",
+            "routine maintenance",
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow",
+            expected=2,
+        )
+        self.assertIn("at least one scoping label", result.stderr)
 
     def test_begin_requires_healthy_two_peer_alertmanager_cluster(self):
         self.alertmanager.peers = [{"name": "am-0"}]

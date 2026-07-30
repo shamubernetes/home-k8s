@@ -6,4 +6,5 @@ resources:
 - ../../../../templates/volsync
 - ./externalsecret.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded

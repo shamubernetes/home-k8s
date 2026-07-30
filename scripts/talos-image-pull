@@ -14,8 +14,9 @@ fi
 [[ -x $talosctl ]]
 [[ $preflight_fleet_bytes =~ ^[0-9]+$ ]]
 (( preflight_fleet_bytes <= max_total_bytes ))
+jq -e 'type == "array" and length <= 20 and all(.[]; type == "string")' \
+  <<< "$images_json" >/dev/null
 mapfile -t images < <(jq -r '.[]' <<< "$images_json")
-[[ ${#images[@]} -ge 1 && ${#images[@]} -le 20 ]]
 
 declare -a cleanup_nodes=()
 declare -a cleanup_images=()
@@ -37,24 +38,22 @@ size_bytes() {
 image_size() {
   local node=$1 digest=$2
   "$talosctl" --nodes "$node" image list |
-    awk -v digest="$digest" '$3 == digest {print $4, $5; exit}'
+    awk -v digest="$digest" '$3 == digest && !found {print $4, $5; found=1}'
 }
 
 cleanup_new_images() {
-  local index node image digest size unit
+  local index node image
   [[ $succeeded == true ]] && return 0
   set +e
   for ((index=${#cleanup_nodes[@]} - 1; index >= 0; index--)); do
     node=${cleanup_nodes[$index]}
     image=${cleanup_images[$index]}
-    digest=${image##*@}
-    size=''
-    unit=''
-    read -r size unit < <(image_size "$node" "$digest") || true
-    if [[ -n ${size:-} && -n ${unit:-} ]]; then
-      printf 'cleanup node=%s image=%s\n' "$node" "$image" >&2
-      "$talosctl" --nodes "$node" image remove "$image" >&2
-    fi
+    # CRI RemoveImage is intentionally called even when a failed or timed-out
+    # pull never became list-visible. It removes a completed registration when
+    # present and leaves any unreferenced partial content eligible for
+    # containerd garbage collection.
+    printf 'cleanup node=%s image=%s\n' "$node" "$image" >&2
+    "$talosctl" --nodes "$node" image remove "$image" >&2
   done
 }
 trap cleanup_new_images EXIT
@@ -68,16 +67,28 @@ for image in "${images[@]}"; do
   [[ $image =~ @sha256:[0-9a-f]{64}$ ]]
   digest=${image##*@}
   for node in "${nodes[@]}"; do
+    before=''
+    if ! before=$(image_size "$node" "$digest"); then
+      echo "could not inventory images before pull: node=$node image=$image" >&2
+      exit 1
+    fi
     before_size=''
     before_unit=''
-    read -r before_size before_unit < <(image_size "$node" "$digest") || true
+    read -r before_size before_unit <<< "$before"
     if [[ -z ${before_size:-} || -z ${before_unit:-} ]]; then
       cleanup_nodes+=("$node")
       cleanup_images+=("$image")
     fi
     printf 'pull node=%s image=%s\n' "$node" "$image"
     timeout 10m "$talosctl" --nodes "$node" image pull "$image"
-    read -r size unit < <(image_size "$node" "$digest")
+    after=''
+    if ! after=$(image_size "$node" "$digest"); then
+      echo "could not inventory images after pull: node=$node image=$image" >&2
+      exit 1
+    fi
+    size=''
+    unit=''
+    read -r size unit <<< "$after"
     [[ -n ${size:-} && -n ${unit:-} ]]
     bytes=$(size_bytes "$size" "$unit")
     if (( bytes > max_image_bytes )); then

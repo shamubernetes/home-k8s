@@ -96,12 +96,6 @@ spec:
                 )[10m:]
               ) > 0.01
             )
-    ingress:
-      dashboard:
-        ingressClassName: internal
-        host:
-          name: rook.${HOME_DOMAIN}
-          path: /
     toolbox:
       enabled: true
     configOverride: |
@@ -124,6 +118,10 @@ spec:
           bdev_enable_discard: "true"
           bdev_async_discard_threads: "1"
           osd_class_update_on_start: "false"
+        mgr:
+          # Bound Ceph v20.2.2's multi-megabyte Rook PodList recent-log ring.
+          # Remove after the Tentacle fixes are included in a stable release.
+          log_max_recent: "100"
         osd:
           osd_scrub_begin_hour: "0"
           osd_scrub_end_hour: "23"
@@ -319,12 +317,3 @@ spec:
         volumeBindingMode: Immediate
         parameters:
           region: us-east-1
-      ingress:
-        enabled: true
-        ingressClassName: internal
-        annotations:
-          nginx.ingress.kubernetes.io/proxy-body-size: "0"
-          nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-        host:
-          name: rgw.${HOME_DOMAIN}
-          path: /

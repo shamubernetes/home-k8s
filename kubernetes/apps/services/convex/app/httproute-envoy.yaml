@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: convex-actions-envoy
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "convex-actions.${HOME_DOMAIN}"
+  rules:
+  -
+    backendRefs:
+    - name: convex-backend
+      port: 3211
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: convex-api-envoy
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "convex-api.${HOME_DOMAIN}"
+  rules:
+  -
+    backendRefs:
+    - name: convex-backend
+      port: 3210
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: convex-dashboard-envoy
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "convex.${HOME_DOMAIN}"
+  rules:
+  -
+    backendRefs:
+    - name: convex-dashboard
+      port: 6791

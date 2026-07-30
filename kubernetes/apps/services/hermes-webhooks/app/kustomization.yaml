@@ -5,3 +5,4 @@ resources:
 - ./service.yaml
 - ./endpointslice.yaml
 - ./ingress.yaml
+- ./httproute-envoy.yaml

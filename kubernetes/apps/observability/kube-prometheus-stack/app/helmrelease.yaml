@@ -78,6 +78,8 @@ spec:
     prometheus:
       ingress:
         enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
         ingressClassName: internal
         pathType: Prefix
         hosts: ["prometheus.${HOME_DOMAIN}"]

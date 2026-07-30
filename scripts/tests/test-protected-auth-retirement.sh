@@ -43,7 +43,7 @@ case $rollback_count in
       printf 'oauth2-proxy remains listed after all protected Ingresses were retired\n' >&2
       exit 1
     fi
-    if git grep -n -E 'nginx\.ingress\.kubernetes\.io/auth-(url|signin|response-headers)|oauth2-proxy\.arrs\.svc\.cluster\.local' -- "${protected_helmreleases[@]}"; then
+    if git grep -n -E 'nginx\.ingress\.kubernetes\.io/auth-(url|signin|response-headers)|oauth2-proxy\.arrs\.svc\.cluster\.local' -- "${protected_helmreleases[@]}" 2>/dev/null; then
       printf 'legacy protected-auth references remain after retirement\n' >&2
       exit 1
     fi

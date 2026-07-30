@@ -20,14 +20,4 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    connect:
-      ingress:
-        enabled: true
-        ingressClassName: internal
-        pathType: Prefix
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        hosts:
-          - host: op-connect.${HOME_DOMAIN}
-            paths:
-              - /
+    connect: {}

@@ -11,6 +11,10 @@ spec:
   hostnames:
   - "plane-mcp.${HOME_DOMAIN}"
   rules:
-  - backendRefs:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /mcp
+    backendRefs:
     - name: plane-mcp
       port: 3000

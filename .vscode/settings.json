@@ -1,6 +1,4 @@
 {
-  "editor.defaultFormatter": "trunk.io",
-  "editor.formatOnSave": true,
   "git.enableSmartCommit": true,
   "git.ignoreLimitWarning": true,
   "gitlens.advanced.fileHistoryFollowsRenames": true,
@@ -17,8 +15,7 @@
     "editor.fontLigatures": false
   },
   "[yaml]": {
-    "editor.fontLigatures": false,
-    "editor.defaultFormatter": "trunk.io"
+    "editor.fontLigatures": false
   },
   // Extension Settings
   "files.associations": {

@@ -6,14 +6,9 @@ metadata:
 spec:
   interval: 30m
   timeout: 15m
-  chart:
-    spec:
-      chart: ceph-csi-drivers
-      version: 1.0.1
-      sourceRef:
-        kind: HelmRepository
-        name: ceph-csi-operator
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: ceph-csi-drivers
   install:
     remediation:
       retries: 3

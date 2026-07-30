@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Resolve preventive OCI manifest-size limits for trusted Talos image plans."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+DIGEST_RE = re.compile(r"@(?P<digest>sha256:[0-9a-f]{64})$")
+MANIFEST_MEDIA_TYPES = {
+    "application/vnd.docker.distribution.manifest.v2+json",
+    "application/vnd.oci.image.manifest.v1+json",
+}
+MAX_IMAGE_BYTES = 5_000_000_000
+MAX_FLEET_BYTES = 20_000_000_000
+
+
+def run_crane(crane: str, *arguments: str) -> str:
+    try:
+        result = subprocess.run(
+            [crane, *arguments],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ValueError(f"crane timed out for {arguments[-1]}") from error
+    except subprocess.CalledProcessError as error:
+        diagnostic = error.stderr.strip() or "crane failed without a diagnostic"
+        raise ValueError(diagnostic) from error
+    return result.stdout
+
+
+def descriptor_size(manifest: object) -> int:
+    if not isinstance(manifest, dict) or manifest.get("mediaType") not in MANIFEST_MEDIA_TYPES:
+        raise ValueError("platform resolution did not return an OCI/Docker image manifest")
+    config = manifest.get("config")
+    layers = manifest.get("layers")
+    if not isinstance(config, dict) or not isinstance(layers, list):
+        raise ValueError("image manifest is missing config or layers")
+    descriptors = [config, *layers]
+    sizes: list[int] = []
+    for descriptor in descriptors:
+        if not isinstance(descriptor, dict):
+            raise ValueError("image manifest contains a malformed descriptor")
+        size = descriptor.get("size")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            raise ValueError("image manifest contains an invalid descriptor size")
+        sizes.append(size)
+    return sum(sizes)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--images-json", required=True)
+    parser.add_argument("--node-count", type=int, required=True)
+    parser.add_argument("--platform", default="linux/amd64")
+    parser.add_argument("--output")
+    args = parser.parse_args()
+
+    try:
+        images = json.loads(args.images_json)
+        if not isinstance(images, list) or len(images) > 20:
+            raise ValueError("images must be a JSON array with at most 20 entries")
+        if args.node_count < 1 or args.node_count > 20:
+            raise ValueError("node-count must be between 1 and 20")
+        crane = os.environ.get("CRANE", "crane")
+        resolved: list[dict[str, object]] = []
+        per_node_total = 0
+        for image in images:
+            if not isinstance(image, str):
+                raise ValueError("every image reference must be a string")
+            match = DIGEST_RE.search(image)
+            if match is None:
+                raise ValueError(f"image is not digest pinned: {image}")
+            expected_digest = match.group("digest")
+            top_level_digest = run_crane(crane, "digest", image).strip()
+            if top_level_digest != expected_digest:
+                raise ValueError(f"registry digest mismatch for {image}")
+            raw_config = run_crane(crane, "config", image, "--platform", args.platform)
+            image_config = json.loads(raw_config)
+            expected_os, expected_architecture = args.platform.split("/", maxsplit=1)
+            if (
+                not isinstance(image_config, dict)
+                or image_config.get("os") != expected_os
+                or image_config.get("architecture") != expected_architecture
+            ):
+                raise ValueError(f"image does not resolve to {args.platform}: {image}")
+            raw_manifest = run_crane(crane, "manifest", image, "--platform", args.platform)
+            size = descriptor_size(json.loads(raw_manifest))
+            if size > MAX_IMAGE_BYTES:
+                raise ValueError(f"image exceeds preventive per-image size limit: {image} ({size} bytes)")
+            per_node_total += size
+            resolved.append({"image": image, "platform_bytes": size})
+        fleet_total = per_node_total * args.node_count
+        if fleet_total > MAX_FLEET_BYTES:
+            raise ValueError(f"plan exceeds preventive fleet size limit ({fleet_total} bytes)")
+        report = {
+            "schema_version": 1,
+            "platform": args.platform,
+            "node_count": args.node_count,
+            "per_node_total_bytes": per_node_total,
+            "fleet_total_bytes": fleet_total,
+            "images": resolved,
+        }
+        payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as output:
+                output.write(payload)
+        else:
+            print(payload, end="")
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"talos-image-size: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

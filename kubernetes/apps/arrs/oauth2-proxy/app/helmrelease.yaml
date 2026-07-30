@@ -112,7 +112,9 @@ spec:
           http:
             port: *port
     ingress:
-      app:
+      rollback:
+        annotations:
+          external-dns.alpha.kubernetes.io/controller: ignore
         className: internal
         hosts:
         - &host
@@ -134,11 +136,6 @@ spec:
         - <<: *host
           host: whisparr.${HOME_DOMAIN}
           paths: *paths
-      rollback:
-        annotations:
-          external-dns.alpha.kubernetes.io/controller: ignore
-        className: internal
-        hosts:
         - <<: *host
           host: radarr.${HOME_DOMAIN}
           paths: *paths

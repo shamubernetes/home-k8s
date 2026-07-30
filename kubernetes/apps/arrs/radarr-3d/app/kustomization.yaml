@@ -4,8 +4,13 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
+- ./externalsecret-oidc.yaml
 - ../../../../templates/volsync
 - ./helmrelease.yaml
+- ./httproute-envoy-api.yaml
+- ./httproute-envoy-browser.yaml
+- ./securitypolicy-oidc.yaml
+- ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
 configMapGenerator:
 - name: radarr-3d-configmap

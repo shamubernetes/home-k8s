@@ -72,6 +72,8 @@ kind: Gateway
 metadata:
   name: envoy-external
   namespace: network
+  annotations:
+    external-dns.alpha.kubernetes.io/target: "external.${HOME_DOMAIN}"
 spec:
   gatewayClassName: envoy
   infrastructure:
@@ -102,6 +104,8 @@ kind: Gateway
 metadata:
   name: envoy-internal
   namespace: network
+  annotations:
+    external-dns.alpha.kubernetes.io/target: "internal.${HOME_DOMAIN}"
 spec:
   gatewayClassName: envoy
   infrastructure:

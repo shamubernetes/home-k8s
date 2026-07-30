@@ -18,14 +18,14 @@ if [[ ! -f $route || ! -f $policy ]]; then
   exit 1
 fi
 
-# HOME_DOMAIN is a literal Flux substitution placeholder in the manifest.
-# shellcheck disable=SC2016
+# Construct the literal Flux placeholder so yq does not interpret ${...}.
 yq -e '
   .apiVersion == "gateway.networking.k8s.io/v1" and
   .kind == "HTTPRoute" and
   .metadata.name == "profilarr-envoy-api-hermes" and
   .metadata.namespace == "arrs" and
-  .spec.hostnames == ["profilarr.${HOME_DOMAIN}"] and
+  (.spec.hostnames | length) == 1 and
+  .spec.hostnames[0] == ("profilarr." + "$" + "{HOME_DOMAIN}") and
   (.spec.parentRefs | length) == 1 and
   .spec.parentRefs[0].name == "envoy-internal" and
   .spec.parentRefs[0].namespace == "network" and
@@ -41,8 +41,10 @@ yq -e '
   (.spec.rules[0].backendRefs | length) == 1 and
   .spec.rules[0].backendRefs[0].name == "profilarr" and
   .spec.rules[0].backendRefs[0].port == 6868 and
-  ([.spec.rules[0].filters[] | select(.type == "RequestHeaderModifier") | .requestHeaderModifier.remove[]] | sort) ==
-    (["X-Auth-Request-Email", "X-Auth-Request-Groups", "X-Auth-Request-User"] | sort)
+  (.spec.rules[0].filters | length) == 1 and
+  .spec.rules[0].filters[0].type == "RequestHeaderModifier" and
+  (.spec.rules[0].filters[0].requestHeaderModifier.remove | sort | join(",")) ==
+    "X-Auth-Request-Email,X-Auth-Request-Groups,X-Auth-Request-User"
 ' "$route" >/dev/null
 
 yq -e '
@@ -57,7 +59,8 @@ yq -e '
   (.spec.authorization.rules | length) == 1 and
   .spec.authorization.rules[0].name == "allow-hermes-mac" and
   .spec.authorization.rules[0].action == "Allow" and
-  .spec.authorization.rules[0].principal.clientCIDRs == ["10.0.10.95/32"] and
+  (.spec.authorization.rules[0].principal.clientCIDRs | length) == 1 and
+  .spec.authorization.rules[0].principal.clientCIDRs[0] == "10.0.10.95/32" and
   (.spec.authorization.rules[0].principal.headers == null) and
   (.spec.oidc == null)
 ' "$policy" >/dev/null

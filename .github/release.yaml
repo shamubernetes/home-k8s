@@ -19,9 +19,6 @@ changelog:
   - title: GitHub
     labels:
     - area/ci
-  - title: Trunk
-    labels:
-    - area/trunk
   - title: Massive Changes
     labels:
     - size/xxl

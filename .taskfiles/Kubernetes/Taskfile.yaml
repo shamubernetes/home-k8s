@@ -84,6 +84,14 @@ tasks:
     requires:
       vars: ["app"]
 
+  validate-yaml:
+    desc: Validate focused YAML paths with yayamlls schemas
+    summary: |
+      path: One or more YAML files or directories to validate (required)
+    cmd: 'yayamlls validate --root "{{.ROOT_DIR}}" {{.path}}'
+    requires:
+      vars: ["path"]
+
   pin-image:
     desc: Resolve an image tag to an immutable digest reference
     summary: |

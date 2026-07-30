@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolume-v1.json
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zoo-fleet-firmware-releases
+spec:
+  storageClassName: zoo-fleet-firmware-releases
+  capacity:
+    storage: 1Ti
+  accessModes:
+  - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: zoo-fleet-firmware-releases
+    volumeAttributes:
+      server: 10.100.47.100
+      share: /mnt/user/firmware-releases
+  mountOptions:
+  - nfsvers=4.2
+  - nconnect=16
+  - hard
+  - noatime
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zoo-fleet-firmware-releases
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: zoo-fleet-firmware-releases
+  resources:
+    requests:
+      storage: 1Ti

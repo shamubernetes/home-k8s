@@ -3,6 +3,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./namespace.yaml
+- ./namespace-talos.yaml
 - ./ghar-controller/ks.yaml
 - ./ghar-scale-set/ks.yaml
 - ./ghar-scale-set/maudecode-ks.yaml
+- ./ghar-scale-set/talos-ks.yaml

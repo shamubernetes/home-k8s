@@ -7,14 +7,9 @@ metadata:
   namespace: services
 spec:
   interval: 30m
-  chart:
-    spec:
-      chart: n8n-operator
-      version: 0.13.0
-      sourceRef:
-        kind: HelmRepository
-        name: shamubernetes-charts
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: n8n-operator
   install:
     remediation:
       retries: 3

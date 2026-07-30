@@ -5,15 +5,9 @@ metadata:
   name: kuberhealthy
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: kuberhealthy
-      # renovate: registryUrl=https://kuberhealthy.github.io/kuberhealthy/helm-repos
-      version: "104"
-      sourceRef:
-        kind: HelmRepository
-        name: kuberhealthy
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: kuberhealthy
   install:
     crds: CreateReplace
     remediation:

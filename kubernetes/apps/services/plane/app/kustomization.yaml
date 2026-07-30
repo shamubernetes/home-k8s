@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
 - ./auth-config-repair-configmap.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
+- ./ocirepository.yaml

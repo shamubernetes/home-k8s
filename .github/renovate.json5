@@ -2,10 +2,34 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   timezone: "America/New_York",
   dependencyDashboard: true,
+  ignorePaths: [
+    "kubernetes/apps/iot/zoo-fleet/app/ocirepository.yaml",
+  ],
   pruneStaleBranches: true,
   prHourlyLimit: 5,
   prConcurrentLimit: 0,
   branchConcurrentLimit: 0,
+  packageRules: [
+    {
+      description: "GitHub Actions Helm inputs are version-only",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["helm/helm"],
+      pinDigests: false,
+    },
+    {
+      description: "Plane chart values do not support synthesized image digests",
+      matchManagers: ["kubernetes"],
+      matchFileNames: ["kubernetes/apps/services/plane/app/helmrelease.yaml"],
+      matchPackageNames: ["makeplane/backend-commercial"],
+      pinDigests: false,
+    },
+    {
+      description: "Helmfile OCI charts do not support synthesized digest fields",
+      matchManagers: ["helmfile"],
+      matchFileNames: ["talos/helmfile.yaml"],
+      pinDigests: false,
+    },
+  ],
   // Avoid mass rebasing every Renovate branch each run. Those updates fan out
   // GitHub Actions jobs and overload the self-hosted ARC dind runner.
   rebaseWhen: "conflicted",
@@ -27,6 +51,13 @@
     "github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5",
   ],
   labels: ["renovate"],
+  hostRules: [
+    {
+      matchHost: "https://grafana.com/api/",
+      concurrentRequestLimit: 1,
+      maxRequestsPerSecond: 1,
+    },
+  ],
   prCreation: "immediate",
   vulnerabilityAlerts: {
     enabled: true,

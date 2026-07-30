@@ -123,7 +123,7 @@ PR #4252 completed the ten-host Envoy cohort. PRs #4253, #4254, and #4255 establ
 Flux applied cleanup revision `974671ec809aa37fb1e439fa4ee870ca16a54588` and Profilarr machine-route revision `e08ddfc88ebe37cc706b81f20cbb7e07bb479c32`. Final live evidence:
 
 - All ten protected hostnames resolve only to Envoy internal `10.100.47.248`; all browser roots return 302 to Pocket ID.
-- All 17 protected HTTPRoutes report Accepted and ResolvedRefs; all ten OIDC SecurityPolicies and `profilarr-hermes-machine` report Accepted.
+- All 18 production HTTPRoutes report Accepted and ResolvedRefs; all ten OIDC SecurityPolicies and `profilarr-hermes-machine` report Accepted.
 - Seven split-route APIs return native backend 401/403 without OIDC when credentials are missing. Listenarr and Homarr remain full-host OIDC.
 - Profilarr browser and no-header API requests use OIDC. Keyed requests from `10.0.10.95` return JSON and the typed `profilarr.status` action passes; the same keyed request from a non-Hermes pod receives 403.
 - All ten protected application Pods are Ready with zero restarts. Typed Sonarr, both Radarr instances, Prowlarr, Bazarr, SABnzbd, and Profilarr checks pass.

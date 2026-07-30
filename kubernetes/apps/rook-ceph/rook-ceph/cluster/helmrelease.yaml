@@ -317,13 +317,3 @@ spec:
         volumeBindingMode: Immediate
         parameters:
           region: us-east-1
-      ingress:
-        enabled: true
-        ingressClassName: internal
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/proxy-body-size: "0"
-          nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-        host:
-          name: rgw.${HOME_DOMAIN}
-          path: /

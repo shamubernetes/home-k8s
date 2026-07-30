@@ -42,16 +42,6 @@ spec:
     serviceAccount:
       create: true
       automount: false
-    ingress:
-      enabled: true
-      className: internal
-      annotations:
-        external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-      hosts:
-      - host: konflate.${HOME_DOMAIN}
-        paths:
-        - path: /
-          pathType: Prefix
     networkPolicy:
       enabled: true
       type: cilium

@@ -9,4 +9,3 @@ resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
-- ./ingress.yaml

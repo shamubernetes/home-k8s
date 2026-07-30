@@ -6,4 +6,5 @@ resources:
 - ./gotenberg-ocirepository.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ./gotenberg-helmrelease.yaml

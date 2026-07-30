@@ -26,3 +26,30 @@ subjects:
 - kind: ServiceAccount
   name: tuppr
   namespace: system-upgrade
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: legacy-plan-node-cleanup
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: legacy-plan-node-cleanup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: legacy-plan-node-cleanup
+subjects:
+- kind: ServiceAccount
+  name: tuppr
+  namespace: system-upgrade

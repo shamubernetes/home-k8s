@@ -68,19 +68,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: plane-mcp.${HOME_DOMAIN}
-          paths:
-          - path: /mcp
-            pathType: Prefix
-            service:
-              identifier: app
-              port: http
     persistence:
       data:
         type: emptyDir

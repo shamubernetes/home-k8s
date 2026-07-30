@@ -43,6 +43,13 @@ jobs:
         cache: true
         version: 0.4.12
 
+    - name: Log in to GHCR for private chart validation
+      if: ${{ steps.relevant.outputs.changed_files != '[]' }}
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
     - name: Validate full rendered tree
       if: ${{ steps.relevant.outputs.changed_files != '[]' }}
       env:
@@ -84,29 +91,19 @@ jobs:
         cache: true
         version: 0.4.12
 
-    - name: Prepare credential-free snapshots
+    - name: Log in to GHCR for private chart rendering
       if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       env:
-        CHANGED_FILES: ${{ steps.kubernetes.outputs.changed_files }}
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
+    - name: Prepare render snapshots
+      if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
       run: |
         python3 - <<'PY'
-        import json
-        import os
         import textwrap
         from pathlib import Path
-
-        changed = json.loads(os.environ["CHANGED_FILES"])
-        # Cowbell's private OCI chart needs credentials. The Shamubernetes
-        # operator charts are anonymously readable and safe for credential-free diffing.
-        blocked = (
-            "kubernetes/apps/services/cowbell/",
-        )
-        unsupported = [path for path in changed if path.startswith(blocked)]
-        if unsupported:
-            raise SystemExit(
-                "credential-free Flate rendering cannot validate private chart changes: "
-                + ", ".join(unsupported)
-            )
 
         manifest = textwrap.dedent("""\
         apiVersion: v1

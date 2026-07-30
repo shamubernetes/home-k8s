@@ -7,7 +7,8 @@ spec:
   interval: 30m
   url: oci://ghcr.io/shamubernetes/charts/firecrawl
   ref:
-    tag: 0.2.0-maude.1
+    # firecrawl-oci-digest: sha256:252faa69463a8e59540ccbf725a31d3a154f725386eb050a10190c07c3cb5e89
+    tag: 0.2.0-maude.2
   secretRef:
     name: ghcr-pull-secret
   layerSelector:

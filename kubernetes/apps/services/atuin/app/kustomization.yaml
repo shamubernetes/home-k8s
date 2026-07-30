@@ -5,4 +5,5 @@ resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ../../../../templates/gatus/external

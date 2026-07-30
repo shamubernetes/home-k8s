@@ -1,0 +1,16 @@
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: hermes-webhooks
+  labels:
+    kubernetes.io/service-name: hermes-webhooks
+addressType: IPv4
+ports:
+- name: http
+  protocol: TCP
+  port: 8645
+endpoints:
+- addresses:
+  - 10.0.10.95
+  conditions:
+    ready: true

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Require Mise and trusted-runner Talosctl versions to stay synchronized."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+REFERENCE_RE = re.compile(
+    r"^\s*reference:\s+ghcr\.io/siderolabs/talosctl:"
+    r"v(?P<version>\d+\.\d+\.\d+)@(?P<digest>sha256:[a-f0-9]{64})\s*$",
+    re.MULTILINE,
+)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mise", type=Path, default=Path(".mise.toml"))
+    parser.add_argument(
+        "--runner",
+        type=Path,
+        default=Path(
+            "kubernetes/apps/actions-runner-system/ghar-scale-set/"
+            "arc-talos/helmrelease.yaml"
+        ),
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    with args.mise.open("rb") as handle:
+        mise = tomllib.load(handle)
+    mise_version = mise.get("tools", {}).get("talosctl")
+    if not isinstance(mise_version, str) or not re.fullmatch(
+        r"\d+\.\d+\.\d+", mise_version
+    ):
+        raise SystemExit(".mise.toml must contain one exact talosctl version")
+
+    matches = list(REFERENCE_RE.finditer(args.runner.read_text()))
+    if len(matches) != 1:
+        raise SystemExit(
+            "trusted runner must contain exactly one immutable Talosctl OCI reference"
+        )
+    image_version = matches[0].group("version")
+    if image_version != mise_version:
+        raise SystemExit(
+            f"Talosctl version mismatch: Mise={mise_version}, runner={image_version}"
+        )
+
+    print(f"ok: Talosctl tooling synchronized at {mise_version}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

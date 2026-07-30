@@ -8,9 +8,6 @@ spec:
   - name: envoy-internal
     namespace: network
     sectionName: https
-  - name: envoy-external
-    namespace: network
-    sectionName: https
   hostnames:
   - "documenso.${HOME_DOMAIN}"
   rules:

@@ -3,7 +3,7 @@
 set -euo pipefail
 repo_root=$(git rev-parse --show-toplevel); cd "$repo_root"
 validate_full_host() {
-  local category=$1 app_dir=$2 resource_name=$3 host_name=$4 backend_name=$5
+  local category=$1 app_dir=$2 resource_name=$3 host_name=$4 backend_name=$5 backend_port=$6
   local app="kubernetes/apps/${category}/${app_dir}/app"
   local host="${host_name}.\${HOME_DOMAIN}"
   local oidc_item="${resource_name}-oidc" oidc_secret="${resource_name}-oidc-secret"
@@ -18,7 +18,7 @@ validate_full_host() {
   if grep -Fqx -- '- ./httproute-envoy-api.yaml' "$app/kustomization.yaml"; then
     printf 'unsafe API bypass listed for full-host application %s\n' "$resource_name" >&2; return 1
   fi
-  export host backend_name browser_route resource_name oidc_item oidc_secret
+  export host backend_name backend_port browser_route resource_name oidc_item oidc_secret
   yq -e '
     .kind == "HTTPRoute" and
     .metadata.name == strenv(browser_route) and
@@ -38,7 +38,7 @@ validate_full_host() {
     .spec.rules[0].backendRefs[0].group == "" and
     .spec.rules[0].backendRefs[0].kind == "Service" and
     .spec.rules[0].backendRefs[0].name == strenv(backend_name) and
-    .spec.rules[0].backendRefs[0].port == 80 and
+    .spec.rules[0].backendRefs[0].port == (strenv(backend_port) | tonumber) and
     (.spec.rules[0].filters | length) == 1 and
     .spec.rules[0].filters[0].type == "RequestHeaderModifier" and
     (.spec.rules[0].filters[0].requestHeaderModifier.remove | length) == 4 and
@@ -90,6 +90,6 @@ validate_full_host() {
   yq -e '.spec.values.ingress.app.annotations."nginx.ingress.kubernetes.io/auth-url" == "http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth" and .spec.values.ingress.app.hosts[0].paths[0].path == "/"' "$app/helmrelease.yaml" >/dev/null
   printf 'ok: %s full-host Envoy OIDC contract (%s)\n' "$resource_name" "$state"
 }
-validate_full_host arrs listenarr listenarr listenarr listenarr
-validate_full_host arrs profilarr profilarr profilarr profilarr
-validate_full_host services homarr homarr dash homarr
+validate_full_host arrs listenarr listenarr listenarr listenarr 4545
+validate_full_host arrs profilarr profilarr profilarr profilarr 6868
+validate_full_host services homarr homarr dash homarr 7575

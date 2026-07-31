@@ -17,11 +17,11 @@
       pinDigests: false,
     },
     {
-      description: "Plane chart values do not support synthesized image digests",
+      description: "Plane auth helper image is coupled to the chart planeVersion",
       matchManagers: ["kubernetes"],
       matchFileNames: ["kubernetes/apps/services/plane/app/helmrelease.yaml"],
       matchPackageNames: ["makeplane/backend-commercial"],
-      pinDigests: false,
+      enabled: false,
     },
     {
       description: "Helmfile OCI charts do not support synthesized digest fields",

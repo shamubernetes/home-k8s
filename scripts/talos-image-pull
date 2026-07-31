@@ -4,7 +4,7 @@ set -euo pipefail
 images_json=${IMAGES_JSON:?IMAGES_JSON is required}
 preflight_fleet_bytes=${PREFLIGHT_FLEET_BYTES:?PREFLIGHT_FLEET_BYTES is required}
 talosctl=${TALOSCTL:-/opt/talosctl/talosctl}
-max_image_bytes=5000000000
+max_image_bytes=6000000000
 max_total_bytes=20000000000
 nodes=(10.100.47.50 10.100.47.51)
 if [[ -n ${TALOS_NODES:-} ]]; then

@@ -36,7 +36,7 @@ case "$command" in
     ;;
   manifest)
     case "$image" in
-      */large@*) size=5000000001 ;;
+      */large@*) size=6000000001 ;;
       */small2@*|*/small3@*) size=4000000000 ;;
       *) size=300 ;;
     esac
@@ -110,7 +110,7 @@ case "$command" in
     [[ $image != */partial@* || $node != node2 ]] || exit 43
     size=1
     unit=MB
-    [[ $image != */oversize@* ]] || { size=6; unit=GB; }
+    [[ $image != */oversize@* ]] || { size=7; unit=GB; }
     printf '%s %s %s\n' "$digest" "$size" "$unit" > "$(state_name "$digest")"
     [[ $image != */fail@* || $node != node2 ]] || exit 42
     ;;

@@ -381,7 +381,6 @@
         "!quay.io/cephcsi/ceph-csi-operator",
         "!quay.io/ceph/ceph",
       ],
-      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
     },

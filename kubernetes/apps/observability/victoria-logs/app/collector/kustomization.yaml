@@ -4,5 +4,3 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
-- ./prometheusrule.yaml
-- ./collector

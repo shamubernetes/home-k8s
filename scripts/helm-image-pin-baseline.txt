@@ -58,7 +58,6 @@ services/plane/app	makeplane/monitor-commercial:v2.6.3
 services/plane/app	makeplane/silo-commercial:v2.6.3
 services/plane/app	makeplane/space-commercial:v2.6.3
 services/plane/app	makeplane/web-commercial:v2.6.3
-tools/reflector/app	docker.io/emberstack/kubernetes-reflector:10.0.50
 volsync-system/snapshot-controller/app	registry.k8s.io/sig-storage/snapshot-controller:v8.6.0
 volsync-system/snapshot-controller/app	registry.k8s.io/sig-storage/snapshot-conversion-webhook:v8.6.0
 volsync-system/volsync/app	quay.io/backube/volsync:0.16.0

@@ -132,6 +132,11 @@ spec:
               topologyKey: kubernetes.io/hostname
     gateway:
       replicas: 2
+      deploymentStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 0
+          maxUnavailable: 1
       podLabels:
         titans/network-intensive: "true"
       affinity:

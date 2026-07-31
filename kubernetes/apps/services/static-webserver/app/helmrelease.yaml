@@ -69,18 +69,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-        className: external
-        hosts:
-        - host: static.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       public:
         type: nfs

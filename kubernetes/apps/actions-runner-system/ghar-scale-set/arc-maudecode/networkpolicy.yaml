@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumnetworkpolicy_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ghar-set-maudecode-deny-talos
+spec:
+  endpointSelector:
+    matchLabels:
+      actions.github.com/scale-set-name: ghar-set-maudecode
+  egress:
+  - toEntities:
+    - all
+  egressDeny:
+  - toCIDR:
+    - 10.96.51.110/32 # default/talos; endpoint in generated Talos service-account config
+    - 10.100.47.35/32
+    - 10.100.47.48/32
+    - 10.100.47.49/32
+    - 10.100.47.50/32
+    - 10.100.47.51/32
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP
+  - toEntities:
+    - host
+    - remote-node
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP

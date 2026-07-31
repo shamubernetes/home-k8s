@@ -9,9 +9,14 @@ import sys
 PROTECTED = re.compile(
     r"^(\.github/workflows/|scripts/|"
     r"kubernetes/apps/actions-runner-system/|"
-    r"talos/patches/controlplane/talos-api\.yaml)"
+    r"kubernetes/apps/kyverno/|talos/)"
 )
-NON_EXECUTABLE_DATA = frozenset({"scripts/flate-render-baseline.tsv"})
+NON_EXECUTABLE_DATA = frozenset(
+    {
+        "scripts/flate-render-baseline.tsv",
+        "scripts/helm-image-pin-baseline.txt",
+    }
+)
 
 
 def is_protected(path: str) -> bool:

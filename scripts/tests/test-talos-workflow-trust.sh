@@ -104,6 +104,17 @@ grep -Fq "'.changed_files | select(type == \"number\" and . >= 1 and floor == .)
 grep -Fq "scope=\$(scripts/talos-image-gate-scope < changed-files.txt)" \
   .github/workflows/image-pull.yaml
 grep -Fq "[[ \$scope == applicable ]]" .github/workflows/image-pull.yaml
+grep -Fq "if [[ \$scope == not-applicable ]]" .github/workflows/image-pull.yaml
+grep -Fq "if: \${{ needs.preflight.outputs.applicable == 'true' }}" .github/workflows/image-pull.yaml
+grep -Fq 'scripts/talos-image-size' .github/workflows/image-pull.yaml
+grep -Fq 'PREFLIGHT_FLEET_BYTES' .github/workflows/image-pull.yaml
+grep -Fq 'scripts/talos-image-pull' .github/workflows/image-pull.yaml
+grep -Fq "ref: \${{ needs.preflight.outputs.trusted_sha }}" .github/workflows/image-pull.yaml
+grep -Fq 'environment: talos-image-pull' .github/workflows/image-pull.yaml
+if grep -Eq 'environment_url|workflow_dispatch|type: approval' .github/workflows/image-pull.yaml; then
+  echo 'privileged consumer contains a manual execution or approval gate' >&2
+  exit 1
+fi
 if grep -Fq "protected='^(" .github/workflows/image-pull.yaml; then
   echo 'consumer duplicates the shared privileged-boundary classifier' >&2
   exit 1

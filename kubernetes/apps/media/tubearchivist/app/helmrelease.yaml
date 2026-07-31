@@ -93,19 +93,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        className: internal
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/proxy-body-size: 1024m
-        hosts:
-        - host: tube.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       cache:
         existingClaim: *app

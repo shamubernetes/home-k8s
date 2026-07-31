@@ -66,6 +66,8 @@ total_bytes=0
 for image in "${images[@]}"; do
   [[ $image =~ @sha256:[0-9a-f]{64}$ ]]
   digest=${image##*@}
+  declare -a pull_nodes=()
+  declare -a pull_pids=()
   for node in "${nodes[@]}"; do
     before=''
     if ! before=$(image_size "$node" "$digest"); then
@@ -80,7 +82,21 @@ for image in "${images[@]}"; do
       cleanup_images+=("$image")
     fi
     printf 'pull node=%s image=%s\n' "$node" "$image"
-    timeout 10m "$talosctl" --nodes "$node" image pull "$image"
+    timeout 30m "$talosctl" --nodes "$node" image pull "$image" &
+    pull_nodes+=("$node")
+    pull_pids+=("$!")
+  done
+
+  pull_failed=false
+  for index in "${!pull_pids[@]}"; do
+    if ! wait "${pull_pids[$index]}"; then
+      printf 'pull failed node=%s image=%s\n' "${pull_nodes[$index]}" "$image" >&2
+      pull_failed=true
+    fi
+  done
+  [[ $pull_failed == false ]] || exit 1
+
+  for node in "${pull_nodes[@]}"; do
     after=''
     if ! after=$(image_size "$node" "$digest"); then
       echo "could not inventory images after pull: node=$node image=$image" >&2

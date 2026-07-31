@@ -49,7 +49,7 @@ spec:
               spec:
                 initContainers:
                 - name: reconcile-auth-config
-                  image: makeplane/backend-commercial:v2.6.3
+                  image: makeplane/backend-commercial:v3.0.0
                   imagePullPolicy: Always
                   command:
                   - /bin/bash

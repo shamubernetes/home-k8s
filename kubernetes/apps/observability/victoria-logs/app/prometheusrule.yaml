@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: victoria-logs-rules
+spec:
+  groups:
+  - name: victoria-logs.health
+    rules:
+    - alert: VictoriaLogsServiceDown
+      annotations:
+        summary: VictoriaLogs is unavailable on {{ $labels.instance }}.
+      expr: up{job=~".*victoria-logs.*"} == 0
+      for: 2m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsTargetMissing
+      annotations:
+        summary: The VictoriaLogs Prometheus target is missing.
+      expr: absent(up{job=~".*victoria-logs.*"})
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsTooManyRestarts
+      annotations:
+        summary: VictoriaLogs has restarted more than twice in 15 minutes on {{ $labels.instance }}.
+      expr: changes(process_start_time_seconds{job=~".*victoria-logs.*"}[15m]) > 2
+      labels:
+        severity: critical
+    - alert: VictoriaLogsDiskPressure
+      annotations:
+        summary: VictoriaLogs disk utilization is above 80% on {{ $labels.instance }}.
+      expr: |
+        sum(vl_data_size_bytes{job=~".*victoria-logs.*"}) by (job, instance)
+        /
+        (
+          sum(vl_free_disk_space_bytes{job=~".*victoria-logs.*"}) by (job, instance)
+          + sum(vl_data_size_bytes{job=~".*victoria-logs.*"}) by (job, instance)
+        ) > 0.8
+      for: 30m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsReadOnly
+      annotations:
+        summary: VictoriaLogs storage is read-only on {{ $labels.instance }}.
+      expr: vl_storage_is_read_only{job=~".*victoria-logs.*"} == 1
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsRowsRejected
+      annotations:
+        summary: VictoriaLogs is rejecting rows on {{ $labels.instance }} because {{ $labels.reason }}.
+      expr: rate(vl_rows_dropped_total{job=~".*victoria-logs.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsAPIRequestErrors
+      annotations:
+        summary: VictoriaLogs is returning errors for {{ $labels.path }} on {{ $labels.instance }}.
+      expr: increase(vl_http_errors_total{job=~".*victoria-logs.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsConcurrentQueriesAtLimit
+      annotations:
+        summary: VictoriaLogs is continuously hitting its query concurrency limit on {{ $labels.instance }}.
+      expr: |
+        avg_over_time(vl_concurrent_select_current{job=~".*victoria-logs.*"}[1m])
+        >= vl_concurrent_select_capacity{job=~".*victoria-logs.*"}
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsQueryTimeouts
+      annotations:
+        summary: VictoriaLogs queries are timing out at the concurrency limit on {{ $labels.instance }}.
+      expr: increase(vl_concurrent_select_limit_timeout_total{job=~".*victoria-logs.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning

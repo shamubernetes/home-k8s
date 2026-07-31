@@ -34,7 +34,7 @@ spec:
           app:
             image:
               repository: docker.io/documenso/documenso
-              tag: v2.14.0@sha256:f1043654ffd88edffa6ba5b2bbda2897723fc5e9ae06f56c1fe514ee2b567f05
+              tag: v2.16.0@sha256:945bd2c04306bd5d78def0c4ceafdffb6b0a106cd6a2543db5acda9a6424b2d9
             env:
               PORT: &port 3000
               NEXT_PUBLIC_WEBAPP_URL: https://documenso.${HOME_DOMAIN}
@@ -101,19 +101,6 @@ spec:
           http:
             primary: true
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/proxy-body-size: 100m
-        className: internal
-        hosts:
-        - host: documenso.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       tmp:
         type: emptyDir

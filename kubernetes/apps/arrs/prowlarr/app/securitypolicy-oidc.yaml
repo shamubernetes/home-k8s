@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/gateway.envoyproxy.io/securitypolicy_v1alpha1.json
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: prowlarr-oidc
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: prowlarr-envoy-browser
+  oidc:
+    provider:
+      issuer: https://sso.${HOME_DOMAIN}
+    clientIDRef:
+      group: ""
+      kind: Secret
+      name: prowlarr-oidc-secret
+    clientSecret:
+      group: ""
+      kind: Secret
+      name: prowlarr-oidc-secret
+    redirectURL: https://prowlarr.${HOME_DOMAIN}/oauth2/callback
+    logoutPath: /oauth2/logout
+    scopes:
+    - openid
+    - profile
+    - email
+    refreshToken: true
+    forwardAccessToken: false
+    passThroughAuthHeader: false
+    cookieConfig:
+      sameSite: Lax
+    cookieNames:
+      accessToken: prowlarr-access-token
+      idToken: prowlarr-id-token

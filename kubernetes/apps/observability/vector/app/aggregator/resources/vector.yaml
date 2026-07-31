@@ -26,9 +26,20 @@ transforms:
   kubernetes_remap:
     type: remap
     inputs: ["kubernetes_source"]
+    drop_on_abort: true
     source: |
-      # Standardize 'app' index
+      # Reject stale replay before it can poison an entire Loki batch
+      if is_timestamp(.timestamp) && to_unix_timestamp!(.timestamp) < to_unix_timestamp(now()) - 3600 {
+        abort
+      }
+      # Standardize 'app' index and ensure sink labels are always renderable
       .custom_app_name = .pod_labels."app.kubernetes.io/name" || .pod_labels.app || .pod_labels."k8s-app" || "unknown"
+      .kubernetes.pod_namespace = .kubernetes.pod_namespace || "unknown"
+      .kubernetes.pod_node_name = .kubernetes.pod_node_name || "unknown"
+      # Keep encoded Loki entries comfortably below the 256 KiB server limit
+      if is_string(.message) && length!(.message) > 200000 {
+        .message = truncate!(.message, 200000)
+      }
       # Drop pod_labels
       del(.pod_labels)
 
@@ -40,6 +51,7 @@ sinks:
   journald:
     inputs: ["journald_source"]
     type: loki
+    dangerously_allow_unconfined_template_resolution: true
     endpoint: http://loki-gateway.observability.svc.cluster.local
     encoding: {codec: json}
     out_of_order_action: accept
@@ -51,6 +63,7 @@ sinks:
   kubernetes:
     inputs: ["kubernetes_remap"]
     type: loki
+    dangerously_allow_unconfined_template_resolution: true
     endpoint: http://loki-gateway.observability.svc.cluster.local
     encoding: {codec: json}
     out_of_order_action: accept

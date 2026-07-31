@@ -10,7 +10,7 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-  - name: ingress-nginx-external
+  - name: envoy-gateway-config
   path: ./kubernetes/apps/services/hermes-webhooks/app
   prune: true
   sourceRef:

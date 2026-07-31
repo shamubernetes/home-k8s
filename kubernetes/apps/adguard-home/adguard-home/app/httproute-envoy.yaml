@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: adguard-home-origin-envoy
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "adguard.${HOME_DOMAIN}"
+  rules:
+  - backendRefs:
+    - name: adguard-home-origin
+      port: 3000
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: adguard-home-secondary-envoy
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "adguard-secondary.${HOME_DOMAIN}"
+  rules:
+  - backendRefs:
+    - name: adguard-home-secondary
+      port: 3000
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: adguard-home-tertiary-envoy
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "adguard-tertiary.${HOME_DOMAIN}"
+  rules:
+  - backendRefs:
+    - name: adguard-home-tertiary
+      port: 3000

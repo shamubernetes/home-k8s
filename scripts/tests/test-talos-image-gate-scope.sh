@@ -13,6 +13,10 @@ cd "$repo_root"
   'kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml' \
   'scripts/helm-image-pin-baseline.txt' |
   scripts/talos-image-gate-scope) == applicable ]]
+[[ $(printf '%s\n' \
+  'kubernetes/apps/kube-system/cilium/app/ocirepository.yaml' \
+  'talos/helmfile.yaml' |
+  scripts/talos-image-gate-scope) == applicable ]]
 [[ $(printf '%s\n' '.github/workflows/image-gate.yaml' 'scripts/talos-image-gate-scope' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'talos/talconfig.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]

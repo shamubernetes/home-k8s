@@ -90,6 +90,22 @@
       "separateMinorPatch": true,
     },
     {
+      "description": "Loki chart and workload images",
+      "groupName": "loki",
+      "matchPackageNames": [
+        "ghcr.io/grafana/helm-charts/loki",
+        "docker.io/grafana/loki",
+        "docker.io/grafana/loki-canary",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 3,
+      "separateMinorPatch": true,
+    },
+    {
       "description": "Prometheus Operator CRDs chart sources",
       "groupName": "prometheus-operator-crds",
       "matchPackageNames": [

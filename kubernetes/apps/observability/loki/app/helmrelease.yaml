@@ -49,6 +49,10 @@ spec:
   values:
     deploymentMode: SimpleScalable
     loki:
+      image:
+        registry: docker.io
+        repository: grafana/loki
+        tag: 3.6.11@sha256:44148ad243c07957113baea950ee5ba9b0c8eff8d7e38ff3cc1c0af705790945
       podAnnotations:
         configmap.reloader.stakater.com/reload: *cephBucket
         secret.reloader.stakater.com/reload: *cephBucket
@@ -108,6 +112,26 @@ spec:
           rule_path: /rules/fake
         analytics:
           reporting_enabled: false
+    lokiCanary:
+      image:
+        registry: docker.io
+        repository: grafana/loki-canary
+        tag: 3.6.11@sha256:9ea589c612c3b01f2f9c3de3fa898f0476b3ba14526950ba4fe8906f50a6af81
+    memcached:
+      image:
+        registry: docker.io
+        repository: library/memcached
+        tag: 1.6.39-alpine@sha256:c8503d4491edd3110cc07d0465089d3a41cf1daf8645e71149e39a51835e92cd
+    memcachedExporter:
+      image:
+        registry: docker.io
+        repository: prom/memcached-exporter
+        tag: v0.15.4@sha256:b6763ecb3c47f2408e0398518851b7f8c5fc46232b2649f8c78a321130c54266
+    sidecar:
+      image:
+        registry: docker.io
+        repository: kiwigrid/k8s-sidecar
+        tag: 2.5.0@sha256:a6b3f707f883108376514489a94d6629109a327b2978e1d826cd104c4ca436df
     backend:
       replicas: 2
       persistence:
@@ -132,6 +156,10 @@ spec:
               topologyKey: kubernetes.io/hostname
     gateway:
       replicas: 2
+      image:
+        registry: docker.io
+        repository: nginxinc/nginx-unprivileged
+        tag: 1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6
       deploymentStrategy:
         type: RollingUpdate
         rollingUpdate:

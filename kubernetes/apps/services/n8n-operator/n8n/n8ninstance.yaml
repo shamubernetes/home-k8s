@@ -70,15 +70,6 @@ spec:
     type: ClusterIP
     port: 5678
 
-  ingress:
-    enabled: true
-    className: internal
-    host: n8n.${HOME_DOMAIN}
-    path: /
-    pathType: Prefix
-    annotations:
-      external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-
   persistence:
     enabled: true
     size: 5Gi

@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: docker.io/grimmory/grimmory
-              tag: v3.2.2@sha256:98ad96816b7eff9cb754ef70413491b66d23d10946fab27d7217d6c45dfd7fce
+              tag: v3.2.4@sha256:87873dd5419eb99e45a0f27e13398e1aeacba9edd37dfa3276b96ce384469604
             env:
               TZ: ${TIMEZONE}
               USER_ID: "568"
@@ -136,18 +136,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         existingClaim: *app

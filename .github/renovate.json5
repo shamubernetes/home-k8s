@@ -6,7 +6,7 @@
     "kubernetes/apps/iot/zoo-fleet/app/ocirepository.yaml",
   ],
   pruneStaleBranches: true,
-  prHourlyLimit: 5,
+  prHourlyLimit: 10,
   prConcurrentLimit: 0,
   branchConcurrentLimit: 0,
   packageRules: [

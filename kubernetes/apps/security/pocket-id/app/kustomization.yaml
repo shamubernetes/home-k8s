@@ -8,3 +8,5 @@ resources:
 - ./objectbucketclaim.yaml
 - ./poddisruptionbudget.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
+- ./httproute-email-logo-external.yaml

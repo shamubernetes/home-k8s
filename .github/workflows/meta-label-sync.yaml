@@ -5,18 +5,19 @@ on:
   workflow_dispatch:
   push:
     branches: ["main"]
-    paths: [".github/labels.yaml"]
+    paths:
+    - ".github/labels.json"
+    - ".github/workflows/meta-label-sync.yaml"
   schedule:
   - cron: "0 0 * * *" # Every day at midnight
-
-permissions:
-  contents: read
-  issues: write
 
 jobs:
   label-sync:
     name: Label Sync
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,7 +25,6 @@ jobs:
         persist-credentials: false
 
     - name: Sync Labels
-      uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
-      with:
-        config-file: .github/labels.yaml
-        delete-other-labels: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: scripts/sync-github-labels .github/labels.json

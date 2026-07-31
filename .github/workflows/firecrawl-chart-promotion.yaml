@@ -1,0 +1,134 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Firecrawl Chart Promotion"
+
+on:
+  repository_dispatch:
+    types: [firecrawl-chart-released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Immutable downstream chart version
+        required: true
+        type: string
+      digest:
+        description: Published sha256 digest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firecrawl-chart-promotion
+  cancel-in-progress: false
+
+env:
+  CHART_DIGEST: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.digest || inputs.digest }}
+  CHART_VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.version || inputs.version }}
+
+jobs:
+  promote:
+    name: Promote immutable Firecrawl chart
+    runs-on: ubuntu-latest
+    steps:
+    - name: Validate trusted dispatch source
+      if: ${{ github.event_name == 'repository_dispatch' }}
+      env:
+        SOURCE_REPOSITORY: ${{ github.event.client_payload.source_repository }}
+      run: test "$SOURCE_REPOSITORY" = shamubernetes/firecrawl-helm
+
+    - name: Generate ShamuBot token
+      id: app-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ secrets.BOT_APP_ID }}
+        private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+        permission-contents: write
+        permission-issues: write
+        permission-pull-requests: write
+
+    - name: Check out repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Install Helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      with:
+        version: v4.2.3
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      with:
+        cosign-release: v2.5.3
+
+    - name: Log in to private GHCR chart repository
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: |
+        printf '%s' "$GHCR_TOKEN" | helm registry login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+        printf '%s' "$GHCR_TOKEN" | cosign login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
+    - name: Verify and pin immutable chart
+      run: scripts/promote-firecrawl-chart "$CHART_VERSION" "$CHART_DIGEST"
+
+    - name: Ensure automation labels
+      env:
+        GH_REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      run: |
+        gh label create automation --color 1d76db --description "Managed by unattended automation" --force
+        gh label create firecrawl-promotion --color 0e8a16 --description "Firecrawl chart promotion awaiting live verification" --force
+
+    - name: Open promotion pull request
+      id: pull-request
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      with:
+        token: ${{ steps.app-token.outputs.token }}
+        branch: automation/firecrawl-chart
+        delete-branch: true
+        commit-message: "chore(firecrawl): promote ${{ env.CHART_VERSION }}"
+        title: "chore(firecrawl): promote ${{ env.CHART_VERSION }}"
+        body: |
+          Unattended promotion of the signed downstream Firecrawl chart.
+
+          - Version: `${{ env.CHART_VERSION }}`
+          - Digest: `${{ env.CHART_DIGEST }}`
+          - Source run: `${{ github.event.client_payload.source_run_id }}`
+
+          The artifact digest, embedded chart version, and exact GitHub Actions OIDC signature were verified before this pull request was opened. Protected static-analysis and Flate checks remain the merge gate.
+        labels: |
+          automation
+          firecrawl-promotion
+
+    - name: Record pending live verification
+      if: ${{ steps.pull-request.outputs.pull-request-number != '' }}
+      env:
+        GH_REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        PR_NUMBER: ${{ steps.pull-request.outputs.pull-request-number }}
+      run: |
+        title="Firecrawl $CHART_VERSION deployment verification"
+        issue=$(gh issue list --state all --label firecrawl-promotion \
+          --search "\"$title\" in:title" --json number,title \
+          --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+        {
+          printf 'The signed Firecrawl chart promotion is awaiting protected merge and live verification by Maude.\n\n'
+          printf -- '- Version: %s\n' "$CHART_VERSION"
+          printf -- '- Digest: %s\n' "$CHART_DIGEST"
+          printf -- '- Pull request: #%s\n' "$PR_NUMBER"
+        } >issue.md
+        if [[ -n $issue ]]; then
+          gh issue reopen "$issue" || true
+          gh issue edit "$issue" --body-file issue.md
+        else
+          gh issue create --title "$title" --body-file issue.md --label firecrawl-promotion
+        fi
+
+    - name: Enable gated automatic merge
+      if: ${{ steps.pull-request.outputs.pull-request-number != '' }}
+      env:
+        GH_REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      run: gh pr merge --auto --squash "${{ steps.pull-request.outputs.pull-request-number }}"

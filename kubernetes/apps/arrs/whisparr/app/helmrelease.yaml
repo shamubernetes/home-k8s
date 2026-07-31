@@ -36,12 +36,11 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/whisparr-eros
-              tag: 3.0.2.1859@sha256:52fd2d58cb840dc9dec5fb483c1e2b1976628615469e6c881d9c874b2c8d40ff
+              tag: 3.3.7-release.979@sha256:9002dd8e29471d65f0b1a03802a3bf48bb58212435a053bbbe8971f2d2253194
             env:
               WHISPARR__ANALYTICS_ENABLED: "False"
               WHISPARR__AUTHENTICATION_METHOD: External
               WHISPARR__AUTHENTICATION_REQUIRED: DisabledForLocalAddresses
-              WHISPARR__BRANCH: develop
               WHISPARR__INSTANCE_NAME: Whisparr
               WHISPARR__LOG_LEVEL: info
               WHISPARR__PORT: &port 80
@@ -84,30 +83,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Groups
-          nginx.ingress.kubernetes.io/auth-signin: https://$host/oauth2/start?rd=$escaped_request_uri
-          nginx.ingress.kubernetes.io/auth-url: http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth
-        className: internal
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
-      api:
-        className: internal
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /api
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         existingClaim: *app

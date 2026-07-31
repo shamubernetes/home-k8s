@@ -28,11 +28,24 @@ spec:
       cwa-bdl:
         annotations:
           reloader.stakater.com/auto: "true"
+        initContainers:
+          books-canary:
+            image:
+              repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
+              tag: latest@sha256:056f02e28d446b128d91fa10451c7cc376392f7383bbb841deec49838a419d53
+            command:
+              - /bin/sh
+              - -ec
+              - stat /books >/dev/null
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
         containers:
           app:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:8700c1d3b6bb94e1b5f9482bac12e39652ed737de02f256920e1ad982a7ac0f1
+              tag: latest@sha256:056f02e28d446b128d91fa10451c7cc376392f7383bbb841deec49838a419d53
             env:
               TZ: ${TIMEZONE}
               PUID: "568"
@@ -41,7 +54,7 @@ spec:
               INGEST_DIR: /books
               SEARCH_MODE: direct
             probes:
-              liveness: &probes
+              liveness:
                 enabled: true
                 custom: true
                 spec:
@@ -52,7 +65,17 @@ spec:
                   periodSeconds: 10
                   timeoutSeconds: 5
                   failureThreshold: 5
-              readiness: *probes
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ready
+                    port: 8085
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 5
               startup:
                 enabled: true
                 spec:
@@ -69,6 +92,45 @@ spec:
                 cpu: 10m
               limits:
                 memory: 2Gi
+          books-monitor:
+            image:
+              repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
+              tag: latest@sha256:056f02e28d446b128d91fa10451c7cc376392f7383bbb841deec49838a419d53
+            command:
+              - /bin/sh
+              - -ec
+              - |
+                exec python3 -u -c '
+                import os
+                import urllib.request
+                from http.server import BaseHTTPRequestHandler, HTTPServer
+
+                class Handler(BaseHTTPRequestHandler):
+                    def do_GET(self):
+                        try:
+                            os.stat("/books")
+                            with urllib.request.urlopen("http://127.0.0.1:8084/api/health", timeout=3) as response:
+                                healthy = response.status == 200
+                        except Exception:
+                            healthy = False
+                        self.send_response(200 if healthy else 503)
+                        self.end_headers()
+
+                    def log_message(self, format, *args):
+                        return
+
+                HTTPServer(("0.0.0.0", 8085), Handler).serve_forever()
+                '
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 5m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
     defaultPodOptions:
       securityContext:
         runAsNonRoot: false
@@ -83,18 +145,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        className: internal
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        hosts:
-        - host: "books.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         existingClaim: cwa-bdl

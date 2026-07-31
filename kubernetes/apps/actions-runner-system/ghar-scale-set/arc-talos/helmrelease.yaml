@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ghar-set-talos
+  namespace: actions-runner-talos
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: ghar-set-talos
+  driftDetection:
+    mode: enabled
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: ghar-controller
+    namespace: actions-runner-system
+  values:
+    nameOverride: ghar-set-talos
+    runnerScaleSetName: ghar-set-talos
+    runnerGroup: talos-image-pull
+    githubConfigSecret: actions-runner-controller-auth-secret
+    githubConfigUrl: https://github.com/shamubernetes
+    minRunners: 0
+    maxRunners: 1
+    template:
+      spec:
+        automountServiceAccountToken: false
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: DoesNotExist
+        restartPolicy: Never
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 123
+          fsGroup: 123
+          fsGroupChangePolicy: OnRootMismatch
+          seccompProfile:
+            type: RuntimeDefault
+        initContainers:
+        - name: install-talosctl
+          image: ghcr.io/home-operations/actions-runner:2.335.1@sha256:0c6f38e8194f6c3714aa86c6dc8a72574484818ed625dd66074920b25c118508
+          command: ["/bin/bash", "-ceu"]
+          args:
+          - install -m 0555 /source/talosctl /tools/talosctl
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+          volumeMounts:
+          - name: talosctl-source
+            mountPath: /source
+            readOnly: true
+          - name: talosctl
+            mountPath: /tools
+        containers:
+        - name: runner
+          image: ghcr.io/home-operations/actions-runner:2.335.1@sha256:0c6f38e8194f6c3714aa86c6dc8a72574484818ed625dd66074920b25c118508
+          command: ["/home/runner/run.sh"]
+          env:
+          - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
+            value: "false"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+          volumeMounts:
+          - name: talosconfig
+            mountPath: /var/run/secrets/talos.dev
+            readOnly: true
+          - name: talosctl
+            mountPath: /opt/talosctl
+            readOnly: true
+        volumes:
+        - name: talosconfig
+          secret:
+            secretName: ghar-set-talos-talosconfig
+            defaultMode: 0440
+        - name: talosctl
+          emptyDir: {}
+        - name: talosctl-source
+          image:
+            reference: ghcr.io/siderolabs/talosctl:v1.13.7@sha256:e824808e0a9c8138c2f7b17f21cfebee2f1442a336d812eb0034c9c897059302
+            pullPolicy: IfNotPresent
+    controllerServiceAccount:
+      name: ghar-controller
+      namespace: actions-runner-system

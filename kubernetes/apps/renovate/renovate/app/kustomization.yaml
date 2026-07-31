@@ -6,6 +6,7 @@ resources:
 - ./externalsecret.yaml
 # - ./objectbucketclaim.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 configMapGenerator:
 - name: renovate-config
   files:

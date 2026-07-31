@@ -38,7 +38,9 @@
   automerge: false,
   automergeStrategy: "squash",
   platformAutomerge: false,
-  // Disable automatic reviewer assignment globally - only add for non-automerge PRs via packageRules
+  // Renovate PRs rely on automated checks and must not request human reviews.
+  reviewers: [],
+  additionalReviewers: [],
   reviewersFromCodeOwners: false,
   assigneesFromCodeOwners: false,
   extends: [

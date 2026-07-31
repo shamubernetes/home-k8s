@@ -25,15 +25,18 @@ spec:
       registry: docker.io
       repository: victoriametrics/vlagent
       tag: v1.52.0@sha256:5f8bb5cfde9745c02c3301426cad6fab4ef1d382161af577d284cccc9136b99c
+    env:
+    - name: KUBE_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
     remoteWrite:
     - url: http://victoria-logs.observability.svc.cluster.local:9428
       maxDiskUsagePerURL: 10GB
     collector:
+      extraFields: '{"collector_node":"%{KUBE_NODE_NAME}"}'
       streamFields:
-      - kubernetes.pod_name
-      - kubernetes.pod_namespace
-      - kubernetes.container_name
-      - kubernetes.pod_labels.app.kubernetes.io/name
+      - collector_node
       excludeFilter: kubernetes.pod_name:=%{HOSTNAME}
     extraArgs:
       kubernetesCollector.decolorizeFields: _msg
@@ -46,10 +49,10 @@ spec:
       enabled: true
     resources:
       requests:
-        cpu: 50m
+        cpu: 100m
         memory: 128Mi
       limits:
-        cpu: 500m
+        cpu: "1"
         memory: 512Mi
     tolerations:
     - operator: Exists

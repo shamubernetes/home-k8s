@@ -36,7 +36,7 @@ spec:
           init-buckets:
             image:
               repository: docker.io/amazon/aws-cli
-              tag: 2.35.9@sha256:01be46681e0bd75da54c2ca7c4edad9ecd29499f664cac5f6cbf0a189d67d0f3
+              tag: 2.36.8@sha256:7e1b11a3c93bc5af81f496de0662f666b2352a4a6666e8ebae904fe102b131b6
             envFrom: *envFrom
             env:
               S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
@@ -133,40 +133,6 @@ spec:
         ports:
           http:
             port: 6791
-    ingress:
-      api:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: convex-api.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: backend
-              port: api
-      actions:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: convex-actions.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: backend
-              port: actions
-      dashboard:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: convex.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: dashboard
-              port: http
     persistence:
       data:
         type: persistentVolumeClaim

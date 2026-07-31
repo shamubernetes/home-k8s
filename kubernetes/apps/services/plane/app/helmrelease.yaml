@@ -104,13 +104,7 @@ spec:
     license:
       licenseDomain: plane.${HOME_DOMAIN}
     ingress:
-      enabled: true
-      ingressClass: nginx
-      minioHost: ""
-      rabbitmqHost: ""
-      ingress_annotations:
-        external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        nginx.ingress.kubernetes.io/proxy-body-size: 20m
+      enabled: false
     ssl:
       createIssuer: false
       generateCerts: false

@@ -43,12 +43,6 @@ spec:
       ui:
         enabled: true
         rollOutPods: true
-        ingress:
-          enabled: true
-          annotations:
-            external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          className: internal
-          hosts: ["hubble.${HOME_DOMAIN}"]
     operator:
       prometheus:
         enabled: true

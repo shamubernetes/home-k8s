@@ -1,0 +1,15 @@
+---
+schemas:
+  "https://json.schemastore.org/github-workflow.json":
+  - ".github/workflows/*.yaml"
+  - ".github/workflows/*.yml"
+catalog: true
+kubernetes:
+  enabled: true
+renderers:
+  flate:
+    enabled: true
+    path: kubernetes
+customTags:
+- "!secret"
+- "!env_var"

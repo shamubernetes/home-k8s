@@ -5,6 +5,7 @@ metadata:
   name: &app bazarr
 spec:
   interval: 10m
+  timeout: 20m
   chartRef:
     kind: OCIRepository
     name: bazarr
@@ -64,7 +65,7 @@ spec:
                     port: *port
                   periodSeconds: 5
                   timeoutSeconds: 2
-                  failureThreshold: 60
+                  failureThreshold: 180
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true

@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+grep -Fq "timeout 30m \"\$talosctl\" --nodes \"\$node\" image pull \"\$image\"" \
+  scripts/talos-image-pull
+
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
@@ -107,6 +110,15 @@ case "$command" in
   pull)
     image=$5
     digest=${image##*@}
+    if [[ -n ${FAKE_PULL_BARRIER_DIR:-} ]]; then
+      mkdir -p "$FAKE_PULL_BARRIER_DIR"
+      touch "$FAKE_PULL_BARRIER_DIR/$node"
+      for _ in $(seq 1 200); do
+        [[ -e $FAKE_PULL_BARRIER_DIR/node1 && -e $FAKE_PULL_BARRIER_DIR/node2 ]] && break
+        sleep 0.01
+      done
+      [[ -e $FAKE_PULL_BARRIER_DIR/node1 && -e $FAKE_PULL_BARRIER_DIR/node2 ]]
+    fi
     [[ $image != */partial@* || $node != node2 ]] || exit 43
     size=1
     unit=MB
@@ -136,6 +148,7 @@ run_pull() {
   mkdir -p "$state"
   PATH="$tmpdir:$PATH" FAKE_STATE="$state" FAKE_LOG="$log" TALOSCTL="$tmpdir/talosctl" \
     FAKE_LIST_FAILURE="${FAKE_LIST_FAILURE:-}" FAKE_LIST_TRAILING="${FAKE_LIST_TRAILING:-}" \
+    FAKE_PULL_BARRIER_DIR="${FAKE_PULL_BARRIER_DIR:-}" \
     TALOS_NODES=node1,node2 IMAGES_JSON="[\"$image\"]" \
     PREFLIGHT_FLEET_BYTES="$bytes" scripts/talos-image-pull
 }
@@ -145,6 +158,9 @@ if grep -q 'image remove' "$tmpdir/success.log"; then
   echo 'successful pull unexpectedly invoked cleanup' >&2
   exit 1
 fi
+
+FAKE_PULL_BARRIER_DIR="$tmpdir/pull-barrier" \
+  run_pull "$tmpdir/concurrent-state" "$tmpdir/concurrent.log" "$small" >/dev/null
 
 mkdir -p "$tmpdir/empty-state"
 PATH="$tmpdir:$PATH" FAKE_STATE="$tmpdir/empty-state" FAKE_LOG="$tmpdir/empty.log" \

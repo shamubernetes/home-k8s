@@ -20,4 +20,8 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    connect: {}
+    connect:
+      pdb:
+        enabled: true
+        maxUnavailable: 0
+        minAvailable: 1

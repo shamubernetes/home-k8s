@@ -21,6 +21,8 @@ spec:
     keepHistory: false
   values:
     connect:
+      podAnnotations:
+        descheduler.alpha.kubernetes.io/evict: "false"
       pdb:
         enabled: true
         maxUnavailable: 0

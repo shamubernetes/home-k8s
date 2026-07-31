@@ -26,7 +26,12 @@ transforms:
   kubernetes_remap:
     type: remap
     inputs: ["kubernetes_source"]
+    drop_on_abort: true
     source: |
+      # Reject stale replay before it can poison an entire Loki batch
+      if is_timestamp(.timestamp) && to_unix_timestamp!(.timestamp) < to_unix_timestamp(now()) - 3600 {
+        abort
+      }
       # Standardize 'app' index and ensure sink labels are always renderable
       .custom_app_name = .pod_labels."app.kubernetes.io/name" || .pod_labels.app || .pod_labels."k8s-app" || "unknown"
       .kubernetes.pod_namespace = .kubernetes.pod_namespace || "unknown"

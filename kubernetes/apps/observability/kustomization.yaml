@@ -8,6 +8,7 @@ resources:
 - ./gatus/ks.yaml
 - ./vector/ks.yaml
 - ./loki/ks.yaml
+- ./victoria-logs/ks.yaml
 - ./tautulli/ks.yaml
 - ./grafana/ks.yaml
 - ./kuberhealthy/ks.yaml

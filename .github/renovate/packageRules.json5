@@ -344,7 +344,6 @@
       ],
       "minimumReleaseAge": "3 days",
       "automerge": false,
-      "reviewers": ["kiliantyler"],
     },
     {
       "description": "Never auto-merge application images",
@@ -355,13 +354,11 @@
         "!quay.io/ceph/ceph",
       ],
       "automerge": false,
-      "reviewers": ["kiliantyler"],
     },
     {
       "description": "Never auto-merge major updates or mixed-risk groups",
       "matchUpdateTypes": ["major"],
       "automerge": false,
-      "reviewers": ["kiliantyler"],
     },
     // Schedules for critical infrastructure
     {
@@ -373,7 +370,6 @@
       "matchDatasources": ["docker"],
       "minimumReleaseAge": "3 days",
       "automerge": false,
-      "reviewers": ["kiliantyler"],
       "schedule": ["* 2-5 8-14 * 6"]
     },
     {

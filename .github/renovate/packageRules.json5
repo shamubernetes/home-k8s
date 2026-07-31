@@ -31,21 +31,6 @@
       pinDigests: false,
     },
     {
-      description: "Grouped OCI charts do not publish release timestamps",
-      matchDatasources: ["docker"],
-      matchPackageNames: [
-        "quay.io/cilium/charts/cilium",
-        "ghcr.io/coredns/charts/coredns",
-        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
-        "ghcr.io/mariadb-operator/charts/mariadb-operator",
-        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
-        "ghcr.io/rook/rook-ceph",
-        "ghcr.io/rook/rook-ceph-cluster",
-        "ghcr.io/shamubernetes/charts/git-mirror-operator",
-      ],
-      minimumReleaseAgeBehaviour: "timestamp-optional",
-    },
-    {
       description: "Flux manages OCIRepository dependencies without regex duplication",
       matchManagers: ["custom.regex"],
       matchFileNames: ["**/ocirepository.yaml"],
@@ -384,7 +369,7 @@
         "kubernetes/apps/**/*-crds*/**",
         "kubernetes/apps/**/*-operator*/**",
       ],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
     },
@@ -414,7 +399,7 @@
         "ghcr.io/siderolabs/kubelet"
       ],
       "matchDatasources": ["docker"],
-      "minimumReleaseAge": "7 days",
+      "minimumReleaseAge": "3 days",
       "automerge": false,
       "reviewers": ["kiliantyler"],
       "schedule": ["* 2-5 8-14 * 6"]
@@ -423,10 +408,27 @@
       "description": "Wait 3 days before updating critical infrastructure",
       "matchPackageNames": [
         "/cilium/",
+        "coredns",
+        "prometheus-operator-crds",
         "ghcr.io/rook/rook-ceph",
         "ghcr.io/rook/rook-ceph-cluster",
       ],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Grouped OCI charts rely on their atomic partners for release age",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "quay.io/cilium/charts/cilium",
+        "ghcr.io/coredns/charts/coredns",
+        "ghcr.io/prometheus-community/charts/prometheus-operator-crds",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator",
+        "ghcr.io/mariadb-operator/charts/mariadb-operator-crds",
+        "ghcr.io/rook/rook-ceph",
+        "ghcr.io/rook/rook-ceph-cluster",
+        "ghcr.io/shamubernetes/charts/git-mirror-operator",
+      ],
+      "minimumReleaseAge": "0 days"
     },
   ],
 }

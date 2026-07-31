@@ -5,4 +5,8 @@ resources:
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./externalsecret.yaml
+- ./externalsecret-oidc.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy-browser.yaml
+- ./securitypolicy-oidc.yaml
+- ./service-envoy-dns.yaml

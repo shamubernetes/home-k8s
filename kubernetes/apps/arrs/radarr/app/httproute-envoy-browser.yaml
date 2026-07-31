@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr-envoy-browser
+spec:
+  hostnames:
+  - radarr.${HOME_DOMAIN}
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: envoy-internal
+    namespace: network
+    sectionName: https
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        remove:
+        - Authorization
+        - X-Auth-Request-User
+        - X-Auth-Request-Email
+        - X-Auth-Request-Groups
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: radarr
+      port: 80

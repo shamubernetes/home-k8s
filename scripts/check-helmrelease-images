@@ -201,7 +201,7 @@ while IFS=$'\t' read -r skipped_app expected_failure reason; do
   if [[ -z $expected_failure || -z $reason ]]; then
     printf 'invalid Helm image validation skip entry: %s\n' "$skipped_app" >&2
     status=1
-  elif ! grep -Fxq "$skipped_app" "$all_apps"; then
+  elif ! grep -Fxq "$skipped_app" "$all_apps" && [[ $reason != retired:* ]]; then
     printf 'Helm image validation skip no longer matches a tracked release directory: %s\n' "$skipped_app" >&2
     status=1
   fi

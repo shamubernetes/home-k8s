@@ -82,7 +82,31 @@ def compact_alert(alert):
         "severity": labels.get("severity", "unknown"),
         "namespace": labels.get("namespace"),
         "node": labels.get("node") or labels.get("kubernetes_node"),
+        "device": labels.get("device"),
     }
+
+
+def parse_alert_selector(value):
+    labels = {}
+    for item in value.split(","):
+        name, separator, expected = item.partition("=")
+        name = name.strip()
+        expected = expected.strip()
+        if not separator or not name or not expected:
+            raise argparse.ArgumentTypeError(
+                "active-alert selectors must use label=value pairs separated by commas"
+            )
+        labels[name] = expected
+    if "alertname" not in labels or len(labels) < 2:
+        raise argparse.ArgumentTypeError(
+            "active-alert selectors must include alertname and at least one scoping label"
+        )
+    return labels
+
+
+def alert_matches_selector(alert, selector):
+    labels = alert.get("labels", {})
+    return all(labels.get(name) == expected for name, expected in selector.items())
 
 
 def matcher_signature(matchers):
@@ -543,8 +567,10 @@ def active_owned_silences(cluster):
     return list(found.values())
 
 
-def unsilenced_blockers(cluster):
+def unsilenced_blockers(cluster, allowed_alerts=None):
+    allowed_alerts = allowed_alerts or []
     blockers = {}
+    allowed = {}
     for _, alerts in cluster.all_alerts():
         for alert in alerts:
             status = alert.get("status", {})
@@ -556,8 +582,11 @@ def unsilenced_blockers(cluster):
                 and labels.get("alertname") not in EXCLUDED_ALERTS
             ):
                 item = compact_alert(alert)
-                blockers[json.dumps(item, sort_keys=True)] = item
-    return list(blockers.values())
+                if any(alert_matches_selector(alert, selector) for selector in allowed_alerts):
+                    allowed[json.dumps(item, sort_keys=True)] = item
+                else:
+                    blockers[json.dumps(item, sort_keys=True)] = item
+    return list(blockers.values()), list(allowed.values())
 
 
 def member_coverage(member, silence_id):
@@ -673,7 +702,7 @@ def expire_silence(cluster, silence_id):
     )
 
 
-def begin(cluster, reason, duration):
+def begin(cluster, reason, duration, allowed_alerts=None):
     with begin_lock() as lock:
         lock.assert_healthy()
         peers = cluster.require_healthy()
@@ -683,7 +712,7 @@ def begin(cluster, reason, duration):
             raise MaintenanceError(
                 f"an owned maintenance silence is already active ({ids}); renew or end it explicitly"
             )
-        blockers = unsilenced_blockers(cluster)
+        blockers, allowed = unsilenced_blockers(cluster, allowed_alerts)
         if blockers:
             names = ", ".join(item["alertname"] for item in blockers)
             raise MaintenanceError(
@@ -721,6 +750,7 @@ def begin(cluster, reason, duration):
             "coveredAlerts": len(covered),
             "coveredAlertNames": covered,
             "excludedAlerts": excluded,
+            "allowedBaselineAlerts": allowed,
         }
 
 
@@ -919,6 +949,17 @@ def build_parser():
     begin_parser = subparsers.add_parser("begin", help="start and verify a maintenance silence")
     begin_parser.add_argument("--reason", required=True, help="human-readable maintenance reason")
     begin_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
+    begin_parser.add_argument(
+        "--allow-active-alert",
+        action="append",
+        type=parse_alert_selector,
+        default=[],
+        metavar="LABEL=VALUE,...",
+        help=(
+            "allow one exact, known baseline warning/critical alert during admission; "
+            "repeatable and must include alertname plus a scoping label"
+        ),
+    )
     renew_parser = subparsers.add_parser("renew", help="extend an active owned silence")
     renew_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
     renew_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
@@ -937,7 +978,7 @@ def main():
     try:
         with alertmanager_cluster() as cluster:
             if args.command == "begin":
-                result = begin(cluster, args.reason, args.duration)
+                result = begin(cluster, args.reason, args.duration, args.allow_active_alert)
             elif args.command == "renew":
                 result = renew(cluster, args.id, args.duration)
             elif args.command == "end":

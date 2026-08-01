@@ -24,10 +24,6 @@ spec:
     namespace: openebs-system
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  - name: vector-agent
-    namespace: observability
-  - name: vector-aggregator
-    namespace: observability
   valuesFrom:
   # NOTE: BUCKET_HOST from OBC doesn't include protocol, but Loki requires a valid URI
   # - targetPath: loki.storage.s3.endpoint

@@ -104,10 +104,8 @@ graph TB
         CRDs`"]
         KubePromStack["`**kube-prometheus-stack**
         Prometheus/Grafana`"]
-        Loki["`**loki**
-        Logging`"]
-        Vector["`**vector**
-        Log aggregation`"]
+        VictoriaLogs["`**victoria-logs**
+        Logging and collection`"]
         Gatus["`**gatus**
         Status page`"]
         Grafana["`**grafana**
@@ -185,8 +183,8 @@ graph TB
     %% Observability Dependencies
     ClusterApps --> PromOpCRDs
     SecretStore --> KubePromStack
-    SecretStore --> Loki
-    SecretStore --> Vector
+    KubePromStack --> VictoriaLogs
+    RookCluster --> VictoriaLogs
     CNPGCluster --> Gatus
     SecretStore --> Gatus
     CNPGCluster --> Grafana
@@ -215,7 +213,7 @@ graph TB
     class GitRepo,OCIRepo,HelmRepos sourceStyle
     class Cluster,ClusterApps,FluxKust rootStyle
     class OPConnect,ExternalSecrets,SecretStore,CertManager,CertIssuers,Cilium,CiliumConfig,NFD,NFDRules,ExternalDNS,ExternalDNSUnifi,RookCeph,RookCluster,VolSync,SnapshotCtrl,CNPG,CNPGCluster,Dragonfly,DragonflyCluster,IngressCerts,IngressExt,IngressInt,Cloudflared infraStyle
-    class AdGuard,Plex,Radarr,Sonarr,HomeAssistant,GHARController,GHARZoo,KubePromStack,Loki,Vector,Gatus,Grafana,FluxMonitoring,FluxWebhooks appStyle
+    class AdGuard,Plex,Radarr,Sonarr,HomeAssistant,GHARController,GHARZoo,KubePromStack,VictoriaLogs,Gatus,Grafana,FluxMonitoring,FluxWebhooks appStyle
 ```
 
 ## Dependency Flow Summary

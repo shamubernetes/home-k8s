@@ -151,7 +151,6 @@ spec:
         apiVersion: 1
         deleteDatasources:
         - {name: Alertmanager, orgId: 1}
-        - {name: Loki, orgId: 1}
         - {name: Prometheus, orgId: 1}
         - {name: VictoriaLogs, orgId: 1}
         datasources:

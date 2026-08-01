@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-loki-backend-0
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  volumeName: pvc-f70c2600-bfe9-4320-ad2c-d81c53aacc6e
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-loki-backend-1
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  volumeName: pvc-ef4c13bb-b58d-46ed-9de0-c17a6a8cb9d7
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-loki-write-0
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  volumeName: pvc-e5773464-594a-4f8f-9a0d-b55bf90f6fed
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-loki-write-1
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  volumeName: pvc-ee6c5fdd-a7a3-4d8c-a028-101f612d5789

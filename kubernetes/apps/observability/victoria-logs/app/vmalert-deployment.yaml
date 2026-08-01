@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/apps/v1/deployment.json
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: victoria-logs-vmalert
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: victoria-logs-vmalert
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: victoria-logs-vmalert
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: vmalert
+        image: docker.io/victoriametrics/vmalert:v1.148.0@sha256:268ab5df69360a236e1382db0dbde44d5c32362b85501f761d61fc25c76f05ce
+        imagePullPolicy: IfNotPresent
+        args:
+        - -datasource.url=http://victoria-logs.observability.svc.cluster.local:9428
+        - -notifier.url=http://kube-prometheus-stack-alertmanager.observability.svc.cluster.local:9093
+        - -rule=/etc/vmalert/rules/*.yaml
+        - -rule.evalDelay=5s
+        - -httpListenAddr=:8880
+        - -loggerFormat=json
+        ports:
+        - name: http
+          containerPort: 8880
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+        volumeMounts:
+        - name: rules
+          mountPath: /etc/vmalert/rules
+          readOnly: true
+      volumes:
+      - name: rules
+        configMap:
+          name: victoria-logs-vmalert-rules

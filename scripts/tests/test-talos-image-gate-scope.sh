@@ -10,6 +10,10 @@ cd "$repo_root"
   'scripts/flate-render-baseline.tsv' |
   scripts/talos-image-gate-scope) == applicable ]]
 [[ $(printf '%s\n' \
+  'kubernetes/apps/observability/victoria-logs/app/helmrelease.yaml' \
+  'scripts/helm-image-validation-skips.txt' |
+  scripts/talos-image-gate-scope) == applicable ]]
+[[ $(printf '%s\n' \
   'kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml' \
   'scripts/helm-image-pin-baseline.txt' |
   scripts/talos-image-gate-scope) == applicable ]]
@@ -18,6 +22,7 @@ cd "$repo_root"
   'talos/helmfile.yaml' |
   scripts/talos-image-gate-scope) == applicable ]]
 [[ $(printf '%s\n' '.github/workflows/image-gate.yaml' 'scripts/talos-image-gate-scope' | scripts/talos-image-gate-scope) == not-applicable ]]
+[[ $(printf '%s\n' 'scripts/helm-image-validation-skips.txt' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'talos/talconfig.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'talos/patches/worker/runtime.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]

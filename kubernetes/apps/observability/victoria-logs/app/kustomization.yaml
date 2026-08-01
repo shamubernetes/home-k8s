@@ -5,4 +5,5 @@ resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
 - ./prometheusrule.yaml
+- ./acceptance-job.yaml
 - ./collector

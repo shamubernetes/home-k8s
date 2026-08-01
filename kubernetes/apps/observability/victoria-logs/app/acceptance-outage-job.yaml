@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-batch-v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: victoria-logs-outage-20260801
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: victoria-logs-outage-acceptance
+        observability.home.arpa/workstream: victoria-logs-i2
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: marker-writer
+        image: docker.io/library/busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+        command:
+        - /bin/sh
+        - -ec
+        - |
+          sleep 120
+          i=1
+          while [ "$i" -le 2000 ]; do
+            printf '{"_msg":"victoria_logs_buffer_replay","hermes_marker":"workstream_i2_outage_20260801","hermes_sequence":%s,"level":"info","event":"victoria_logs_buffer_acceptance"}\n' "$i"
+            i=$((i + 1))
+          done
+          sleep 10
+        resources:
+          requests:
+            cpu: 25m
+            memory: 16Mi
+          limits:
+            cpu: 250m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true

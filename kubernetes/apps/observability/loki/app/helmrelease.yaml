@@ -143,7 +143,7 @@ spec:
       image:
         registry: docker.io
         repository: prom/memcached-exporter
-        tag: v0.15.4@sha256:b6763ecb3c47f2408e0398518851b7f8c5fc46232b2649f8c78a321130c54266
+        tag: v0.16.0@sha256:fa03aba2f2aa6f572bf56ba07dd2960c62433805427be0fddc8b21b8074c1728
     sidecar:
       image:
         registry: docker.io

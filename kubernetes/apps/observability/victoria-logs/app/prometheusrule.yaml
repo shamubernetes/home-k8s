@@ -77,3 +77,64 @@ spec:
       for: 15m
       labels:
         severity: warning
+  - name: victoria-logs.collector
+    rules:
+    - alert: VictoriaLogsCollectorTargetsMissing
+      annotations:
+        summary: VictoriaLogs is missing {{ $value }} collector target(s).
+      expr: |
+        scalar(
+          kube_daemonset_status_desired_number_scheduled{
+            namespace="observability",
+            daemonset="victoria-logs-collector"
+          }
+        )
+        -
+        (
+          count(up{job="observability/victoria-logs-collector"})
+          or vector(0)
+        ) > 0
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsCollectorRemoteWriteErrors
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} is continuously failing remote writes.
+      expr: increase(vlagent_remotewrite_errors_total{job="observability/victoria-logs-collector"}[5m]) > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsCollectorDroppedData
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} dropped buffered log data.
+      expr: |
+        increase(vlagent_remotewrite_packets_dropped_total{job="observability/victoria-logs-collector"}[5m]) > 0
+        or
+        increase(vm_persistentqueue_blocks_dropped_total{job="observability/victoria-logs-collector"}[5m]) > 0
+        or
+        increase(vm_persistentqueue_bytes_dropped_total{job="observability/victoria-logs-collector"}[5m]) > 0
+      labels:
+        severity: critical
+    - alert: VictoriaLogsCollectorBufferPressure
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} queue is more than 80% full.
+      expr: |
+        vm_persistentqueue_bytes_pending{job="observability/victoria-logs-collector"}
+        /
+        (
+          vm_persistentqueue_bytes_pending{job="observability/victoria-logs-collector"}
+          + vm_persistentqueue_free_disk_space_bytes{job="observability/victoria-logs-collector"}
+        ) > 0.8
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsCollectorWritesStalled
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} has queued data but no successful writes.
+      expr: |
+        vlagent_remotewrite_pending_data_bytes{job="observability/victoria-logs-collector"} > 0
+        and on(instance, pod, url)
+        increase(vlagent_remotewrite_blocks_sent_total{job="observability/victoria-logs-collector"}[10m]) == 0
+      for: 10m
+      labels:
+        severity: critical

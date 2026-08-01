@@ -19,15 +19,32 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: StatefulSet
+          name: loki-backend
+        patch: |-
+          - op: add
+            path: /spec/persistentVolumeClaimRetentionPolicy
+            value:
+              whenDeleted: Retain
+              whenScaled: Retain
+      - target:
+          kind: StatefulSet
+          name: loki-write
+        patch: |-
+          - op: add
+            path: /spec/persistentVolumeClaimRetentionPolicy
+            value:
+              whenDeleted: Retain
+              whenScaled: Retain
   dependsOn:
   - name: openebs
     namespace: openebs-system
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  - name: vector-agent
-    namespace: observability
-  - name: vector-aggregator
-    namespace: observability
   valuesFrom:
   # NOTE: BUCKET_HOST from OBC doesn't include protocol, but Loki requires a valid URI
   # - targetPath: loki.storage.s3.endpoint
@@ -111,6 +128,7 @@ spec:
     backend:
       replicas: 2
       persistence:
+        enableStatefulSetAutoDeletePVC: false
         size: 20Gi
         storageClass: openebs-hostpath
       podLabels:
@@ -176,6 +194,7 @@ spec:
     write:
       replicas: 2
       persistence:
+        enableStatefulSetAutoDeletePVC: false
         size: 20Gi
         storageClass: openebs-hostpath
       podLabels:

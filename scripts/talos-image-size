@@ -15,7 +15,7 @@ MANIFEST_MEDIA_TYPES = {
     "application/vnd.docker.distribution.manifest.v2+json",
     "application/vnd.oci.image.manifest.v1+json",
 }
-MAX_IMAGE_BYTES = 5_000_000_000
+MAX_IMAGE_BYTES = 6_000_000_000
 MAX_FLEET_BYTES = 20_000_000_000
 
 

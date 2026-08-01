@@ -28,8 +28,17 @@ spec:
     crds:
       enabled: false
     cleanPrometheusOperatorObjectNames: true
+    prometheusOperator:
+      image:
+        sha: a001ed10a3823bbf2410ea347796d0e35ff8decd24fb98acbe7ab9e98d431c39
+      admissionWebhooks:
+        patch:
+          image:
+            sha: d0e80b2f62fe43bb5e1b96adc692132fb4522e802f4cf673c09b1f94722b8cb6
     alertmanager:
       alertmanagerSpec:
+        image:
+          sha: 9e082985f56f4c8c9f724e18f2288c6708f472e56a5286b8863d080434ea065d
         replicas: 2
         alertmanagerConfiguration:
           name: alertmanager
@@ -52,10 +61,6 @@ spec:
       rules:
         kubeApiserverAvailability: false
         kubeApiserverBurnrate: false
-    kubeApiServer:
-      serviceMonitor:
-        selector:
-          k8s-app: kube-apiserver
     kubeScheduler:
       service:
         selector:
@@ -70,6 +75,8 @@ spec:
       enabled: false
     prometheus:
       prometheusSpec:
+        image:
+          sha: 64f71bb84e03c855948418b0fc5dea53e9543d8e3fc9931598f583805507f05e
         replicas: 2
         podMonitorSelectorNilUsesHelmValues: false
         probeSelectorNilUsesHelmValues: false
@@ -97,6 +104,8 @@ spec:
                 requests:
                   storage: 50Gi
     prometheus-node-exporter:
+      image:
+        digest: sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106
       fullnameOverride: node-exporter
       prometheus:
         monitor:

@@ -18,8 +18,8 @@ data:
         dns:
           query-name: "rook.${HOME_DOMAIN}"
           query-type: A
+        extra-labels:
+          alerting: "true"
         conditions:
           - "[DNS_RCODE] == NXDOMAIN"
           - "len([BODY]) == 0"
-        alerts:
-          - type: pagerduty

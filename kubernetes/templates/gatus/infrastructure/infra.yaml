@@ -15,7 +15,7 @@ data:
       ui:
         hide-hostname: true
         hide-url: true
+      extra-labels:
+        alerting: "true"
       conditions:
       - ${GATUS_INFRA_CONDITION:-"[CONNECTED] == true"}
-      alerts:
-      - type: pagerduty

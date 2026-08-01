@@ -17,7 +17,7 @@ data:
       ui:
         hide-hostname: true
         hide-url: true
+      extra-labels:
+        alerting: "true"
       conditions:
       - "[STATUS] == ${GATUS_STATUS:-200}"
-      alerts:
-      - type: pagerduty

@@ -14,7 +14,7 @@ data:
       interval: 1m
       client:
         dns-resolver: tcp://1.1.1.1:53
+      extra-labels:
+        alerting: "true"
       conditions:
       - "[STATUS] == ${GATUS_STATUS:-200}"
-      alerts:
-      - type: pagerduty

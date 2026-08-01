@@ -53,6 +53,9 @@ spec:
       className: csi-ceph-blockpool
       walClassName: csi-ceph-blockpool
       snapshotOwnerReference: cluster
+      onlineConfiguration:
+        # Finish the standby restartpoint before recovery can cancel backup startup.
+        immediateCheckpoint: true
   # Note: Uncomment bootstrap section to recover from backup
   # After successful migration, comment this out and increment serverName in ObjectStore
   # bootstrap:

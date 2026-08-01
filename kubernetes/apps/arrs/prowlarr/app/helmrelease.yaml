@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: ghcr.io/home-operations/prowlarr
-              tag: 2.4.0.5397@sha256:8a140c9104c754a272f5e0d1dfcb32a06f07946a431a45c1083a16344f531748
+              tag: 2.6.0.5494@sha256:f2db7fc93c2c26476de74695b565bfced0f39255cdba30fedf6d1ec45789f818
             env:
               PROWLARR__APP__INSTANCENAME: Prowlarr
               PROWLARR__APP__THEME: dark
@@ -81,30 +81,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Groups
-          nginx.ingress.kubernetes.io/auth-signin: https://$host/oauth2/start?rd=$escaped_request_uri
-          nginx.ingress.kubernetes.io/auth-url: http://oauth2-proxy.arrs.svc.cluster.local:4180/oauth2/auth
-        className: internal
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
-      api:
-        className: internal
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /api
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         type: emptyDir

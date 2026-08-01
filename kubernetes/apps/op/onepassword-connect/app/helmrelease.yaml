@@ -21,13 +21,9 @@ spec:
     keepHistory: false
   values:
     connect:
-      ingress:
+      podAnnotations:
+        descheduler.alpha.kubernetes.io/evict: "false"
+      pdb:
         enabled: true
-        ingressClassName: internal
-        pathType: Prefix
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        hosts:
-          - host: op-connect.${HOME_DOMAIN}
-            paths:
-              - /
+        maxUnavailable: 0
+        minAvailable: 1

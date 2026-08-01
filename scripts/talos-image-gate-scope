@@ -15,6 +15,7 @@ NON_EXECUTABLE_DATA = frozenset(
     {
         "scripts/flate-render-baseline.tsv",
         "scripts/helm-image-pin-baseline.txt",
+        "talos/helmfile.yaml",
     }
 )
 

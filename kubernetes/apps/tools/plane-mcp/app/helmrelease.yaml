@@ -25,7 +25,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/plane-cli
-              tag: v0.2.2@sha256:788149d12b5395abb803b7ed3f988fcd0de0c3b8f484010ab02800c8b22fc02f
+              tag: v0.2.3@sha256:6fa004f31637efc2c58f339bef5ce590f98d99835e9c546531cc5adf5a3e318a
             env:
               HOST: 0.0.0.0
               PORT: &port 3000
@@ -68,19 +68,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: plane-mcp.${HOME_DOMAIN}
-          paths:
-          - path: /mcp
-            pathType: Prefix
-            service:
-              identifier: app
-              port: http
     persistence:
       data:
         type: emptyDir

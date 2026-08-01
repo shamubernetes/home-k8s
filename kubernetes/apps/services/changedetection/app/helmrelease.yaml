@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/dgtlmoon/changedetection.io
-              tag: 0.55.7@sha256:ea7429f478394d96c8d8b545e4aa93eb17c7ac3ccb06e0ae9f49d15b428f0b84
+              tag: 0.55.8@sha256:fab18103da4995c98df9529752848ccb061b4ecf8bd24c307936af0656f8ba16
             env:
               BASE_URL: https://changedetection.${HOME_DOMAIN}
               DISABLE_VERSION_CHECK: "true"
@@ -103,18 +103,6 @@ spec:
         ports:
           http:
             port: 3000
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       datastore:
         existingClaim: *app

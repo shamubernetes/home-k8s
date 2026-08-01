@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-logs
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: victoria-logs
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: ConfigMap
+          name: victoria-logs-victoria-logs-single-vector-k8s-monitoring
+        patch: |-
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: victoria-logs-victoria-logs-single-vector-k8s-monitoring
+          $patch: delete
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: kube-prometheus-stack
+    namespace: observability
+  values:
+    dashboards:
+      enabled: true
+      labels:
+        grafana_dashboard: "1"
+    server:
+      fullnameOverride: victoria-logs
+      image:
+        registry: docker.io
+        repository: victoriametrics/victoria-logs
+        tag: v1.52.0@sha256:47b820890d64c4575a2a0a46415dcd8a4fd59a0f1fcd6a377693d7aea639442e
+      retentionPeriod: 7d
+      retentionDiskSpaceUsage: 85GiB
+      persistentVolume:
+        enabled: true
+        accessModes:
+        - ReadWriteOnce
+        storageClassName: ceph-block
+        size: 100Gi
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: "4"
+          memory: 4Gi
+      serviceMonitor:
+        enabled: true
+    vector:
+      enabled: false

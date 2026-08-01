@@ -34,7 +34,7 @@ spec:
           app:
             image:
               repository: ghcr.io/atuinsh/atuin
-              tag: 18.16.1@sha256:9d4d79507b51be6d292b218f5cc791d79ca0a72f51ab48f786b091bd6eafb39f
+              tag: 18.18.1@sha256:8573bcd8343325e3de6f8322787881faeb9e82bee703b5969a55005b69d62e24
             env:
               ATUIN_HOST: 0.0.0.0
               ATUIN_PORT: &port 80
@@ -91,18 +91,6 @@ spec:
           path: /metrics
           interval: 1m
           scrapeTimeout: 10s
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-        className: external
-        hosts:
-        - host: atuin.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         type: emptyDir

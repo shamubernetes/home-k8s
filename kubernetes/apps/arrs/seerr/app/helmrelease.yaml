@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/seerr-team/seerr
-              tag: v3.3.0@sha256:2892b14e960d946fb91573792505dcba011075638f27104360fd21aa157fa2bc
+              tag: v3.4.1@sha256:b21cf91bb7a10d70446e104e7b7b9c9c386aa22beeac535a3271cbfc5843d142
             env:
               TZ: America/New_York
               LOG_LEVEL: "info"
@@ -71,18 +71,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-        className: external
-        hosts:
-        - host: requests.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         existingClaim: seerr

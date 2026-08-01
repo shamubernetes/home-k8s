@@ -30,7 +30,7 @@ spec:
           hamass:
             image:
               repository: curlimages/curl
-              tag: 8.20.0@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a
+              tag: 8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
             command:
             - sh
             - -c
@@ -84,7 +84,7 @@ spec:
           app:
             image:
               repository: ghcr.io/home-operations/plex
-              tag: 1.43.2.10687@sha256:be00a2ad851ea3193cd870636f908eb6425ad89390f23cdb08daa35ab5cceacc
+              tag: 1.43.3.10828@sha256:0c0b6899339503af17cb190b25af6acf10f0030e2820985e16ee14ef428f49d7
             env:
               TZ: America/New_York
               PLEX_ADVERTISE_URL: https://plex.${HOME_DOMAIN}:443,http://${IPAM_IP_PLEX}:32400
@@ -168,19 +168,6 @@ spec:
         ports:
           http:
             port: *plexPort
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: external.${HOME_DOMAIN}
-          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-        className: external
-        hosts:
-        - host: "{{ .Release.Name }}.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         existingClaim: plex

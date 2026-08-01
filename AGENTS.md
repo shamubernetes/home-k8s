@@ -27,6 +27,9 @@ task kubernetes:sync-secrets ns=<namespace> secret=<name>
 # Validate a GitOps app without applying it
 task kubernetes:validate-app app=<category>/<app>
 
+# Run focused schema validation on YAML files or directories
+task kubernetes:validate-yaml path=<path>
+
 # Resolve a mutable image tag to an immutable digest reference
 task kubernetes:pin-image image=docker.io/library/nginx:latest
 
@@ -98,9 +101,10 @@ Each app follows: `kubernetes/apps/<category>/<app>/app/`
 
 ## Tooling and Python
 
-- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, Renovate, and Python.
+- Use the tools declared in `.mise.toml` for this repo: `kubectl`, `sops`, `age`, `task`, `flux2`, `talhelper`, `talosctl`, `krew`, Renovate, `yayamlls`, and Python.
 - Python is pinned through Mise for standard-library-only validation helpers. The repository does not declare third-party Python dependencies such as PyYAML.
 - For YAML inspection and transformation, prefer `yq`, `kubectl kustomize`, `helm template`, and the scripts under `scripts/`.
+- Use `yayamlls` for focused schema and language-server validation. It does not format YAML; preserve the repository's existing YAML style when editing.
 - If a helper script uses Python, keep it Python standard-library only unless a Python environment and dependency file are added deliberately.
 - Do not install Python packages globally/Homebrew just to inspect YAML. If a one-off Python dependency is unavoidable, use an isolated temporary environment and do not make it part of the repo workflow without adding explicit project config.
 

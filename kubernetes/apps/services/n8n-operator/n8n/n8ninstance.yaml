@@ -7,7 +7,7 @@ metadata:
 spec:
   replicas: 1
   deploymentStrategy: Recreate
-  image: docker.io/n8nio/n8n:2.30.8@sha256:11524034450080bd0032754892b23ff20be43d72cf320ce75640f7c5475fdca8
+  image: docker.io/n8nio/n8n:2.33.1@sha256:5dcddc592d31f3a2b5e778097c161fe7d7e323dbd852a4b64a9be5931fd20fc0
   imagePullPolicy: IfNotPresent
   timezone: "America/New_York"
 
@@ -69,15 +69,6 @@ spec:
   service:
     type: ClusterIP
     port: 5678
-
-  ingress:
-    enabled: true
-    className: internal
-    host: n8n.${HOME_DOMAIN}
-    path: /
-    pathType: Prefix
-    annotations:
-      external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
 
   persistence:
     enabled: true

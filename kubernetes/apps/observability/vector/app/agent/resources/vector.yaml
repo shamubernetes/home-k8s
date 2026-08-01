@@ -4,6 +4,10 @@ sources:
   kubernetes_source:
     type: kubernetes_logs
     use_apiserver_cache: true
+    read_from: end
+    ignore_older_secs: 3600
+    exclude_paths_glob_patterns:
+      - "**/*.log.*"
     pod_annotation_fields:
       container_image: container_image
       container_name: container_name

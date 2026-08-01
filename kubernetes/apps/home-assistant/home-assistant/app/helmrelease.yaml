@@ -37,7 +37,7 @@ spec:
           install-hacs:
             image:
               repository: busybox
-              tag: 1.38.0@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+              tag: 1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
             command:
             - "/bin/sh"
             - -c
@@ -68,7 +68,7 @@ spec:
           code-server:
             image:
               repository: ghcr.io/coder/code-server
-              tag: 4.125.0@sha256:9a7848dd2627158e3873f88bd8743807a4168e4d580f26ec0cbc132a9d9ee78e
+              tag: 4.131.0@sha256:3623e6362abdec6258472882b06fdeec9d6ce2ad3fda316b3c5d7ed092b89add
             args: ["--auth", "none", "--user-data-dir", "/config/.vscode", "--extensions-dir", "/config/.vscode", "--port", "12321", "/config"]
             resources:
               requests:
@@ -93,29 +93,6 @@ spec:
             port: 8123
           code-server:
             port: 12321
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: "ha.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
-      code-server:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        className: internal
-        hosts:
-        - host: code.ha.${HOME_DOMAIN}
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: code-server
     persistence:
       config:
         existingClaim: home-assistant

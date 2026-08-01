@@ -32,7 +32,7 @@ spec:
           books-canary:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:8700c1d3b6bb94e1b5f9482bac12e39652ed737de02f256920e1ad982a7ac0f1
+              tag: latest@sha256:bd314405a9ca1eb176d1618c38f19948a1feb18ec4190a7665d3096163eab0a4
             command:
               - /bin/sh
               - -ec
@@ -45,7 +45,7 @@ spec:
           app:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:8700c1d3b6bb94e1b5f9482bac12e39652ed737de02f256920e1ad982a7ac0f1
+              tag: latest@sha256:bd314405a9ca1eb176d1618c38f19948a1feb18ec4190a7665d3096163eab0a4
             env:
               TZ: ${TIMEZONE}
               PUID: "568"
@@ -95,7 +95,7 @@ spec:
           books-monitor:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:8700c1d3b6bb94e1b5f9482bac12e39652ed737de02f256920e1ad982a7ac0f1
+              tag: latest@sha256:bd314405a9ca1eb176d1618c38f19948a1feb18ec4190a7665d3096163eab0a4
             command:
               - /bin/sh
               - -ec
@@ -145,18 +145,6 @@ spec:
         ports:
           http:
             port: *port
-    ingress:
-      app:
-        className: internal
-        annotations:
-          external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-        hosts:
-        - host: "books.${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
     persistence:
       config:
         existingClaim: cwa-bdl

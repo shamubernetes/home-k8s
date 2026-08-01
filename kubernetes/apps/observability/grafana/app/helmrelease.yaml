@@ -19,7 +19,7 @@ spec:
   dependsOn:
   - name: kube-prometheus-stack
     namespace: observability
-  - name: loki
+  - name: victoria-logs
     namespace: observability
   values:
     extraInitContainers:
@@ -39,6 +39,7 @@ spec:
       GF_DATE_FORMATS_USE_BROWSER_LOCALE: true
       GF_EXPLORE_ENABLED: true
       GF_FEATURE_TOGGLES_ENABLE: publicDashboards
+      GF_INSTALL_PLUGINS_FORCE: "true"
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: natel-discrete-panel,pr0ps-trackmap-panel,panodata-map-panel
       GF_SECURITY_ANGULAR_SUPPORT_ENABLED: true
       GF_SECURITY_COOKIE_SAMESITE: grafana
@@ -152,6 +153,7 @@ spec:
         - {name: Alertmanager, orgId: 1}
         - {name: Loki, orgId: 1}
         - {name: Prometheus, orgId: 1}
+        - {name: VictoriaLogs, orgId: 1}
         datasources:
         - name: Prometheus
           type: prometheus
@@ -159,13 +161,12 @@ spec:
           access: proxy
           url: http://prometheus-operated.observability.svc.cluster.local:9090
           isDefault: true
-        - name: Loki
-          type: loki
-          uid: loki
+        - name: VictoriaLogs
+          type: victoriametrics-logs-datasource
+          uid: victorialogs
           access: proxy
-          url: http://loki-gateway.observability.svc.cluster.local
-          jsonData:
-            maxLines: 250
+          url: http://victoria-logs.observability.svc.cluster.local:9428
+          isDefault: false
         - name: Alertmanager
           type: alertmanager
           uid: alertmanager
@@ -279,13 +280,6 @@ spec:
           gnetId: 11454
           revision: 14
           datasource: Prometheus
-      nginx:
-        nginx:
-          url: https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/grafana/dashboards/nginx.json
-          datasource: Prometheus
-        nginx-request-handling-performance:
-          url: https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/grafana/dashboards/request-handling-performance.json
-          datasource: Prometheus
       prometheus:
         prometheus:
           # renovate: depName="Prometheus"
@@ -332,15 +326,10 @@ spec:
     - grafana-worldmap-panel
     - natel-discrete-panel
     - pr0ps-trackmap-panel
+    - victoriametrics-logs-datasource 0.30.1
     - vonage-status-panel
     serviceMonitor:
       enabled: true
-    ingress:
-      enabled: true
-      annotations:
-        external-dns.alpha.kubernetes.io/target: internal.${HOME_DOMAIN}
-      ingressClassName: internal
-      hosts: ["grafana.${HOME_DOMAIN}"]
     persistence:
       enabled: false
     testFramework:

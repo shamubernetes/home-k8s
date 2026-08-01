@@ -309,37 +309,10 @@
       },
       "separateMinorPatch": false,
     },
-    // Deny-by-default automerge. Every opt-in below uses exact package names,
-    // is separated from dependency groups, keeps CI mandatory, and waits long
-    // enough for upstream regressions or yanks to surface.
     {
-      "description": "Auto-merge trusted GitHub-owned action digest updates",
-      "matchManagers": ["github-actions"],
-      "matchDatasources": ["github-tags"],
-      "matchPackageNames": ["actions/checkout"],
-      "matchUpdateTypes": ["digest"],
-      "minimumReleaseAge": "7 days",
-      "groupName": null,
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": false,
-      "ignoreTests": false,
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
-    },
-    {
-      "description": "Auto-merge exact low-risk static-analysis tool patches",
-      "matchManagers": ["mise"],
-      "matchPackageNames": ["actionlint", "shellcheck", "zizmor"],
-      "matchUpdateTypes": ["patch"],
-      "minimumReleaseAge": "7 days",
-      "groupName": null,
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": false,
-      "ignoreTests": false,
-      "assigneesFromCodeOwners": false,
-      "reviewersFromCodeOwners": false,
+      "description": "Non-infrastructure npm dependencies do not wait for release age",
+      "matchDatasources": ["npm"],
+      "minimumReleaseAge": "0 days",
     },
     {
       "description": "Never auto-merge high-blast-radius infrastructure",
@@ -371,7 +344,6 @@
       ],
       "minimumReleaseAge": "3 days",
       "automerge": false,
-      "reviewers": ["kiliantyler"],
     },
     {
       "description": "Never auto-merge application images",
@@ -381,15 +353,12 @@
         "!quay.io/cephcsi/ceph-csi-operator",
         "!quay.io/ceph/ceph",
       ],
-      "minimumReleaseAge": "3 days",
       "automerge": false,
-      "reviewers": ["kiliantyler"],
     },
     {
       "description": "Never auto-merge major updates or mixed-risk groups",
       "matchUpdateTypes": ["major"],
       "automerge": false,
-      "reviewers": ["kiliantyler"],
     },
     // Schedules for critical infrastructure
     {
@@ -401,7 +370,6 @@
       "matchDatasources": ["docker"],
       "minimumReleaseAge": "3 days",
       "automerge": false,
-      "reviewers": ["kiliantyler"],
       "schedule": ["* 2-5 8-14 * 6"]
     },
     {

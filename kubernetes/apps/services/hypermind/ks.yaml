@@ -1,0 +1,22 @@
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: hypermind-gatus-cleanup
+  namespace: flux-system
+spec:
+  targetNamespace: services
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: hypermind-gatus-cleanup
+  path: ./kubernetes/apps/services/hypermind/cleanup
+  prune: true
+  deletionPolicy: Delete
+  sourceRef:
+    kind: GitRepository
+    name: home-kubernetes
+  wait: true
+  interval: 10m
+  retryInterval: 1m
+  timeout: 5m

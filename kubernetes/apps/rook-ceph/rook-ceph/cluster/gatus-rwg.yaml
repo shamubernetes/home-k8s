@@ -16,9 +16,10 @@ data:
           hide-hostname: true
           hide-url: true
         dns:
-          query-name: "rwg.${HOME_DOMAIN}"
+          query-name: "rgw.${HOME_DOMAIN}"
           query-type: A
         conditions:
+          - "[DNS_RCODE] == NXDOMAIN"
           - "len([BODY]) == 0"
         alerts:
-          - type: pushover
+          - type: pagerduty

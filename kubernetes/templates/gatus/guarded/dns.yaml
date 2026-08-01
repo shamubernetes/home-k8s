@@ -21,6 +21,7 @@ data:
           query-name: "${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}"
           query-type: A
         conditions:
+          - "[DNS_RCODE] == NXDOMAIN"
           - "len([BODY]) == 0"
         alerts:
-          - type: pushover
+          - type: pagerduty

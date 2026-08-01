@@ -2,5 +2,4 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- envoy.yaml
-- monitors.yaml
+  - ./retired-gatus-fragments.yaml

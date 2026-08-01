@@ -1,4 +1,5 @@
 autoDirectNodeRoutes: true
+upgradeCompatibility: "1.16"
 bandwidthManager:
   enabled: true
   bbr: true

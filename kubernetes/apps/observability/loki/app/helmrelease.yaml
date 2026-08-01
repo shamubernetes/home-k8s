@@ -138,7 +138,7 @@ spec:
       image:
         registry: docker.io
         repository: library/memcached
-        tag: 1.6.39-alpine@sha256:c8503d4491edd3110cc07d0465089d3a41cf1daf8645e71149e39a51835e92cd
+        tag: 1.6.45-alpine@sha256:c29847751abb41f4c268c84fb3087fee05d4edcbda44409ccb5086e26148e8a7
     memcachedExporter:
       image:
         registry: docker.io

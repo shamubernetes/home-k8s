@@ -7,7 +7,6 @@ resources:
 - ./kube-prometheus-stack/ks.yaml
 - ./gatus/ks.yaml
 - ./victoria-logs/ks.yaml
-- ./loki-cleanup/ks.yaml
 - ./tautulli/ks.yaml
 - ./grafana/ks.yaml
 - ./kuberhealthy/ks.yaml

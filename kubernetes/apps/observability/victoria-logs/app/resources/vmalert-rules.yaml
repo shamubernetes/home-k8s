@@ -1,0 +1,15 @@
+groups:
+- name: plex
+  type: vlogs
+  interval: 30s
+  rules:
+  - alert: PlexDatabaseBusy
+    expr: '_time:2m kubernetes.pod_labels.app.kubernetes.io/name:=plex _msg:~"(?i)retry busy DB" | stats count() as matches | filter matches:>0'
+    for: 2m
+    labels:
+      app: plex
+      severity: critical
+      category: logs
+    annotations:
+      app: "{{ $labels.app }}"
+      summary: "{{ $labels.app }} is experiencing database issues"

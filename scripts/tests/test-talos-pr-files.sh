@@ -9,12 +9,12 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 cat > "$tmpdir/files.json" <<'JSON'
 [[
-  {"filename":"kubernetes/apps/services/vector/app/helmrelease.yaml","status":"modified"},
+  {"filename":"kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml","status":"modified"},
   {"filename":"docs/runner.md","previous_filename":".github/workflows/image-pull.yaml","status":"renamed"}
 ]]
 JSON
 scripts/talos-pr-files --expected-count 2 "$tmpdir/files.json" > "$tmpdir/paths"
-grep -Fxq 'kubernetes/apps/services/vector/app/helmrelease.yaml' "$tmpdir/paths"
+grep -Fxq 'kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml' "$tmpdir/paths"
 grep -Fxq 'docs/runner.md' "$tmpdir/paths"
 grep -Fxq '.github/workflows/image-pull.yaml' "$tmpdir/paths"
 
@@ -42,8 +42,8 @@ fi
 
 cat > "$tmpdir/duplicate.json" <<'JSON'
 [[
-  {"filename":"kubernetes/apps/services/vector/app/helmrelease.yaml","status":"modified"},
-  {"filename":"kubernetes/apps/services/vector/app/helmrelease.yaml","status":"modified"}
+  {"filename":"kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml","status":"modified"},
+  {"filename":"kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml","status":"modified"}
 ]]
 JSON
 if scripts/talos-pr-files --expected-count 2 "$tmpdir/duplicate.json" >/dev/null 2>&1; then

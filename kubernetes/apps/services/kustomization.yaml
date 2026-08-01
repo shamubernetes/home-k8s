@@ -12,7 +12,6 @@ resources:
 - ./git-mirror-operator/ks.yaml
 - ./hermes-webhooks/ks.yaml
 - ./homarr/ks.yaml
-- ./hypermind/ks.yaml
 - ./documenso/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./plane/ks.yaml

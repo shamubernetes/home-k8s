@@ -13,7 +13,7 @@ data:
       url: "http://${GATUS_INTERNAL_APP:-${APP}}.${NAMESPACE}.svc.cluster.local:${GATUS_INTERNAL_PORT:-80}${GATUS_PATH:-/}"
       interval: 1m
       headers:
-        Host: "${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}"
+        Host: "${GATUS_HOST_HEADER:-${GATUS_INTERNAL_APP:-${APP}}.${NAMESPACE}.svc.cluster.local}"
       ui:
         hide-hostname: true
         hide-url: true

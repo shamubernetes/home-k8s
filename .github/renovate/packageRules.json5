@@ -283,9 +283,10 @@
       "groupName": "Talos",
       "matchPackageNames": [
         "ghcr.io/siderolabs/installer",
+        "siderolabs/talos",
         "ghcr.io/siderolabs/talosctl"
       ],
-      "matchDatasources": ["docker"],
+      "matchDatasources": ["docker", "github-releases"],
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}"
@@ -379,9 +380,11 @@
       "description": "Wait one day for Talos and Kubernetes releases before Hermes handles their PRs",
       "matchPackageNames": [
         "ghcr.io/siderolabs/installer",
-        "ghcr.io/siderolabs/kubelet"
+        "ghcr.io/siderolabs/kubelet",
+        "siderolabs/talos",
+        "siderolabs/kubelet"
       ],
-      "matchDatasources": ["docker"],
+      "matchDatasources": ["docker", "github-releases"],
       "minimumReleaseAge": "1 day",
       "automerge": false,
     },

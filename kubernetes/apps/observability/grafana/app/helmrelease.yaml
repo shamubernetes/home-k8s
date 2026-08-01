@@ -19,8 +19,6 @@ spec:
   dependsOn:
   - name: kube-prometheus-stack
     namespace: observability
-  - name: loki
-    namespace: observability
   - name: victoria-logs
     namespace: observability
   values:
@@ -163,13 +161,6 @@ spec:
           access: proxy
           url: http://prometheus-operated.observability.svc.cluster.local:9090
           isDefault: true
-        - name: Loki
-          type: loki
-          uid: loki
-          access: proxy
-          url: http://loki-gateway.observability.svc.cluster.local
-          jsonData:
-            maxLines: 250
         - name: VictoriaLogs
           type: victoriametrics-logs-datasource
           uid: victorialogs

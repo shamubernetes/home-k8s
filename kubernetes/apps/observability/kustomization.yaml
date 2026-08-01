@@ -6,8 +6,7 @@ resources:
 - ./prometheus-operator-crds/ks.yaml
 - ./kube-prometheus-stack/ks.yaml
 - ./gatus/ks.yaml
-- ./vector/ks.yaml
-- ./loki/ks.yaml
+- ./victoria-logs/ks.yaml
 - ./tautulli/ks.yaml
 - ./grafana/ks.yaml
 - ./kuberhealthy/ks.yaml

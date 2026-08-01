@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/podmonitor_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: victoria-logs-vmalert
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: victoria-logs-vmalert
+  podMetricsEndpoints:
+  - port: http

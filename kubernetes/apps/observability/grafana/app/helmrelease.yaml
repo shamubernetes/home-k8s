@@ -21,6 +21,8 @@ spec:
     namespace: observability
   - name: loki
     namespace: observability
+  - name: victoria-logs
+    namespace: observability
   values:
     extraInitContainers:
     - name: 01-init-db
@@ -39,6 +41,7 @@ spec:
       GF_DATE_FORMATS_USE_BROWSER_LOCALE: true
       GF_EXPLORE_ENABLED: true
       GF_FEATURE_TOGGLES_ENABLE: publicDashboards
+      GF_INSTALL_PLUGINS_FORCE: "true"
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: natel-discrete-panel,pr0ps-trackmap-panel,panodata-map-panel
       GF_SECURITY_ANGULAR_SUPPORT_ENABLED: true
       GF_SECURITY_COOKIE_SAMESITE: grafana
@@ -152,6 +155,7 @@ spec:
         - {name: Alertmanager, orgId: 1}
         - {name: Loki, orgId: 1}
         - {name: Prometheus, orgId: 1}
+        - {name: VictoriaLogs, orgId: 1}
         datasources:
         - name: Prometheus
           type: prometheus
@@ -166,6 +170,12 @@ spec:
           url: http://loki-gateway.observability.svc.cluster.local
           jsonData:
             maxLines: 250
+        - name: VictoriaLogs
+          type: victoriametrics-logs-datasource
+          uid: victorialogs
+          access: proxy
+          url: http://victoria-logs.observability.svc.cluster.local:9428
+          isDefault: false
         - name: Alertmanager
           type: alertmanager
           uid: alertmanager
@@ -325,6 +335,7 @@ spec:
     - grafana-worldmap-panel
     - natel-discrete-panel
     - pr0ps-trackmap-panel
+    - victoriametrics-logs-datasource 0.30.1
     - vonage-status-panel
     serviceMonitor:
       enabled: true

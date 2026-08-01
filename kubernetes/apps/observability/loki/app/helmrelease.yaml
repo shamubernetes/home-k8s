@@ -19,6 +19,27 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: StatefulSet
+          name: loki-backend
+        patch: |-
+          - op: add
+            path: /spec/persistentVolumeClaimRetentionPolicy
+            value:
+              whenDeleted: Retain
+              whenScaled: Retain
+      - target:
+          kind: StatefulSet
+          name: loki-write
+        patch: |-
+          - op: add
+            path: /spec/persistentVolumeClaimRetentionPolicy
+            value:
+              whenDeleted: Retain
+              whenScaled: Retain
   dependsOn:
   - name: openebs
     namespace: openebs-system
@@ -107,6 +128,7 @@ spec:
     backend:
       replicas: 2
       persistence:
+        enableStatefulSetAutoDeletePVC: false
         size: 20Gi
         storageClass: openebs-hostpath
       podLabels:
@@ -172,6 +194,7 @@ spec:
     write:
       replicas: 2
       persistence:
+        enableStatefulSetAutoDeletePVC: false
         size: 20Gi
         storageClass: openebs-hostpath
       podLabels:

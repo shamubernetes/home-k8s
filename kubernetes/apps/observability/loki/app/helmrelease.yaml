@@ -69,7 +69,7 @@ spec:
       image:
         registry: docker.io
         repository: grafana/loki
-        tag: 3.6.11@sha256:44148ad243c07957113baea950ee5ba9b0c8eff8d7e38ff3cc1c0af705790945
+        tag: 3.6.13@sha256:b31e171ab90b521ff7e7f3a909eefc050811d4dbf02c857e44c2a2f555461b6b
       podAnnotations:
         configmap.reloader.stakater.com/reload: *cephBucket
         secret.reloader.stakater.com/reload: *cephBucket
@@ -133,7 +133,7 @@ spec:
       image:
         registry: docker.io
         repository: grafana/loki-canary
-        tag: 3.6.11@sha256:9ea589c612c3b01f2f9c3de3fa898f0476b3ba14526950ba4fe8906f50a6af81
+        tag: 3.6.13@sha256:4d18a00666fcbaee8cf5aa01dd724c054d2aa70f366cc81aeadde291ffc5201c
     memcached:
       image:
         registry: docker.io

@@ -1,0 +1,140 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: victoria-logs-rules
+spec:
+  groups:
+  - name: victoria-logs.health
+    rules:
+    - alert: VictoriaLogsServiceDown
+      annotations:
+        summary: VictoriaLogs is unavailable on {{ $labels.instance }}.
+      expr: up{job=~".*victoria-logs.*"} == 0
+      for: 2m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsTargetMissing
+      annotations:
+        summary: The VictoriaLogs Prometheus target is missing.
+      expr: absent(up{job=~".*victoria-logs.*"})
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsTooManyRestarts
+      annotations:
+        summary: VictoriaLogs has restarted more than twice in 15 minutes on {{ $labels.instance }}.
+      expr: changes(process_start_time_seconds{job=~".*victoria-logs.*"}[15m]) > 2
+      labels:
+        severity: critical
+    - alert: VictoriaLogsDiskPressure
+      annotations:
+        summary: VictoriaLogs disk utilization is above 80% on {{ $labels.instance }}.
+      expr: |
+        sum(vl_data_size_bytes{job=~".*victoria-logs.*"}) by (job, instance)
+        /
+        (
+          sum(vl_free_disk_space_bytes{job=~".*victoria-logs.*"}) by (job, instance)
+          + sum(vl_data_size_bytes{job=~".*victoria-logs.*"}) by (job, instance)
+        ) > 0.8
+      for: 30m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsReadOnly
+      annotations:
+        summary: VictoriaLogs storage is read-only on {{ $labels.instance }}.
+      expr: vl_storage_is_read_only{job=~".*victoria-logs.*"} == 1
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsRowsRejected
+      annotations:
+        summary: VictoriaLogs is rejecting rows on {{ $labels.instance }} because {{ $labels.reason }}.
+      expr: rate(vl_rows_dropped_total{job=~".*victoria-logs.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsAPIRequestErrors
+      annotations:
+        summary: VictoriaLogs is returning errors for {{ $labels.path }} on {{ $labels.instance }}.
+      expr: increase(vl_http_errors_total{job=~".*victoria-logs.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsConcurrentQueriesAtLimit
+      annotations:
+        summary: VictoriaLogs is continuously hitting its query concurrency limit on {{ $labels.instance }}.
+      expr: |
+        avg_over_time(vl_concurrent_select_current{job=~".*victoria-logs.*"}[1m])
+        >= vl_concurrent_select_capacity{job=~".*victoria-logs.*"}
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsQueryTimeouts
+      annotations:
+        summary: VictoriaLogs queries are timing out at the concurrency limit on {{ $labels.instance }}.
+      expr: increase(vl_concurrent_select_limit_timeout_total{job=~".*victoria-logs.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning
+  - name: victoria-logs.collector
+    rules:
+    - alert: VictoriaLogsCollectorTargetsMissing
+      annotations:
+        summary: VictoriaLogs is missing {{ $value }} collector target(s).
+      expr: |
+        scalar(
+          kube_daemonset_status_desired_number_scheduled{
+            namespace="observability",
+            daemonset="victoria-logs-collector"
+          }
+        )
+        -
+        (
+          count(up{job="observability/victoria-logs-collector"})
+          or vector(0)
+        ) > 0
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaLogsCollectorRemoteWriteErrors
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} is continuously failing remote writes.
+      expr: increase(vlagent_remotewrite_errors_total{job="observability/victoria-logs-collector"}[5m]) > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsCollectorDroppedData
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} dropped buffered log data.
+      expr: |
+        increase(vlagent_remotewrite_packets_dropped_total{job="observability/victoria-logs-collector"}[5m]) > 0
+        or
+        increase(vm_persistentqueue_blocks_dropped_total{job="observability/victoria-logs-collector"}[5m]) > 0
+        or
+        increase(vm_persistentqueue_bytes_dropped_total{job="observability/victoria-logs-collector"}[5m]) > 0
+      labels:
+        severity: critical
+    - alert: VictoriaLogsCollectorBufferPressure
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} queue is more than 80% full.
+      expr: |
+        vm_persistentqueue_bytes_pending{job="observability/victoria-logs-collector"}
+        /
+        (
+          vm_persistentqueue_bytes_pending{job="observability/victoria-logs-collector"}
+          + vm_persistentqueue_free_disk_space_bytes{job="observability/victoria-logs-collector"}
+        ) > 0.8
+      for: 15m
+      labels:
+        severity: warning
+    - alert: VictoriaLogsCollectorWritesStalled
+      annotations:
+        summary: VictoriaLogs collector {{ $labels.pod }} has queued data but no successful writes.
+      expr: |
+        vlagent_remotewrite_pending_data_bytes{job="observability/victoria-logs-collector"} > 0
+        and on(instance, pod, url)
+        increase(vlagent_remotewrite_blocks_sent_total{job="observability/victoria-logs-collector"}[10m]) == 0
+      for: 10m
+      labels:
+        severity: critical

@@ -20,8 +20,8 @@ data:
         dns:
           query-name: "${GATUS_SUBDOMAIN:-${APP}}.${GATUS_DOMAIN:-${HOME_DOMAIN}}"
           query-type: A
+        extra-labels:
+          alerting: "true"
         conditions:
           - "[DNS_RCODE] == NOERROR"
           - "len([BODY]) >= 1"
-        alerts:
-          - type: pagerduty

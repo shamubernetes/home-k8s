@@ -358,7 +358,6 @@
         "kubernetes/apps/**/*-crds*/**",
         "kubernetes/apps/**/*-operator*/**",
       ],
-      "minimumReleaseAge": "3 days",
       "automerge": false,
     },
     {
@@ -378,26 +377,15 @@
     },
     // Schedules for critical infrastructure
     {
-      "description": "Talos and Kubernetes upgrades only on 2nd Saturday of month (2-6am)",
+      "description": "Wait one day for Talos and Kubernetes releases and schedule upgrades for the 2nd Saturday of the month (2-6am)",
       "matchPackageNames": [
         "ghcr.io/siderolabs/installer",
         "ghcr.io/siderolabs/kubelet"
       ],
       "matchDatasources": ["docker"],
-      "minimumReleaseAge": "3 days",
+      "minimumReleaseAge": "1 day",
       "automerge": false,
       "schedule": ["* 2-5 8-14 * 6"]
-    },
-    {
-      "description": "Wait 3 days before updating critical infrastructure",
-      "matchPackageNames": [
-        "/cilium/",
-        "coredns",
-        "prometheus-operator-crds",
-        "ghcr.io/rook/rook-ceph",
-        "ghcr.io/rook/rook-ceph-cluster",
-      ],
-      "minimumReleaseAge": "3 days"
     },
     {
       "description": "Grouped OCI charts rely on their atomic partners for release age",

@@ -11,9 +11,9 @@
   branchConcurrentLimit: 0,
   packageRules: [
     {
-      description: "GitHub Actions Helm inputs are version-only",
+      description: "GitHub Actions tool inputs are version-only",
       matchManagers: ["github-actions"],
-      matchPackageNames: ["helm/helm"],
+      matchPackageNames: ["helm/helm", "sigstore/cosign"],
       pinDigests: false,
     },
     {
@@ -53,6 +53,9 @@
     "github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5",
   ],
   labels: ["renovate"],
+  // config:best-practices waits three days by default. Only Talos and
+  // Kubernetes releases are delayed by the narrower package rule below.
+  minimumReleaseAge: "0 days",
   hostRules: [
     {
       matchHost: "https://grafana.com/api/",

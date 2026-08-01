@@ -1,0 +1,17 @@
+# These inert ConfigMaps adopt the two Gatus fragments orphaned when HyperMind
+# was retired. Removing this cleanup Kustomization lets Flux delete them.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hypermind-app-gatus-ep
+  annotations:
+    modernization.maudeco.de/cleanup: "retired-hypermind-gatus-fragment"
+data: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hypermind-dns-gatus-ep
+  annotations:
+    modernization.maudeco.de/cleanup: "retired-hypermind-gatus-fragment"
+data: {}

@@ -7,5 +7,6 @@ resources:
 - ./externalsecret.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./observability-pipeline-prometheusrule.yaml
 - ../../../../templates/gatus/guarded
 - ./gatus-alertmanager.yaml

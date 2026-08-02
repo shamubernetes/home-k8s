@@ -90,6 +90,84 @@
       "separateMinorPatch": true,
     },
     {
+      "description": "CloudNativePG chart and operator image",
+      "groupName": "cloudnative-pg",
+      "matchPackageNames": [
+        "ghcr.io/cloudnative-pg/charts/cloudnative-pg",
+        "ghcr.io/cloudnative-pg/cloudnative-pg",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
+      "separateMinorPatch": false,
+    },
+    {
+      "description": "External Secrets chart and workload image",
+      "groupName": "external-secrets",
+      "matchPackageNames": [
+        "ghcr.io/external-secrets/charts/external-secrets",
+        "ghcr.io/external-secrets/external-secrets",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
+      "separateMinorPatch": false,
+    },
+    {
+      "description": "cert-manager chart and workload images",
+      "groupName": "cert-manager",
+      "matchPackageNames": [
+        "quay.io/jetstack/charts/cert-manager",
+        "quay.io/jetstack/cert-manager-controller",
+        "quay.io/jetstack/cert-manager-webhook",
+        "quay.io/jetstack/cert-manager-cainjector",
+        "quay.io/jetstack/cert-manager-startupapicheck",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 5,
+      "separateMinorPatch": false,
+    },
+    {
+      "description": "Node Feature Discovery chart and workload image",
+      "groupName": "node-feature-discovery",
+      "matchPackageNames": [
+        "registry.k8s.io/nfd/charts/node-feature-discovery",
+        "registry.k8s.io/nfd/node-feature-discovery",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "minimumGroupSize": 2,
+      "separateMinorPatch": false,
+    },
+    {
+      "description": "Snapshot Controller chart and workload images",
+      "groupName": "snapshot-controller",
+      "matchPackageNames": [
+        "ghcr.io/piraeusdatastore/helm-charts/snapshot-controller",
+        "registry.k8s.io/sig-storage/snapshot-controller",
+        "registry.k8s.io/sig-storage/snapshot-conversion-webhook",
+      ],
+      "matchDatasources": ["docker"],
+      "semanticCommitScope": "group",
+      "group": {
+        "commitMessageTopic": "{{{groupName}}}",
+      },
+      "separateMinorPatch": false,
+    },
+    {
       "description": "Loki chart and workload images",
       "groupName": "loki",
       "matchPackageNames": [

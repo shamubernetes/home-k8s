@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: $0 --output FILE -- HELM_ARGS..." >&2
+  exit 2
+}
+
+output=
+[[ ${1:-} == --output && -n ${2:-} && ${3:-} == -- ]] || usage
+output=$2
+shift 3
+(($#)) || usage
+
+attempts=${HELM_TEMPLATE_ATTEMPTS:-3}
+delay=${HELM_TEMPLATE_RETRY_DELAY_SECONDS:-5}
+[[ $attempts =~ ^[1-9][0-9]*$ ]] || {
+  echo "HELM_TEMPLATE_ATTEMPTS must be a positive integer" >&2
+  exit 2
+}
+[[ $delay =~ ^[0-9]+$ ]] || {
+  echo "HELM_TEMPLATE_RETRY_DELAY_SECONDS must be a non-negative integer" >&2
+  exit 2
+}
+
+output=$(cd "$(dirname "$output")" && pwd -P)/$(basename "$output")
+tmp=$(mktemp "${output}.tmp.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+rm -f "$output"
+
+for ((attempt = 1; attempt <= attempts; attempt++)); do
+  : > "$tmp"
+  if helm "$@" > "$tmp"; then
+    mv "$tmp" "$output"
+    trap - EXIT
+    exit 0
+  else
+    status=$?
+  fi
+  if ((attempt == attempts)); then
+    echo "Helm template failed after ${attempts} attempts" >&2
+    exit "$status"
+  fi
+  echo "Helm template attempt ${attempt}/${attempts} failed; retrying" >&2
+  sleep "$delay"
+done

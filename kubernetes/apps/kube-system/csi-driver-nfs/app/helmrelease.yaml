@@ -17,6 +17,19 @@ spec:
       strategy: rollback
       retries: 3
   values:
+    image:
+      nfs:
+        tag: v4.13.4@sha256:1eb5a85180a4ad0193a31d319b163f35c8c1857794ebaac71d8abcdd5a0516d3
+      csiProvisioner:
+        tag: v6.3.0@sha256:a4b0b1a37605b7b04a293e136edf7006ec1786a8eb3f4e5a945f81d667dcc371
+      csiResizer:
+        tag: v2.2.0@sha256:a2d40c1c3ccb0c48b467125a6652c4dd5dcbf0d295641c9989581cfc690f6cf3
+      csiSnapshotter:
+        tag: v8.6.0@sha256:42af0929bcd60a43499825c078a60ff0534e08af8fbeb283aa391be40feb9f3e
+      livenessProbe:
+        tag: v2.19.0@sha256:06da0d5b8908072f2e4522692aee8dc119fba7247a9658497e1153992cd777e9
+      nodeDriverRegistrar:
+        tag: v2.17.0@sha256:f9de845b170155199f2a2a3f9531cf13d78e31235e9db6b6582a8b0db0a50dad
     controller:
       runOnControlPlane: true
     externalSnapshotter:

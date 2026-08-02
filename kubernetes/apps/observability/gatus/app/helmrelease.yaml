@@ -41,6 +41,7 @@ spec:
               RESOURCE: both
               UNIQUE_FILENAMES: true
               METHOD: WATCH
+              SCRIPT: /scripts/reload-config.sh
             restartPolicy: Always
             resources: &resources
               requests:
@@ -117,3 +118,12 @@ spec:
         - path: /config/config.yaml
           subPath: config.yaml
           readOnly: true
+      config-reload-script:
+        type: configMap
+        name: gatus-config-reload
+        advancedMounts:
+          gatus:
+            init-config:
+            - path: /scripts/reload-config.sh
+              subPath: reload-config.sh
+              readOnly: true

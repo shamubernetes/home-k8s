@@ -19,6 +19,12 @@ NON_EXECUTABLE_DATA = frozenset(
         "talos/helmfile.yaml",
     }
 )
+COORDINATED_TALOS_UPGRADE = frozenset(
+    {
+        "kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml",
+        "talos/talconfig.yaml",
+    }
+)
 
 
 def is_protected(path: str) -> bool:
@@ -27,6 +33,9 @@ def is_protected(path: str) -> bool:
 
 def main() -> int:
     files = [line.strip() for line in sys.stdin if line.strip()]
+    if frozenset(files) == COORDINATED_TALOS_UPGRADE:
+        print("applicable")
+        return 0
     protected_boundary = any(is_protected(path) for path in files)
     applicable = any(
         path.startswith("kubernetes/") and not is_protected(path) for path in files

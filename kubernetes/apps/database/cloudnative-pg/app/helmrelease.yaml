@@ -19,11 +19,10 @@ spec:
   postRenderers:
   - kustomize:
       images:
-      # renovate-helm-image: depName=ghcr.io/cloudnative-pg/cloudnative-pg
       - name: ghcr.io/cloudnative-pg/cloudnative-pg
         newName: ghcr.io/cloudnative-pg/cloudnative-pg
-        newTag: 1.29.1
-        digest: sha256:0dfff19ba7b52ca25851a1010028b6940fff2e233290465af1cfb08a5f3f4661
+        # renovate: datasource=docker depName=ghcr.io/cloudnative-pg/cloudnative-pg
+        newTag: 1.29.1@sha256:0dfff19ba7b52ca25851a1010028b6940fff2e233290465af1cfb08a5f3f4661
   dependsOn:
   - name: openebs
     namespace: openebs-system

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: $0 --checkout DIR --registry-config FILE --output FILE" >&2
+  exit 2
+}
+
+checkout=
+registry_config=
+output=
+while (($#)); do
+  case $1 in
+    --checkout) checkout=${2-}; shift 2 ;;
+    --registry-config) registry_config=${2-}; shift 2 ;;
+    --output) output=${2-}; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+[[ -n $checkout && -d $checkout ]] || usage
+[[ -n $registry_config && -f $registry_config ]] || usage
+[[ -n $output ]] || usage
+
+attempts=${FLATE_IMAGE_INVENTORY_ATTEMPTS:-3}
+delay=${FLATE_IMAGE_INVENTORY_RETRY_DELAY_SECONDS:-10}
+[[ $attempts =~ ^[1-9][0-9]*$ ]] || {
+  echo "FLATE_IMAGE_INVENTORY_ATTEMPTS must be a positive integer" >&2
+  exit 2
+}
+[[ $delay =~ ^[0-9]+$ ]] || {
+  echo "FLATE_IMAGE_INVENTORY_RETRY_DELAY_SECONDS must be a non-negative integer" >&2
+  exit 2
+}
+
+registry_config=$(cd "$(dirname "$registry_config")" && pwd -P)/$(basename "$registry_config")
+output=$(cd "$(dirname "$output")" && pwd -P)/$(basename "$output")
+tmp=$(mktemp "${output}.tmp.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+
+for ((attempt = 1; attempt <= attempts; attempt++)); do
+  : > "$tmp"
+  if (
+    cd "$checkout"
+    flate --no-progress get images \
+      --allow-missing-secrets \
+      --restrict-egress \
+      --registry-config "$registry_config" \
+      --path kubernetes \
+      --output json
+  ) > "$tmp"; then
+    jq -e 'type == "array"' "$tmp" >/dev/null || {
+      echo "Flate image inventory is not a JSON array" >&2
+      exit 1
+    }
+    mv "$tmp" "$output"
+    trap - EXIT
+    exit 0
+  else
+    status=$?
+  fi
+
+  if ((attempt == attempts)); then
+    echo "Flate image inventory failed after ${attempts} attempts" >&2
+    exit "$status"
+  fi
+  echo "Flate image inventory attempt ${attempt}/${attempts} failed; retrying" >&2
+  sleep "$delay"
+done

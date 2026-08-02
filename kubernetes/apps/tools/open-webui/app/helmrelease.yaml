@@ -36,6 +36,56 @@ spec:
     image:
       repository: ghcr.io/open-webui/open-webui
       tag: v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+    extraInitContainers:
+    - name: configure-chat-completions
+      image: ghcr.io/open-webui/open-webui:v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+      command: [python, -c]
+      args:
+      - |
+        import json
+        import sqlite3
+        import time
+        from pathlib import Path
+
+        database = Path("/app/backend/data/webui.db")
+        if not database.exists():
+            raise SystemExit(0)
+
+        with sqlite3.connect(database, timeout=30) as connection:
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'config'"
+            ).fetchone()
+            if table is None:
+                raise SystemExit(0)
+
+            row = connection.execute(
+                "SELECT value FROM config WHERE key = 'openai.api_configs'"
+            ).fetchone()
+            if row is None:
+                raise SystemExit(0)
+
+            api_configs = json.loads(row[0])
+            api_configs.setdefault("0", {}).pop("api_type", None)
+            connection.execute(
+                "UPDATE config SET value = ?, updated_at = ? WHERE key = 'openai.api_configs'",
+                (json.dumps(api_configs, separators=(",", ":")), int(time.time())),
+            )
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        seccompProfile:
+          type: RuntimeDefault
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+      volumeMounts:
+      - name: data
+        mountPath: /app/backend/data
     enableOpenaiApi: true
     openaiBaseApiUrls:
     - http://10.0.10.95:8642/v1
@@ -43,7 +93,7 @@ spec:
     openaiApiKeysExistingSecretKey: OPENAI_API_KEYS
     extraEnvVars:
     - name: OPENAI_API_CONFIGS
-      value: '{"0":{"api_type":"responses"}}'
+      value: '{"0":{}}'
     - name: ENABLE_OAUTH
       value: "true"
     - name: ENABLE_OAUTH_SIGNUP

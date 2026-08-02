@@ -1,0 +1,92 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: open-webui
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: open-webui
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    fullnameOverride: open-webui
+    ollama:
+      enabled: false
+    pipelines:
+      enabled: false
+    tika:
+      enabled: false
+    terminals:
+      enabled: false
+    websocket:
+      enabled: false
+      manager: ""
+      redis:
+        enabled: false
+    image:
+      repository: ghcr.io/open-webui/open-webui
+      tag: v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+    enableOpenaiApi: true
+    openaiBaseApiUrls:
+    - http://10.0.10.95:8642/v1
+    openaiApiKeysExistingSecret: open-webui-secret
+    openaiApiKeysExistingSecretKey: OPENAI_API_KEYS
+    extraEnvVars:
+    - name: OPENAI_API_CONFIGS
+      value: '{"0":{"api_type":"responses"}}'
+    - name: WEBUI_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: open-webui-secret
+          key: WEBUI_SECRET_KEY
+    - name: WEBUI_URL
+      value: https://webui.${HOME_DOMAIN}
+    - name: ENABLE_OLLAMA_API
+      value: "false"
+    - name: TZ
+      value: ${TIMEZONE}
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: ceph-block
+      accessModes:
+      - ReadWriteOnce
+    startupProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 5
+      failureThreshold: 60
+    readinessProbe:
+      httpGet:
+        path: /health/db
+        port: http
+      periodSeconds: 10
+      failureThreshold: 6
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 30
+      failureThreshold: 3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault

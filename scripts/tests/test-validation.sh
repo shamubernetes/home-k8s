@@ -8,6 +8,7 @@ values_resolver="${repo_root}/scripts/resolve-helmrelease-values"
 image_check="${repo_root}/scripts/check-image-pins"
 document_check="${repo_root}/scripts/check-kubernetes-documents"
 postrender="${repo_root}/scripts/apply-helmrelease-postrenderers"
+helm_template_retry="${repo_root}/scripts/helm-template-retry"
 runtime_resolver="${repo_root}/scripts/resolve-helmrelease-runtime"
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
@@ -25,40 +26,26 @@ assert_eq() {
   fi
 }
 
-helm_template_retry() {
-  local attempt status
-  for attempt in 1 2 3; do
-    if helm template "$@"; then
-      return 0
-    else
-      status=$?
-    fi
-    if (( attempt < 3 )); then
-      printf 'Helm template fetch attempt %s/3 failed; retrying\n' "$attempt" >&2
-      sleep $((attempt * 5))
-    fi
-  done
-  return "$status"
-}
-
 actual=$($resolver "$helmreleases" inline tools)
 assert_eq $'app-template\t4.6.2\thttps://bjw-s-labs.github.io/helm-charts' "$actual" 'inline HelmRepository chart'
 IFS=$'\t' read -r inline_chart inline_version inline_repo <<< "$actual"
-helm_template_retry inline-test "$inline_chart" --version "$inline_version" --repo "$inline_repo" > "${tmpdir}/inline-render.yaml"
+$helm_template_retry --output "${tmpdir}/inline-render.yaml" -- \
+  template inline-test "$inline_chart" --version "$inline_version" --repo "$inline_repo"
 $document_check "${tmpdir}/inline-render.yaml"
 
 actual=$($resolver "$helmreleases" tagged tools)
 assert_eq $'oci://docker.io/envoyproxy/gateway-helm\t1.8.1\t' "$actual" 'tagged OCIRepository chartRef'
 IFS=$'\t' read -r tagged_chart tagged_version _ <<< "$actual"
-helm_template_retry tagged-test "$tagged_chart" --version "$tagged_version" > "${tmpdir}/tagged-unpinned.yaml"
+$helm_template_retry --output "${tmpdir}/tagged-unpinned.yaml" -- \
+  template tagged-test "$tagged_chart" --version "$tagged_version"
 if $image_check "${tmpdir}/tagged-unpinned.yaml" >/dev/null 2>&1; then
   echo 'FAIL Helm-rendered unpinned chart image was accepted' >&2
   exit 1
 fi
-helm_template_retry tagged-test "$tagged_chart" --version "$tagged_version" \
+$helm_template_retry --output "${tmpdir}/tagged-pinned.yaml" -- \
+  template tagged-test "$tagged_chart" --version "$tagged_version" \
   --set deployment.envoyGateway.image.repository=docker.io/envoyproxy/gateway \
-  --set-string 'deployment.envoyGateway.image.tag=v1.8.1@sha256:497df13b71f4e544c7e80414873041e291776c28cd788bcbee0d18421fa5db98' \
-  > "${tmpdir}/tagged-pinned.yaml"
+  --set-string 'deployment.envoyGateway.image.tag=v1.8.1@sha256:497df13b71f4e544c7e80414873041e291776c28cd788bcbee0d18421fa5db98'
 $image_check "${tmpdir}/tagged-pinned.yaml"
 
 actual=$($resolver "$helmreleases" digested tools)

@@ -312,7 +312,8 @@ while IFS= read -r release_name; do
   if [[ -n "$repository_url" ]]; then
     helm_args+=(--repo "$repository_url")
   fi
-  helm "${helm_args[@]}" > "$rendered"
+  "${repo_root}/scripts/helm-template-retry" \
+    --output "$rendered" -- "${helm_args[@]}"
 
   "${repo_root}/scripts/check-kubernetes-documents" "$rendered"
   yq 'select(.apiVersion and .kind)' "$rendered" > "$rendered_pre"

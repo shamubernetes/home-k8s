@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Apply exact declarative Flux image transforms to a Flate image inventory."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}$")
+IMAGE_ITEM_RE = re.compile(r"^(?P<indent>[ \t]*)-\s+name:\s*(?P<value>\S+)\s*$")
+IMAGE_FIELD_RE = re.compile(
+    r"^[ \t]+(?P<key>newName|newTag|digest):\s*(?P<value>\S+)\s*$"
+)
+
+
+def normalize_image(image: str) -> str:
+    if not image or any(char.isspace() for char in image):
+        raise ValueError(f"invalid image reference: {image!r}")
+    first = image.split("/", 1)[0]
+    if "/" not in image or not ("." in first or ":" in first or first == "localhost"):
+        return f"docker.io/{image}"
+    return image
+
+
+def image_name(image: str) -> str:
+    without_digest = image.split("@", 1)[0]
+    slash = without_digest.rfind("/")
+    colon = without_digest.rfind(":")
+    if colon > slash:
+        without_digest = without_digest[:colon]
+    return normalize_image(without_digest)
+
+
+def indentation(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def transform_blocks(path: Path) -> list[dict[str, str]]:
+    text = path.read_text()
+    if not re.search(r"(?m)^\s*kind:\s*HelmRelease\s*$", text):
+        return []
+    lines = text.splitlines()
+    result: list[dict[str, str]] = []
+    for index, line in enumerate(lines):
+        match = IMAGE_ITEM_RE.match(line)
+        if not match:
+            continue
+        base_indent = indentation(line)
+        fields = {"name": match.group("value")}
+        for following in lines[index + 1 :]:
+            if not following.strip():
+                continue
+            if indentation(following) <= base_indent:
+                break
+            if following.lstrip().startswith("#"):
+                continue
+            field = IMAGE_FIELD_RE.match(following)
+            if field:
+                fields[field.group("key")] = field.group("value")
+        if "newTag" in fields and ("newName" in fields or "name" in fields):
+            result.append(fields)
+    return result
+
+
+def load_transforms(checkout: Path) -> dict[str, str]:
+    app_root = checkout / "kubernetes/apps"
+    if not app_root.is_dir():
+        raise ValueError(f"application tree is missing: {app_root}")
+    transforms: dict[str, str] = {}
+    for path in sorted((*app_root.rglob("*.yaml"), *app_root.rglob("*.yml"))):
+        for fields in transform_blocks(path):
+            package = image_name(fields.get("newName", fields["name"]))
+            new_tag = fields["newTag"]
+            digest = fields.get("digest", "")
+            if "@" in new_tag:
+                new_tag, embedded_digest = new_tag.rsplit("@", 1)
+                if digest and digest != embedded_digest:
+                    raise ValueError(f"conflicting digest fields in {path}")
+                digest = embedded_digest
+            if not new_tag or not DIGEST_RE.fullmatch(digest):
+                continue
+            mutable = f"{package}:{new_tag}"
+            immutable = f"{mutable}@{digest}"
+            previous = transforms.get(mutable)
+            if previous and previous != immutable:
+                raise ValueError(
+                    f"conflicting post-renderer transforms for {mutable}: "
+                    f"{previous} and {immutable}"
+                )
+            transforms[mutable] = immutable
+    return transforms
+
+
+def write_json_atomic(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as stream:
+            json.dump(value, stream, indent=2)
+            stream.write("\n")
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--checkout", type=Path, required=True)
+    parser.add_argument("--inventory", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    try:
+        value = json.loads(args.inventory.read_text())
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValueError("inventory must contain a JSON array of image references")
+        transforms = load_transforms(args.checkout)
+        images = {
+            transforms.get(normalize_image(image), normalize_image(image)) for image in value
+        }
+        write_json_atomic(args.output, sorted(images))
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"apply-flux-image-postrenderers: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

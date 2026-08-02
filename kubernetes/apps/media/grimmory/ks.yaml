@@ -24,6 +24,7 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      GATUS_INTERNAL_PORT: "6060"
       GATUS_PATH: /api/v1/healthcheck
       VOLSYNC_CAPACITY: 10Gi
       VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_GRIMMORY}"

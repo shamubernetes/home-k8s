@@ -58,6 +58,19 @@
     },
     {
       customType: "regex",
+      description: "Track digest-pinned Flux Helm post-renderer images",
+      managerFilePatterns: [
+        "/^kubernetes/apps/.+/helmrelease\\.ya?ml$/",
+      ],
+      matchStrings: [
+        "(?<indentation>[ \\t]*)# renovate-helm-image: depName=(?<depName>\\S+)\\n[ \\t]*- name: (?<packageName>\\S+)\\n[ \\t]+newName: \\S+\\n[ \\t]+newTag: (?<currentValue>\\S+)\\n[ \\t]+digest: (?<currentDigest>sha256:[a-f0-9]{64})",
+      ],
+      autoReplaceStringTemplate: "{{{indentation}}}# renovate-helm-image: depName={{{depName}}}\\n{{{indentation}}}- name: {{{packageName}}}\\n{{{indentation}}}  newName: {{{packageName}}}\\n{{{indentation}}}  newTag: {{{newValue}}}\\n{{{indentation}}}  digest: {{{newDigest}}}",
+      datasourceTemplate: "docker",
+      versioningTemplate: "docker",
+    },
+    {
+      customType: "regex",
       description: "Keep trusted Talosctl policy image aligned with the runner deployment",
       managerFilePatterns: [
         "/^kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary\\.yaml$/",

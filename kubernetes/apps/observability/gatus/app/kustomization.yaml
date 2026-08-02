@@ -7,10 +7,14 @@ resources:
 - ./rbac.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+
 - ../../../../templates/gatus/external
 configMapGenerator:
 - name: gatus-configmap
   files:
   - config.yaml=./resources/config.yaml
+- name: gatus-config-reload
+  files:
+  - reload-config.sh=./resources/reload-config.sh
 generatorOptions:
   disableNameSuffixHash: true

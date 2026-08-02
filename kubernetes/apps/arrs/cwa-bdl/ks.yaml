@@ -24,6 +24,8 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      GATUS_INTERNAL_PORT: "8084"
+      GATUS_SUBDOMAIN: books
       VOLSYNC_CAPACITY: 5Gi
       VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_CWA_BDL}"
       VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_CWA_BDL}"

@@ -34,7 +34,9 @@ spec:
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true
       serviceMonitor:
-        enabled: true
+        # CSI is managed by the standalone ceph-csi-drivers chart. The legacy
+        # Rook monitor has no matching Service and must not remain discoverable.
+        enabled: false
     monitoring:
       enabled: true
     resources:

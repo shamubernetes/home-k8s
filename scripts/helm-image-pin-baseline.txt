@@ -17,13 +17,6 @@ kube-system/descheduler/app	registry.k8s.io/descheduler/descheduler:v0.36.0
 kube-system/kubelet-csr-approver/app	ghcr.io/postfinance/kubelet-csr-approver:v1.2.14
 kube-system/metrics-server/app	registry.k8s.io/metrics-server/metrics-server:v0.8.1
 kube-system/node-feature-discovery/app	registry.k8s.io/nfd/node-feature-discovery:v0.18.3
-kyverno/kyverno/app	ghcr.io/kyverno/readiness-checker:v1.18.1
-kyverno/kyverno/app	reg.kyverno.io/kyverno/background-controller:v1.18.1
-kyverno/kyverno/app	reg.kyverno.io/kyverno/cleanup-controller:v1.18.1
-kyverno/kyverno/app	reg.kyverno.io/kyverno/kyverno-cli:v1.18.1
-kyverno/kyverno/app	reg.kyverno.io/kyverno/kyverno:v1.18.1
-kyverno/kyverno/app	reg.kyverno.io/kyverno/kyvernopre:v1.18.1
-kyverno/kyverno/app	reg.kyverno.io/kyverno/reports-controller:v1.18.1
 network/external-dns/cloudflare	registry.k8s.io/external-dns/external-dns:v0.21.0
 network/external-dns/unifi	registry.k8s.io/external-dns/external-dns:v0.21.0
 observability/grafana/app	docker.io/curlimages/curl:8.9.1

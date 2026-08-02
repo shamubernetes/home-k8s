@@ -10,11 +10,15 @@ trap 'rm -rf "$tmpdir" "$fixture_dir"' EXIT
 
 values="$tmpdir/values.yaml"
 rendered="$tmpdir/rendered.yaml"
+chart_source=kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/ocirepository.yaml
+chart_url=$(yq -r '.spec.url' "$chart_source")
+chart_version=$(yq -r '.spec.ref.tag' "$chart_source")
+[[ $chart_url == oci://* && -n $chart_version && $chart_version != null ]]
 yq -o=yaml '.spec.values' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml > "$values"
 helm template ghar-set-talos \
-  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
-  --version 0.14.2 \
+  "$chart_url" \
+  --version "$chart_version" \
   --namespace actions-runner-talos \
   -f "$values" > "$rendered"
 
@@ -36,8 +40,11 @@ yq -e 'select(.kind == "AutoscalingRunnerSet") |
 
 runner_image=$(yq -r '.spec.values.template.spec.containers[] | select(.name == "runner") | .image' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml)
+init_runner_image=$(yq -r '.spec.values.template.spec.initContainers[] | select(.name == "install-talosctl") | .image' \
+  kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml)
 talosctl_image=$(yq -r '.spec.values.template.spec.volumes[] | select(.name == "talosctl-source") | .image.reference' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml)
+[[ $init_runner_image == "$runner_image" ]]
 [[ $(yq -r '.spec.rules[] | select(.name == "pin-trusted-runner-images-and-tools") |
   .validate.pattern.spec.containers[] | select(.["(name)"] == "runner") | .image' \
   kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml) == "$runner_image" ]]
@@ -108,7 +115,7 @@ spec:
       type: RuntimeDefault
   containers:
   - name: runner
-    image: ghcr.io/home-operations/actions-runner:2.336.0@sha256:281a9a090522fafbf4967f158b8c97d03552b1978b688893c5f7cb1944bc5fe5
+    image: fixture.invalid/runner:replace-me
     command:
     - /home/runner/run.sh
     env:
@@ -138,7 +145,7 @@ spec:
       readOnly: true
   initContainers:
   - name: install-talosctl
-    image: ghcr.io/home-operations/actions-runner:2.336.0@sha256:281a9a090522fafbf4967f158b8c97d03552b1978b688893c5f7cb1944bc5fe5
+    image: fixture.invalid/runner:replace-me
     command:
     - /bin/bash
     - -ceu
@@ -165,9 +172,14 @@ spec:
     emptyDir: {}
   - name: talosctl-source
     image:
-      reference: ghcr.io/siderolabs/talosctl:v1.13.7@sha256:e824808e0a9c8138c2f7b17f21cfebee2f1442a336d812eb0034c9c897059302
+      reference: fixture.invalid/talosctl:replace-me
       pullPolicy: IfNotPresent
 YAML
+RUNNER_IMAGE="$runner_image" TALOSCTL_IMAGE="$talosctl_image" yq -i '
+  (.spec.containers[] | select(.name == "runner") | .image) = strenv(RUNNER_IMAGE) |
+  (.spec.initContainers[] | select(.name == "install-talosctl") | .image) = strenv(RUNNER_IMAGE) |
+  (.spec.volumes[] | select(.name == "talosctl-source") | .image.reference) = strenv(TALOSCTL_IMAGE)
+' "$tmpdir/runner-pod.yaml"
 cat > "$tmpdir/admin-serviceaccount.yaml" <<'YAML'
 apiVersion: talos.dev/v1alpha1
 kind: ServiceAccount

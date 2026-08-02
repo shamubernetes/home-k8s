@@ -13,17 +13,10 @@ database/mariadb-operator/app	ghcr.io/mariadb-operator/mariadb-operator:26.6.0
 external-secrets/external-secrets/app	ghcr.io/external-secrets/external-secrets:v2.6.0
 games/minecraft-stoneblock4/app	itzg/mc-backup:latest
 games/minecraft-stoneblock4/app	itzg/minecraft-server:latest
-kube-system/csi-driver-nfs/app	registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.15.0
-kube-system/csi-driver-nfs/app	registry.k8s.io/sig-storage/csi-provisioner:v6.1.0
-kube-system/csi-driver-nfs/app	registry.k8s.io/sig-storage/csi-resizer:v2.0.0
-kube-system/csi-driver-nfs/app	registry.k8s.io/sig-storage/csi-snapshotter:v8.4.0
-kube-system/csi-driver-nfs/app	registry.k8s.io/sig-storage/livenessprobe:v2.17.0
-kube-system/csi-driver-nfs/app	registry.k8s.io/sig-storage/nfsplugin:v4.13.3
 kube-system/descheduler/app	registry.k8s.io/descheduler/descheduler:v0.36.0
 kube-system/kubelet-csr-approver/app	ghcr.io/postfinance/kubelet-csr-approver:v1.2.14
 kube-system/metrics-server/app	registry.k8s.io/metrics-server/metrics-server:v0.8.1
 kube-system/node-feature-discovery/app	registry.k8s.io/nfd/node-feature-discovery:v0.18.3
-kube-system/reloader/app	ghcr.io/stakater/reloader:v1.4.17
 kyverno/kyverno/app	ghcr.io/kyverno/readiness-checker:v1.18.1
 kyverno/kyverno/app	reg.kyverno.io/kyverno/background-controller:v1.18.1
 kyverno/kyverno/app	reg.kyverno.io/kyverno/cleanup-controller:v1.18.1

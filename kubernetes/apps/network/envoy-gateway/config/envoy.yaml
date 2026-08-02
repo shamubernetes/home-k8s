@@ -52,6 +52,29 @@ spec:
   telemetry:
     metrics:
       prometheus: {}
+    accessLog:
+      settings:
+      - format:
+          type: JSON
+          json:
+            authority: "%REQ(:AUTHORITY)%"
+            bytes_received: "%BYTES_RECEIVED%"
+            bytes_sent: "%BYTES_SENT%"
+            duration_ms: "%DURATION%"
+            method: "%REQ(:METHOD)%"
+            path: "%PATH(NQ:ORIG_OR_PATH)%"
+            protocol: "%PROTOCOL%"
+            response_code: "%RESPONSE_CODE%"
+            response_code_details: "%RESPONSE_CODE_DETAILS%"
+            response_flags: "%RESPONSE_FLAGS%"
+            route_name: "%ROUTE_NAME%"
+            start_time: "%START_TIME%"
+            upstream_cluster: "%UPSTREAM_CLUSTER%"
+            upstream_transport_failure_reason: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"
+        sinks:
+        - type: File
+          file:
+            path: /dev/stdout
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/gatewayclass_v1.json
 apiVersion: gateway.networking.k8s.io/v1

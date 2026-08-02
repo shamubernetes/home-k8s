@@ -19,11 +19,10 @@ spec:
   postRenderers:
   - kustomize:
       images:
-      # renovate-helm-image: depName=ghcr.io/external-secrets/external-secrets
       - name: ghcr.io/external-secrets/external-secrets
         newName: ghcr.io/external-secrets/external-secrets
-        newTag: v2.6.0
-        digest: sha256:b8ffd3cf43132989711bcbdd8c364d6fd3af2d77b113bef0acb25d4bb8657a95
+        # renovate: datasource=docker depName=ghcr.io/external-secrets/external-secrets
+        newTag: v2.6.0@sha256:b8ffd3cf43132989711bcbdd8c364d6fd3af2d77b113bef0acb25d4bb8657a95
   uninstall:
     keepHistory: false
   values:

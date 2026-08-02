@@ -26,7 +26,6 @@ kyverno/kyverno/app	reg.kyverno.io/kyverno/kyvernopre:v1.18.1
 kyverno/kyverno/app	reg.kyverno.io/kyverno/reports-controller:v1.18.1
 network/external-dns/cloudflare	registry.k8s.io/external-dns/external-dns:v0.21.0
 network/external-dns/unifi	registry.k8s.io/external-dns/external-dns:v0.21.0
-network/tailscale-operator/app	ghcr.io/tailscale/k8s-operator:v1.98.4
 observability/grafana/app	docker.io/curlimages/curl:8.9.1
 observability/grafana/app	docker.io/grafana/grafana:12.3.1
 observability/grafana/app	quay.io/kiwigrid/k8s-sidecar:2.5.0

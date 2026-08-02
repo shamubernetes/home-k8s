@@ -2,9 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ./namespace.yaml
-- ./firecrawl/ks.yaml
-- ./open-webui/ks.yaml
-- ./plane-mcp/ks.yaml
-- ./reflector/ks.yaml
-- ./searxng/ks.yaml
+- ./ocirepository.yaml
+- ./externalsecret.yaml
+- ./helmrelease.yaml
+- ./httproute-envoy.yaml

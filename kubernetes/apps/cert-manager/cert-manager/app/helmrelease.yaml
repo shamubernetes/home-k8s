@@ -19,22 +19,18 @@ spec:
     image:
       repository: quay.io/jetstack/cert-manager-controller
       tag: v1.21.1@sha256:416a2d76870d996460e62bd7f521bf14fa017be9e3e904aab92163a331fcb61a
-      digest: sha256:fe0623d7d04a382c888f03343a3a2da716e0d96ad3d5d790c0ebcbcb2a4329a5
     webhook:
       image:
         repository: quay.io/jetstack/cert-manager-webhook
         tag: v1.21.1@sha256:d8b3961b51c8c7320633f8208dc46bf88aa13804d0f7cbe48a096b2c523cee42
-        digest: sha256:baf651128b9f05c426cbd5e60e2036bf382c99ca270f49d0757d6f7d2452f4e5
     cainjector:
       image:
         repository: quay.io/jetstack/cert-manager-cainjector
         tag: v1.21.1@sha256:ccf6b919ec0500745a47a910118f834f9636d0aac1ff221245cd2557ed8c7c98
-        digest: sha256:6f5a644135887b2aa7d5cc145072fa56421560e3586ff1f184358022d490f4e1
     startupapicheck:
       image:
         repository: quay.io/jetstack/cert-manager-startupapicheck
         tag: v1.21.1@sha256:d8ab6416e6e7303a86fa0a8daa82c94a8001f21c9d78eb2e7db20534e5d07ae8
-        digest: sha256:4e2a69b4a0cc9627905bbeecf720f95d5153ca39cacdab923d2748e73556792b
     installCRDs: true
     dns01RecursiveNameservers: 1.1.1.1:53,9.9.9.9:53
     dns01RecursiveNameserversOnly: true

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir=$(cd "$(dirname "$0")" && pwd -P)
+
 usage() {
   echo "usage: $0 --checkout DIR --registry-config FILE --output FILE" >&2
   exit 2
@@ -53,7 +55,11 @@ for ((attempt = 1; attempt <= attempts; attempt++)); do
       echo "Flate image inventory is not a JSON array" >&2
       exit 1
     }
-    mv "$tmp" "$output"
+    "$script_dir/apply-flux-image-postrenderers" \
+      --checkout "$checkout" \
+      --inventory "$tmp" \
+      --output "$output"
+    rm -f "$tmp"
     trap - EXIT
     exit 0
   else

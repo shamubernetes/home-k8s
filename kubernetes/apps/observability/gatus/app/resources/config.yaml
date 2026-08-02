@@ -7,14 +7,6 @@ storage:
   caching: true
 metrics: true
 debug: false
-alerting:
-  pagerduty:
-    integration-key: $${PD_GATUS_INTEGRATION_KEY}
-    default-alert:
-      description: health-check failed
-      send-on-resolved: true
-      failure-threshold: 3
-      success-threshold: 3
 connectivity:
   checker:
     target: 1.1.1.1:53
@@ -44,11 +36,11 @@ endpoints:
   interval: 1m
   client:
     timeout: 5s
+  extra-labels:
+    alerting: "true"
   conditions:
   - "[CONNECTED] == true"
   - "[RESPONSE_TIME] < 1000"
-  alerts:
-  - type: pagerduty
 ui:
   title: TheZoo Status
   header: TheZoo Status

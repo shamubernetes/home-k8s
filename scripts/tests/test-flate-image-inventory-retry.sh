@@ -6,7 +6,7 @@ cd "$repo_root"
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
-mkdir -p "$tmpdir/bin" "$tmpdir/checkout/kubernetes"
+mkdir -p "$tmpdir/bin" "$tmpdir/checkout/kubernetes/apps"
 printf '{}\n' > "$tmpdir/registry.json"
 
 cat > "$tmpdir/bin/flate" <<'SCRIPT'

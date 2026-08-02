@@ -18,6 +18,8 @@ spec:
       retries: 3
   values:
     fullnameOverride: open-webui
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
     ollama:
       enabled: false
     pipelines:
@@ -42,6 +44,38 @@ spec:
     extraEnvVars:
     - name: OPENAI_API_CONFIGS
       value: '{"0":{"api_type":"responses"}}'
+    - name: ENABLE_OAUTH
+      value: "true"
+    - name: ENABLE_OAUTH_SIGNUP
+      value: "true"
+    - name: ENABLE_OAUTH_PERSISTENT_CONFIG
+      value: "false"
+    - name: ENABLE_OAUTH_ID_TOKEN_COOKIE
+      value: "false"
+    - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+      value: "true"
+    - name: OAUTH_CODE_CHALLENGE_METHOD
+      value: S256
+    - name: OAUTH_PROVIDER_NAME
+      value: Pocket ID
+    - name: OAUTH_SCOPES
+      value: openid email profile groups offline_access
+    - name: OPENID_PROVIDER_URL
+      value: https://sso.${HOME_DOMAIN}/.well-known/openid-configuration
+    - name: OPENID_REDIRECT_URI
+      value: https://webui.${HOME_DOMAIN}/oauth/oidc/callback
+    - name: WEBUI_AUTH_SIGNOUT_REDIRECT_URL
+      value: https://webui.${HOME_DOMAIN}/auth
+    - name: OAUTH_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: open-webui-secret
+          key: OAUTH_CLIENT_ID
+    - name: OAUTH_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: open-webui-secret
+          key: OAUTH_CLIENT_SECRET
     - name: WEBUI_SECRET_KEY
       valueFrom:
         secretKeyRef:

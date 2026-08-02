@@ -37,8 +37,8 @@ spec:
     - dns01:
         cloudflare:
           apiTokenSecretRef:
-            name: cert-manager-secret
-            key: api-token
+            name: cloudflare-secret
+            key: CLOUDFLARE_API_TOKEN
       selector:
         dnsZones:
         - "${HOME_DOMAIN}"

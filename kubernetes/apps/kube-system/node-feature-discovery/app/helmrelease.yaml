@@ -24,7 +24,7 @@ spec:
       - name: registry.k8s.io/nfd/node-feature-discovery
         newName: registry.k8s.io/nfd/node-feature-discovery
         # renovate: datasource=docker depName=registry.k8s.io/nfd/node-feature-discovery
-        newTag: v0.18.3@sha256:f9ef2ebee55141a1758d3c0a87bb701f5db2adf6856f7218b11bc2bac7b63862
+        newTag: v0.19.0@sha256:2fa1c99ad09bdf2c8ad97706a4ad2fd548c84d5ecd70ba32a6152c667b96c4d2
   values:
     worker:
       config:

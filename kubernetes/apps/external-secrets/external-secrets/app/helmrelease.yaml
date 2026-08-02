@@ -16,6 +16,13 @@ spec:
     cleanupOnFail: true
     remediation:
       retries: 3
+  postRenderers:
+  - kustomize:
+      images:
+      - name: ghcr.io/external-secrets/external-secrets
+        newName: ghcr.io/external-secrets/external-secrets
+        # renovate: datasource=docker depName=ghcr.io/external-secrets/external-secrets
+        newTag: v2.6.0@sha256:b8ffd3cf43132989711bcbdd8c364d6fd3af2d77b113bef0acb25d4bb8657a95
   uninstall:
     keepHistory: false
   values:

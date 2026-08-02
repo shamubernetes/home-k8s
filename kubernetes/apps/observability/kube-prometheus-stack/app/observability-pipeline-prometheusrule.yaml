@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: observability-pipeline
+  namespace: observability
+spec:
+  groups:
+  - name: observability-pipeline
+    rules:
+    - alert: ObservabilityPipelineTargetMissing
+      expr: |
+        label_replace(absent(up{job="kube-prometheus-stack-prometheus"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="kube-prometheus-stack-alertmanager"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="gatus"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="victoria-logs"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="observability/victoria-logs-collector"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="observability/victoria-logs-vmalert"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="envoy-gateway"}), "expected_job", "$1", "job", "(.*)")
+        or label_replace(absent(up{job="envoy-proxy"}), "expected_job", "$1", "job", "(.*)")
+      for: 10m
+      labels:
+        severity: critical
+        category: observability
+      annotations:
+        summary: "Expected observability target {{ $labels.expected_job }} is missing"
+        description: "Prometheus has no active time series for the expected {{ $labels.expected_job }} scrape job."
+    - alert: ObservabilityMonitorHasNoTargets
+      expr: |
+        min by (scrape_job) (
+          prometheus_target_scrape_pool_targets{scrape_job=~"(service|pod)Monitor/.+"}
+        ) == 0
+      for: 10m
+      labels:
+        severity: warning
+        category: observability
+      annotations:
+        summary: "Prometheus monitor {{ $labels.scrape_job }} discovers zero targets"
+        description: "A configured ServiceMonitor or PodMonitor has discovered no targets for at least 10 minutes."
+    - alert: GatusSchedulerStalled
+      expr: |
+        sum(increase(gatus_results_code_total{job="gatus"}[5m])) == 0
+        or absent(gatus_results_code_total{job="gatus"})
+      for: 5m
+      labels:
+        severity: critical
+        category: observability
+      annotations:
+        summary: "Gatus stopped executing synthetic checks"
+        description: "Gatus is still scrapeable, but none of its endpoint result counters advanced for 10 minutes."
+    - alert: VictoriaLogsVmalertEvaluationsStalled
+      expr: |
+        sum by (instance) (
+          increase(vmalert_iteration_total{job="observability/victoria-logs-vmalert"}[5m])
+        ) == 0
+        or absent(vmalert_iteration_total{job="observability/victoria-logs-vmalert"})
+      for: 5m
+      labels:
+        severity: warning
+        category: observability
+      annotations:
+        summary: "VictoriaLogs vmalert evaluations stalled"
+        description: "No VictoriaLogs vmalert rule-group iterations completed for 10 minutes."

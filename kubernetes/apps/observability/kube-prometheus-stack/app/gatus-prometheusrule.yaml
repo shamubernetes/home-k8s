@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: gatus-endpoints
+  namespace: observability
+spec:
+  groups:
+  - name: gatus-endpoints
+    rules:
+    - alert: GatusEndpointUnhealthy
+      expr: gatus_results_endpoint_success{job="gatus", alerting="true"} == 0
+      for: 3m
+      labels:
+        severity: warning
+        category: synthetic-monitoring
+      annotations:
+        summary: "Gatus check {{ $labels.group }}/{{ $labels.name }} is failing"
+        description: "Gatus check {{ $labels.key }} has failed continuously for at least 3 minutes."

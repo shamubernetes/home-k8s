@@ -49,8 +49,6 @@ spec:
           key: WEBUI_SECRET_KEY
     - name: WEBUI_URL
       value: https://webui.${HOME_DOMAIN}
-    - name: ENABLE_OLLAMA_API
-      value: "false"
     - name: TZ
       value: ${TIMEZONE}
     persistence:

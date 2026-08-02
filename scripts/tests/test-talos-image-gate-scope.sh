@@ -29,6 +29,28 @@ cd "$repo_root"
 [[ $(printf '%s\n' 'kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml' | scripts/talos-image-gate-scope) == not-applicable ]]
 [[ $(printf '%s\n' 'README.md' | scripts/talos-image-gate-scope) == not-applicable ]]
 
+[[ $(printf '%s\n' \
+  'kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml' \
+  'talos/talconfig.yaml' |
+  scripts/talos-image-gate-scope) == applicable ]]
+
+if printf '%s\n' \
+  'kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml' \
+  'kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml' \
+  'talos/talconfig.yaml' |
+    scripts/talos-image-gate-scope >/dev/null 2>&1; then
+  echo 'coordinated Talos exception accepted an unrelated application change' >&2
+  exit 1
+fi
+
+if printf '%s\n' \
+  'kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml' \
+  'talos/patches/worker/runtime.yaml' |
+    scripts/talos-image-gate-scope >/dev/null 2>&1; then
+  echo 'coordinated Talos exception accepted a privileged patch' >&2
+  exit 1
+fi
+
 if printf '%s\n' \
   'kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml' \
   'talos/talconfig.yaml' |

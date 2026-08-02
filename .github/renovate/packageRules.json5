@@ -159,7 +159,6 @@
         "ghcr.io/piraeusdatastore/helm-charts/snapshot-controller",
         "registry.k8s.io/sig-storage/snapshot-controller",
         "registry.k8s.io/sig-storage/snapshot-conversion-webhook",
-        "registry.k8s.io/sig-storage/snapshot-validation-webhook",
       ],
       "matchDatasources": ["docker"],
       "semanticCommitScope": "group",

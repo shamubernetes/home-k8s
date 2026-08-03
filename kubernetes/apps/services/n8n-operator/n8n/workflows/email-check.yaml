@@ -225,8 +225,8 @@ spec:
       name: n8n-api-key
       key: api-key
   workflowName: "Email Check"
-  active: true
-  deletionPolicy: Retain
+  active: false
+  deletionPolicy: Delete
   sourceRef:
     kind: ConfigMap
     name: workflow-email-check

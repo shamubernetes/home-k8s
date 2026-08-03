@@ -37,7 +37,7 @@ spec:
       repository: ghcr.io/open-webui/open-webui
       tag: v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
     extraInitContainers:
-    - name: configure-chat-completions
+    - name: configure-responses-api
       image: ghcr.io/open-webui/open-webui:v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
       command: [python, -c]
       args:
@@ -45,6 +45,7 @@ spec:
         import json
         import sqlite3
         import time
+        import uuid
         from pathlib import Path
 
         database = Path("/app/backend/data/webui.db")
@@ -65,11 +66,59 @@ spec:
                 raise SystemExit(0)
 
             api_configs = json.loads(row[0])
-            api_configs.setdefault("0", {}).pop("api_type", None)
+            for index in ("0", "1"):
+                config = api_configs.setdefault(index, {})
+                config["api_type"] = "responses"
+                config["enable"] = True
             connection.execute(
                 "UPDATE config SET value = ?, updated_at = ? WHERE key = 'openai.api_configs'",
                 (json.dumps(api_configs, separators=(",", ":")), int(time.time())),
             )
+
+            users_by_role = {}
+            for user_id, role in connection.execute("SELECT id, role FROM user"):
+                users_by_role.setdefault(role, []).append(user_id)
+            admin_ids = users_by_role.get("admin", [])
+            member_ids = users_by_role.get("user", [])
+            admin_id = admin_ids[0] if len(admin_ids) == 1 else None
+            maggie_id = member_ids[0] if len(member_ids) == 1 else None
+            now = int(time.time())
+            template = connection.execute(
+                "SELECT params, meta FROM model WHERE id = 'Maude'"
+            ).fetchone()
+            model_params, model_meta = template or ("{}", "{}")
+
+            for model_id, name, owner_id, allowed_user_id in (
+                ("Maude", "Maude", admin_id, admin_id),
+                ("Maude for Maggie", "Maude for Maggie", admin_id, maggie_id),
+            ):
+                if owner_id is None:
+                    continue
+                model = connection.execute(
+                    "SELECT 1 FROM model WHERE id = ?", (model_id,)
+                ).fetchone()
+                if model is None:
+                    connection.execute(
+                        "INSERT INTO model "
+                        "(id, user_id, base_model_id, name, params, meta, "
+                        "updated_at, created_at, is_active) "
+                        "VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 1)",
+                        (model_id, owner_id, name, model_params, model_meta, now, now),
+                    )
+
+                connection.execute(
+                    "DELETE FROM access_grant "
+                    "WHERE resource_type = 'model' AND resource_id = ?",
+                    (model_id,),
+                )
+                if allowed_user_id is not None:
+                    connection.execute(
+                        "INSERT INTO access_grant "
+                        "(id, resource_type, resource_id, principal_type, principal_id, "
+                        "permission, created_at) "
+                        "VALUES (?, 'model', ?, 'user', ?, 'read', ?)",
+                        (str(uuid.uuid4()), model_id, allowed_user_id, now),
+                    )
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:
@@ -89,11 +138,12 @@ spec:
     enableOpenaiApi: true
     openaiBaseApiUrls:
     - http://10.0.10.95:8642/v1
+    - http://10.0.10.95:8643/v1
     openaiApiKeysExistingSecret: open-webui-secret
     openaiApiKeysExistingSecretKey: OPENAI_API_KEYS
     extraEnvVars:
     - name: OPENAI_API_CONFIGS
-      value: '{"0":{}}'
+      value: '{"0":{"api_type":"responses"},"1":{"api_type":"responses"}}'
     - name: ENABLE_OAUTH
       value: "true"
     - name: ENABLE_OAUTH_SIGNUP

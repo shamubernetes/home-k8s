@@ -6,7 +6,7 @@ metadata:
 spec:
   talos:
     # renovate: datasource=github-releases depName=siderolabs/talos
-    version: v1.13.4
+    version: v1.13.7
   policy:
     placement: hard
     rebootMode: powercycle

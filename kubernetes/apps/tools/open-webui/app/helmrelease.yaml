@@ -43,6 +43,7 @@ spec:
       args:
       - |
         import json
+        import os
         import sqlite3
         import time
         import uuid
@@ -58,6 +59,22 @@ spec:
             ).fetchone()
             if table is None:
                 raise SystemExit(0)
+
+            api_base_urls = os.environ["OPENAI_API_BASE_URLS"].split(";")
+            api_keys = os.environ["OPENAI_API_KEYS"].split(";")
+            if len(api_base_urls) != 2 or len(api_keys) != 2:
+                raise RuntimeError("expected exactly two OpenAI-compatible connections")
+
+            for key, value in (
+                ("openai.api_base_urls", api_base_urls),
+                ("openai.api_keys", api_keys),
+            ):
+                updated = connection.execute(
+                    "UPDATE config SET value = ?, updated_at = ? WHERE key = ?",
+                    (json.dumps(value, separators=(",", ":")), int(time.time()), key),
+                ).rowcount
+                if updated != 1:
+                    raise RuntimeError(f"missing persisted Open WebUI config key: {key}")
 
             row = connection.execute(
                 "SELECT value FROM config WHERE key = 'openai.api_configs'"
@@ -119,6 +136,14 @@ spec:
                         "VALUES (?, 'model', ?, 'user', ?, 'read', ?)",
                         (str(uuid.uuid4()), model_id, allowed_user_id, now),
                     )
+      env:
+      - name: OPENAI_API_BASE_URLS
+        value: http://10.0.10.95:8642/v1;http://10.0.10.95:8643/v1
+      - name: OPENAI_API_KEYS
+        valueFrom:
+          secretKeyRef:
+            name: open-webui-secret
+            key: OPENAI_API_KEYS
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:

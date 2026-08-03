@@ -107,7 +107,7 @@ spec:
 
             for model_id, name, owner_id, allowed_user_id in (
                 ("Maude", "Maude", admin_id, admin_id),
-                ("Maude for Maggie", "Maude for Maggie", admin_id, maggie_id),
+                ("Maude for Maggie", "Maude for Maggie", maggie_id, maggie_id),
             ):
                 if owner_id is None:
                     continue
@@ -121,6 +121,12 @@ spec:
                         "updated_at, created_at, is_active) "
                         "VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 1)",
                         (model_id, owner_id, name, model_params, model_meta, now, now),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE model SET user_id = ?, name = ?, updated_at = ?, is_active = 1 "
+                        "WHERE id = ?",
+                        (owner_id, name, now, model_id),
                     )
 
                 connection.execute(
@@ -169,6 +175,8 @@ spec:
     extraEnvVars:
     - name: OPENAI_API_CONFIGS
       value: '{"0":{"api_type":"responses"},"1":{"api_type":"responses"}}'
+    - name: BYPASS_ADMIN_ACCESS_CONTROL
+      value: "false"
     - name: ENABLE_OAUTH
       value: "true"
     - name: ENABLE_OAUTH_SIGNUP

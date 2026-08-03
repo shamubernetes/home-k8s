@@ -31,18 +31,6 @@ spec:
                     - FailedBarePods
                     - PodsWithLocalStorage
                     - SystemCriticalPods
-            - name: LowNodeUtilization
-              args:
-                metricsUtilization:
-                  source: KubernetesMetrics
-                thresholds:
-                  cpu: 20
-                  memory: 20
-                  pods: 20
-                targetThresholds:
-                  cpu: 50
-                  memory: 50
-                  pods: 50
             - name: RemoveDuplicates
             - name: RemoveFailedPods
               args:
@@ -66,7 +54,8 @@ spec:
           plugins:
             balance:
               enabled:
-                - LowNodeUtilization
+                # Keep LowNodeUtilization disabled. In this heterogeneous cluster it
+                # burst-evicted singletons onto the slower worker during image GC.
                 - RemoveDuplicates
                 - RemovePodsViolatingTopologySpreadConstraint
             deschedule:

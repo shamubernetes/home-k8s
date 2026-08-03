@@ -37,7 +37,7 @@ spec:
       repository: ghcr.io/open-webui/open-webui
       tag: v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
     extraInitContainers:
-    - name: configure-chat-completions
+    - name: configure-responses-api
       image: ghcr.io/open-webui/open-webui:v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
       command: [python, -c]
       args:
@@ -68,7 +68,7 @@ spec:
             api_configs = json.loads(row[0])
             for index in ("0", "1"):
                 config = api_configs.setdefault(index, {})
-                config.pop("api_type", None)
+                config["api_type"] = "responses"
                 config["enable"] = True
             connection.execute(
                 "UPDATE config SET value = ?, updated_at = ? WHERE key = 'openai.api_configs'",
@@ -143,7 +143,7 @@ spec:
     openaiApiKeysExistingSecretKey: OPENAI_API_KEYS
     extraEnvVars:
     - name: OPENAI_API_CONFIGS
-      value: '{"0":{},"1":{}}'
+      value: '{"0":{"api_type":"responses"},"1":{"api_type":"responses"}}'
     - name: ENABLE_OAUTH
       value: "true"
     - name: ENABLE_OAUTH_SIGNUP

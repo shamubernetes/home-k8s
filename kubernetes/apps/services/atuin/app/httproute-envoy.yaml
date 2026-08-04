@@ -3,6 +3,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: atuin-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Atuin"
+    homepage.shamubernetes.com/description: "Search synchronized shell history"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "70"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "dashboard-icons:atuin"
 spec:
   parentRefs:
   - name: envoy-external

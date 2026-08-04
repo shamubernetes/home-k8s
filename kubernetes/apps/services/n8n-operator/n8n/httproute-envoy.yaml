@@ -3,6 +3,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: n8n-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "n8n"
+    homepage.shamubernetes.com/description: "Build and manage automations"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "30"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "dashboard-icons:n8n"
 spec:
   parentRefs:
   - name: envoy-internal

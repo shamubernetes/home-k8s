@@ -32,6 +32,8 @@ spec:
               digest: sha256:b911b795ac54f82ee6db0b363cbdf1f2fe593aa327bf9a00950c3ebf5f5eba06
             env:
               HOMEPAGE_ADDR: :8080
+              HOMEPAGE_BRAND_NAME: TheZoo
+              HOMEPAGE_BROWSER_TITLE: TheZoo
               HOMEPAGE_CACHE_DIR: /var/cache/homepage/icons
               HOMEPAGE_DASHBOARD_ICONS_REVISION: 0d6481f2a87cf611e2bf25adcf8fb07351ed2440
               HOMEPAGE_ICON_CACHE_MAX_BYTES: "201326592"

@@ -148,6 +148,13 @@ jobs:
             [[ $(jq -r '.event' <<<"$source_run") == pull_request_target ]] || continue
             [[ $(jq -r '.head_sha' <<<"$source_run") == "$HEAD_SHA" ]] || continue
             [[ $(jq -r '.conclusion // ""' <<<"$source_run") == "$check_conclusion" ]] || continue
+            if [[ $check_conclusion != success ]]; then
+              jq --argjson id "$check_id" --slurpfile all checks.json \
+                '.check_runs += [$all[0].check_runs[] | select(.id == $id)]' \
+                current-checks.json > fresh-checks.json
+              mv fresh-checks.json current-checks.json
+              continue
+            fi
             download_exact_artifact \
               "$source_run_id" \
               "talos-image-plan-${HEAD_SHA}" \

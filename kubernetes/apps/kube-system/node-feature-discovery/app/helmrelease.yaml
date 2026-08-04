@@ -18,6 +18,13 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+  - kustomize:
+      images:
+      - name: registry.k8s.io/nfd/node-feature-discovery
+        newName: registry.k8s.io/nfd/node-feature-discovery
+        # renovate: datasource=docker depName=registry.k8s.io/nfd/node-feature-discovery
+        newTag: v0.19.0@sha256:2fa1c99ad09bdf2c8ad97706a4ad2fd548c84d5ecd70ba32a6152c667b96c4d2
   values:
     worker:
       config:

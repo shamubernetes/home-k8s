@@ -16,6 +16,16 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Job
+              name: kyverno-migrate-resources
+            patch: |-
+              - op: replace
+                path: /metadata/name
+                value: kyverno-migrate-resources-v1-18-2
   values:
     config:
       # This repo uses Kyverno generate rules heavily; keep UR threshold above the
@@ -23,11 +33,22 @@ spec:
       updateRequestThreshold: "10000"
     crds:
       install: true
+      migration:
+        image:
+          tag: v1.18.2@sha256:7224ed05508c24419c3df98114c28ba682ad0a940dcdb7b9fdba0a4b6bf943cf
+    test:
+      image:
+        tag: v1.18.2@sha256:4fb1870b1a4adfed0fa7a32b7c3bcaf736fb889c7e1947ee8b20710bc2f5a5ce
+    webhooksCleanup:
+      image:
+        tag: v1.18.2@sha256:4fb1870b1a4adfed0fa7a32b7c3bcaf736fb889c7e1947ee8b20710bc2f5a5ce
     grafana:
       enabled: true
       annotations:
         grafana_folder: Infrastructure
     backgroundController:
+      image:
+        tag: v1.18.2@sha256:d62566ce41bd0d4a32bf2cf44b9ebfc02c36374f821f83070890287f62f68671
       replicas: 2
       serviceMonitor:
         enabled: true
@@ -82,6 +103,8 @@ spec:
         limits:
           memory: 192Mi
     cleanupController:
+      image:
+        tag: v1.18.2@sha256:b0395d29ae332276e6910eb40418be9bc127c068d659f90aa1bcddd6be99ccb4
       replicas: 2
       serviceMonitor:
         enabled: true
@@ -96,6 +119,8 @@ spec:
             app.kubernetes.io/instance: &key kyverno-cleanup
             app.kubernetes.io/component: *key
     reportsController:
+      image:
+        tag: v1.18.2@sha256:f09cf305170014e191b94e1c54f5be73163d8824eefad49349675c4efe43159a
       replicas: 2
       serviceMonitor:
         enabled: true
@@ -110,6 +135,9 @@ spec:
             app.kubernetes.io/instance: &key kyverno-reports
             app.kubernetes.io/component: *key
     admissionController:
+      initContainer:
+        image:
+          tag: v1.18.2@sha256:cd8cb4a31d25b3992734fb8f24a90ef691c90ce49338c89bea96792160eacb98
       replicas: 3
       serviceMonitor:
         enabled: true
@@ -143,6 +171,8 @@ spec:
             - list
             - watch
       container:
+        image:
+          tag: v1.18.2@sha256:0a540e2ddf74d0d2d3d45f9ef248d7dbc96576accdbcc6a2dd7eaff9fea56504
         resources:
           requests:
             cpu: 500m

@@ -1,0 +1,257 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: open-webui
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: open-webui
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    fullnameOverride: open-webui
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
+    ollama:
+      enabled: false
+    pipelines:
+      enabled: false
+    tika:
+      enabled: false
+    terminals:
+      enabled: false
+    websocket:
+      enabled: false
+      manager: ""
+      redis:
+        enabled: false
+    image:
+      repository: ghcr.io/open-webui/open-webui
+      tag: v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+    extraInitContainers:
+    - name: configure-responses-api
+      image: ghcr.io/open-webui/open-webui:v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+      command: [python, -c]
+      args:
+      - |
+        import json
+        import os
+        import sqlite3
+        import time
+        import uuid
+        from pathlib import Path
+
+        database = Path("/app/backend/data/webui.db")
+        if not database.exists():
+            raise SystemExit(0)
+
+        with sqlite3.connect(database, timeout=30) as connection:
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'config'"
+            ).fetchone()
+            if table is None:
+                raise SystemExit(0)
+
+            api_base_urls = os.environ["OPENAI_API_BASE_URLS"].split(";")
+            api_keys = os.environ["OPENAI_API_KEYS"].split(";")
+            if len(api_base_urls) != 2 or len(api_keys) != 2:
+                raise RuntimeError("expected exactly two OpenAI-compatible connections")
+
+            for key, value in (
+                ("openai.api_base_urls", api_base_urls),
+                ("openai.api_keys", api_keys),
+            ):
+                updated = connection.execute(
+                    "UPDATE config SET value = ?, updated_at = ? WHERE key = ?",
+                    (json.dumps(value, separators=(",", ":")), int(time.time()), key),
+                ).rowcount
+                if updated != 1:
+                    raise RuntimeError(f"missing persisted Open WebUI config key: {key}")
+
+            row = connection.execute(
+                "SELECT value FROM config WHERE key = 'openai.api_configs'"
+            ).fetchone()
+            if row is None:
+                raise SystemExit(0)
+
+            api_configs = json.loads(row[0])
+            for index in ("0", "1"):
+                config = api_configs.setdefault(index, {})
+                config["api_type"] = "responses"
+                config["enable"] = True
+            connection.execute(
+                "UPDATE config SET value = ?, updated_at = ? WHERE key = 'openai.api_configs'",
+                (json.dumps(api_configs, separators=(",", ":")), int(time.time())),
+            )
+
+            users_by_role = {}
+            for user_id, role in connection.execute("SELECT id, role FROM user"):
+                users_by_role.setdefault(role, []).append(user_id)
+            admin_ids = users_by_role.get("admin", [])
+            member_ids = users_by_role.get("user", [])
+            admin_id = admin_ids[0] if len(admin_ids) == 1 else None
+            maggie_id = member_ids[0] if len(member_ids) == 1 else None
+            now = int(time.time())
+            template = connection.execute(
+                "SELECT params, meta FROM model WHERE id = 'Maude'"
+            ).fetchone()
+            model_params, model_meta = template or ("{}", "{}")
+
+            for model_id, name, owner_id, allowed_user_id in (
+                ("Maude", "Maude", admin_id, admin_id),
+                ("Maude for Maggie", "Maude for Maggie", maggie_id, maggie_id),
+            ):
+                if owner_id is None:
+                    continue
+                model = connection.execute(
+                    "SELECT 1 FROM model WHERE id = ?", (model_id,)
+                ).fetchone()
+                if model is None:
+                    connection.execute(
+                        "INSERT INTO model "
+                        "(id, user_id, base_model_id, name, params, meta, "
+                        "updated_at, created_at, is_active) "
+                        "VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 1)",
+                        (model_id, owner_id, name, model_params, model_meta, now, now),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE model SET user_id = ?, name = ?, updated_at = ?, is_active = 1 "
+                        "WHERE id = ?",
+                        (owner_id, name, now, model_id),
+                    )
+
+                connection.execute(
+                    "DELETE FROM access_grant "
+                    "WHERE resource_type = 'model' AND resource_id = ?",
+                    (model_id,),
+                )
+                if allowed_user_id is not None:
+                    connection.execute(
+                        "INSERT INTO access_grant "
+                        "(id, resource_type, resource_id, principal_type, principal_id, "
+                        "permission, created_at) "
+                        "VALUES (?, 'model', ?, 'user', ?, 'read', ?)",
+                        (str(uuid.uuid4()), model_id, allowed_user_id, now),
+                    )
+      env:
+      - name: OPENAI_API_BASE_URLS
+        value: http://10.0.10.95:8642/v1;http://10.0.10.95:8643/v1
+      - name: OPENAI_API_KEYS
+        valueFrom:
+          secretKeyRef:
+            name: open-webui-secret
+            key: OPENAI_API_KEYS
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        seccompProfile:
+          type: RuntimeDefault
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+      volumeMounts:
+      - name: data
+        mountPath: /app/backend/data
+    enableOpenaiApi: true
+    openaiBaseApiUrls:
+    - http://10.0.10.95:8642/v1
+    - http://10.0.10.95:8643/v1
+    openaiApiKeysExistingSecret: open-webui-secret
+    openaiApiKeysExistingSecretKey: OPENAI_API_KEYS
+    extraEnvVars:
+    - name: OPENAI_API_CONFIGS
+      value: '{"0":{"api_type":"responses"},"1":{"api_type":"responses"}}'
+    - name: BYPASS_ADMIN_ACCESS_CONTROL
+      value: "false"
+    - name: ENABLE_OAUTH
+      value: "true"
+    - name: ENABLE_OAUTH_SIGNUP
+      value: "true"
+    - name: ENABLE_OAUTH_PERSISTENT_CONFIG
+      value: "false"
+    - name: ENABLE_OAUTH_ID_TOKEN_COOKIE
+      value: "false"
+    - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+      value: "true"
+    - name: OAUTH_CODE_CHALLENGE_METHOD
+      value: S256
+    - name: OAUTH_PROVIDER_NAME
+      value: Pocket ID
+    - name: OAUTH_SCOPES
+      value: openid email profile groups offline_access
+    - name: OPENID_PROVIDER_URL
+      value: https://sso.${HOME_DOMAIN}/.well-known/openid-configuration
+    - name: OPENID_REDIRECT_URI
+      value: https://webui.${HOME_DOMAIN}/oauth/oidc/callback
+    - name: WEBUI_AUTH_SIGNOUT_REDIRECT_URL
+      value: https://webui.${HOME_DOMAIN}/auth
+    - name: OAUTH_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: open-webui-secret
+          key: OAUTH_CLIENT_ID
+    - name: OAUTH_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: open-webui-secret
+          key: OAUTH_CLIENT_SECRET
+    - name: WEBUI_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: open-webui-secret
+          key: WEBUI_SECRET_KEY
+    - name: WEBUI_URL
+      value: https://webui.${HOME_DOMAIN}
+    - name: TZ
+      value: ${TIMEZONE}
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: ceph-block
+      accessModes:
+      - ReadWriteOnce
+    startupProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 5
+      failureThreshold: 60
+    readinessProbe:
+      httpGet:
+        path: /health/db
+        port: http
+      periodSeconds: 10
+      failureThreshold: 6
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 30
+      failureThreshold: 3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault

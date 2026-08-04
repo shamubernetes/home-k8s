@@ -20,6 +20,8 @@ spec:
       retries: 3
   values:
     replicaCount: 2
+    podAnnotations:
+      maintenance.home.arpa/rollback-restart: "2026-08-03T14:18:25Z"
     monitoring:
       serviceMonitor:
         enabled: true

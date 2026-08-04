@@ -16,6 +16,13 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+  - kustomize:
+      images:
+      - name: ghcr.io/cloudnative-pg/cloudnative-pg
+        newName: ghcr.io/cloudnative-pg/cloudnative-pg
+        # renovate: datasource=docker depName=ghcr.io/cloudnative-pg/cloudnative-pg
+        newTag: 1.30.0@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb
   dependsOn:
   - name: openebs
     namespace: openebs-system

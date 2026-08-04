@@ -14,7 +14,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: read # Resolve exact base/head metadata for the trusted planner.
 
 concurrency:
   group: "image-plan-${{ github.event.pull_request.number }}"
@@ -105,15 +105,10 @@ jobs:
         PY
 
         for checkout in base head; do
-          (
-            cd "$checkout"
-            flate --no-progress get images \
-              --allow-missing-secrets \
-              --restrict-egress \
-              --registry-config "$registry_config" \
-              --path kubernetes \
-              --output json > "../${checkout}-images.json"
-          )
+          trusted/scripts/render-flate-image-inventory \
+            --checkout "$checkout" \
+            --registry-config "$registry_config" \
+            --output "$PWD/${checkout}-images.json"
         done
 
     - name: Build commit-bound image plan
@@ -156,7 +151,7 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     permissions:
-      checks: write
+      checks: write # Publish the exact-head planner result consumed by the gate.
       contents: read
     steps:
     - name: Publish exact-trigger plan result

@@ -1,0 +1,109 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app homepage
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: homepage
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      homepage:
+        replicas: 1
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        serviceAccount:
+          identifier: *app
+        containers:
+          app:
+            image:
+              repository: ghcr.io/shamubernetes/homepage
+              digest: sha256:da7e6cb6bfc7cd95dc5bece092d3bf9e5510007de35cfa3e9870e488ef678d8f
+            env:
+              HOMEPAGE_ADDR: :8080
+              HOMEPAGE_CACHE_DIR: /var/cache/homepage/icons
+              HOMEPAGE_DASHBOARD_ICONS_REVISION: 0d6481f2a87cf611e2bf25adcf8fb07351ed2440
+              HOMEPAGE_ICON_CACHE_MAX_BYTES: "201326592"
+              HOMEPAGE_ICON_FETCH_TIMEOUT: 5s
+              HOMEPAGE_ICON_MAX_BYTES: "1048576"
+              HOMEPAGE_SELFHST_ICONS_REVISION: f5b7d54f97895fc169461dcbedd77ddcce6daf54
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /readyz
+                    port: &port 8080
+                  periodSeconds: 2
+                  timeoutSeconds: 1
+                  failureThreshold: 30
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /readyz
+                    port: *port
+                  periodSeconds: 5
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /livez
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+    defaultPodOptions:
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    serviceAccount:
+      homepage: {}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *port
+    persistence:
+      cache:
+        type: emptyDir
+        sizeLimit: 256Mi
+        globalMounts:
+        - path: /var/cache/homepage
+      tmp:
+        type: emptyDir
+        sizeLimit: 16Mi
+        globalMounts:
+        - path: /tmp

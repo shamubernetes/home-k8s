@@ -3,6 +3,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: radarr-envoy-browser
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Radarr"
+    homepage.shamubernetes.com/description: "Manage movie downloads"
+    homepage.shamubernetes.com/group: "Downloads"
+    homepage.shamubernetes.com/order: "20"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "dashboard-icons:radarr"
 spec:
   hostnames:
   - radarr.${HOME_DOMAIN}

@@ -39,6 +39,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: convex-dashboard-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Convex"
+    homepage.shamubernetes.com/description: "Manage application data and functions"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "80"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "dashboard-icons:convex"
 spec:
   parentRefs:
   - name: envoy-internal

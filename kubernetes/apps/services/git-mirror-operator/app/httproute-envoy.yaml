@@ -3,6 +3,13 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: gitmirror-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Git Mirror"
+    homepage.shamubernetes.com/description: "Manage repository mirrors"
+    homepage.shamubernetes.com/group: "Infrastructure"
+    homepage.shamubernetes.com/order: "40"
+    homepage.shamubernetes.com/favorite: "false"
 spec:
   parentRefs:
   - name: envoy-external

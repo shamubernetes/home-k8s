@@ -3,6 +3,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: plane-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Plane"
+    homepage.shamubernetes.com/description: "Projects and work items"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "20"
+    homepage.shamubernetes.com/favorite: "true"
+    homepage.shamubernetes.com/icon: "dashboard-icons:plane"
 spec:
   parentRefs:
   - name: envoy-internal

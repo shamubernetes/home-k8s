@@ -29,7 +29,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/homepage
-              digest: sha256:9470bbf5d1460a25f932ef5a7c712af92300fcc139dd633befbb6ef3771bc994
+              digest: sha256:1b4078ef2edbbe46564856e4fcce1dc3d3079e0f9c523f7df3b83700b63cf108
             env:
               HOMEPAGE_ADDR: :8080
               HOMEPAGE_CACHE_DIR: /var/cache/homepage/icons

@@ -29,7 +29,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/homepage
-              digest: sha256:1b4078ef2edbbe46564856e4fcce1dc3d3079e0f9c523f7df3b83700b63cf108
+              digest: sha256:14b1678f2dac31d57de39ed508d454b87476096744f6123e853c612d726bf0b6
             env:
               HOMEPAGE_ADDR: :8080
               HOMEPAGE_CACHE_DIR: /var/cache/homepage/icons
@@ -37,7 +37,11 @@ spec:
               HOMEPAGE_ICON_CACHE_MAX_BYTES: "201326592"
               HOMEPAGE_ICON_FETCH_TIMEOUT: 5s
               HOMEPAGE_ICON_MAX_BYTES: "1048576"
+              HOMEPAGE_PUBLIC_URL: https://home.${HOME_DOMAIN}
               HOMEPAGE_SELFHST_ICONS_REVISION: f5b7d54f97895fc169461dcbedd77ddcce6daf54
+            envFrom:
+            - secretRef:
+                name: homepage-oidc-secret
             probes:
               startup:
                 enabled: true

@@ -3,6 +3,15 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: open-webui-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Open WebUI"
+    homepage.shamubernetes.com/description: "Chat with local and hosted AI models"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "10"
+    homepage.shamubernetes.com/favorite: "true"
+    homepage.shamubernetes.com/icon: "dashboard-icons:open-webui"
+    homepage.shamubernetes.com/icon-light: "dashboard-icons:open-webui-light"
 spec:
   parentRefs:
   - name: envoy-internal

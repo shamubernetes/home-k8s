@@ -9,7 +9,6 @@ resources:
   - credentials/postgres.yaml
   - credentials/onepassword.yaml
   - credentials/smtp.yaml
-  - credentials/imap-maude.yaml
   - plugins/onepassword.yaml
   - migrations/openclaw-notifications.yaml
   - migrations/codex-usage-alert-events.yaml
@@ -18,4 +17,3 @@ resources:
   - workflows/error-handler.yaml
   - workflows/codex-usage-pagerduty.yaml
   - workflows/openai-model-release.yaml
-  - workflows/email-check.yaml

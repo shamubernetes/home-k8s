@@ -29,7 +29,7 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/homepage
-              digest: sha256:da7e6cb6bfc7cd95dc5bece092d3bf9e5510007de35cfa3e9870e488ef678d8f
+              digest: sha256:9470bbf5d1460a25f932ef5a7c712af92300fcc139dd633befbb6ef3771bc994
             env:
               HOMEPAGE_ADDR: :8080
               HOMEPAGE_CACHE_DIR: /var/cache/homepage/icons
@@ -44,7 +44,7 @@ spec:
                 custom: true
                 spec:
                   httpGet:
-                    path: /readyz
+                    path: /livez
                     port: &port 8080
                   periodSeconds: 2
                   timeoutSeconds: 1
@@ -77,8 +77,10 @@ spec:
               requests:
                 cpu: 10m
                 memory: 64Mi
+                ephemeral-storage: 64Mi
               limits:
                 memory: 256Mi
+                ephemeral-storage: 300Mi
     defaultPodOptions:
       automountServiceAccountToken: true
       securityContext:

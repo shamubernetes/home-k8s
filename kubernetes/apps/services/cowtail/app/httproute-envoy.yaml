@@ -3,6 +3,13 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: cowtail-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Cowtail"
+    homepage.shamubernetes.com/description: "Review and repair cluster incidents"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "90"
+    homepage.shamubernetes.com/favorite: "false"
 spec:
   parentRefs:
   - name: envoy-external

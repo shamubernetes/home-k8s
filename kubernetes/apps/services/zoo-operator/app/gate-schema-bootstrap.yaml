@@ -1,3 +1,27 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: zoo-gate-schema-bootstrap
+  labels:
+    app.kubernetes.io/component: database-bootstrap
+    app.kubernetes.io/instance: zoo
+    app.kubernetes.io/name: gate
+    app.kubernetes.io/part-of: zoo
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: zoo-gate-schema-bootstrap
+    creationPolicy: Owner
+  data:
+  - secretKey: DATABASE_URL
+    remoteRef:
+      key: The Zoo - Gate
+      property: DATABASE_URL
+---
 # yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-batch-v1.json
 apiVersion: batch/v1
 kind: Job
@@ -39,8 +63,8 @@ spec:
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: gate-postgres
-              key: url
+              name: zoo-gate-schema-bootstrap
+              key: DATABASE_URL
         resources:
           requests:
             cpu: 10m

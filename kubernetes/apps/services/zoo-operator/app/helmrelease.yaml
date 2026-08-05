@@ -1,0 +1,190 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: zoo-operator
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: zoo-operator
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    image:
+      reference: ghcr.io/thezoo-house/operator@sha256:39b8f85f8867f931abf30b48440339678a41ada09b23123e3edd633bde16bcdc
+      pullPolicy: IfNotPresent
+    imagePullSecrets:
+      - name: ghcr-pull-secret
+    replicaCount: 2
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: "1", memory: 256Mi}
+    metrics:
+      serviceMonitor:
+        enabled: true
+        interval: 30s
+        scrapeTimeout: 10s
+    zoo:
+      name: zoo
+      labels:
+        app.kubernetes.io/part-of: the-zoo
+      annotations: {}
+      spec:
+        homeDomain: thezoo.house
+        observability:
+          serviceMonitors: true
+          prometheusRules: true
+          grafanaDashboard: true
+        externalSecrets:
+          - name: gate-auth
+            targetSecretName: gate-auth
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: session-secret, remoteRef: {key: The Zoo - Gate, property: SESSION_SECRET}}
+              - {secretKey: oidc-signing-keys-json, remoteRef: {key: The Zoo - Gate, property: OIDC_SIGNING_KEYS_JSON}}
+          - name: gate-postgres
+            targetSecretName: gate-postgres
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: url, remoteRef: {key: The Zoo - Gate, property: DATABASE_URL}}
+              - {secretKey: INIT_POSTGRES_HOST, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_HOST}}
+              - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_DBNAME}}
+              - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_USER}}
+              - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_PASS}}
+              - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
+          - name: zoo-auth
+            targetSecretName: zoo-auth
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: client-secret, remoteRef: {key: The Zoo - Website, property: GATE_CLIENT_SECRET}}
+              - {secretKey: session-secret, remoteRef: {key: The Zoo - Website, property: SESSION_SECRET}}
+          - name: zoo-postgres
+            targetSecretName: zoo-postgres
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: url, remoteRef: {key: The Zoo - Website, property: DATABASE_URL}}
+          - name: cowbell-runtime
+            targetSecretName: cowbell-runtime
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: backend-secret, remoteRef: {key: The Zoo - Cowbell, property: COWBELL_BACKEND_SECRET}}
+              - {secretKey: hermes-secret, remoteRef: {key: The Zoo - Cowbell, property: COWBELL_HERMES_SECRET}}
+              - {secretKey: hermes-webhook-secret, remoteRef: {key: The Zoo - Cowbell, property: COWBELL_HERMES_WEBHOOK_SECRET}}
+              - {secretKey: gate-client-secret, remoteRef: {key: The Zoo - Cowbell, property: ZOO_SSO_CLIENT_SECRET}}
+              - {secretKey: plex-catalog-base-url, remoteRef: {key: The Zoo - Cowbell, property: PLEX_CATALOG_BASE_URL}}
+              - {secretKey: plex-catalog-token, remoteRef: {key: The Zoo - Cowbell, property: PLEX_CATALOG_TOKEN}}
+          - name: cowbell-postgres
+            targetSecretName: cowbell-postgres
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: pooled-url, remoteRef: {key: The Zoo - Cowbell, property: DATABASE_URL}}
+              - {secretKey: direct-url, remoteRef: {key: The Zoo - Cowbell, property: COWBELL_LISTENER_DATABASE_URL}}
+              - {secretKey: INIT_POSTGRES_HOST, remoteRef: {key: The Zoo - Cowbell, property: INIT_POSTGRES_HOST}}
+              - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Cowbell, property: INIT_POSTGRES_DBNAME}}
+              - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Cowbell, property: INIT_POSTGRES_USER}}
+              - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Cowbell, property: INIT_POSTGRES_PASS}}
+              - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
+          - name: shared-rabbitmq
+            targetSecretName: shared-rabbitmq
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: url, remoteRef: {key: The Zoo - Shared Services, property: RABBITMQ_URL}}
+          - name: shared-elasticsearch
+            targetSecretName: shared-elasticsearch
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: url, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_URL}}
+              - {secretKey: username, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_USERNAME}}
+              - {secretKey: password, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_PASSWORD}}
+          - name: shared-redis
+            targetSecretName: shared-redis
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: url, remoteRef: {key: The Zoo - Shared Services, property: REDIS_URL}}
+          - name: shared-s3
+            targetSecretName: shared-s3
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: access-key-id, remoteRef: {key: The Zoo - Shared Services, property: S3_ACCESS_KEY_ID}}
+              - {secretKey: secret-access-key, remoteRef: {key: The Zoo - Shared Services, property: S3_SECRET_ACCESS_KEY}}
+          - name: shared-grafana
+            targetSecretName: shared-grafana
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: token, remoteRef: {key: The Zoo - Shared Services, property: GRAFANA_TOKEN}}
+        services:
+          gate:
+            enabled: true
+            auth:
+              plexClientID: 07a74dc80629d6c85a955f16aeab687b
+              plexServerID: 5b4122f45aaecbfa1f5e19003d8424ec4521d90d
+              sessionSecretRef: {name: gate-auth, key: session-secret}
+              oidcSigningKeysSecretRef: {name: gate-auth, key: oidc-signing-keys-json}
+            databaseSecretRef: {name: gate-postgres, key: url}
+            databaseInitialization:
+              image:
+                repository: ghcr.io/home-operations/postgres-init
+                digest: sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+              hostSecretRef: {name: gate-postgres, key: INIT_POSTGRES_HOST}
+              databaseNameSecretRef: {name: gate-postgres, key: INIT_POSTGRES_DBNAME}
+              userSecretRef: {name: gate-postgres, key: INIT_POSTGRES_USER}
+              passwordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_PASS}
+              superuserPasswordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_SUPER_PASS}
+            migrations: {command: [bun, run, migrate]}
+            workload:
+              image:
+                repository: ghcr.io/thezoo-house/gate
+                digest: sha256:b7a27a08583192a1c96dad6f035e606dd7c8bec7d92f66143bf5e7200120fdd0
+              replicas: 2
+              imagePullSecrets: [{name: ghcr-pull-secret}]
+              httpRoute: {hostnames: [gate.thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
+          zoo: {enabled: false}
+          cowbell: {enabled: false}
+        sharedServices:
+          rabbitmq: {name: shared-rabbitmq, key: url}
+          elasticsearch:
+            urlSecretRef: {name: shared-elasticsearch, key: url}
+            usernameSecretRef: {name: shared-elasticsearch, key: username}
+            passwordSecretRef: {name: shared-elasticsearch, key: password}
+          redis: {name: shared-redis, key: url}
+          s3:
+            endpoint: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+            bucket: cowbell
+            region: us-east-1
+            accessKeyIDSecretRef: {name: shared-s3, key: access-key-id}
+            secretAccessKeySecretRef: {name: shared-s3, key: secret-access-key}
+          prometheus:
+            url: http://prometheus-operated.observability.svc.cluster.local:9090
+          grafana:
+            url: https://grafana.thezoo.house
+            credentialsSecretRef: {name: shared-grafana, key: token}
+    accessPolicy: {enabled: false}

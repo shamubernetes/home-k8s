@@ -11,4 +11,4 @@ generatorOptions:
 secretGenerator:
 - name: shared-elasticsearch-endpoint
   literals:
-  - url=http://elasticsearch.database.svc.cluster.local:9200
+  - url=https://elasticsearch.${HOME_DOMAIN}

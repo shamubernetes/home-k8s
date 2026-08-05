@@ -250,7 +250,9 @@ spec:
                   homepage.shamubernetes.com/group: Tools
                   homepage.shamubernetes.com/order: "100"
                   homepage.shamubernetes.com/favorite: "false"
-              serviceEgress: [{name: plex, namespace: media, ports: [{port: 32400, protocol: TCP}]}]
+              serviceEgress:
+              - {name: plex, namespace: media, ports: [{port: 32400, protocol: TCP}]}
+              - {name: envoy-internal, namespace: network, ports: [{port: 443, protocol: TCP}]}
         sharedServices:
           rabbitmq: {name: shared-rabbitmq, key: url}
           elasticsearch:

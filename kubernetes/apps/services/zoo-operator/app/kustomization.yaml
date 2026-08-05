@@ -9,6 +9,6 @@ resources:
 generatorOptions:
   disableNameSuffixHash: true
 secretGenerator:
-- name: shared-elasticsearch-endpoint
+- name: shared-elasticsearch-tls-endpoint
   literals:
-  - url=https://elasticsearch.${HOME_DOMAIN}
+  - url=https://elasticsearch.thezoo.house

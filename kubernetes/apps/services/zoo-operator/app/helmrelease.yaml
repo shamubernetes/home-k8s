@@ -196,7 +196,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/thezoo.house
-                digest: sha256:87e6e94473e88f3292e0dd4d77fb2bb74e36eaa37f0d5a002dc4c3a06192cf96
+                digest: sha256:5aa0dbb641e1ed84dd72da78c1376a58b48dcba6f53ef8c96165976f290c4920
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute: {hostnames: [thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
@@ -237,7 +237,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/cowbell
-                digest: sha256:31163b2383640a660187d746b0167e71720997b27a0ecafdec652b3273fe8df0
+                digest: sha256:cc5ddbb1d8eb779a79f44a2c8363051800a58152164dab022f9b4e903dc572ae
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute:

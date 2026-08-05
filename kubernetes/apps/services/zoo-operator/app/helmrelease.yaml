@@ -5,6 +5,7 @@ metadata:
   name: zoo-operator
 spec:
   interval: 10m
+  timeout: 10m
   chartRef:
     kind: OCIRepository
     name: zoo-operator

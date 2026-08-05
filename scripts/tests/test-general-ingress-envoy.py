@@ -127,6 +127,8 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('wizarr-envoy', 'envoy-external', 'join.${HOME_DOMAIN}', 'PathPrefix', '/', 'wizarr', 5690, ''),
  ('zoo-fleet-envoy', 'envoy-external', 'fleet.${HOME_DOMAIN}', 'PathPrefix', '/', 'zoo-fleet', 3000, '300s')]
 
+PLEX_TRANSITION_PARENTS = {"envoy-external", "envoy-external,envoy-internal"}
+
 
 def load_documents(path: Path) -> list[dict]:
     result = subprocess.run(
@@ -142,6 +144,11 @@ def load_documents(path: Path) -> list[dict]:
 def route_rows(document: dict) -> list[tuple]:
     name = document["metadata"]["name"]
     parent_names = ",".join(sorted(ref["name"] for ref in document["spec"]["parentRefs"]))
+    if name == "plex-envoy":
+        if parent_names not in PLEX_TRANSITION_PARENTS:
+            raise AssertionError(f"{name} parents must be one of {sorted(PLEX_TRANSITION_PARENTS)}")
+        # Keep the protected test valid on both sides of the split privileged/app rollout.
+        parent_names = "envoy-external"
     hostnames = document["spec"]["hostnames"]
     if len(hostnames) != 1:
         raise AssertionError(f"{name} must declare exactly one hostname")

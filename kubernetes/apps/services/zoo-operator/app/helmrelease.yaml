@@ -256,7 +256,7 @@ spec:
         sharedServices:
           rabbitmq: {name: shared-rabbitmq, key: url}
           elasticsearch:
-            urlSecretRef: {name: shared-elasticsearch-endpoint, key: url}
+            urlSecretRef: {name: shared-elasticsearch-tls-endpoint, key: url}
             usernameSecretRef: {name: shared-elasticsearch, key: username}
             passwordSecretRef: {name: shared-elasticsearch, key: password}
           redis: {name: shared-redis, key: url}

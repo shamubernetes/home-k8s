@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./gate-schema-bootstrap.yaml
+- ./zoo-database-bootstrap.yaml
 - ./helmrelease.yaml

@@ -252,6 +252,16 @@ spec:
                 digest: sha256:31163b2383640a660187d746b0167e71720997b27a0ecafdec652b3273fe8df0
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
+              httpRoute:
+                hostnames: [issue.thezoo.house, issues.thezoo.house, cowbell.thezoo.house]
+                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
+                annotations:
+                  homepage.shamubernetes.com/enabled: "true"
+                  homepage.shamubernetes.com/name: Cowbell
+                  homepage.shamubernetes.com/description: Report media issues
+                  homepage.shamubernetes.com/group: Tools
+                  homepage.shamubernetes.com/order: "100"
+                  homepage.shamubernetes.com/favorite: "false"
         sharedServices:
           rabbitmq: {name: shared-rabbitmq, key: url}
           elasticsearch:

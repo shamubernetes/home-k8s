@@ -18,3 +18,4 @@ resources:
 - ./plane/ks.yaml
 - ./plane-github-bridge/ks.yaml
 - ./static-webserver/ks.yaml
+- ./zoo-operator/ks.yaml

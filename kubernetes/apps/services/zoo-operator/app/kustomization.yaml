@@ -6,3 +6,9 @@ resources:
 - ./gate-schema-bootstrap.yaml
 - ./zoo-database-bootstrap.yaml
 - ./helmrelease.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+- name: shared-elasticsearch-endpoint
+  literals:
+  - url=http://elasticsearch.database.svc.cluster.local:9200

@@ -124,7 +124,6 @@ spec:
             refreshInterval: 1h
             storeRef: {name: op-secret-store, kind: ClusterSecretStore}
             data:
-              - {secretKey: url, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_URL}}
               - {secretKey: username, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_USERNAME}}
               - {secretKey: password, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_PASSWORD}}
           - name: shared-redis
@@ -255,7 +254,7 @@ spec:
         sharedServices:
           rabbitmq: {name: shared-rabbitmq, key: url}
           elasticsearch:
-            urlSecretRef: {name: shared-elasticsearch, key: url}
+            urlSecretRef: {name: shared-elasticsearch-endpoint, key: url}
             usernameSecretRef: {name: shared-elasticsearch, key: username}
             passwordSecretRef: {name: shared-elasticsearch, key: password}
           redis: {name: shared-redis, key: url}

@@ -5,6 +5,7 @@ resources:
 - ./ocirepository.yaml
 - ./gate-schema-bootstrap.yaml
 - ./zoo-database-bootstrap.yaml
+- ./cowbell-rollback-externalsecret.yaml
 - ./helmrelease.yaml
 generatorOptions:
   disableNameSuffixHash: true

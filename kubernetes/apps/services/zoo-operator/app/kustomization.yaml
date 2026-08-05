@@ -12,3 +12,7 @@ secretGenerator:
 - name: shared-elasticsearch-tls-endpoint
   literals:
   - url=https://elasticsearch.thezoo.house
+# Keep rollback pods viable while Zoo adopts the renamed endpoint reference.
+- name: shared-elasticsearch-endpoint
+  literals:
+  - url=https://elasticsearch.thezoo.house

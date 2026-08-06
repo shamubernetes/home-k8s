@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: zoo-operator
+spec:
+  interval: 15m
+  secretRef:
+    name: ghcr-pull-secret
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    digest: sha256:eb3e0ba5acecb1171ddede1c3f741134d99697632c8518491131dc953230c8b5
+  url: oci://ghcr.io/thezoo-house/charts/zoo-operator

@@ -10,7 +10,7 @@ spec:
     sectionName: https
   hostnames:
   - pds.kiliantyler.com
-  - "*.pds.kiliantyler.com"
+  - "*.kiliantyler.com"
   rules:
   - backendRefs:
     - name: atproto-pds

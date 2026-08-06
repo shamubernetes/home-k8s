@@ -5,4 +5,15 @@ resources:
 - ./ocirepository.yaml
 - ./gate-schema-bootstrap.yaml
 - ./zoo-database-bootstrap.yaml
+- ./cowbell-rollback-externalsecret.yaml
 - ./helmrelease.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+- name: shared-elasticsearch-tls-endpoint
+  literals:
+  - url=https://elasticsearch.thezoo.house
+# Keep rollback pods viable while Zoo adopts the renamed endpoint reference.
+- name: shared-elasticsearch-endpoint
+  literals:
+  - url=https://elasticsearch.thezoo.house

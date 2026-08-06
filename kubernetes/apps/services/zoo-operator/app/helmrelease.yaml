@@ -237,7 +237,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/cowbell
-                digest: sha256:8fbc3ca60e15443374fde4dbeb65bfde9aa63d4b4c3658fb45e30f33a1279414
+                digest: sha256:00c3a3a8b894ce0809215e0ecb405a88f773ff2c72a31227ee8e73305712811b
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute:

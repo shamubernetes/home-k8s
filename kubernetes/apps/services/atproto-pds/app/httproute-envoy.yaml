@@ -13,5 +13,5 @@ spec:
   - "*.pds.kiliantyler.com"
   rules:
   - backendRefs:
-    - name: atproto-pds-app
+    - name: atproto-pds
       port: 3000

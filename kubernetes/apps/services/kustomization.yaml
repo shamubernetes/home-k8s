@@ -6,7 +6,6 @@ resources:
 - ./atuin/ks.yaml
 - ./changedetection/ks.yaml
 - ./convex/ks.yaml
-- ./cowbell/ks.yaml
 - ./cs2/ks.yaml
 - ./cowtail/ks.yaml
 - ./git-mirror-operator/ks.yaml
@@ -18,3 +17,4 @@ resources:
 - ./plane/ks.yaml
 - ./plane-github-bridge/ks.yaml
 - ./static-webserver/ks.yaml
+- ./zoo-operator/ks.yaml

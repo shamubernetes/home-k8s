@@ -21,7 +21,9 @@ EXPECTED_ROUTE_NAMES = set(['adguard-home-origin-envoy',
  'convex-actions-envoy',
  'convex-api-envoy',
  'convex-dashboard-envoy',
+ 'cowbell-cowbell-envoy',
  'cowbell-envoy',
+ 'cowbell-issues-envoy',
  'cowtail-envoy',
  'cwa-bdl-envoy',
  'documenso-envoy',
@@ -72,7 +74,9 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('convex-actions-envoy', 'envoy-internal', 'convex-actions.${HOME_DOMAIN}', 'PathPrefix', '/', 'convex-backend', 3211, ''),
  ('convex-api-envoy', 'envoy-internal', 'convex-api.${HOME_DOMAIN}', 'PathPrefix', '/', 'convex-backend', 3210, ''),
  ('convex-dashboard-envoy', 'envoy-internal', 'convex.${HOME_DOMAIN}', 'PathPrefix', '/', 'convex-dashboard', 6791, ''),
+ ('cowbell-cowbell-envoy', 'envoy-external', 'cowbell.${HOME_DOMAIN}', 'PathPrefix', '/', 'cowbell-cowbell', 80, ''),
  ('cowbell-envoy', 'envoy-external', 'issue.${HOME_DOMAIN}', 'PathPrefix', '/', 'cowbell-cowbell', 80, ''),
+ ('cowbell-issues-envoy', 'envoy-external', 'issues.${HOME_DOMAIN}', 'PathPrefix', '/', 'cowbell-cowbell', 80, ''),
  ('cowtail-envoy', 'envoy-external', 'cowtail.${HOME_DOMAIN}', 'PathPrefix', '/', 'cowtail', 80, '86400s'),
  ('cwa-bdl-envoy', 'envoy-internal', 'books.${HOME_DOMAIN}', 'PathPrefix', '/', 'cwa-bdl', 8084, ''),
  ('documenso-envoy', 'envoy-internal', 'documenso.${HOME_DOMAIN}', 'PathPrefix', '/', 'documenso', 3000, ''),
@@ -106,7 +110,7 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('plane-github-bridge-envoy', 'envoy-external', 'plane-github.${HOME_DOMAIN}', 'Exact', '/plane/webhook', 'plane-github-bridge', 80, ''),
  ('plane-mcp-envoy', 'envoy-internal', 'plane-mcp.${HOME_DOMAIN}', 'PathPrefix', '/mcp', 'plane-mcp', 3000, ''),
  ('plane-uploads-envoy', 'envoy-internal', 'plane.${HOME_DOMAIN}', 'PathPrefix', '/uploads', 'rook-ceph-rgw-ceph-objectstore', 80, ''),
- ('plex-envoy', 'envoy-external', 'plex.${HOME_DOMAIN}', 'PathPrefix', '/', 'plex', 32400, ''),
+ ('plex-envoy', 'envoy-external,envoy-internal', 'plex.${HOME_DOMAIN}', 'PathPrefix', '/', 'plex', 32400, ''),
  ('pocket-id-envoy', 'envoy-internal', 'sso.${HOME_DOMAIN}', 'PathPrefix', '/', 'pocket-id', 1411, ''),
  ('prometheus-envoy', 'envoy-internal', 'prometheus.${HOME_DOMAIN}', 'PathPrefix', '/', 'kube-prometheus-stack-prometheus', 9090, ''),
  ('renovate-envoy', 'envoy-external', 'renovate.${HOME_DOMAIN}', 'PathPrefix', '/', 'renovate', 8080, ''),
@@ -122,7 +126,6 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('web-static-envoy', 'envoy-external', 'static.${HOME_DOMAIN}', 'PathPrefix', '/', 'web-static', 80, ''),
  ('wizarr-envoy', 'envoy-external', 'join.${HOME_DOMAIN}', 'PathPrefix', '/', 'wizarr', 5690, ''),
  ('zoo-fleet-envoy', 'envoy-external', 'fleet.${HOME_DOMAIN}', 'PathPrefix', '/', 'zoo-fleet', 3000, '300s')]
-
 
 def load_documents(path: Path) -> list[dict]:
     result = subprocess.run(

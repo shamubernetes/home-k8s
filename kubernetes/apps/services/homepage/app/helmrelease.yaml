@@ -29,9 +29,12 @@ spec:
           app:
             image:
               repository: ghcr.io/shamubernetes/homepage
-              digest: sha256:14b1678f2dac31d57de39ed508d454b87476096744f6123e853c612d726bf0b6
+              digest: sha256:4cd8c486b648497cad786a469338cbfe52a7334065f2d277388ddc27bae4ee2a
             env:
+              HOMEPAGE_ACCESS_CONTROL_ENABLED: "false"
               HOMEPAGE_ADDR: :8080
+              HOMEPAGE_BRAND_NAME: TheZoo
+              HOMEPAGE_BROWSER_TITLE: TheZoo
               HOMEPAGE_CACHE_DIR: /var/cache/homepage/icons
               HOMEPAGE_DASHBOARD_ICONS_REVISION: 0d6481f2a87cf611e2bf25adcf8fb07351ed2440
               HOMEPAGE_ICON_CACHE_MAX_BYTES: "201326592"

@@ -21,6 +21,8 @@ spec:
     namespace: observability
   - name: victoria-logs
     namespace: observability
+  - name: victoria-metrics-ha
+    namespace: observability
   values:
     extraInitContainers:
     - name: 01-init-db
@@ -153,6 +155,7 @@ spec:
         - {name: Alertmanager, orgId: 1}
         - {name: Prometheus, orgId: 1}
         - {name: VictoriaLogs, orgId: 1}
+        - {name: Home Assistant Metrics, orgId: 1}
         datasources:
         - name: Prometheus
           type: prometheus
@@ -166,6 +169,15 @@ spec:
           access: proxy
           url: http://victoria-logs.observability.svc.cluster.local:9428
           isDefault: false
+        - name: Home Assistant Metrics
+          type: prometheus
+          uid: victoriametrics-ha
+          access: proxy
+          url: http://victoria-metrics-ha.observability.svc.cluster.local:8428
+          isDefault: false
+          jsonData:
+            prometheusType: VictoriaMetrics
+            prometheusVersion: 1.149.0
         - name: Alertmanager
           type: alertmanager
           uid: alertmanager

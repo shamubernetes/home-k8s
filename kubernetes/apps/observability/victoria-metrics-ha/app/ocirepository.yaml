@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  annotations:
+    oci.home.arpa/allow-rollout: "true"
+  name: victoria-metrics-ha
+spec:
+  interval: 30m
+  url: oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-single
+  ref:
+    tag: 0.44.0
+    digest: sha256:d254253600818a88fd4a72d4c8ff23a4ee2c85017436325df22c9287f4254be8
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

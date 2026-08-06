@@ -170,7 +170,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/gate
-                digest: sha256:8a944d70615d52e2a0a677a52845bd3ee95eac59d296a6fe7da0dbd208f5fa85
+                digest: sha256:1c7ca52dc3d5d054ccd169fc29571cd78b7ab5be04357d34c1b049bb6fb7cbc1
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute: {hostnames: [gate.thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}

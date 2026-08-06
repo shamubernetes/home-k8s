@@ -124,7 +124,6 @@ spec:
             refreshInterval: 1h
             storeRef: {name: op-secret-store, kind: ClusterSecretStore}
             data:
-              - {secretKey: url, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_URL}}
               - {secretKey: username, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_USERNAME}}
               - {secretKey: password, remoteRef: {key: The Zoo - Shared Services, property: ELASTICSEARCH_PASSWORD}}
           - name: shared-redis
@@ -171,7 +170,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/gate
-                digest: sha256:57d4b0afa44fa531695f223f7fcc5ba3fc9a9a35a87d917143d666cc4808035a
+                digest: sha256:25610ebf384a6ed8b0464f90f8aa61d42827701abdca755bc1f9ae673ed68431
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute: {hostnames: [gate.thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
@@ -197,7 +196,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/thezoo.house
-                digest: sha256:87e6e94473e88f3292e0dd4d77fb2bb74e36eaa37f0d5a002dc4c3a06192cf96
+                digest: sha256:3731873b6ff7b17c6d6b5fa10d943e6dcac8a11096a1a09ef9cb430daf18f40a
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute: {hostnames: [thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
@@ -238,7 +237,7 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/cowbell
-                digest: sha256:31163b2383640a660187d746b0167e71720997b27a0ecafdec652b3273fe8df0
+                digest: sha256:00c3a3a8b894ce0809215e0ecb405a88f773ff2c72a31227ee8e73305712811b
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute:
@@ -251,11 +250,13 @@ spec:
                   homepage.shamubernetes.com/group: Tools
                   homepage.shamubernetes.com/order: "100"
                   homepage.shamubernetes.com/favorite: "false"
-              serviceEgress: [{name: plex, namespace: media, ports: [{port: 32400, protocol: TCP}]}]
+              serviceEgress:
+              - {name: plex, namespace: media, ports: [{port: 32400, protocol: TCP}]}
+              - {name: envoy-internal, namespace: network, ports: [{port: 443, protocol: TCP}]}
         sharedServices:
           rabbitmq: {name: shared-rabbitmq, key: url}
           elasticsearch:
-            urlSecretRef: {name: shared-elasticsearch, key: url}
+            urlSecretRef: {name: shared-elasticsearch-tls-endpoint, key: url}
             usernameSecretRef: {name: shared-elasticsearch, key: username}
             passwordSecretRef: {name: shared-elasticsearch, key: password}
           redis: {name: shared-redis, key: url}

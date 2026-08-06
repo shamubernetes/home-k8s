@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: zoo-gate-schema-bootstrap
+  labels:
+    app.kubernetes.io/component: database-bootstrap
+    app.kubernetes.io/instance: zoo
+    app.kubernetes.io/name: gate
+    app.kubernetes.io/part-of: zoo
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: zoo-gate-schema-bootstrap
+    creationPolicy: Owner
+  data:
+  - secretKey: DATABASE_URL
+    remoteRef:
+      key: The Zoo - Gate
+      property: DATABASE_URL
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-batch-v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zoo-gate-schema-bootstrap
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+  labels:
+    app.kubernetes.io/component: database-bootstrap
+    app.kubernetes.io/instance: zoo
+    app.kubernetes.io/name: gate
+    app.kubernetes.io/part-of: zoo
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: database-bootstrap
+        app.kubernetes.io/instance: zoo
+        app.kubernetes.io/name: gate
+        app.kubernetes.io/part-of: zoo
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: bootstrap-schema
+        image: ghcr.io/home-operations/postgres-init:17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+        command:
+        - psql
+        args:
+        - "$(DATABASE_URL)"
+        - --set=ON_ERROR_STOP=1
+        - --command=CREATE SCHEMA IF NOT EXISTS gate AUTHORIZATION gate;
+        - --command=ALTER ROLE gate IN DATABASE gate SET search_path TO gate, public;
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: zoo-gate-schema-bootstrap
+              key: DATABASE_URL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true

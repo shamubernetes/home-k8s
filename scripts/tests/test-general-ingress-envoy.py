@@ -110,7 +110,7 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('plane-github-bridge-envoy', 'envoy-external', 'plane-github.${HOME_DOMAIN}', 'Exact', '/plane/webhook', 'plane-github-bridge', 80, ''),
  ('plane-mcp-envoy', 'envoy-internal', 'plane-mcp.${HOME_DOMAIN}', 'PathPrefix', '/mcp', 'plane-mcp', 3000, ''),
  ('plane-uploads-envoy', 'envoy-internal', 'plane.${HOME_DOMAIN}', 'PathPrefix', '/uploads', 'rook-ceph-rgw-ceph-objectstore', 80, ''),
- ('plex-envoy', 'envoy-external', 'plex.${HOME_DOMAIN}', 'PathPrefix', '/', 'plex', 32400, ''),
+ ('plex-envoy', 'envoy-external,envoy-internal', 'plex.${HOME_DOMAIN}', 'PathPrefix', '/', 'plex', 32400, ''),
  ('pocket-id-envoy', 'envoy-internal', 'sso.${HOME_DOMAIN}', 'PathPrefix', '/', 'pocket-id', 1411, ''),
  ('prometheus-envoy', 'envoy-internal', 'prometheus.${HOME_DOMAIN}', 'PathPrefix', '/', 'kube-prometheus-stack-prometheus', 9090, ''),
  ('renovate-envoy', 'envoy-external', 'renovate.${HOME_DOMAIN}', 'PathPrefix', '/', 'renovate', 8080, ''),
@@ -126,7 +126,6 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('web-static-envoy', 'envoy-external', 'static.${HOME_DOMAIN}', 'PathPrefix', '/', 'web-static', 80, ''),
  ('wizarr-envoy', 'envoy-external', 'join.${HOME_DOMAIN}', 'PathPrefix', '/', 'wizarr', 5690, ''),
  ('zoo-fleet-envoy', 'envoy-external', 'fleet.${HOME_DOMAIN}', 'PathPrefix', '/', 'zoo-fleet', 3000, '300s')]
-
 
 def load_documents(path: Path) -> list[dict]:
     result = subprocess.run(

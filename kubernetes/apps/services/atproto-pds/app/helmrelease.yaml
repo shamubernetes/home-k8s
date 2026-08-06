@@ -52,7 +52,7 @@ spec:
               PDS_RATE_LIMITS_ENABLED: "true"
               PDS_REPORT_SERVICE_DID: did:plc:ar7c4by46qjdydhdevvrndac
               PDS_REPORT_SERVICE_URL: https://mod.bsky.app
-              PDS_SERVICE_HANDLE_DOMAINS: .pds.kiliantyler.com
+              PDS_SERVICE_HANDLE_DOMAINS: ".kiliantyler.com"
               TZ: ${TIMEZONE}
             envFrom:
             - secretRef:

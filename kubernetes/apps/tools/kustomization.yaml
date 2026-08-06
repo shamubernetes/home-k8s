@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - ./namespace.yaml
 - ./firecrawl/ks.yaml
+- ./open-webui/ks.yaml
 - ./plane-mcp/ks.yaml
 - ./reflector/ks.yaml
 - ./searxng/ks.yaml

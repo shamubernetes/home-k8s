@@ -3,6 +3,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: listenarr-envoy-browser
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Listenarr"
+    homepage.shamubernetes.com/description: "Manage music downloads"
+    homepage.shamubernetes.com/group: "Downloads"
+    homepage.shamubernetes.com/order: "80"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "selfhst:listenarr"
 spec:
   hostnames:
   - listenarr.${HOME_DOMAIN}

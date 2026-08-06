@@ -3,6 +3,14 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: calibre-web-automated-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Calibre Web"
+    homepage.shamubernetes.com/description: "Browse and read the ebook library"
+    homepage.shamubernetes.com/group: "Media"
+    homepage.shamubernetes.com/order: "40"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "dashboard-icons:calibre-web"
 spec:
   parentRefs:
   - name: envoy-internal

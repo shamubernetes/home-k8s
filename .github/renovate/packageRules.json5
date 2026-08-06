@@ -54,10 +54,10 @@
       "allowedVersions": "<9",
     },
     {
-      "description": "Rook 1.20 supports Ceph 19 and 20",
+      "description": "Rook 1.20.3 is incompatible with Ceph 20.2.3",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["quay.io/ceph/ceph"],
-      "allowedVersions": "<21",
+      "allowedVersions": "<20.2.3",
     },
     // Versions
     {

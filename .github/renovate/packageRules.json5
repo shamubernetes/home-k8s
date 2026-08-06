@@ -2,6 +2,15 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
     {
+      description: "Home Assistant and HACS core use the rehearsed upgrade workflow",
+      matchFileNames: ["kubernetes/apps/home-assistant/home-assistant/app/helmrelease.yaml"],
+      matchPackageNames: [
+        "ghcr.io/home-operations/home-assistant",
+        "hacs/integration",
+      ],
+      enabled: false,
+    },
+    {
       description: "Cowbell chart promotion is managed by its signed webhook",
       matchFileNames: ["kubernetes/apps/services/cowbell/app/ocirepository.yaml"],
       enabled: false,

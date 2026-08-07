@@ -24,3 +24,5 @@ configMapGenerator:
   - ./resources/retained-allowlist.txt
 generatorOptions:
   disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

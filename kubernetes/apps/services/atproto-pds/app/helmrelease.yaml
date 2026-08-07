@@ -52,6 +52,7 @@ spec:
               PDS_INVITE_REQUIRED: "true"
               PDS_PORT: &port 3000
               PDS_RATE_LIMITS_ENABLED: "true"
+              PDS_RECOVERY_DID_KEY: did:key:zQ3shgba7GXBN5dmDmVX7nqL9o8UsFkGPKVoYm3Bd2kJHmxDR
               PDS_REPORT_SERVICE_DID: did:plc:ar7c4by46qjdydhdevvrndac
               PDS_REPORT_SERVICE_URL: https://mod.bsky.app
               PDS_SERVICE_HANDLE_DOMAINS: ".kiliantyler.com"

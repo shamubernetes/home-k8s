@@ -10,11 +10,10 @@ set -eu
 : "${MQTT_RATGDO_MAIN_PASSWORD:?MQTT_RATGDO_MAIN_PASSWORD is required}"
 
 MQTT_PORT=8883
-CA_FILE=/etc/ssl/certs/ca-certificates.crt
 ADMIN_OPTIONS=/work/admin-options
 
 printf '%s\n' \
-  "--cafile ${CA_FILE}" \
+  '--tls-use-os-certs' \
   "-h ${MQTT_HOST}" \
   "-p ${MQTT_PORT}" \
   "-u ${MQTT_ADMIN_USERNAME}" \

@@ -38,6 +38,26 @@ spec:
                 secretKeyRef:
                   name: mosquitto-secret
                   key: admin-password
+            - name: MQTT_HA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: ha-password
+            - name: MQTT_ESPRESENSE_BAR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: espresense-bar-password
+            - name: MQTT_ESPRESENSE_LIVINGROOM_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: espresense-livingroom-password
+            - name: MQTT_RATGDO_MAIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: ratgdo-main-password
             resources:
               requests:
                 cpu: 10m

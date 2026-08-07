@@ -46,7 +46,7 @@ spec:
               PDS_DID_CACHE_MAX_TTL: "3600000"
               PDS_DID_CACHE_STALE_TTL: "300000"
               PDS_DID_PLC_URL: https://plc.directory
-              PDS_EMAIL_FROM_ADDRESS: atproto@kiliantyler.com
+              PDS_EMAIL_FROM_ADDRESS: smtprelay@thezoo.house
               PDS_EMAIL_SMTP_URL: smtp://smtp-relay.network.svc.cluster.local:25
               PDS_HOSTNAME: pds.kiliantyler.com
               PDS_INVITE_REQUIRED: "true"

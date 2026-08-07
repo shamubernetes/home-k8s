@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: victoria-metrics-ha-rules
+spec:
+  groups:
+  - name: victoria-metrics-ha.health
+    rules:
+    - alert: HomeAssistantVictoriaMetricsDown
+      annotations:
+        summary: Home Assistant VictoriaMetrics is unavailable.
+      expr: up{job=~".*victoria-metrics-ha.*"} == 0
+      for: 2m
+      labels:
+        severity: critical
+    - alert: HomeAssistantVictoriaMetricsTargetMissing
+      annotations:
+        summary: The Home Assistant VictoriaMetrics Prometheus target is missing.
+      expr: absent(up{job=~".*victoria-metrics-ha.*"})
+      for: 5m
+      labels:
+        severity: critical
+    - alert: HomeAssistantVictoriaMetricsStorageGrowth
+      annotations:
+        summary: Home Assistant VictoriaMetrics storage is above 60%; review growth and expansion timing.
+      expr: |
+        sum(vm_data_size_bytes{job=~".*victoria-metrics-ha.*"})
+        /
+        (
+          sum(vm_data_size_bytes{job=~".*victoria-metrics-ha.*"})
+          + sum(vm_free_disk_space_bytes{job=~".*victoria-metrics-ha.*"})
+        ) > 0.60
+      for: 30m
+      labels:
+        severity: warning
+    - alert: HomeAssistantVictoriaMetricsExpansionRequired
+      annotations:
+        summary: Home Assistant VictoriaMetrics storage is above 75%; expand the PVC before further growth.
+      expr: |
+        sum(vm_data_size_bytes{job=~".*victoria-metrics-ha.*"})
+        /
+        (
+          sum(vm_data_size_bytes{job=~".*victoria-metrics-ha.*"})
+          + sum(vm_free_disk_space_bytes{job=~".*victoria-metrics-ha.*"})
+        ) > 0.75
+      for: 15m
+      labels:
+        severity: critical
+    - alert: HomeAssistantVictoriaMetricsReadOnly
+      annotations:
+        summary: Home Assistant VictoriaMetrics storage is read-only.
+      expr: vm_storage_is_read_only{job=~".*victoria-metrics-ha.*"} == 1
+      for: 5m
+      labels:
+        severity: critical
+    - alert: HomeAssistantVictoriaMetricsRowsRejected
+      annotations:
+        summary: Home Assistant VictoriaMetrics is rejecting or dropping rows.
+      expr: |
+        increase(vm_rows_invalid_total{job=~".*victoria-metrics-ha.*"}[5m])
+        + increase(vm_protoparser_rows_dropped_total{job=~".*victoria-metrics-ha.*"}[5m]) > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: HomeAssistantVictoriaMetricsAPIRequestErrors
+      annotations:
+        summary: Home Assistant VictoriaMetrics is returning API errors.
+      expr: increase(vm_http_request_errors_total{job=~".*victoria-metrics-ha.*"}[5m]) > 0
+      for: 15m
+      labels:
+        severity: warning

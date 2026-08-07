@@ -36,7 +36,7 @@ spec:
           init-buckets:
             image:
               repository: docker.io/amazon/aws-cli
-              tag: 2.36.15@sha256:310813a7eae8fd88da1cc9c37970e3500b0ff3984479e1012f0a6fd44e453f63
+              tag: 2.36.18@sha256:a807ac61090901c63dd4600eef3e6c8b010afdd07530e30d932a988e5a8405fa
             envFrom: *envFrom
             env:
               S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
@@ -51,7 +51,7 @@ spec:
           app:
             image:
               repository: ghcr.io/get-convex/convex-backend
-              tag: latest@sha256:01eb88b7eb9a1f3224f12f5f62423a9d83522a8db286bf2d45f1962fadbe958a
+              tag: latest@sha256:240a2e9115dab3c13145b96532d1cc8bc63c5e2d112d95f80e592a75242bfa75
             env:
               INSTANCE_NAME: convex
               DO_NOT_REQUIRE_SSL: "1"
@@ -106,7 +106,7 @@ spec:
           app:
             image:
               repository: ghcr.io/get-convex/convex-dashboard
-              tag: latest@sha256:a3b196240f9d3b2f0f48630b08755cdab5c56965daa31416cc1602debee1464f
+              tag: latest@sha256:cd9a57079de2e49dfc786510b70ebf7cc254dda71807176edc4955ccc13915ca
             env:
               NEXT_PUBLIC_DEPLOYMENT_URL: https://convex-api.${HOME_DOMAIN}
               NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: "true"

@@ -5,7 +5,7 @@ Mosquitto is the shared MQTT broker for Zoo Fleet and retained Home Assistant de
 - TLS MQTT: `mqtt.${HOME_DOMAIN}:8883`
 - Authenticated migration compatibility: `mqtt.${HOME_DOMAIN}:1883`
 
-The plaintext listener exists only because the retained ESPresense and native ratgdo firmware do not support MQTT TLS. NetworkPolicy and CiliumNetworkPolicy restrict it to ESPresense Bar (`10.107.104.20`), ESPresense Living Room (`10.107.107.175`), Main Garage ratgdo (`10.107.106.236`), and the `iot`, `home-assistant`, and `home-assistant-migration` namespaces. Cilium DSR preserves external client addresses for those `/32` checks; do not set `externalTrafficPolicy: Local`, which is incompatible with the cluster's L2 announcements. Anonymous access remains disabled. Small Garage, retired ESPresense rooms, WeatherFlow, PS5 MQTT, and Node-RED are deliberately excluded.
+The plaintext listener exists only because the retained ESPresense and native ratgdo firmware do not support MQTT TLS. NetworkPolicy and CiliumNetworkPolicy restrict it to ESPresense Bar (`10.107.104.20`), ESPresense Living Room (`10.107.107.175`), Main Garage ratgdo (`10.107.106.236`), and explicitly labeled verifier pods in `iot`. Cilium DSR preserves external client addresses for those `/32` checks; do not set `externalTrafficPolicy: Local`, which is incompatible with the cluster's L2 announcements. Anonymous access remains disabled. Small Garage, retired ESPresense rooms, WeatherFlow, PS5 MQTT, and Node-RED are deliberately excluded.
 
 ## 1Password item
 
@@ -24,7 +24,7 @@ External Secrets creates `mosquitto-secret`. The broker init flow reconciles the
 
 Zoo Fleet creates its own clients, groups, and roles at runtime. Each device authenticates with a unique username and receives product/target-specific ACLs containing `%u`.
 
-The `mosquitto-home-assistant-clients-v1` Job provisions four fixed clients and immutable v1 roles:
+The `mosquitto-home-assistant-clients-v2` Job provisions four fixed clients and immutable v1 roles. It removes obsolete `ha-migration-*` role versions after assigning the current roles, without touching Zoo Fleet state:
 
 - Home Assistant, TLS `8883`
 - ESPresense Bar, authenticated `1883`
@@ -51,7 +51,7 @@ For a Home Assistant migration client password, update the matching 1Password fi
 
 ## Verification
 
-The suspended CronJob runs a destructive-but-self-cleaning broker contract test. It verifies:
+The suspended CronJob runs a destructive-but-self-cleaning broker contract test. It never publishes into a physical device command hierarchy; command authorization is checked from the Dynamic Security role contract. It verifies:
 
 - public TLS certificate and authentication;
 - Zoo Fleet v1 ACL, reconnect, retained desired state, and retained Last Will behavior;

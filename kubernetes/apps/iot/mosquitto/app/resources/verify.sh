@@ -306,7 +306,6 @@ RATGDO_USER=ratgdo-main-garage
 BAR_TOPIC="espresense/rooms/bar/verify/${RUN_ID}"
 LIVINGROOM_TOPIC="espresense/rooms/livingroom/verify/${RUN_ID}"
 RATGDO_STATUS_TOPIC="ratgdo_Main_Garage_Door/status/verify/${RUN_ID}"
-RATGDO_COMMAND_TOPIC="ratgdo_Main_Garage_Door/command/verify/${RUN_ID}"
 BAR_DISCOVERY_TOPIC="homeassistant/sensor/espresense_5c1fa8/verify/${RUN_ID}"
 ESP_SETTING_TOPIC="espresense/settings/verify-${RUN_ID}/config"
 ESP_BROADCAST_TOPIC="espresense/rooms/*/verify-${RUN_ID}/set"
@@ -334,13 +333,12 @@ mqtt_plain_pub "$RATGDO_USER" "$MQTT_RATGDO_MAIN_PASSWORD" \
 wait "$ha_ratgdo_subscriber"
 grep -qx "$RUN_ID" /work/ha-ratgdo
 
-mqtt_plain_sub "$RATGDO_USER" "$MQTT_RATGDO_MAIN_PASSWORD" \
-  -W 10 -C 1 -t "$RATGDO_COMMAND_TOPIC" > /work/ratgdo-command &
-ratgdo_command_subscriber=$!
-sleep 1
-mqtt_pub "$HA_USER" "$MQTT_HA_PASSWORD" -t "$RATGDO_COMMAND_TOPIC" -m "$RUN_ID"
-wait "$ratgdo_command_subscriber"
-grep -qx "$RUN_ID" /work/ratgdo-command
+ha_role_contract="$(ctrl getRole ha-migration-home-assistant-v1)"
+printf '%s\n' "$ha_role_contract" | grep -Fq 'publishClientSend'
+printf '%s\n' "$ha_role_contract" | grep -Fq 'ratgdo_Main_Garage_Door/command/#'
+ratgdo_role_contract="$(ctrl getRole ha-migration-ratgdo-main-v1)"
+printf '%s\n' "$ratgdo_role_contract" | grep -Fq 'publishClientReceive'
+printf '%s\n' "$ratgdo_role_contract" | grep -Fq 'ratgdo_Main_Garage_Door/command/#'
 
 mqtt_sub "$HA_USER" "$MQTT_HA_PASSWORD" -W 10 -C 1 \
   -t 'homeassistant/#' > /work/ha-bar-discovery &

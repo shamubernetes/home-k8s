@@ -132,6 +132,7 @@ jobs:
       run: |
         python scripts/tests/test-cluster-maintenance.py
         python scripts/tests/test-home-assistant-renovate-guard.py
+        python scripts/tests/test-renovate-group-precedence.py
         scripts/tests/test-validation.sh
         scripts/tests/test-flate-render.sh
         scripts/tests/test-firecrawl-promotion.sh

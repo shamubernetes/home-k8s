@@ -9,7 +9,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
   ref:
-    tag: 88.1.5
+    tag: 88.1.6
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

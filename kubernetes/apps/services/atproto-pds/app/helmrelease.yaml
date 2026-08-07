@@ -43,6 +43,8 @@ spec:
               PDS_CONTACT_EMAIL_ADDRESS: kilian@kil.dev
               PDS_CRAWLERS: https://bsky.network
               PDS_DATA_DIRECTORY: /pds
+              PDS_DID_CACHE_MAX_TTL: "3600000"
+              PDS_DID_CACHE_STALE_TTL: "300000"
               PDS_DID_PLC_URL: https://plc.directory
               PDS_EMAIL_FROM_ADDRESS: atproto@kiliantyler.com
               PDS_EMAIL_SMTP_URL: smtp://smtp-relay.network.svc.cluster.local:25

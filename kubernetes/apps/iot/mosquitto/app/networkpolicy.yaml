@@ -23,12 +23,9 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: iot
-    - namespaceSelector:
+      podSelector:
         matchLabels:
-          kubernetes.io/metadata.name: home-assistant
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: home-assistant-migration
+          mqtt.home.arpa/plaintext-client: "true"
     - ipBlock:
         cidr: 10.107.104.20/32
     - ipBlock:

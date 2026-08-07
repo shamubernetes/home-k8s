@@ -26,10 +26,7 @@ spec:
   - fromEndpoints:
     - matchLabels:
         k8s:io.kubernetes.pod.namespace: iot
-    - matchLabels:
-        k8s:io.kubernetes.pod.namespace: home-assistant
-    - matchLabels:
-        k8s:io.kubernetes.pod.namespace: home-assistant-migration
+        mqtt.home.arpa/plaintext-client: "true"
     toPorts:
     - ports:
       - port: "1883"

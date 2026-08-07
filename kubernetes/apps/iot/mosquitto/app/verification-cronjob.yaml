@@ -12,6 +12,9 @@ spec:
       backoffLimit: 1
       ttlSecondsAfterFinished: 3600
       template:
+        metadata:
+          labels:
+            mqtt.home.arpa/plaintext-client: "true"
         spec:
           restartPolicy: Never
           automountServiceAccountToken: false

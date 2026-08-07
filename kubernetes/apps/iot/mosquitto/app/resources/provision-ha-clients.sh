@@ -69,6 +69,15 @@ ensure_assignment() {
   fi
 }
 
+remove_obsolete_managed_roles() {
+  for role in $(ctrl listRoles | grep '^ha-migration-' || true); do
+    case "$role" in
+      "$HA_ROLE"|"$BAR_ROLE"|"$LIVINGROOM_ROLE"|"$RATGDO_ROLE") ;;
+      *) ctrl deleteRole "$role" >/dev/null ;;
+    esac
+  done
+}
+
 HA_USER=home-assistant
 BAR_USER=espresense-bar
 LIVINGROOM_USER=espresense-livingroom
@@ -159,6 +168,7 @@ ensure_assignment "$HA_USER" "$HA_ROLE"
 ensure_assignment "$BAR_USER" "$BAR_ROLE"
 ensure_assignment "$LIVINGROOM_USER" "$LIVINGROOM_ROLE"
 ensure_assignment "$RATGDO_USER" "$RATGDO_ROLE"
+remove_obsolete_managed_roles
 
 rm -f "$ADMIN_OPTIONS"
 echo "Home Assistant migration MQTT clients and immutable v1 roles reconciled"

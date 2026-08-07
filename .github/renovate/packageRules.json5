@@ -68,11 +68,6 @@
       "matchPackageNames": ["quay.io/ceph/ceph"],
       "allowedVersions": "<20.2.3",
     },
-    {
-      "description": "Flate 0.4.13 has no downloadable release assets",
-      "matchPackageNames": ["home-operations/flate"],
-      "allowedVersions": "<0.4.13",
-    },
     // Versions
     {
       "description": ["Custom versioning for http-https-echo"],

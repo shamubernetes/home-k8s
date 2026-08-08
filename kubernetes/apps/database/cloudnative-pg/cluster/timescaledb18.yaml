@@ -34,8 +34,9 @@ spec:
         reference: ghcr.io/cloudnative-pg/timescaledb-oss:2.27.2-18-trixie@sha256:dbe5ff08bb626440d096f57a26d4f31301ffcaf4a8c9a236c38356e380a96f05
     parameters:
       checkpoint_timeout: 15min
-      max_wal_size: 4GB
+      huge_pages: "off"
       max_connections: "100"
+      max_wal_size: 4GB
       min_wal_size: 1GB
       shared_buffers: 128MB
       wal_compression: "on"
@@ -49,7 +50,6 @@ spec:
       cpu: 250m
     limits:
       memory: 2Gi
-      hugepages-2Mi: 2Gi
   monitoring:
     enablePodMonitor: true
   plugins:

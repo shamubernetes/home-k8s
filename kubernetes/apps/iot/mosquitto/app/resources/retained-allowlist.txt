@@ -1,0 +1,10 @@
+# Home Assistant migration MQTT allowlist
+#
+# Main Garage is approved. Small Garage, PS5, WeatherFlow, Node-RED, and stale
+# ESPresense rooms are intentionally absent.
+homeassistant/+/espresense_5c1fa8/#
+homeassistant/+/espresense_9810a8/#
+homeassistant/+/Main_Garage_Door/#
+espresense/rooms/bar/#
+espresense/rooms/livingroom/#
+ratgdo_Main_Garage_Door/status/#

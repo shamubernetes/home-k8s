@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumnetworkpolicy_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mosquitto
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: mosquitto
+      app.kubernetes.io/name: mosquitto
+  ingress:
+  - fromEntities:
+    - cluster
+    - host
+    - remote-node
+    toPorts:
+    - ports:
+      - port: "8883"
+        protocol: TCP
+  - fromCIDR:
+    - 10.0.0.0/8
+    toPorts:
+    - ports:
+      - port: "8883"
+        protocol: TCP
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: iot
+        mqtt.home.arpa/plaintext-client: "true"
+    toPorts:
+    - ports:
+      - port: "1883"
+        protocol: TCP
+  - fromCIDR:
+    - 10.107.104.20/32
+    - 10.107.107.175/32
+    - 10.107.106.236/32
+    toPorts:
+    - ports:
+      - port: "1883"
+        protocol: TCP
+  egress: []

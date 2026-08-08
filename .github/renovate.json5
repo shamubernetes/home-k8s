@@ -49,8 +49,10 @@
     "github>shamubernetes/home-k8s//.github/renovate/noPin.json5",
     "github>shamubernetes/home-k8s//.github/renovate/customDatasources.json5",
     "github>shamubernetes/home-k8s//.github/renovate/customManagers.json5",
-    "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
     "github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5",
+    // Apply explicit groups after generic manager and datasource formatting so
+    // grouped PRs retain their group scope regardless of which tools they update.
+    "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
   ],
   labels: ["renovate"],
   // config:best-practices waits three days by default. Only Talos and

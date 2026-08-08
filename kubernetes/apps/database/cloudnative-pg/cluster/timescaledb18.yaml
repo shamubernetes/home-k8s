@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/postgresql.cnpg.io/cluster_v1.json
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: timescaledb18
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:18-system-trixie@sha256:4b384608950050622a7ee9cd5057b45c67a96ada3859fc9b7d839f54c11b9425
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  switchoverDelay: 60
+  failoverDelay: 0
+  bootstrap:
+    initdb:
+      database: tracearr
+      owner: tracearr
+      secret:
+        name: tracearr-db-secret
+      postInitApplicationSQL:
+      - CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+  storage:
+    size: 20Gi
+    storageClass: ceph-block
+  walStorage:
+    size: 5Gi
+    storageClass: ceph-block
+  superuserSecret:
+    name: cloudnative-pg-secret
+  enableSuperuserAccess: true
+  postgresql:
+    extensions:
+    - name: timescaledb
+      image:
+        reference: ghcr.io/cloudnative-pg/timescaledb-oss:2.27.2-18-trixie@sha256:dbe5ff08bb626440d096f57a26d4f31301ffcaf4a8c9a236c38356e380a96f05
+    parameters:
+      checkpoint_timeout: 15min
+      huge_pages: "off"
+      max_connections: "100"
+      max_wal_size: 4GB
+      min_wal_size: 1GB
+      shared_buffers: 128MB
+      wal_compression: "on"
+    shared_preload_libraries:
+    - timescaledb
+  nodeMaintenanceWindow:
+    inProgress: false
+    reusePVC: true
+  resources:
+    requests:
+      cpu: 250m
+    limits:
+      memory: 2Gi
+  monitoring:
+    enablePodMonitor: true
+  plugins:
+  - name: barman-cloud.cloudnative-pg.io
+    isWALArchiver: true
+    parameters:
+      barmanObjectName: r2
+      serverName: timescaledb18-v1
+  backup:
+    volumeSnapshot:
+      className: csi-ceph-blockpool
+      walClassName: csi-ceph-blockpool
+      snapshotOwnerReference: cluster
+      onlineConfiguration:
+        immediateCheckpoint: true

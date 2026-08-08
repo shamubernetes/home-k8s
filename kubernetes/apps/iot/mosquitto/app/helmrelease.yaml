@@ -38,11 +38,31 @@ spec:
               printf '%s\n%s\n' "$MOSQUITTO_ADMIN_PASSWORD" "$MOSQUITTO_ADMIN_PASSWORD" |
                 mosquitto_ctrl dynsec init "$config" "$MOSQUITTO_ADMIN_USERNAME"
               sed -i \
-                -e 's/"publishClientReceive": true/"publishClientReceive": false/' \
-                -e 's/"unsubscribe": true/"unsubscribe": false/' \
+                -e 's/"publishClientReceive":[[:space:]]*true/"publishClientReceive": false/' \
+                -e 's/"unsubscribe":[[:space:]]*true/"unsubscribe": false/' \
                 "$config"
-              grep -q '"publishClientReceive": false' "$config"
-              grep -q '"unsubscribe": false' "$config"
+              grep -Eq '"publishClientReceive":[[:space:]]*false' "$config"
+              grep -Eq '"unsubscribe":[[:space:]]*false' "$config"
+            env:
+              MOSQUITTO_ADMIN_USERNAME:
+                valueFrom:
+                  secretKeyRef:
+                    name: mosquitto-secret
+                    key: admin-username
+              MOSQUITTO_ADMIN_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: mosquitto-secret
+                    key: admin-password
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+          reconcile-admin-credential:
+            image:
+              repository: *imageRepository
+              tag: *imageTag
+            command: ["/bin/sh", "/scripts/reconcile-admin.sh"]
             env:
               MOSQUITTO_ADMIN_USERNAME:
                 valueFrom:
@@ -105,6 +125,9 @@ spec:
           external-dns.alpha.kubernetes.io/hostname: "mqtt.${HOME_DOMAIN}"
           io.cilium/lb-ipam-ips: "${IPAM_IP_MOSQUITTO}"
         ports:
+          mqtt-plain:
+            port: 1883
+            protocol: TCP
           mqtt:
             port: *mqttPort
             protocol: TCP
@@ -118,6 +141,15 @@ spec:
             - path: /mosquitto/config/mosquitto.conf
               subPath: mosquitto.conf
               readOnly: true
+      scripts:
+        type: configMap
+        name: mosquitto-ha-migration
+        advancedMounts:
+          mosquitto:
+            reconcile-admin-credential:
+            - path: /scripts/reconcile-admin.sh
+              subPath: reconcile-admin.sh
+              readOnly: true
       data:
         type: persistentVolumeClaim
         storageClass: ceph-block
@@ -127,6 +159,8 @@ spec:
         advancedMounts:
           mosquitto:
             initialize-dynamic-security:
+            - path: /mosquitto/data
+            reconcile-admin-credential:
             - path: /mosquitto/data
             app:
             - path: /mosquitto/data

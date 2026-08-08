@@ -6,6 +6,9 @@ resources:
 - ./externalsecret.yaml
 - ./ocirepository.yaml
 - ./helmrelease.yaml
+- ./networkpolicy.yaml
+- ./ciliumnetworkpolicy.yaml
+- ./ha-clients-job.yaml
 - ./verification-cronjob.yaml
 configMapGenerator:
 - name: mosquitto-config
@@ -14,5 +17,12 @@ configMapGenerator:
 - name: mosquitto-verification
   files:
   - ./resources/verify.sh
+- name: mosquitto-ha-migration
+  files:
+  - ./resources/reconcile-admin.sh
+  - ./resources/provision-ha-clients.sh
+  - ./resources/retained-allowlist.txt
 generatorOptions:
   disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

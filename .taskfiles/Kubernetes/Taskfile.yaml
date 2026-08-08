@@ -88,7 +88,8 @@ tasks:
     desc: Validate focused YAML paths with yayamlls schemas
     summary: |
       path: One or more YAML files or directories to validate (required)
-    cmd: 'yayamlls validate --root "{{.ROOT_DIR}}" {{.path}}'
+      GitOps app roots are automatically routed through scripts/validate-app.
+    cmd: '{{.ROOT_DIR}}/scripts/validate-yaml {{.path}}'
     requires:
       vars: ["path"]
 
@@ -126,9 +127,27 @@ tasks:
     summary: |
       category: App category, for example tools or services (required)
       app: App name (required)
-      args: Extra args passed to scripts/new-app, for example --image ... --port ... --internal --secret
+      args: Extra args passed to scripts/new-app, including a tagged digest, port, and explicit health decision
     cmd: '{{.ROOT_DIR}}/scripts/new-app {{.category}} {{.app}} {{.args}}'
     vars:
       args: '{{.args | default ""}}'
     requires:
       vars: ["category", "app"]
+
+  preflight-new-app:
+    desc: Resolve an image and record a new app runtime contract
+    summary: |
+      app: App path as <category>/<app> (required)
+      args: Runtime contract flags passed to scripts/preflight-new-app (required)
+    cmd: '{{.ROOT_DIR}}/scripts/preflight-new-app {{.app}} {{.args}}'
+    requires:
+      vars: ["app", "args"]
+
+  homarr-upsert-app:
+    desc: Idempotently add an app and tile to a Homarr v1 board
+    summary: |
+      args: App fields passed to scripts/homarr-upsert-app (required)
+      Credentials must be piped on stdin as JSON with username and password.
+    cmd: '{{.ROOT_DIR}}/scripts/homarr-upsert-app {{.args}}'
+    requires:
+      vars: ["args"]

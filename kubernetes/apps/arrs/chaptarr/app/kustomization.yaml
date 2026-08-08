@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ./ocirepository.yaml
+- ./externalsecret.yaml
+- ./externalsecret-oidc.yaml
+- ../../../../templates/volsync
+- ./helmrelease.yaml
+- ./httproute-envoy-api.yaml
+- ./httproute-envoy-browser.yaml
+- ./securitypolicy-oidc.yaml
+- ./service-envoy-dns.yaml
+- ../../../../templates/gatus/guarded

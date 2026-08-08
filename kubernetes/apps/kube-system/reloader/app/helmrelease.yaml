@@ -19,8 +19,8 @@ spec:
     fullnameOverride: reloader
     image:
       repository: ghcr.io/stakater/reloader
-      tag: v1.4.19@sha256:0530cf462fa3ba530fab887372e3b79caf608d0093ffc2fded9fa33bac8b74cd
-      digest: sha256:0530cf462fa3ba530fab887372e3b79caf608d0093ffc2fded9fa33bac8b74cd
+      tag: v1.4.21@sha256:b253579350a835082cdad8d8736671cedaa0f8309437c894bd1bf1c2f0e0d45e
+      digest: sha256:00380aee220b9c6fac720fbd99ca244000c839f3b391cd82d401c156ab368c60
     reloader:
       readOnlyRootFileSystem: true
       podMonitor:

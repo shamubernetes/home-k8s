@@ -1,0 +1,25 @@
+# Internal-only Home Assistant telemetry store.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: victoria-metrics-ha
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: victoria-metrics-ha
+      app.kubernetes.io/name: victoria-metrics-single
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: home-assistant
+    ports:
+    - port: 8428
+      protocol: TCP
+  egress: []

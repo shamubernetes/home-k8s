@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: chaptarr-envoy-browser
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Chaptarr"
+    homepage.shamubernetes.com/description: "Manage ebook and audiobook downloads"
+    homepage.shamubernetes.com/group: "Downloads"
+    homepage.shamubernetes.com/order: "85"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "mdi-bookshelf"
+spec:
+  hostnames:
+  - chaptarr.${HOME_DOMAIN}
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: envoy-internal
+    namespace: network
+    sectionName: https
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        remove:
+        - Authorization
+        - X-Auth-Request-User
+        - X-Auth-Request-Email
+        - X-Auth-Request-Groups
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: chaptarr
+      port: 8789

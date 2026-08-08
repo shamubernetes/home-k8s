@@ -134,6 +134,8 @@ jobs:
         python scripts/tests/test-home-assistant-renovate-guard.py
         python scripts/tests/test-renovate-ceph-guard.py
         python scripts/tests/test-renovate-group-precedence.py
+        python scripts/tests/test-deployment-tooling.py
+        python scripts/tests/test-homarr-upsert-app.py
         scripts/tests/test-validation.sh
         scripts/tests/test-flate-render.sh
         scripts/tests/test-firecrawl-promotion.sh

@@ -2,6 +2,15 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
     {
+      description: "Home Assistant and HACS core use the rehearsed upgrade workflow",
+      matchFileNames: ["kubernetes/apps/home-assistant/home-assistant/app/helmrelease.yaml"],
+      matchPackageNames: [
+        "ghcr.io/home-operations/home-assistant",
+        "hacs/integration",
+      ],
+      enabled: false,
+    },
+    {
       description: "Cowbell chart promotion is managed by its signed webhook",
       matchFileNames: ["kubernetes/apps/services/cowbell/app/ocirepository.yaml"],
       enabled: false,
@@ -54,10 +63,10 @@
       "allowedVersions": "<9",
     },
     {
-      "description": "Rook 1.20 supports Ceph 19 and 20",
+      "description": "Rook supports Ceph 20; skip broken Ceph 20.2.3 only",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["quay.io/ceph/ceph"],
-      "allowedVersions": "<21",
+      "allowedVersions": "<20.2.3 || >=20.2.4 <21",
     },
     // Versions
     {

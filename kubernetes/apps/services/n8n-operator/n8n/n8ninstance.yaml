@@ -7,7 +7,7 @@ metadata:
 spec:
   replicas: 1
   deploymentStrategy: Recreate
-  image: docker.io/n8nio/n8n:2.34.0@sha256:d92b370360f8af2ea8ea344d3fd70853a575a7afb568472930c82cd138fe0757
+  image: docker.io/n8nio/n8n:2.34.4@sha256:f69bad7a699300702af665b9f13fc67455b93c9fb9174bca6c37f3d4a47b8583
   imagePullPolicy: IfNotPresent
   timezone: "America/New_York"
 

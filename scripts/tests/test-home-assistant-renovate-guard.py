@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import re
+import unittest
+from pathlib import Path
+
+RULE_DESCRIPTION = "Home Assistant and HACS core use the rehearsed upgrade workflow"
+TARGET_FILE = "kubernetes/apps/home-assistant/home-assistant/app/helmrelease.yaml"
+BLOCKED_PACKAGES = {
+    "ghcr.io/home-operations/home-assistant",
+    "hacs/integration",
+}
+
+
+def load_json5(path: Path) -> dict:
+    """Parse the limited JSON5 syntax used by Renovate with stdlib only."""
+    text = path.read_text()
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    text = re.sub(r"(^|\s)//.*$", r"\1", text, flags=re.MULTILINE)
+    text = re.sub(
+        r'(?m)([,{]\s*)([A-Za-z_$][A-Za-z0-9_$]*)(\s*:)',
+        r'\1"\2"\3',
+        text,
+    )
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return json.loads(text)
+
+
+class HomeAssistantRenovateGuardTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repo_root = Path(__file__).resolve().parents[2]
+        cls.rules = load_json5(
+            cls.repo_root / ".github" / "renovate" / "packageRules.json5"
+        )["packageRules"]
+        cls.manifest = (
+            cls.repo_root / TARGET_FILE
+        ).read_text()
+
+    def test_guard_is_exact_and_disabled(self) -> None:
+        matching = [
+            rule for rule in self.rules if rule.get("description") == RULE_DESCRIPTION
+        ]
+        self.assertEqual(len(matching), 1, "expected exactly one HA/HACS guard")
+        rule = matching[0]
+        self.assertIs(rule.get("enabled"), False)
+        self.assertEqual(rule.get("matchFileNames"), [TARGET_FILE])
+        self.assertEqual(set(rule.get("matchPackageNames", [])), BLOCKED_PACKAGES)
+
+    def test_guarded_dependencies_exist_in_target_manifest(self) -> None:
+        for package in BLOCKED_PACKAGES:
+            self.assertIn(package, self.manifest)
+        self.assertIn(
+            "# renovate: datasource=github-releases depName=hacs/integration",
+            self.manifest,
+        )
+        self.assertRegex(
+            self.manifest,
+            r"(?m)^\s*HACS_VERSION=\d+\.\d+\.\d+$",
+        )
+
+    def test_unrelated_dependencies_are_not_disabled(self) -> None:
+        matching = [
+            rule for rule in self.rules if rule.get("description") == RULE_DESCRIPTION
+        ]
+        self.assertEqual(len(matching), 1, "expected exactly one HA/HACS guard")
+        blocked = set(matching[0].get("matchPackageNames", []))
+        for package in {
+            "busybox",
+            "ghcr.io/home-operations/postgres-init",
+            "ghcr.io/coder/code-server",
+        }:
+            self.assertNotIn(package, blocked)
+            self.assertIn(package, self.manifest)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -16,3 +16,4 @@ resources:
 - ./whisparr/ks.yaml
 - ./cwa-bdl/ks.yaml
 - ./listenarr/ks.yaml
+- ./chaptarr/ks.yaml

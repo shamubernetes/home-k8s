@@ -63,15 +63,10 @@
       "allowedVersions": "<9",
     },
     {
-      "description": "Rook 1.20.3 is incompatible with Ceph 20.2.3",
+      "description": "Rook supports Ceph 20; skip broken Ceph 20.2.3 only",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["quay.io/ceph/ceph"],
-      "allowedVersions": "<20.2.3",
-    },
-    {
-      "description": "Flate 0.4.13 has no downloadable release assets",
-      "matchPackageNames": ["home-operations/flate"],
-      "allowedVersions": "<0.4.13",
+      "allowedVersions": "<20.2.3 || >=20.2.4 <21",
     },
     // Versions
     {

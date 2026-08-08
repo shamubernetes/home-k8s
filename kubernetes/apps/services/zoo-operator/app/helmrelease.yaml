@@ -25,6 +25,9 @@ spec:
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
+    registryCredentialsSecretRef:
+      name: ghcr-pull-secret
+      key: .dockerconfigjson
     replicaCount: 2
     resources:
       requests: {cpu: 50m, memory: 128Mi}

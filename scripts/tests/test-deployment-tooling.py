@@ -259,7 +259,7 @@ fi
                 [
                     str(self.repo / "scripts/new-app"),
                     "tools",
-                    "example",
+                    "legacy",
                     "--image",
                     f"ghcr.io/example/app:1.0.0@sha256:{digest}",
                     "--port",
@@ -269,8 +269,10 @@ fi
                 text=True,
                 capture_output=True,
             )
-            self.assertNotEqual(undecided.returncode, 0)
-            self.assertIn("choose --health-path", undecided.stderr)
+            self.assertEqual(undecided.returncode, 0, undecided.stderr)
+            self.assertIn("defaulting to --health-path /", undecided.stderr)
+            legacy_helmrelease = (category / "legacy/app/helmrelease.yaml").read_text()
+            self.assertIn("path: /", legacy_helmrelease)
             mutable = subprocess.run(
                 [
                     str(self.repo / "scripts/new-app"),

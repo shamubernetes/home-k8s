@@ -36,8 +36,17 @@ task kubernetes:pin-image image=docker.io/library/nginx:latest
 # Check effective workload images for missing digest pins
 task kubernetes:check-image-pins
 
-# Scaffold a standard app-template app
-task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest --port 8080 --internal"
+# Resolve the image and record explicit health, storage, database, and auth decisions first
+task kubernetes:preflight-new-app app=tools/example args="--image docker.io/library/nginx:latest --port 8080 --no-health-endpoint --persistence none --database none --auth internal"
+
+# Scaffold from the pinned image and probe decision returned by the preflight
+task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest@sha256:<resolved-digest> --port 8080 --no-health-endpoint --internal"
+
+# Upsert one Homarr app and tile. Pipe credentials as JSON; never write them to disk.
+credential_provider | task kubernetes:homarr-upsert-app args="--name Example --href https://example.${HOME_DOMAIN} --icon-url https://example/icon.svg"
+
+# Follow updated PR heads, required checks, and merge through an explicit repository target
+task github:deliver-pr pr=<number> args="--merge"
 
 # Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
@@ -308,13 +317,33 @@ scripts/pin-image docker.io/searxng/searxng:latest
 task kubernetes:pin-image image=docker.io/searxng/searxng:latest
 ```
 
-To scaffold a new standard app-template app:
+Before scaffolding a new standard app-template app, make the runtime contract explicit and resolve the mutable image to an immutable digest:
 
 ```bash
-scripts/new-app tools example --image docker.io/library/nginx:latest --port 8080 --internal
-# or
-task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest --port 8080 --internal"
+scripts/preflight-new-app tools/example \
+  --image docker.io/library/nginx:latest \
+  --port 8080 \
+  --no-health-endpoint \
+  --persistence none \
+  --database none \
+  --auth internal
 ```
+
+When upstream source is available, pass `--source <checkout> --strict-evidence` to require source evidence for the declared port, health endpoint, persistence paths, and database choice. The report includes image platforms, entrypoint, command, exposed ports, declared volumes, and environment variable names when `crane` is available. Unknowns are warnings rather than guessed values.
+
+Then scaffold the app with the pinned image returned by the preflight:
+
+```bash
+scripts/new-app tools example --image docker.io/library/nginx:latest@sha256:<resolved-digest> --port 8080 --health-path / --internal
+# or
+task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest@sha256:<resolved-digest> --port 8080 --health-path / --internal"
+```
+
+For focused YAML validation, `scripts/validate-yaml` automatically recognizes a single `kubernetes/apps/<category>/<app>` root and runs the canonical `scripts/validate-app` workflow. Exit code `201` from yayamlls is explained as a schema failure or unsupported schema instead of being returned without context.
+
+For Homarr v1 dashboard updates, use `scripts/homarr-upsert-app`. It reads `{ "username": "...", "password": "..." }` from stdin, owns and closes its local port-forward unless `--base-url` is supplied, deduplicates both the app and board tile, and verifies the result by read-back. Do not put Homarr credentials in arguments, environment variables, or temporary files.
+
+For PR delivery, use `scripts/pr-deliver <pr> [--repo owner/name] [--merge]`. It keeps one watcher per repository/PR, follows a changed head SHA instead of reporting stale checks, and always passes an explicit repository to `gh pr merge`, avoiding worktree checkout conflicts.
 
 After pushing app changes, watch Flux converge with:
 

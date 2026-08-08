@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -19,8 +20,18 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("pr", help="pull request number or URL")
     value.add_argument("--repo", help="GitHub repository as owner/name")
     value.add_argument("--interval", type=int, default=10)
-    value.add_argument("--merge", action="store_true", help="squash-merge after checks pass")
-    value.add_argument("--auto", action="store_true", help="enable GitHub auto-merge after checks pass")
+    delivery = value.add_mutually_exclusive_group()
+    delivery.add_argument(
+        "--merge",
+        action="store_true",
+        help="enable policy-safe auto-merge and wait until the PR is merged",
+    )
+    delivery.add_argument(
+        "--auto",
+        action="store_true",
+        help="enable GitHub auto-merge after checks pass, then return",
+    )
+    value.add_argument("--merge-timeout", type=int, default=900)
     value.add_argument("--keep-branch", action="store_true")
     return value
 
@@ -47,6 +58,9 @@ def main() -> int:
     args = parser().parse_args()
     if args.interval < 1:
         print("--interval must be at least one second", file=sys.stderr)
+        return 2
+    if args.merge_timeout < 1:
+        print("--merge-timeout must be at least one second", file=sys.stderr)
         return 2
     gh = os.environ.get("GH_BIN", "gh")
     try:
@@ -118,12 +132,53 @@ def main() -> int:
                 "--match-head-commit",
                 after,
             ]
-            if args.auto:
-                merge.append("--auto")
+            merge.append("--auto")
             if not args.keep_branch:
                 merge.append("--delete-branch")
             merge_result = run(gh, merge)
-            return merge_result.returncode
+            if merge_result.returncode or args.auto:
+                return merge_result.returncode
+
+            deadline = time.monotonic() + args.merge_timeout
+            while time.monotonic() < deadline:
+                try:
+                    state_and_head = value(
+                        gh,
+                        [
+                            "pr",
+                            "view",
+                            args.pr,
+                            "--repo",
+                            repo,
+                            "--json",
+                            "state,headRefOid",
+                            "--jq",
+                            '"\\(.state) \\(.headRefOid)"',
+                        ],
+                    )
+                except RuntimeError as exc:
+                    print(exc, file=sys.stderr)
+                    return 1
+                state_parts = state_and_head.split(maxsplit=1)
+                if len(state_parts) != 2:
+                    print(f"unexpected gh pr view output: {state_and_head!r}", file=sys.stderr)
+                    return 1
+                state, current_head = state_parts
+                if state == "MERGED":
+                    print(f"merged {repo}#{args.pr} at {current_head[:12]}", flush=True)
+                    return 0
+                if state != "OPEN":
+                    print(f"PR entered unexpected state {state}", file=sys.stderr)
+                    return 1
+                if current_head != after:
+                    print(
+                        f"PR head changed after auto-merge was armed: {after[:12]} -> {current_head[:12]}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                time.sleep(args.interval)
+            print(f"timed out waiting for {repo}#{args.pr} to merge", file=sys.stderr)
+            return 1
         return 0
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)

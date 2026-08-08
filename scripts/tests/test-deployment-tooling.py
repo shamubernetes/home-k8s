@@ -362,6 +362,9 @@ if args[:2] == ['repo', 'view']:
     print('shamubernetes/home-k8s')
     raise SystemExit(0)
 if args[:2] == ['pr', 'view']:
+    if 'state,headRefOid' in args:
+        print('MERGED ' + 'b' * 40)
+        raise SystemExit(0)
     index = int(state.read_text())
     values = ['a' * 40, 'b' * 40, 'b' * 40, 'b' * 40]
     print(values[min(index, len(values) - 1)])
@@ -395,7 +398,9 @@ raise SystemExit(2)
             merge = next(line for line in lines if line.startswith("pr merge"))
             self.assertIn("--repo shamubernetes/home-k8s", merge)
             self.assertIn("--match-head-commit " + "b" * 40, merge)
+            self.assertIn("--auto", merge)
             self.assertIn("--delete-branch", merge)
+            self.assertIn("merged shamubernetes/home-k8s#123", result.stdout)
 
 
 if __name__ == "__main__":

@@ -8,8 +8,9 @@ Usage: scripts/validate-yaml <path> [path ...]
 Validates focused YAML files with yayamlls. A single GitOps application root
 (kubernetes/apps/<category>/<app> or its app/ directory) is automatically sent
 to scripts/validate-app, which performs the canonical Kustomize and Helm checks.
-Set VALIDATE_YAML_APP_MODE to auto, online, or offline. Auto uses offline
-validation only when no reachable Kubernetes API is available.
+Set VALIDATE_YAML_APP_MODE to offline, online, or auto. Offline is the default
+and never reads the active Kubernetes context. Online is explicit; auto opts in
+to online validation when any Kubernetes API is reachable.
 USAGE
 }
 
@@ -30,7 +31,7 @@ if [[ $# -eq 1 ]]; then
     category=${BASH_REMATCH[1]}
     app=${BASH_REMATCH[2]}
     if [[ -f "${repo_root}/kubernetes/apps/${category}/${app}/ks.yaml" && -f "${repo_root}/kubernetes/apps/${category}/${app}/app/kustomization.yaml" ]]; then
-      mode=${VALIDATE_YAML_APP_MODE:-auto}
+      mode=${VALIDATE_YAML_APP_MODE:-offline}
       app_args=()
       case "$mode" in
         online) ;;
@@ -46,7 +47,7 @@ if [[ $# -eq 1 ]]; then
           ;;
       esac
       if (( ${#app_args[@]} )); then
-        printf '==> detected GitOps app %s/%s; using scripts/validate-app --offline (cluster unavailable)\n' "$category" "$app" >&2
+        printf '==> detected GitOps app %s/%s; using scripts/validate-app --offline\n' "$category" "$app" >&2
       else
         printf '==> detected GitOps app %s/%s; using scripts/validate-app\n' "$category" "$app" >&2
       fi

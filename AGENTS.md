@@ -339,9 +339,9 @@ scripts/new-app tools example --image docker.io/library/nginx:latest@sha256:<res
 task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest@sha256:<resolved-digest> --port 8080 --health-path / --internal"
 ```
 
-For focused YAML validation, `scripts/validate-yaml` automatically recognizes a single `kubernetes/apps/<category>/<app>` root and runs the canonical `scripts/validate-app` workflow. Exit code `201` from yayamlls is explained as a schema failure or unsupported schema instead of being returned without context.
+For focused YAML validation, `scripts/validate-yaml` automatically recognizes a single `kubernetes/apps/<category>/<app>` root and runs the canonical `scripts/validate-app --offline` workflow. This avoids reading whichever Kubernetes context happens to be active. Set `VALIDATE_YAML_APP_MODE=online` only when cluster-backed substitution and server-side dry-run are intentional. Exit code `201` from yayamlls is explained as a schema failure or unsupported schema instead of being returned without context.
 
-For Homarr v1 dashboard updates, use `scripts/homarr-upsert-app`. It reads `{ "username": "...", "password": "..." }` from stdin, owns and closes its local port-forward unless `--base-url` is supplied, deduplicates both the app and board tile, and verifies the result by read-back. Do not put Homarr credentials in arguments, environment variables, or temporary files.
+For Homarr v1 dashboard updates, use `scripts/homarr-upsert-app`. It reads `{ "username": "...", "password": "..." }` from stdin, owns and closes its local port-forward unless `--base-url` is supplied, locally serializes upserts matching either app name or URL, deduplicates both the app and board tile, and verifies the result by read-back. Explicit remote base URLs must use HTTPS; plaintext HTTP is accepted only on loopback. Do not put Homarr credentials in arguments, environment variables, or temporary files.
 
 For PR delivery, use `scripts/pr-deliver <pr> [--repo owner/name] [--merge]`. It keeps one watcher per repository/PR, follows a changed head SHA instead of reporting stale checks, and always passes an explicit repository to `gh pr merge`, avoiding worktree checkout conflicts.
 

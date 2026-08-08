@@ -195,4 +195,3 @@ validate_split_app prowlarr prowlarr prowlarr prowlarr 80 true
 validate_split_app sabnzbd sabnzbd sab sabnzbd 80 true
 validate_split_app bazarr bazarr bazarr bazarr 6767 true
 validate_split_app whisparr whisparr whisparr whisparr 80 true
-validate_split_app chaptarr chaptarr chaptarr chaptarr 8789 true

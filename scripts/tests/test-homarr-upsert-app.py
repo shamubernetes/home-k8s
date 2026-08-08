@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 import unittest
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +17,7 @@ class FakeHomarrHandler(BaseHTTPRequestHandler):
     apps: list[dict[str, Any]] = []
     board: dict[str, Any] = {"id": "board-1", "name": "dashboard", "items": []}
     fail_next_tile = False
+    create_delay = 0.0
 
     def log_message(self, format: str, *args: object) -> None:
         del format, args
@@ -62,6 +64,8 @@ class FakeHomarrHandler(BaseHTTPRequestHandler):
         document = json.loads(raw)
         value = document["json"]
         if self.path == "/api/trpc/app.create":
+            if type(self).create_delay:
+                time.sleep(type(self).create_delay)
             app = {"id": f"app-{len(type(self).apps) + 1}", **value}
             type(self).apps.append(app)
             self.trpc(app)
@@ -97,6 +101,12 @@ class HomarrUpsertTest(unittest.TestCase):
         cls.thread.start()
         cls.base_url = f"http://127.0.0.1:{cls.server.server_port}"
 
+    def setUp(self) -> None:
+        FakeHomarrHandler.apps = []
+        FakeHomarrHandler.board = {"id": "board-1", "name": "dashboard", "items": []}
+        FakeHomarrHandler.fail_next_tile = False
+        FakeHomarrHandler.create_delay = 0.0
+
     @classmethod
     def tearDownClass(cls) -> None:
         cls.server.shutdown()
@@ -104,30 +114,41 @@ class HomarrUpsertTest(unittest.TestCase):
         cls.server.server_close()
 
     def invoke(
-        self, description: str = "Manage ebook and audiobook downloads"
+        self,
+        description: str = "Manage ebook and audiobook downloads",
+        base_url: str | None = None,
+        name: str = "Chaptarr",
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [
-                sys.executable,
-                str(self.repo / "scripts/homarr-upsert-app"),
-                "--base-url",
-                self.base_url,
-                "--name",
-                "Chaptarr",
-                "--href",
-                "https://chaptarr.thezoo.house/",
-                "--description",
-                description,
-                "--icon-url",
-                "https://example.test/chaptarr.svg",
-                "--board",
-                "dashboard",
-            ],
+            self.command(description, base_url, name),
             cwd=self.repo,
             input=json.dumps({"username": "admin", "password": "very-secret"}),
             text=True,
             capture_output=True,
         )
+
+    def command(
+        self,
+        description: str = "Manage ebook and audiobook downloads",
+        base_url: str | None = None,
+        name: str = "Chaptarr",
+    ) -> list[str]:
+        return [
+            sys.executable,
+            str(self.repo / "scripts/homarr-upsert-app"),
+            "--base-url",
+            base_url or self.base_url,
+            "--name",
+            name,
+            "--href",
+            "https://chaptarr.thezoo.house/",
+            "--description",
+            description,
+            "--icon-url",
+            "https://example.test/chaptarr.svg",
+            "--board",
+            "dashboard",
+        ]
 
     def test_upsert_is_verified_and_idempotent_without_leaking_credentials(self) -> None:
         first = self.invoke()
@@ -165,6 +186,41 @@ class HomarrUpsertTest(unittest.TestCase):
         self.assertNotEqual(failed.returncode, 0)
         self.assertEqual(FakeHomarrHandler.apps, [])
         self.assertEqual(FakeHomarrHandler.board["items"], [])
+
+    def test_remote_plaintext_base_url_is_rejected_before_login(self) -> None:
+        result = self.invoke(base_url="http://homarr.example.test")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires HTTPS unless its host is loopback", result.stderr)
+
+    def test_concurrent_upserts_are_serialized(self) -> None:
+        FakeHomarrHandler.apps = []
+        FakeHomarrHandler.board["items"] = []
+        FakeHomarrHandler.create_delay = 0.3
+        payload = json.dumps({"username": "admin", "password": "very-secret"})
+        processes = [
+            subprocess.Popen(
+                self.command(name=name),
+                cwd=self.repo,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for name in ("Chaptarr", "Chaptarr Alias")
+        ]
+        results: list[tuple[str, str]] = []
+        try:
+            results = [process.communicate(payload, timeout=15) for process in processes]
+        finally:
+            FakeHomarrHandler.create_delay = 0.0
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+        for process, (stdout, stderr) in zip(processes, results, strict=True):
+            self.assertEqual(process.returncode, 0, stdout + stderr)
+        self.assertEqual(len(FakeHomarrHandler.apps), 1)
+        self.assertEqual(len(FakeHomarrHandler.board["items"]), 1)
 
 
 if __name__ == "__main__":

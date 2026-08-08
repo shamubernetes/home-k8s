@@ -148,6 +148,8 @@ tasks:
     summary: |
       args: App fields passed to scripts/homarr-upsert-app (required)
       Credentials must be piped on stdin as JSON with username and password.
+      Matching target/board/app-name-or-URL updates are serialized locally. Remote base URLs require HTTPS;
+      HTTP is allowed only for a local loopback endpoint or the managed port-forward.
     cmd: '{{.ROOT_DIR}}/scripts/homarr-upsert-app {{.args}}'
     requires:
       vars: ["args"]

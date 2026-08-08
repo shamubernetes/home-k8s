@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/postgresql.cnpg.io/scheduledbackup_v1.json
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: timescaledb18-snapshot
+spec:
+  schedule: "0 30 2 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: timescaledb18
+  method: volumeSnapshot
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/postgresql.cnpg.io/scheduledbackup_v1.json
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: timescaledb18-r2
+spec:
+  schedule: "0 30 */12 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: timescaledb18
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: r2

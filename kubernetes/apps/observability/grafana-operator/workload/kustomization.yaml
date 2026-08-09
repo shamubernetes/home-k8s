@@ -8,3 +8,4 @@ resources:
 - ./pdb.yaml
 - ./servicemonitor.yaml
 - ./canary-resources.yaml
+- ./datasources.yaml

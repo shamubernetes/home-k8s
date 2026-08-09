@@ -6,7 +6,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: grafana-v5
+      dashboards: grafana-v5
   endpoints:
   - port: grafana
     path: /metrics

@@ -51,8 +51,10 @@ task github:deliver-pr pr=<number> args="--merge"
 # Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
 
-# Start a verified, bounded Alertmanager maintenance silence
+# Start a paired public status notice and verified, bounded Alertmanager silence.
+# STATUS_API_KEY must be injected from the TheZoo Status item in 1Password.
 export MAINTENANCE_KUBECONFIG="$HOME/.kube/config"
+export STATUS_API_URL="https://status.thezoo.house"
 scripts/cluster-maintenance begin \
   --reason "planned cluster maintenance" --duration 4h
 
@@ -218,13 +220,19 @@ and continue to reject every additional warning or critical alert.
 
 The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
 and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.
-The default window is four hours and the hard maximum is 24 hours. Record the exact
-silence ID returned by `begin`, renew only that ID when maintenance must continue,
-and call `end` only after the merged revision, Flux/Tuppr convergence, affected
-workloads, cluster health, and component-relevant routes or APIs are verified. A
-failed rollout keeps the window active only while a protected GitOps rollback is
-being executed and verified. If the operator dies, the finite expiry restores
-alerting automatically.
+The default window is four hours and the hard maximum is 24 hours. `begin` requires
+`STATUS_API_KEY`, creates the public notice before the Alertmanager silence, and
+atomically persists both IDs under
+`~/.local/state/home-k8s/cluster-maintenance.json` (override with
+`MAINTENANCE_STATE_FILE`). If either side fails, it compensates the side that already
+succeeded. Renew only the returned silence ID. Call `end` only after the merged
+revision, Flux/Tuppr convergence, affected workloads, cluster health, and
+component-relevant routes or APIs are verified. `end` refuses to restore alerting or
+resolve the public notice while unexpected warning or critical alerts remain. It
+expires the silence before resolving the notice. A failed rollout keeps the window
+active only while a protected GitOps rollback is being executed and verified. If the
+operator dies, the finite Alertmanager expiry restores alerting automatically while
+the persisted state preserves the public notice for explicit resolution.
 
 Run `scripts/cluster-maintenance probe` to exercise Alertmanager's create/read/delete
 lifecycle with a unique, preflighted alert name. The probe rejects any collision,
@@ -339,9 +347,9 @@ scripts/new-app tools example --image docker.io/library/nginx:latest@sha256:<res
 task kubernetes:new-app category=tools app=example args="--image docker.io/library/nginx:latest@sha256:<resolved-digest> --port 8080 --health-path / --internal"
 ```
 
-For focused YAML validation, `scripts/validate-yaml` automatically recognizes a single `kubernetes/apps/<category>/<app>` root and runs the canonical `scripts/validate-app` workflow. Exit code `201` from yayamlls is explained as a schema failure or unsupported schema instead of being returned without context.
+For focused YAML validation, `scripts/validate-yaml` automatically recognizes a single `kubernetes/apps/<category>/<app>` root and runs the canonical `scripts/validate-app --offline` workflow. This avoids reading whichever Kubernetes context happens to be active. Set `VALIDATE_YAML_APP_MODE=online` only when cluster-backed substitution and server-side dry-run are intentional. Exit code `201` from yayamlls is explained as a schema failure or unsupported schema instead of being returned without context.
 
-For Homarr v1 dashboard updates, use `scripts/homarr-upsert-app`. It reads `{ "username": "...", "password": "..." }` from stdin, owns and closes its local port-forward unless `--base-url` is supplied, deduplicates both the app and board tile, and verifies the result by read-back. Do not put Homarr credentials in arguments, environment variables, or temporary files.
+For Homarr v1 dashboard updates, use `scripts/homarr-upsert-app`. It reads `{ "username": "...", "password": "..." }` from stdin, owns and closes its local port-forward unless `--base-url` is supplied, locally serializes upserts matching either app name or URL, deduplicates both the app and board tile, and verifies the result by read-back. Explicit remote base URLs must use HTTPS; plaintext HTTP is accepted only on loopback. Do not put Homarr credentials in arguments, environment variables, or temporary files.
 
 For PR delivery, use `scripts/pr-deliver <pr> [--repo owner/name] [--merge]`. It keeps one watcher per repository/PR, follows a changed head SHA instead of reporting stale checks, and always passes an explicit repository to `gh pr merge`, avoiding worktree checkout conflicts.
 

@@ -82,7 +82,7 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('documenso-envoy', 'envoy-internal', 'documenso.${HOME_DOMAIN}', 'PathPrefix', '/', 'documenso', 3000, ''),
  ('firecrawl-envoy', 'envoy-internal', 'firecrawl.${HOME_DOMAIN}', 'PathPrefix', '/', 'firecrawl-api', 3002, ''),
  ('flux-webhook-envoy', 'envoy-external', 'flux-webhook.${HOME_DOMAIN}', 'PathPrefix', '/hook/', 'webhook-receiver', 80, ''),
- ('gatus-envoy', 'envoy-external', 'status.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
+ ('gatus-envoy', 'envoy-internal', 'gatus.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
  ('gitmirror-envoy', 'envoy-external', 'gitmirror.${HOME_DOMAIN}', 'PathPrefix', '/webhooks/github', 'git-mirror-operator-github-webhook-service', 8082, ''),
  ('grafana-envoy', 'envoy-internal', 'grafana.${HOME_DOMAIN}', 'PathPrefix', '/', 'grafana', 80, ''),
  ('grimmory-envoy', 'envoy-internal', 'grimmory.${HOME_DOMAIN}', 'PathPrefix', '/', 'grimmory', 6060, ''),

@@ -31,7 +31,7 @@ spec:
       role_attribute_strict: "true"
       allow_assign_grafana_admin: "true"
       role_attribute_path: "contains(sub, 'system:serviceaccount:observability:grafana-operator') && 'GrafanaAdmin' || contains(sub, 'system:serviceaccount:observability:grafana-v5-sa') && 'GrafanaAdmin' || 'None'"
-      jwk_set_url: https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}/openid/v1/jwks
+      jwk_set_url: https://kubernetes.default.svc/openid/v1/jwks
       jwk_set_bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
       tls_client_ca: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
     database:

@@ -51,20 +51,3 @@ spec:
     jsonData:
       prometheusType: VictoriaMetrics
       prometheusVersion: 1.149.0
----
-apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaDatasource
-metadata:
-  name: alertmanager
-spec:
-  instanceSelector:
-    matchLabels:
-      dashboards: grafana-v5
-  datasource:
-    name: Alertmanager
-    type: alertmanager
-    uid: alertmanager
-    access: proxy
-    url: http://alertmanager-operated.observability.svc.cluster.local:9093
-    jsonData:
-      implementation: prometheus

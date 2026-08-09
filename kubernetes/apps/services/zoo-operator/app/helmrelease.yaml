@@ -21,7 +21,7 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:0cdf7f1da141fd3da9a7eac84d0d0fcb9e9410e4511158571e63bfaf901925f5
+      reference: ghcr.io/thezoo-house/operator@sha256:dfbe38467de246ef39774e265a8da9b908bb4fdb805adbb9fb9469eb74a15b88
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
@@ -44,6 +44,7 @@ spec:
       annotations: {}
       spec:
         homeDomain: thezoo.house
+        imagePullSecrets: [{name: ghcr-pull-secret}]
         releaseTracking: {channel: LatestStable, pollInterval: 10m}
         observability:
           serviceMonitors: true
@@ -153,123 +154,82 @@ spec:
             data:
               - {secretKey: token, remoteRef: {key: The Zoo - Shared Services, property: GRAFANA_TOKEN}}
         services:
-          gate:
-            enabled: true
-            auth:
+          - name: gate
+            replicas: 2
+            route:
+              httpRoute:
+                hostnames: [gate.thezoo.house]
+                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
+            values:
               plexClientID: 07a74dc80629d6c85a955f16aeab687b
               plexServerID: 5b4122f45aaecbfa1f5e19003d8424ec4521d90d
-              sessionSecretRef: {name: gate-auth, key: session-secret}
-              oidcSigningKeysSecretRef: {name: gate-auth, key: oidc-signing-keys-json}
-            databaseSecretRef: {name: gate-postgres, key: url}
+            secretRefs:
+              databaseURL: {name: gate-postgres, key: url}
+              sessionSecret: {name: gate-auth, key: session-secret}
+              oidcSigningKeys: {name: gate-auth, key: oidc-signing-keys-json}
             databaseInitialization:
-              image:
-                repository: ghcr.io/home-operations/postgres-init
-                digest: sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
               hostSecretRef: {name: gate-postgres, key: INIT_POSTGRES_HOST}
               databaseNameSecretRef: {name: gate-postgres, key: INIT_POSTGRES_DBNAME}
               userSecretRef: {name: gate-postgres, key: INIT_POSTGRES_USER}
               passwordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_SUPER_PASS}
-            migrations: {command: [bun, run, migrate]}
-            workload:
-              image:
-                repository: ghcr.io/thezoo-house/gate
-              replicas: 2
-              imagePullSecrets: [{name: ghcr-pull-secret}]
-              httpRoute: {hostnames: [gate.thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
-          zoo:
-            enabled: true
-            databaseSecretRef: {name: zoo-postgres, key: url}
+          - name: zoo
+            replicas: 2
+            route:
+              httpRoute:
+                hostnames: [thezoo.house]
+                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
+            values:
+              gateClientID: gate-JxtMQKIHuhmQz5EzClI3u2kgNggr29Go
+              gateAudience: gate-JxtMQKIHuhmQz5EzClI3u2kgNggr29Go
+            secretRefs:
+              databaseURL: {name: zoo-postgres, key: url}
+              gateClientSecret: {name: zoo-auth, key: client-secret}
+              sessionSecret: {name: zoo-auth, key: session-secret}
             databaseInitialization:
-              image:
-                repository: ghcr.io/home-operations/postgres-init
-                digest: sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
               hostSecretRef: {name: zoo-postgres, key: INIT_POSTGRES_HOST}
               databaseNameSecretRef: {name: zoo-postgres, key: INIT_POSTGRES_DBNAME}
               userSecretRef: {name: zoo-postgres, key: INIT_POSTGRES_USER}
               passwordSecretRef: {name: zoo-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: zoo-postgres, key: INIT_POSTGRES_SUPER_PASS}
-            auth:
-              issuer: https://gate.thezoo.house
-              clientID: gate-JxtMQKIHuhmQz5EzClI3u2kgNggr29Go
-              audience: gate-JxtMQKIHuhmQz5EzClI3u2kgNggr29Go
-              clientSecretRef: {name: zoo-auth, key: client-secret}
-              sessionSecretRef: {name: zoo-auth, key: session-secret}
-              redirectURI: https://thezoo.house/auth/gate/callback
-            workload:
-              image:
-                repository: ghcr.io/thezoo-house/thezoo.house
-              replicas: 2
-              imagePullSecrets: [{name: ghcr-pull-secret}]
-              httpRoute: {hostnames: [thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
-          cowbell:
-            enabled: true
-            runtime:
-              backendSecretRef: {name: cowbell-runtime, key: backend-secret}
-              hermesSecretRef: {name: cowbell-runtime, key: hermes-secret}
+          - name: cowbell
+            replicas: 2
+            route:
+              httpRoute:
+                hostnames: [issue.thezoo.house, issues.thezoo.house, cowbell.thezoo.house]
+                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
+            values:
               hermesWebhookURL: https://hermes-gateway.thezoo.house/webhooks/cowbell-issue
-              hermesWebhookSecretRef: {name: cowbell-runtime, key: hermes-webhook-secret}
               plexClientID: 213050c9e68f0f2cf7cf7f9852f78e7f
               plexServerID: 5b4122f45aaecbfa1f5e19003d8424ec4521d90d
-              plexCatalogBaseURLSecretRef: {name: cowbell-runtime, key: plex-catalog-base-url}
-              plexCatalogTokenSecretRef: {name: cowbell-runtime, key: plex-catalog-token}
-              sso:
-                issuer: https://gate.thezoo.house
-                clientID: gate-jiyqwWwIv3IW6mxwj2LRuEDRwiZacteP
-                clientSecretRef: {name: cowbell-runtime, key: gate-client-secret}
-                audience: gate-jiyqwWwIv3IW6mxwj2LRuEDRwiZacteP
-                callbackURI: https://issue.thezoo.house/auth/zoo/callback
-            databaseSecretRef: {name: cowbell-postgres, key: pooled-url}
-            listenerDatabaseSecretRef: {name: cowbell-postgres, key: direct-url}
-            dispatcher: {enabled: true}
-            worker: {enabled: true}
+              ssoClientID: gate-jiyqwWwIv3IW6mxwj2LRuEDRwiZacteP
+              ssoAudience: gate-jiyqwWwIv3IW6mxwj2LRuEDRwiZacteP
+              s3Endpoint: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+              s3Bucket: cowbell
+              s3Region: us-east-1
+              prometheusURL: http://prometheus-operated.observability.svc.cluster.local:9090
+              grafanaURL: https://grafana.thezoo.house
+            secretRefs:
+              backendSecret: {name: cowbell-runtime, key: backend-secret}
+              hermesSecret: {name: cowbell-runtime, key: hermes-secret}
+              hermesWebhookSecret: {name: cowbell-runtime, key: hermes-webhook-secret}
+              databaseURL: {name: cowbell-postgres, key: pooled-url}
+              listenerDatabaseURL: {name: cowbell-postgres, key: direct-url}
+              plexCatalogBaseURL: {name: cowbell-runtime, key: plex-catalog-base-url}
+              plexCatalogToken: {name: cowbell-runtime, key: plex-catalog-token}
+              ssoClientSecret: {name: cowbell-runtime, key: gate-client-secret}
+              rabbitmqURL: {name: shared-rabbitmq, key: url}
+              elasticsearchURL: {name: shared-elasticsearch-tls-endpoint, key: url}
+              elasticsearchUsername: {name: shared-elasticsearch, key: username}
+              elasticsearchPassword: {name: shared-elasticsearch, key: password}
+              redisURL: {name: shared-redis, key: url}
+              s3AccessKeyID: {name: shared-s3, key: access-key-id}
+              s3SecretAccessKey: {name: shared-s3, key: secret-access-key}
+              grafanaToken: {name: shared-grafana, key: token}
             databaseInitialization:
-              image:
-                repository: ghcr.io/home-operations/postgres-init
-                digest: sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
               hostSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_HOST}
               databaseNameSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_DBNAME}
               userSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_USER}
               passwordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_SUPER_PASS}
-            migrations:
-              command: [bun, --no-install, --no-env-file, web/src/db/migrateCli.ts]
-              backoffLimit: 2
-              timeoutSeconds: 300
-            workload:
-              image:
-                repository: ghcr.io/thezoo-house/cowbell
-              replicas: 2
-              imagePullSecrets: [{name: ghcr-pull-secret}]
-              httpRoute:
-                hostnames: [issue.thezoo.house, issues.thezoo.house, cowbell.thezoo.house]
-                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
-                annotations:
-                  homepage.shamubernetes.com/enabled: "true"
-                  homepage.shamubernetes.com/name: Cowbell
-                  homepage.shamubernetes.com/description: Report media issues
-                  homepage.shamubernetes.com/group: Tools
-                  homepage.shamubernetes.com/order: "100"
-                  homepage.shamubernetes.com/favorite: "false"
-              serviceEgress:
-              - {name: plex, namespace: media, ports: [{port: 32400, protocol: TCP}]}
-              - {name: envoy-internal, namespace: network, ports: [{port: 443, protocol: TCP}]}
-        sharedServices:
-          rabbitmq: {name: shared-rabbitmq, key: url}
-          elasticsearch:
-            urlSecretRef: {name: shared-elasticsearch-tls-endpoint, key: url}
-            usernameSecretRef: {name: shared-elasticsearch, key: username}
-            passwordSecretRef: {name: shared-elasticsearch, key: password}
-          redis: {name: shared-redis, key: url}
-          s3:
-            endpoint: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
-            bucket: cowbell
-            region: us-east-1
-            accessKeyIDSecretRef: {name: shared-s3, key: access-key-id}
-            secretAccessKeySecretRef: {name: shared-s3, key: secret-access-key}
-          prometheus:
-            url: http://prometheus-operated.observability.svc.cluster.local:9090
-          grafana:
-            url: https://grafana.thezoo.house
-            credentialsSecretRef: {name: shared-grafana, key: token}
     accessPolicy: {enabled: false}

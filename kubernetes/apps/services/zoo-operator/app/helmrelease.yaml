@@ -21,7 +21,7 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:dfbe38467de246ef39774e265a8da9b908bb4fdb805adbb9fb9469eb74a15b88
+      reference: ghcr.io/thezoo-house/operator@sha256:beb15228893edd4290d6290fc880a6fe91943d061ba431a0812d23b7ad17d818
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret

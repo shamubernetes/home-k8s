@@ -32,7 +32,7 @@ subjects:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: zoo-schema-v2-cutover-v4
+  name: zoo-schema-v2-cutover-v5
   labels:
     app.kubernetes.io/name: zoo-schema-v2-cutover
 spec:
@@ -53,45 +53,76 @@ spec:
         fsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
-      containers:
-      - name: migrate
+      initContainers:
+      - name: fetch-helmrelease
+        image: docker.io/bitnami/kubectl:latest@sha256:1a86ba502f618724fd493f6a2b129f060454db04f06faa58d8ed94510280b17f
+        command: [/bin/sh, -c]
+        args:
+        - kubectl get helmrelease zoo-operator -o json > /work/helmrelease.json
+        volumeMounts:
+        - {name: work, mountPath: /work}
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 128Mi}
+        securityContext: &container-security
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+      - name: build-patch
+        image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+        command: [python3, -c]
+        args:
+        - |
+          import json
+          from pathlib import Path
+
+          document = json.loads(Path('/work/helmrelease.json').read_text())
+          services = document['spec']['values']['zoo']['spec']['services']
+          if not isinstance(services, list) or not services:
+              raise SystemExit('HelmRelease services must be a nonempty list')
+          patch = {'spec': {'services': services}}
+          Path('/work/patch.json').write_text(json.dumps(patch, separators=(',', ':')))
+        volumeMounts:
+        - {name: work, mountPath: /work}
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 128Mi}
+        securityContext: *container-security
+      - name: apply-patch
         image: docker.io/bitnami/kubectl:latest@sha256:1a86ba502f618724fd493f6a2b129f060454db04f06faa58d8ed94510280b17f
         command: [/bin/sh, -c]
         args:
         - |
           set -eu
-          current="$(kubectl get zoo zoo -o jsonpath-as-json='{.spec.services}')"
-          current="$${current#\[}"
-          current="$${current%\]}"
-          case "$current" in
-            \[*\])
-              echo "Zoo spec.services is already a list"
-              ;;
-            *)
-              services="$(kubectl get helmrelease zoo-operator \
-                -o jsonpath-as-json='{.spec.values.zoo.spec.services}')"
-              services="$${services#\[}"
-              services="$${services%\]}"
-              case "$services" in
-                \[*\]) ;;
-                *) exit 1 ;;
-              esac
-              kubectl patch zoo zoo --type=merge \
-                -p="{\"spec\":{\"services\":$services}}"
-              ;;
-          esac
-          current="$(kubectl get zoo zoo -o jsonpath-as-json='{.spec.services}')"
-          current="$${current#\[}"
-          current="$${current%\]}"
-          case "$current" in
-            \[*\]) ;;
-            *) exit 1 ;;
-          esac
+          kubectl patch zoo zoo --type=merge --patch-file=/work/patch.json
+          kubectl get zoo zoo -o json > /work/zoo.json
+        volumeMounts:
+        - {name: work, mountPath: /work}
         resources:
           requests: {cpu: 10m, memory: 32Mi}
           limits: {cpu: 100m, memory: 128Mi}
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: [ALL]
+        securityContext: *container-security
+      containers:
+      - name: verify
+        image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+        command: [python3, -c]
+        args:
+        - |
+          import json
+          from pathlib import Path
+
+          document = json.loads(Path('/work/zoo.json').read_text())
+          services = document['spec']['services']
+          names = {service['name'] for service in services}
+          if names != {'gate', 'zoo', 'cowbell'}:
+              raise SystemExit(f'unexpected service set: {sorted(names)}')
+        volumeMounts:
+        - {name: work, mountPath: /work}
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 128Mi}
+        securityContext: *container-security
+      volumes:
+      - name: work
+        emptyDir: {}

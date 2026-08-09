@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grafana-operator
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: grafana-operator
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  values:
+    namespaceScope: true
+    leaderElect: true
+    replicas: 2
+    image:
+      tag: v5.24.0@sha256:e72d11ac579a000fe0ddcc0c3341a5103a1c93a28fbc394dc7c7009ed071d1a7
+    resources:
+      requests:
+        cpu: 20m
+        memory: 96Mi
+      limits:
+        memory: 256Mi
+    serviceMonitor:
+      enabled: true
+    dashboard:
+      enabled: true

@@ -9,6 +9,8 @@ resources:
 - ./victoria-logs/ks.yaml
 - ./victoria-metrics-ha/ks.yaml
 - ./tautulli/ks.yaml
+- ./grafana-operator-crds/ks.yaml
+- ./grafana-operator/ks.yaml
 - ./grafana/ks.yaml
 - ./kuberhealthy/ks.yaml
 - ./unpoller/ks.yaml

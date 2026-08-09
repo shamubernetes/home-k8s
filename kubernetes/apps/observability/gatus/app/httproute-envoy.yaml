@@ -13,7 +13,7 @@ metadata:
     homepage.shamubernetes.com/icon: "dashboard-icons:gatus"
 spec:
   parentRefs:
-  - name: envoy-external
+  - name: envoy-internal
     namespace: network
     sectionName: https
   hostnames:

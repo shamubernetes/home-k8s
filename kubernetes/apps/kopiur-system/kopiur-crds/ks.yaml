@@ -10,7 +10,7 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   path: ./kubernetes/apps/kopiur-system/kopiur-crds/app
-  prune: true
+  prune: false # CRDs must survive operator removal and rollback
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"

@@ -1,4 +1,5 @@
 failed	HelmRelease	iot/zoo-fleet	secret iot/ghcr-pull-secret not found
+failed	HelmRelease	services/zoo-operator	secret services/ghcr-pull-secret not found
 failed	HelmRelease	tools/firecrawl	secret tools/ghcr-pull-secret not found
 failed	OCIRepository	iot/zoo-fleet	secret iot/ghcr-pull-secret not found
 failed	OCIRepository	services/zoo-operator	secret services/ghcr-pull-secret not found

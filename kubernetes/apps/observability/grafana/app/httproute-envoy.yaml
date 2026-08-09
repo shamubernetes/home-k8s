@@ -20,5 +20,5 @@ spec:
   - "grafana.${HOME_DOMAIN}"
   rules:
   - backendRefs:
-    - name: grafana-v5-service
-      port: 3000
+    - name: grafana
+      port: 80

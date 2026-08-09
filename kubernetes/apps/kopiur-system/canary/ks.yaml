@@ -20,6 +20,18 @@ spec:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: true
+  # Kopiur 0.10.0 does not refresh status.observedGeneration for a
+  # schedule-only SnapshotReplication update until the next run. Keep Flux
+  # health-aware without blocking an otherwise Ready replication scheduler.
+  healthCheckExprs:
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotReplication
+    current: >-
+      has(status.phase) && status.phase == 'Succeeded' &&
+      status.conditions.exists(c, c.type == 'Ready' && c.status == 'True')
+    failed: >-
+      (has(status.phase) && status.phase == 'Failed') ||
+      status.conditions.exists(c, c.type == 'Stalled' && c.status == 'True')
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: 15m

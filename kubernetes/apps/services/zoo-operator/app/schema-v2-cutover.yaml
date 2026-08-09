@@ -12,6 +12,10 @@ rules:
   resources: [zoos]
   resourceNames: [zoo]
   verbs: [get, patch]
+- apiGroups: [helm.toolkit.fluxcd.io]
+  resources: [helmreleases]
+  resourceNames: [zoo-operator]
+  verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -28,9 +32,11 @@ subjects:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: zoo-schema-v2-cutover
+  name: zoo-schema-v2-cutover-v2
+  labels:
+    app.kubernetes.io/name: zoo-schema-v2-cutover
 spec:
-  backoffLimit: 3
+  backoffLimit: 0
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -39,7 +45,7 @@ spec:
     spec:
       serviceAccountName: zoo-schema-v2-cutover
       automountServiceAccountToken: true
-      restartPolicy: OnFailure
+      restartPolicy: Never
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -54,17 +60,24 @@ spec:
         args:
         - |
           set -eu
-          current="$(kubectl get zoo zoo -o jsonpath='{.spec.services}')"
+          current="$(kubectl get zoo zoo -o jsonpath-as-json='{.spec.services}')"
           case "$current" in
             \[*\])
               echo "Zoo spec.services is already a list"
               ;;
             *)
-              kubectl patch zoo zoo --type=json \
-                -p='[{"op":"replace","path":"/spec/services","value":[]}]'
+              services="$(kubectl get helmrelease zoo-operator \
+                -o jsonpath-as-json='{.spec.values.zoo.spec.services}')"
+              test -n "$services"
+              kubectl patch zoo zoo --type=merge \
+                -p="{\"spec\":{\"services\":$services}}"
               ;;
           esac
-          test "$(kubectl get zoo zoo -o jsonpath='{.spec.services}')" = '[]'
+          current="$(kubectl get zoo zoo -o jsonpath-as-json='{.spec.services}')"
+          case "$current" in
+            \[*\]) ;;
+            *) exit 1 ;;
+          esac
         resources:
           requests: {cpu: 10m, memory: 32Mi}
           limits: {cpu: 100m, memory: 128Mi}

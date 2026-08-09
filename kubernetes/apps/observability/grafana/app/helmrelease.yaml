@@ -156,29 +156,6 @@ spec:
         - {name: Alertmanager, orgId: 1}
         - {name: Prometheus, orgId: 1}
         - {name: Home Assistant Metrics, orgId: 1}
-        datasources:
-        - name: Prometheus
-          type: prometheus
-          uid: prometheus
-          access: proxy
-          url: http://prometheus-operated.observability.svc.cluster.local:9090
-          isDefault: true
-        - name: Home Assistant Metrics
-          type: prometheus
-          uid: victoriametrics-ha
-          access: proxy
-          url: http://victoria-metrics-ha.observability.svc.cluster.local:8428
-          isDefault: false
-          jsonData:
-            prometheusType: VictoriaMetrics
-            prometheusVersion: 1.149.0
-        - name: Alertmanager
-          type: alertmanager
-          uid: alertmanager
-          access: proxy
-          url: http://alertmanager-operated.observability.svc.cluster.local:9093
-          jsonData:
-            implementation: prometheus
     dashboards:
       default:
         cloudflared:

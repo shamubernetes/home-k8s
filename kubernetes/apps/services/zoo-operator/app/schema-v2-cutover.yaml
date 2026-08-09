@@ -32,7 +32,7 @@ subjects:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: zoo-schema-v2-cutover-v2
+  name: zoo-schema-v2-cutover-v3
   labels:
     app.kubernetes.io/name: zoo-schema-v2-cutover
 spec:
@@ -61,6 +61,8 @@ spec:
         - |
           set -eu
           current="$(kubectl get zoo zoo -o jsonpath-as-json='{.spec.services}')"
+          current="${current#\[}"
+          current="${current%\]}"
           case "$current" in
             \[*\])
               echo "Zoo spec.services is already a list"
@@ -68,12 +70,19 @@ spec:
             *)
               services="$(kubectl get helmrelease zoo-operator \
                 -o jsonpath-as-json='{.spec.values.zoo.spec.services}')"
-              test -n "$services"
+              services="${services#\[}"
+              services="${services%\]}"
+              case "$services" in
+                \[*\]) ;;
+                *) exit 1 ;;
+              esac
               kubectl patch zoo zoo --type=merge \
                 -p="{\"spec\":{\"services\":$services}}"
               ;;
           esac
           current="$(kubectl get zoo zoo -o jsonpath-as-json='{.spec.services}')"
+          current="${current#\[}"
+          current="${current%\]}"
           case "$current" in
             \[*\]) ;;
             *) exit 1 ;;

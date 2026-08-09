@@ -197,6 +197,90 @@ class FakeAlertmanager:
         return Handler
 
 
+class FakeStatusApi:
+    def __init__(self):
+        self.page_id = "page-1"
+        self.notices = {}
+        self.created = []
+        self.resolved = []
+        self.fail_creates = False
+        self.fail_resolves = False
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), self.handler())
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def url(self):
+        host = self.server.server_address[0]
+        port = self.server.server_address[1]
+        return f"http://{host}:{port}"
+
+    def close(self):
+        self.server.shutdown()
+        self.thread.join(timeout=5)
+        self.server.server_close()
+
+    def add_notice(self, notice_id="notice-1", message="Scheduled maintenance: test"):
+        self.notices[notice_id] = {"id": notice_id, "message": message, "resolved": False}
+        return notice_id
+
+    def handler(self):
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                del format, args
+
+            def send_json(self, status, payload):
+                body = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                if self.path == "/api/pages":
+                    self.send_json(200, [{"id": owner.page_id, "slug": "thezoo"}])
+                    return
+                self.send_json(404, {"message": "not found"})
+
+            def do_POST(self):
+                if self.path != f"/api/pages/{owner.page_id}/notices":
+                    self.send_json(404, {"message": "not found"})
+                    return
+                if owner.fail_creates:
+                    self.send_json(500, {"message": "injected create failure"})
+                    return
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length))
+                notice_id = f"notice-{len(owner.notices) + 1}"
+                notice = {"id": notice_id, **payload, "resolved": False}
+                owner.notices[notice_id] = notice
+                owner.created.append(notice_id)
+                self.send_json(200, notice)
+
+            def do_PUT(self):
+                prefix = f"/api/pages/{owner.page_id}/notices/"
+                suffix = "/resolve"
+                if not self.path.startswith(prefix) or not self.path.endswith(suffix):
+                    self.send_json(404, {"message": "not found"})
+                    return
+                if owner.fail_resolves:
+                    self.send_json(500, {"message": "injected resolve failure"})
+                    return
+                notice_id = self.path[len(prefix) : -len(suffix)]
+                notice = owner.notices.get(notice_id)
+                if not notice:
+                    self.send_json(404, {"message": "not found"})
+                    return
+                notice["resolved"] = True
+                owner.resolved.append(notice_id)
+                self.send_json(200, notice)
+
+        return Handler
+
+
 class ClusterMaintenanceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -210,10 +294,12 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def setUp(self):
         self.alertmanager = FakeAlertmanager()
+        self.status_api = FakeStatusApi()
         self.tmpdir = tempfile.TemporaryDirectory()
 
     def tearDown(self):
         self.alertmanager.close()
+        self.status_api.close()
         self.tmpdir.cleanup()
 
     def command_env(self, **overrides):
@@ -223,8 +309,23 @@ class ClusterMaintenanceTest(unittest.TestCase):
         env["MAINTENANCE_LOCK_FILE"] = str(Path(self.tmpdir.name) / "begin.lock")
         env["MAINTENANCE_VERIFY_TIMEOUT_SECONDS"] = "1"
         env["MAINTENANCE_ALLOW_DUPLICATE_MEMBERS"] = "1"
+        env["MAINTENANCE_STATE_FILE"] = str(Path(self.tmpdir.name) / "maintenance.json")
+        env["STATUS_API_URL"] = self.status_api.url
+        env["STATUS_API_KEY"] = "test-key"
         env.update(overrides)
         return env
+
+    def seed_state(self, silence_id, notice_id="notice-1", allowed_alerts=None):
+        self.status_api.add_notice(notice_id)
+        state = {
+            "silenceId": silence_id,
+            "noticeId": notice_id,
+            "reason": "test",
+            "startedAt": timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=1)),
+            "endsAt": timestamp(dt.datetime.now(UTC) + dt.timedelta(hours=4)),
+            "allowedActiveAlerts": allowed_alerts or [],
+        }
+        Path(self.tmpdir.name, "maintenance.json").write_text(json.dumps(state))
 
     def raw_command(self, *args, env=None):
         return subprocess.run(
@@ -253,9 +354,14 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
         self.assertEqual(output["state"], "active")
         self.assertEqual(output["silenceId"], "maintenance-1")
+        self.assertEqual(output["noticeId"], "notice-1")
         self.assertEqual(output["coveredAlerts"], 1)
         self.assertEqual(output["excludedAlerts"], ["Watchdog"])
         self.assertEqual(len(self.alertmanager.posts), 1)
+        state = json.loads(Path(self.tmpdir.name, "maintenance.json").read_text())
+        self.assertEqual(state["silenceId"], "maintenance-1")
+        self.assertEqual(state["noticeId"], "notice-1")
+        self.assertFalse(self.status_api.notices["notice-1"]["resolved"])
 
         posted = self.alertmanager.posts[0]
         self.assertEqual(posted["createdBy"], MANAGED_BY)
@@ -283,6 +389,14 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         self.assertIn("CephHealthError", result.stderr)
         self.assertEqual(self.alertmanager.posts, [])
+        self.assertEqual(self.status_api.resolved, ["notice-1"])
+
+    def test_begin_does_not_create_a_silence_when_public_notice_creation_fails(self):
+        self.status_api.fail_creates = True
+        result = self.run_command("begin", "--reason", "routine maintenance", expected=1)
+        self.assertIn("status API", result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
 
     def test_begin_allows_one_exact_known_baseline_alert(self):
         self.alertmanager.add_alert(
@@ -385,6 +499,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_renew_extends_only_a_managed_active_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         old_end = self.alertmanager.silences[silence_id]["endsAt"]
         result = self.run_command("renew", "--id", silence_id, "--duration", "6h")
         output = json.loads(result.stdout)
@@ -394,6 +509,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_failed_renewal_expires_the_unverified_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         self.alertmanager.add_alert("RoutineInfo", severity="info")
         self.alertmanager.ignore_silence_application = True
         result = self.run_command(
@@ -407,6 +523,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_renew_rejects_drifted_matchers_before_writing(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         self.alertmanager.silences[silence_id]["matchers"] = [
             {
                 "name": "alertname",
@@ -421,14 +538,30 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_end_expires_only_a_managed_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         result = self.run_command("end", "--id", silence_id)
         output = json.loads(result.stdout)
         self.assertEqual(output["state"], "expired")
         self.assertEqual(self.alertmanager.silences[silence_id]["status"]["state"], "expired")
         self.assertEqual(self.alertmanager.deletes, [silence_id])
+        self.assertEqual(self.status_api.resolved, ["notice-1"])
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_end_preserves_silence_and_notice_while_cluster_alerts_are_unhealthy(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.add_alert(
+            "CephHealthError", severity="critical", silenced_by=[silence_id]
+        )
+        self.seed_state(silence_id)
+        result = self.run_command("end", "--id", silence_id, expected=1)
+        self.assertIn("CephHealthError", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
 
     def test_end_rejects_a_foreign_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         self.alertmanager.silences[silence_id]["createdBy"] = "someone else"
         result = self.run_command("end", "--id", silence_id, expected=1)
         self.assertIn("not owned", result.stderr)

@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fcntl
+import hashlib
 import http.cookiejar
+import ipaddress
 import json
+import math
+import os
 import socket
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any, Iterator
 
 
@@ -31,6 +39,12 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--service", default="homarr")
     value.add_argument("--remote-port", type=int, default=7575)
     value.add_argument("--local-port", type=int, default=0)
+    value.add_argument(
+        "--lock-timeout",
+        type=float,
+        default=120,
+        help="seconds to wait for another matching upsert (default: 120)",
+    )
     value.add_argument("--dry-run", action="store_true")
     return value
 
@@ -65,7 +79,7 @@ def available_port(requested: int) -> int:
 @contextlib.contextmanager
 def homarr_endpoint(args: argparse.Namespace) -> Iterator[str]:
     if args.base_url:
-        yield canonical_href(args.base_url)
+        yield secure_base_url(args.base_url)
         return
     port = available_port(args.local_port)
     command = [
@@ -169,6 +183,93 @@ def canonical_href(value: str) -> str:
     ):
         raise ValueError(f"invalid application URL: {value}")
     return value.rstrip("/")
+
+
+def secure_base_url(value: str) -> str:
+    base_url = canonical_href(value)
+    parsed = urllib.parse.urlparse(base_url)
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError(f"invalid Homarr base URL port: {value}") from exc
+    if not parsed.hostname:
+        raise ValueError(f"invalid Homarr base URL host: {value}")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("Homarr base URL must not contain credentials")
+    if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
+        raise ValueError("Homarr base URL must contain only scheme, host, and optional port")
+    if parsed.scheme == "https":
+        return base_url
+    host = parsed.hostname or ""
+    is_loopback = host.lower() == "localhost"
+    if not is_loopback:
+        try:
+            is_loopback = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            is_loopback = False
+    if not is_loopback:
+        raise ValueError("Homarr base URL requires HTTPS unless its host is loopback")
+    return base_url
+
+
+def lock_scopes(args: argparse.Namespace) -> list[str]:
+    if args.base_url:
+        endpoint = secure_base_url(args.base_url)
+    else:
+        endpoint = f"kubernetes://{args.namespace}/{args.service}:{args.remote_port}"
+    common = [endpoint, args.board.casefold()]
+    identities = [
+        ["name", args.name.casefold()],
+        ["href", canonical_href(args.href)],
+    ]
+    return [
+        json.dumps(common + identity, separators=(",", ":"))
+        for identity in identities
+    ]
+
+
+@contextlib.contextmanager
+def operation_lock(args: argparse.Namespace) -> Iterator[None]:
+    digests = sorted(
+        {hashlib.sha256(scope.encode()).hexdigest() for scope in lock_scopes(args)}
+    )
+    lock_root = Path(tempfile.gettempdir()) / f"home-k8s-homarr-{os.getuid()}"
+    lock_root.mkdir(mode=0o700, exist_ok=True)
+    root_stat = lock_root.lstat()
+    if not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != os.getuid():
+        raise RuntimeError(f"unsafe Homarr lock directory: {lock_root}")
+    lock_root.chmod(0o700)
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    deadline = time.monotonic() + args.lock_timeout
+    locks = []
+    try:
+        for digest in digests:
+            descriptor = os.open(lock_root / f"{digest}.lock", flags, 0o600)
+            lock = os.fdopen(descriptor, "w")
+            locks.append(lock)
+            while True:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            "timed out waiting for another matching Homarr upsert"
+                        )
+                    time.sleep(0.1)
+            lock.seek(0)
+            lock.truncate()
+            lock.write(f"pid={os.getpid()}\n")
+            lock.flush()
+        yield
+    finally:
+        for lock in reversed(locks):
+            try:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+            finally:
+                lock.close()
 
 
 def optional_http_url(value: str, label: str) -> str | None:
@@ -323,9 +424,17 @@ def main() -> int:
     try:
         if not 1 <= args.remote_port <= 65535 or not 0 <= args.local_port <= 65535:
             raise ValueError("Homarr ports must be between 1 and 65535; local port may be 0")
+        if not math.isfinite(args.lock_timeout) or args.lock_timeout < 0:
+            raise ValueError("Homarr lock timeout must be a finite non-negative number")
         username, password = credentials_from_stdin()
-        result = execute(args, username, password)
-    except (ValueError, RuntimeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        with operation_lock(args):
+            result = execute(args, username, password)
+    except (
+        ValueError,
+        RuntimeError,
+        OSError,
+        json.JSONDecodeError,
+    ) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     print(json.dumps(result, sort_keys=True))

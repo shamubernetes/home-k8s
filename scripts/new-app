@@ -9,7 +9,7 @@ Options:
   --internal              Add internal ingress at <app>.${HOME_DOMAIN} (default)
   --external              Add external ingress at <app>.${HOME_DOMAIN}
   --no-ingress            Do not add ingress
-  --health-path <path>    Generate HTTP probes for this path (required choice)
+  --health-path <path>    Generate HTTP probes (legacy default: /)
   --no-health-endpoint    Disable generated HTTP probes explicitly
   --secret                Add ExternalSecret skeleton targeting <app>-secret
   --config-file <path>    Mount a ConfigMap file at the given container path
@@ -39,8 +39,8 @@ ingress="internal"
 with_secret=false
 config_file=""
 chart_version="5.0.1"
-health_path=""
-probes_enabled=false
+health_path="/"
+probes_enabled=true
 probes_decided=false
 
 while [[ $# -gt 0 ]]; do
@@ -61,7 +61,9 @@ done
 
 [[ -n "$image" ]] || { echo "--image is required" >&2; exit 1; }
 [[ -n "$port" ]] || { echo "--port is required" >&2; exit 1; }
-[[ $probes_decided == true ]] || { echo "choose --health-path <path> or --no-health-endpoint" >&2; exit 1; }
+if [[ $probes_decided != true ]]; then
+  echo "warning: no probe decision supplied; defaulting to --health-path / for app.scaffold compatibility" >&2
+fi
 if [[ ! $port =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
   echo "--port must be an integer between 1 and 65535" >&2
   exit 1

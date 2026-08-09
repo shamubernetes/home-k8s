@@ -43,7 +43,7 @@ class DeploymentToolingTest(unittest.TestCase):
             self.assertEqual(called.read_text(), "arrs/chaptarr")
             self.assertIn("detected GitOps app", result.stderr)
 
-    def test_validate_yaml_falls_back_offline_when_cluster_is_unavailable(self) -> None:
+    def test_validate_yaml_defaults_offline_without_probing_the_cluster(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             temp = Path(raw)
             called = temp / "called"
@@ -51,7 +51,11 @@ class DeploymentToolingTest(unittest.TestCase):
                 temp / "validate-app",
                 f"#!/bin/sh\nprintf '%s' \"$*\" > {called}\n",
             )
-            self.executable(temp / "kubectl", "#!/bin/sh\nexit 1\n")
+            probed = temp / "kubectl-probed"
+            self.executable(
+                temp / "kubectl",
+                f"#!/bin/sh\ntouch {probed}\nexit 0\n",
+            )
             result = subprocess.run(
                 [str(self.repo / "scripts/validate-yaml"), "kubernetes/apps/arrs/chaptarr"],
                 cwd=self.repo,
@@ -65,7 +69,32 @@ class DeploymentToolingTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(called.read_text(), "--offline arrs/chaptarr")
-            self.assertIn("cluster unavailable", result.stderr)
+            self.assertIn("using scripts/validate-app --offline", result.stderr)
+            self.assertFalse(probed.exists())
+
+    def test_validate_yaml_auto_mode_probes_and_uses_online_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            called = temp / "called"
+            validate = self.executable(
+                temp / "validate-app",
+                f"#!/bin/sh\nprintf '%s' \"$*\" > {called}\n",
+            )
+            self.executable(temp / "kubectl", "#!/bin/sh\nexit 0\n")
+            result = subprocess.run(
+                [str(self.repo / "scripts/validate-yaml"), "kubernetes/apps/arrs/chaptarr"],
+                cwd=self.repo,
+                env={
+                    **os.environ,
+                    "PATH": f"{temp}:{os.environ['PATH']}",
+                    "VALIDATE_APP_BIN": str(validate),
+                    "VALIDATE_YAML_APP_MODE": "auto",
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(called.read_text(), "arrs/chaptarr")
 
     def test_validate_yaml_explains_yayamlls_201(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -259,7 +288,7 @@ fi
                 [
                     str(self.repo / "scripts/new-app"),
                     "tools",
-                    "example",
+                    "legacy",
                     "--image",
                     f"ghcr.io/example/app:1.0.0@sha256:{digest}",
                     "--port",
@@ -269,8 +298,10 @@ fi
                 text=True,
                 capture_output=True,
             )
-            self.assertNotEqual(undecided.returncode, 0)
-            self.assertIn("choose --health-path", undecided.stderr)
+            self.assertEqual(undecided.returncode, 0, undecided.stderr)
+            self.assertIn("defaulting to --health-path /", undecided.stderr)
+            legacy_helmrelease = (category / "legacy/app/helmrelease.yaml").read_text()
+            self.assertIn("path: /", legacy_helmrelease)
             mutable = subprocess.run(
                 [
                     str(self.repo / "scripts/new-app"),

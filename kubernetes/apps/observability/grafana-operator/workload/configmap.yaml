@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-v5-provisioning
+data:
+  dashboard-provider.yaml: |
+    apiVersion: 1
+    providers:
+    - name: kubernetes-sidecar
+      orgId: 1
+      folder: ""
+      type: file
+      disableDeletion: true
+      editable: true
+      updateIntervalSeconds: 30
+      options:
+        path: /var/lib/grafana/dashboards/dynamic
+        foldersFromFilesStructure: true
+  reload.py: |
+    #!/usr/bin/env python3
+    import time
+    import urllib.request
+
+    token_path = "/var/run/secrets/grafana.com/serviceaccount/token"
+    url = "http://127.0.0.1:3000/api/admin/provisioning/dashboards/reload"
+
+    for attempt in range(60):
+        try:
+            with open(token_path, encoding="utf-8") as handle:
+                token = handle.read().strip()
+            request = urllib.request.Request(
+                url,
+                data=b"{}",
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                if response.status == 200:
+                    raise SystemExit(0)
+        except Exception:
+            if attempt == 59:
+                raise
+            time.sleep(2)

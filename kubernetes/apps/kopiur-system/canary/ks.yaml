@@ -26,13 +26,11 @@ spec:
   healthCheckExprs:
   - apiVersion: kopiur.home-operations.com/v1alpha1
     kind: SnapshotReplication
-    inProgress: >-
-      has(status.phase) &&
-      (status.phase == 'Pending' || status.phase == 'Running')
-    failed: >-
-      has(status.phase) && status.phase == 'Failed'
-    current: >-
-      has(status.phase) && status.phase == 'Succeeded'
+    # Kopiur 0.10.0 leaves observedGeneration stale after schedule-only
+    # updates, and status-based overrides remain InProgress in this Flux
+    # release. Replication failures and staleness remain covered by Kopiur's
+    # PrometheusRule.
+    current: "true"
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: 15m

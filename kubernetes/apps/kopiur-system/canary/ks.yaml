@@ -26,12 +26,13 @@ spec:
   healthCheckExprs:
   - apiVersion: kopiur.home-operations.com/v1alpha1
     kind: SnapshotReplication
-    current: >-
-      has(status.phase) && status.phase == 'Succeeded' &&
-      status.conditions.exists(c, c.type == 'Ready' && c.status == 'True')
+    inProgress: >-
+      has(status.phase) &&
+      (status.phase == 'Pending' || status.phase == 'Running')
     failed: >-
-      (has(status.phase) && status.phase == 'Failed') ||
-      status.conditions.exists(c, c.type == 'Stalled' && c.status == 'True')
+      has(status.phase) && status.phase == 'Failed'
+    current: >-
+      has(status.phase) && status.phase == 'Succeeded'
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: 15m

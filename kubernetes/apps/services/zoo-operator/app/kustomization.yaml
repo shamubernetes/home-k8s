@@ -6,6 +6,7 @@ resources:
 - ./gate-schema-bootstrap.yaml
 - ./zoo-database-bootstrap.yaml
 - ./cowbell-rollback-externalsecret.yaml
+- ./schema-v2-cutover.yaml
 - ./helmrelease.yaml
 generatorOptions:
   disableNameSuffixHash: true

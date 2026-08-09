@@ -21,12 +21,6 @@ spec:
   plugins:
   - name: grafana-clock-panel
     version: 3.2.2
-  - name: grafana-piechart-panel
-    version: 1.6.4
-  - name: grafana-worldmap-panel
-    version: 1.0.6
-  - name: natel-discrete-panel
-    version: 0.1.1
   - name: pr0ps-trackmap-panel
     version: 3.0.2
   - name: victoriametrics-logs-datasource

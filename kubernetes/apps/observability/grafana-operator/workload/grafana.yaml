@@ -43,9 +43,9 @@ spec:
     news:
       news_feed_enabled: "false"
     plugins:
-      allow_loading_unsigned_plugins: natel-discrete-panel,pr0ps-trackmap-panel,panodata-map-panel
+      allow_loading_unsigned_plugins: pr0ps-trackmap-panel,panodata-map-panel
+      preinstall_disabled: "true"
     security:
-      angular_support_enabled: "true"
       cookie_samesite: grafana
       disable_initial_admin_creation: "true"
     server:

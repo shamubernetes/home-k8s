@@ -10,8 +10,8 @@ spec:
     kind: Repository
     name: r2-offsite
   schedule:
-    cron: "*/5 * * * *"
-    jitter: 30s
+    cron: "0 6 * * *"
+    jitter: 30m
   selection:
     latestOnly: false
   migrate:

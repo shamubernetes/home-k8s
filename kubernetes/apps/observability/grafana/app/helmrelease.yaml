@@ -151,10 +151,10 @@ spec:
     datasources:
       datasources.yaml:
         apiVersion: 1
+        prune: true
         deleteDatasources:
         - {name: Alertmanager, orgId: 1}
         - {name: Prometheus, orgId: 1}
-        - {name: VictoriaLogs, orgId: 1}
         - {name: Home Assistant Metrics, orgId: 1}
         datasources:
         - name: Prometheus
@@ -163,12 +163,6 @@ spec:
           access: proxy
           url: http://prometheus-operated.observability.svc.cluster.local:9090
           isDefault: true
-        - name: VictoriaLogs
-          type: victoriametrics-logs-datasource
-          uid: victorialogs
-          access: proxy
-          url: http://victoria-logs.observability.svc.cluster.local:9428
-          isDefault: false
         - name: Home Assistant Metrics
           type: prometheus
           uid: victoriametrics-ha

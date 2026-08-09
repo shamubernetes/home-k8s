@@ -17,7 +17,7 @@ spec:
     namespace: network
     sectionName: https
   hostnames:
-  - "status.${HOME_DOMAIN}"
+  - "gatus.${HOME_DOMAIN}"
   rules:
   - matches:
     - path:

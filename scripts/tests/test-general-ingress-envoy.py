@@ -82,7 +82,7 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('documenso-envoy', 'envoy-internal', 'documenso.${HOME_DOMAIN}', 'PathPrefix', '/', 'documenso', 3000, ''),
  ('firecrawl-envoy', 'envoy-internal', 'firecrawl.${HOME_DOMAIN}', 'PathPrefix', '/', 'firecrawl-api', 3002, ''),
  ('flux-webhook-envoy', 'envoy-external', 'flux-webhook.${HOME_DOMAIN}', 'PathPrefix', '/hook/', 'webhook-receiver', 80, ''),
- ('gatus-envoy', 'envoy-external', 'status.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
+ ('gatus-envoy', 'envoy-internal', 'gatus.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
  ('gitmirror-envoy', 'envoy-external', 'gitmirror.${HOME_DOMAIN}', 'PathPrefix', '/webhooks/github', 'git-mirror-operator-github-webhook-service', 8082, ''),
  ('grafana-envoy', 'envoy-internal', 'grafana.${HOME_DOMAIN}', 'PathPrefix', '/', 'grafana', 80, ''),
  ('grimmory-envoy', 'envoy-internal', 'grimmory.${HOME_DOMAIN}', 'PathPrefix', '/', 'grimmory', 6060, ''),
@@ -126,12 +126,6 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('web-static-envoy', 'envoy-external', 'static.${HOME_DOMAIN}', 'PathPrefix', '/', 'web-static', 80, ''),
  ('wizarr-envoy', 'envoy-external', 'join.${HOME_DOMAIN}', 'PathPrefix', '/', 'wizarr', 5690, ''),
  ('zoo-fleet-envoy', 'envoy-external', 'fleet.${HOME_DOMAIN}', 'PathPrefix', '/', 'zoo-fleet', 3000, '300s')]
-
-GATUS_ROUTE_TRANSITION = {
-    ('gatus-envoy', 'envoy-external', 'status.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
-    ('gatus-envoy', 'envoy-external', 'gatus.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
-    ('gatus-envoy', 'envoy-internal', 'gatus.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
-}
 
 def load_documents(path: Path) -> list[dict]:
     result = subprocess.run(
@@ -190,14 +184,9 @@ def main() -> int:
     unexpected = sorted(observed_names - EXPECTED_ROUTE_NAMES)
     if missing or unexpected:
         raise AssertionError(f"route name mismatch: missing={missing} unexpected={unexpected}")
-    normalized = list(observed)
-    gatus_rows = [row for row in normalized if row[0] == "gatus-envoy"]
-    if len(gatus_rows) == 1 and gatus_rows[0] in GATUS_ROUTE_TRANSITION:
-        normalized.remove(gatus_rows[0])
-        normalized.append(next(row for row in EXPECTED if row[0] == "gatus-envoy"))
-    if sorted(normalized) != EXPECTED:
-        expected_only = sorted(set(EXPECTED) - set(normalized))
-        observed_only = sorted(set(normalized) - set(EXPECTED))
+    if sorted(observed) != EXPECTED:
+        expected_only = sorted(set(EXPECTED) - set(observed))
+        observed_only = sorted(set(observed) - set(EXPECTED))
         raise AssertionError(f"route contract changed: expected_only={expected_only} observed_only={observed_only}")
     print(f"ok: general Envoy route contract ({len(observed_names)} routes, {len(observed)} path/backend bindings)")
     return 0

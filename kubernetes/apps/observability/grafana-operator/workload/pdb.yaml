@@ -1,0 +1,9 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: grafana-v5
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: grafana-v5

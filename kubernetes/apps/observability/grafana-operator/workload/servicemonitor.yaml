@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/servicemonitor_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: grafana-v5
+spec:
+  selector:
+    matchLabels:
+      app: grafana-v5
+  endpoints:
+  - port: grafana
+    path: /metrics
+    interval: 1m

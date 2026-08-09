@@ -57,7 +57,11 @@ class StatusApi:
 
     def request(self, path, method="GET", payload=None):
         body = None
-        headers = {"Accept": "application/json", "X-API-Key": self.api_key}
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "home-k8s-cluster-maintenance/1.0",
+            "X-API-Key": self.api_key,
+        }
         if payload is not None:
             body = json.dumps(payload, separators=(",", ":")).encode()
             headers["Content-Type"] = "application/json"

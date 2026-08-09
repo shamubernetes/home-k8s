@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zoo-schema-v2-cutover
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: zoo-schema-v2-cutover
+rules:
+- apiGroups: [zoo.thezoo.house]
+  resources: [zoos]
+  resourceNames: [zoo]
+  verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: zoo-schema-v2-cutover
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: zoo-schema-v2-cutover
+subjects:
+- kind: ServiceAccount
+  name: zoo-schema-v2-cutover
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zoo-schema-v2-cutover
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zoo-schema-v2-cutover
+    spec:
+      serviceAccountName: zoo-schema-v2-cutover
+      automountServiceAccountToken: true
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: migrate
+        image: docker.io/bitnami/kubectl:latest@sha256:1a86ba502f618724fd493f6a2b129f060454db04f06faa58d8ed94510280b17f
+        command: [/bin/sh, -c]
+        args:
+        - |
+          set -eu
+          current="$(kubectl get zoo zoo -o jsonpath='{.spec.services}')"
+          case "$current" in
+            \[*\])
+              echo "Zoo spec.services is already a list"
+              ;;
+            *)
+              kubectl patch zoo zoo --type=json \
+                -p='[{"op":"replace","path":"/spec/services","value":[]}]'
+              ;;
+          esac
+          test "$(kubectl get zoo zoo -o jsonpath='{.spec.services}')" = '[]'
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 128Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]

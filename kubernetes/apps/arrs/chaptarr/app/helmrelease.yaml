@@ -50,7 +50,7 @@ spec:
           app:
             image:
               repository: docker.io/chaptarr/chaptarr
-              tag: 0.9.911@sha256:ccbe157f88f33d085d12a3e5d7cfb9d5b15f89d69b6eba984f789064d21e1b85
+              tag: 0.9.925@sha256:8e29f4941acaf74c80bba4322237dfd2549816b3dd1b581f176b1be5d1ccb46b
             env:
               CHAPTARR__APP__INSTANCENAME: Chaptarr
               CHAPTARR__AUTH__METHOD: External

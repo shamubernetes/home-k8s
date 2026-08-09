@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app chaptarr
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: chaptarr
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
+  values:
+    controllers:
+      chaptarr:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          init-db-main:
+            image: &postgresInit
+              repository: ghcr.io/home-operations/postgres-init
+              tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+            env:
+              INIT_POSTGRES_DBNAME: chaptarr_main
+            envFrom: &envFrom
+            - secretRef:
+                name: chaptarr-secret
+          init-db-log:
+            image: *postgresInit
+            env:
+              INIT_POSTGRES_DBNAME: chaptarr_log
+            envFrom: *envFrom
+          init-db-cache:
+            image: *postgresInit
+            env:
+              INIT_POSTGRES_DBNAME: chaptarr_cache
+            envFrom: *envFrom
+        containers:
+          app:
+            image:
+              repository: docker.io/chaptarr/chaptarr
+              tag: 0.9.925@sha256:8e29f4941acaf74c80bba4322237dfd2549816b3dd1b581f176b1be5d1ccb46b
+            env:
+              CHAPTARR__APP__INSTANCENAME: Chaptarr
+              CHAPTARR__AUTH__METHOD: External
+              CHAPTARR__AUTH__REQUIRED: DisabledForLocalAddresses
+              CHAPTARR__SERVER__PORT: &port 8789
+              TZ: America/New_York
+              UMASK: "002"
+            envFrom: *envFrom
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ping
+                    port: *port
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 30
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ping
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 25m
+                memory: 128Mi
+              limits:
+                memory: 2Gi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        supplementalGroups: [10000]
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *port
+    persistence:
+      config:
+        existingClaim: *app
+        globalMounts:
+        - path: /config
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp
+      media:
+        type: nfs
+        server: "${IPAM_IP_NFS}"
+        path: /mnt/user/Media
+        globalMounts:
+        - path: /media
+        - path: /audiobooks
+          subPath: Audiobooks
+        - path: /ebooks
+          subPath: Books
+        - path: /downloads
+          subPath: Downloads

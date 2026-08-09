@@ -1,0 +1,24 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: nas-primary-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: nas-primary
+  destinationRef:
+    kind: Repository
+    name: r2-offsite
+  schedule:
+    cron: "*/5 * * * *"
+    jitter: 30s
+  selection:
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

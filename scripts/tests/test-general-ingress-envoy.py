@@ -126,10 +126,6 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('web-static-envoy', 'envoy-external', 'static.${HOME_DOMAIN}', 'PathPrefix', '/', 'web-static', 80, ''),
  ('wizarr-envoy', 'envoy-external', 'join.${HOME_DOMAIN}', 'PathPrefix', '/', 'wizarr', 5690, ''),
  ('zoo-fleet-envoy', 'envoy-external', 'fleet.${HOME_DOMAIN}', 'PathPrefix', '/', 'zoo-fleet', 3000, '300s')]
-GRAFANA_ROUTE_TRANSITION = {
-    ('grafana-envoy', 'envoy-internal', 'grafana.${HOME_DOMAIN}', 'PathPrefix', '/', 'grafana', 80, ''),
-    ('grafana-envoy', 'envoy-internal', 'grafana.${HOME_DOMAIN}', 'PathPrefix', '/', 'grafana-v5-service', 3000, ''),
-}
 
 def load_documents(path: Path) -> list[dict]:
     result = subprocess.run(
@@ -188,14 +184,9 @@ def main() -> int:
     unexpected = sorted(observed_names - EXPECTED_ROUTE_NAMES)
     if missing or unexpected:
         raise AssertionError(f"route name mismatch: missing={missing} unexpected={unexpected}")
-    grafana_rows = [row for row in observed if row[0] == "grafana-envoy"]
-    if len(grafana_rows) != 1 or grafana_rows[0] not in GRAFANA_ROUTE_TRANSITION:
-        raise AssertionError(f"Grafana route must use one approved transition backend: {grafana_rows}")
-    expected = list(EXPECTED)
-    expected[expected.index(next(row for row in expected if row[0] == "grafana-envoy"))] = grafana_rows[0]
-    if sorted(observed) != sorted(expected):
-        expected_only = sorted(set(expected) - set(observed))
-        observed_only = sorted(set(observed) - set(expected))
+    if sorted(observed) != EXPECTED:
+        expected_only = sorted(set(EXPECTED) - set(observed))
+        observed_only = sorted(set(observed) - set(EXPECTED))
         raise AssertionError(f"route contract changed: expected_only={expected_only} observed_only={observed_only}")
     print(f"ok: general Envoy route contract ({len(observed_names)} routes, {len(observed)} path/backend bindings)")
     return 0

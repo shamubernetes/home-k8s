@@ -1,0 +1,101 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: nas-primary
+spec:
+  backend:
+    filesystem:
+      path: /repo/kopiur/canary/nas
+      volume:
+        nfs:
+          server: "${IPAM_IP_NFS}"
+          path: /mnt/user/Backups
+  encryption:
+    passwordSecretRef:
+      name: kopiur-nas-repository
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: true
+    schedule:
+      quick:
+        cron: "0 */6 * * *"
+        jitter: 30m
+      full:
+        cron: "30 3 * * *"
+        jitter: 1h
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: r2-offsite
+spec:
+  backend:
+    s3:
+      bucket: storage-backup
+      prefix: kopiur/canary/r2/
+      endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
+      region: auto
+      auth:
+        secretRef:
+          name: kopiur-r2-repository
+  encryption:
+    passwordSecretRef:
+      name: kopiur-r2-repository
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: true
+    schedule:
+      quick:
+        cron: "30 */6 * * *"
+        jitter: 30m
+      full:
+        cron: "30 4 * * *"
+        jitter: 1h
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi

@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Watch one PR head to completion and optionally merge it with an explicit repo."""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+def parser() -> argparse.ArgumentParser:
+    value = argparse.ArgumentParser(
+        description="Watch required PR checks, following superseded head revisions"
+    )
+    value.add_argument("pr", help="pull request number or URL")
+    value.add_argument("--repo", help="GitHub repository as owner/name")
+    value.add_argument("--interval", type=int, default=10)
+    delivery = value.add_mutually_exclusive_group()
+    delivery.add_argument(
+        "--merge",
+        action="store_true",
+        help="enable policy-safe auto-merge and wait until the PR is merged",
+    )
+    delivery.add_argument(
+        "--auto",
+        action="store_true",
+        help="enable GitHub auto-merge after checks pass, then return",
+    )
+    value.add_argument("--merge-timeout", type=int, default=900)
+    value.add_argument("--keep-branch", action="store_true")
+    return value
+
+
+def run(gh: str, arguments: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [gh, *arguments],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.PIPE if capture else None,
+    )
+
+
+def value(gh: str, arguments: list[str]) -> str:
+    completed = run(gh, arguments, capture=True)
+    if completed.returncode:
+        sys.stderr.write(completed.stderr)
+        raise RuntimeError(f"gh command failed: {' '.join(arguments)}")
+    return completed.stdout.strip()
+
+
+def main() -> int:
+    args = parser().parse_args()
+    if args.interval < 1:
+        print("--interval must be at least one second", file=sys.stderr)
+        return 2
+    if args.merge_timeout < 1:
+        print("--merge-timeout must be at least one second", file=sys.stderr)
+        return 2
+    gh = os.environ.get("GH_BIN", "gh")
+    try:
+        repo = args.repo or value(gh, ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    if not re.fullmatch(r"[^/\s]+/[^/\s]+", repo):
+        print(f"invalid GitHub repository: {repo}", file=sys.stderr)
+        return 2
+
+    lock_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", f"{repo}-{args.pr}")
+    lock_path = Path(tempfile.gettempdir()) / f"home-k8s-pr-deliver-{lock_name}.lock"
+    lock = lock_path.open("w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f"another watcher already owns {repo}#{args.pr}", file=sys.stderr)
+        return 2
+
+    try:
+        while True:
+            try:
+                before = value(
+                    gh,
+                    ["pr", "view", args.pr, "--repo", repo, "--json", "headRefOid", "--jq", ".headRefOid"],
+                )
+            except RuntimeError as exc:
+                print(exc, file=sys.stderr)
+                return 1
+            print(f"watching {repo}#{args.pr} at {before[:12]}", flush=True)
+            checks = run(
+                gh,
+                [
+                    "pr",
+                    "checks",
+                    args.pr,
+                    "--repo",
+                    repo,
+                    "--required",
+                    "--watch",
+                    "--interval",
+                    str(args.interval),
+                ],
+            )
+            try:
+                after = value(
+                    gh,
+                    ["pr", "view", args.pr, "--repo", repo, "--json", "headRefOid", "--jq", ".headRefOid"],
+                )
+            except RuntimeError as exc:
+                print(exc, file=sys.stderr)
+                return 1
+            if after != before:
+                print(f"PR head changed from {before[:12]} to {after[:12]}; discarding stale check result", file=sys.stderr)
+                continue
+            if checks.returncode:
+                return checks.returncode
+            break
+
+        if args.merge or args.auto:
+            merge = [
+                "pr",
+                "merge",
+                args.pr,
+                "--repo",
+                repo,
+                "--squash",
+                "--match-head-commit",
+                after,
+            ]
+            merge.append("--auto")
+            if not args.keep_branch:
+                merge.append("--delete-branch")
+            merge_result = run(gh, merge)
+            if merge_result.returncode or args.auto:
+                return merge_result.returncode
+
+            deadline = time.monotonic() + args.merge_timeout
+            while time.monotonic() < deadline:
+                try:
+                    state_and_head = value(
+                        gh,
+                        [
+                            "pr",
+                            "view",
+                            args.pr,
+                            "--repo",
+                            repo,
+                            "--json",
+                            "state,headRefOid",
+                            "--jq",
+                            '"\\(.state) \\(.headRefOid)"',
+                        ],
+                    )
+                except RuntimeError as exc:
+                    print(exc, file=sys.stderr)
+                    return 1
+                state_parts = state_and_head.split(maxsplit=1)
+                if len(state_parts) != 2:
+                    print(f"unexpected gh pr view output: {state_and_head!r}", file=sys.stderr)
+                    return 1
+                state, current_head = state_parts
+                if state == "MERGED":
+                    print(f"merged {repo}#{args.pr} at {current_head[:12]}", flush=True)
+                    return 0
+                if state != "OPEN":
+                    print(f"PR entered unexpected state {state}", file=sys.stderr)
+                    return 1
+                if current_head != after:
+                    print(
+                        f"PR head changed after auto-merge was armed: {after[:12]} -> {current_head[:12]}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                time.sleep(args.interval)
+            print(f"timed out waiting for {repo}#{args.pr} to merge", file=sys.stderr)
+            return 1
+        return 0
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

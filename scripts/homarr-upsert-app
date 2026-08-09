@@ -1,0 +1,445 @@
+#!/usr/bin/env python3
+"""Idempotently add an application and tile to a Homarr v1 board."""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import http.cookiejar
+import ipaddress
+import json
+import math
+import os
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any, Iterator
+
+
+def parser() -> argparse.ArgumentParser:
+    value = argparse.ArgumentParser(
+        description="Create or reuse one Homarr app and one board tile"
+    )
+    value.add_argument("--name", required=True)
+    value.add_argument("--href", required=True)
+    value.add_argument("--description", default="")
+    value.add_argument("--icon-url", required=True)
+    value.add_argument("--ping-url", default="")
+    value.add_argument("--board", default="dashboard")
+    value.add_argument("--base-url", help="existing Homarr base URL; skips port-forward")
+    value.add_argument("--namespace", default="services")
+    value.add_argument("--service", default="homarr")
+    value.add_argument("--remote-port", type=int, default=7575)
+    value.add_argument("--local-port", type=int, default=0)
+    value.add_argument(
+        "--lock-timeout",
+        type=float,
+        default=120,
+        help="seconds to wait for another matching upsert (default: 120)",
+    )
+    value.add_argument("--dry-run", action="store_true")
+    return value
+
+
+def credentials_from_stdin() -> tuple[str, str]:
+    if sys.stdin.isatty():
+        raise ValueError('credentials must be piped on stdin as {"username":"...","password":"..."}')
+    try:
+        raw = sys.stdin.read(65_537)
+        if len(raw) > 65_536:
+            raise ValueError("credential JSON exceeds 64 KiB")
+        document = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid credential JSON on stdin: {exc}") from exc
+    if not isinstance(document, dict):
+        raise ValueError("credential JSON must be an object")
+    username = document.get("username")
+    password = document.get("password")
+    if not isinstance(username, str) or not username or not isinstance(password, str) or not password:
+        raise ValueError("credential JSON requires non-empty username and password strings")
+    return username, password
+
+
+def available_port(requested: int) -> int:
+    if requested:
+        return requested
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+@contextlib.contextmanager
+def homarr_endpoint(args: argparse.Namespace) -> Iterator[str]:
+    if args.base_url:
+        yield secure_base_url(args.base_url)
+        return
+    port = available_port(args.local_port)
+    command = [
+        "kubectl",
+        "-n",
+        args.namespace,
+        "port-forward",
+        f"service/{args.service}",
+        f"{port}:{args.remote_port}",
+    ]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    base_url = f"http://127.0.0.1:{port}"
+    try:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                stderr = process.stderr.read() if process.stderr else ""
+                raise RuntimeError(f"Homarr port-forward exited early: {stderr.strip()}")
+            try:
+                with urllib.request.urlopen(f"{base_url}/api/health/live", timeout=1) as response:
+                    if response.status == 200:
+                        break
+            except (urllib.error.URLError, TimeoutError):
+                time.sleep(0.25)
+        else:
+            raise RuntimeError("timed out waiting for Homarr port-forward")
+        yield base_url
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+class Homarr:
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+        )
+
+    def request(self, path: str, data: bytes | None = None, content_type: str | None = None) -> Any:
+        headers = {"Accept": "application/json"}
+        if content_type:
+            headers["Content-Type"] = content_type
+        request = urllib.request.Request(self.base_url + path, data=data, headers=headers)
+        try:
+            with self.opener.open(request, timeout=15) as response:
+                body = response.read()
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            raise RuntimeError(f"Homarr request failed: {exc.code} {path}: {body[:500]}") from exc
+        if not body:
+            return None
+        return json.loads(body)
+
+    def login(self, username: str, password: str) -> None:
+        csrf = self.request("/api/auth/csrf")["csrfToken"]
+        form = urllib.parse.urlencode(
+            {
+                "name": username,
+                "password": password,
+                "csrfToken": csrf,
+                "callbackUrl": self.base_url,
+                "json": "true",
+            }
+        ).encode()
+        self.request("/api/auth/callback/credentials", form, "application/x-www-form-urlencoded")
+        session = self.request("/api/auth/session")
+        if not session or not session.get("user"):
+            raise RuntimeError("Homarr credential callback did not create an authenticated session")
+
+    def query(self, procedure: str, value: Any = None, *, undefined: bool = False) -> Any:
+        envelope = (
+            {"json": None, "meta": {"values": ["undefined"]}}
+            if undefined
+            else {"json": value}
+        )
+        encoded = urllib.parse.quote(json.dumps(envelope, separators=(",", ":")))
+        payload = self.request(f"/api/trpc/{procedure}?input={encoded}")
+        return payload["result"]["data"]["json"]
+
+    def mutate(self, procedure: str, value: Any) -> Any:
+        payload = self.request(
+            f"/api/trpc/{procedure}",
+            json.dumps({"json": value}, separators=(",", ":")).encode(),
+            "application/json",
+        )
+        return payload["result"]["data"]["json"]
+
+
+def canonical_href(value: str) -> str:
+    parsed = urllib.parse.urlparse(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(f"invalid application URL: {value}")
+    return value.rstrip("/")
+
+
+def secure_base_url(value: str) -> str:
+    base_url = canonical_href(value)
+    parsed = urllib.parse.urlparse(base_url)
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError(f"invalid Homarr base URL port: {value}") from exc
+    if not parsed.hostname:
+        raise ValueError(f"invalid Homarr base URL host: {value}")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("Homarr base URL must not contain credentials")
+    if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
+        raise ValueError("Homarr base URL must contain only scheme, host, and optional port")
+    if parsed.scheme == "https":
+        return base_url
+    host = parsed.hostname or ""
+    is_loopback = host.lower() == "localhost"
+    if not is_loopback:
+        try:
+            is_loopback = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            is_loopback = False
+    if not is_loopback:
+        raise ValueError("Homarr base URL requires HTTPS unless its host is loopback")
+    return base_url
+
+
+def lock_scopes(args: argparse.Namespace) -> list[str]:
+    if args.base_url:
+        endpoint = secure_base_url(args.base_url)
+    else:
+        endpoint = f"kubernetes://{args.namespace}/{args.service}:{args.remote_port}"
+    common = [endpoint, args.board.casefold()]
+    identities = [
+        ["name", args.name.casefold()],
+        ["href", canonical_href(args.href)],
+    ]
+    return [
+        json.dumps(common + identity, separators=(",", ":"))
+        for identity in identities
+    ]
+
+
+@contextlib.contextmanager
+def operation_lock(args: argparse.Namespace) -> Iterator[None]:
+    digests = sorted(
+        {hashlib.sha256(scope.encode()).hexdigest() for scope in lock_scopes(args)}
+    )
+    lock_root = Path(tempfile.gettempdir()) / f"home-k8s-homarr-{os.getuid()}"
+    lock_root.mkdir(mode=0o700, exist_ok=True)
+    root_stat = lock_root.lstat()
+    if not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != os.getuid():
+        raise RuntimeError(f"unsafe Homarr lock directory: {lock_root}")
+    lock_root.chmod(0o700)
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    deadline = time.monotonic() + args.lock_timeout
+    locks = []
+    try:
+        for digest in digests:
+            descriptor = os.open(lock_root / f"{digest}.lock", flags, 0o600)
+            lock = os.fdopen(descriptor, "w")
+            locks.append(lock)
+            while True:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            "timed out waiting for another matching Homarr upsert"
+                        )
+                    time.sleep(0.1)
+            lock.seek(0)
+            lock.truncate()
+            lock.write(f"pid={os.getpid()}\n")
+            lock.flush()
+        yield
+    finally:
+        for lock in reversed(locks):
+            try:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+            finally:
+                lock.close()
+
+
+def optional_http_url(value: str, label: str) -> str | None:
+    if not value:
+        return None
+    parsed = urllib.parse.urlparse(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(f"invalid {label} URL: {value}")
+    return value
+
+
+def comparable_href(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return canonical_href(value)
+    except ValueError:
+        return None
+
+
+def matching_apps(apps: list[dict[str, Any]], name: str, href: str) -> list[dict[str, Any]]:
+    return [
+        app
+        for app in apps
+        if comparable_href(app.get("href")) == href or app.get("name") == name
+    ]
+
+
+def app_tiles(board: dict[str, Any], app_id: str) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in board.get("items", [])
+        if item.get("kind") == "app" and (item.get("options") or {}).get("appId") == app_id
+    ]
+
+
+def add_app_tile(homarr: Homarr, board_id: str, app_id: str) -> dict[str, Any]:
+    created = homarr.mutate(
+        "board.addItem",
+        {
+            "boardId": board_id,
+            "kind": "app",
+            "options": {"appId": app_id},
+            "integrationIds": [],
+        },
+    )
+    if not isinstance(created, dict) or not created.get("itemId"):
+        raise RuntimeError("Homarr board.addItem did not return an itemId")
+    return {"id": created["itemId"]}
+
+
+def execute(args: argparse.Namespace, username: str, password: str) -> dict[str, Any]:
+    href = canonical_href(args.href)
+    icon_url = optional_http_url(args.icon_url, "icon")
+    ping_url = optional_http_url(args.ping_url, "ping")
+    if icon_url is None:
+        raise ValueError("icon URL must not be empty")
+    with homarr_endpoint(args) as base_url:
+        homarr = Homarr(base_url)
+        homarr.login(username, password)
+        apps = homarr.query("app.all", undefined=True)
+        board = homarr.query("board.getBoardByName", {"name": args.board})
+        if not isinstance(apps, list):
+            raise RuntimeError("Homarr app.all returned an unexpected response")
+        if not isinstance(board, dict) or not board.get("id"):
+            raise RuntimeError(f"Homarr board {args.board!r} was not found")
+        matches = matching_apps(apps, args.name, href)
+        if len(matches) > 1:
+            raise RuntimeError(f"multiple Homarr apps match {args.name!r} or {href!r}")
+        desired = {
+            "name": args.name,
+            "description": args.description or None,
+            "iconUrl": icon_url,
+            "href": href,
+            "pingUrl": ping_url,
+        }
+        created_app = False
+        updated_app = False
+        would_update_app = False
+        if matches:
+            app = matches[0]
+            if canonical_href(app.get("href") or "http://invalid") != href:
+                raise RuntimeError(
+                    f"Homarr app name {args.name!r} already points to {app.get('href')!r}"
+                )
+            would_update_app = any(app.get(key) != value for key, value in desired.items())
+        elif args.dry_run:
+            app = {"id": None, **desired}
+        else:
+            app = homarr.mutate("app.create", desired)
+            created_app = True
+
+        tiles = app_tiles(board, app["id"]) if app.get("id") else []
+        if len(tiles) > 1:
+            raise RuntimeError(f"multiple tiles on board {args.board!r} reference app {app['id']}")
+        created_tile = False
+        if tiles:
+            tile = tiles[0]
+        elif args.dry_run:
+            tile = {"id": None}
+        else:
+            try:
+                tile = add_app_tile(homarr, board["id"], app["id"])
+            except (RuntimeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+                if created_app:
+                    try:
+                        homarr.mutate("app.delete", {"id": app["id"]})
+                    except (RuntimeError, urllib.error.URLError, json.JSONDecodeError) as rollback:
+                        raise RuntimeError(
+                            f"tile creation failed ({exc}); app rollback also failed ({rollback})"
+                        ) from rollback
+                raise
+            created_tile = True
+
+        if would_update_app and not args.dry_run:
+            homarr.mutate("app.update", {"id": app["id"], **desired})
+            app = {**app, **desired}
+            updated_app = True
+
+        verified = False
+        if not args.dry_run:
+            after_apps = homarr.query("app.all", undefined=True)
+            after_board = homarr.query("board.getBoardByName", {"name": args.board})
+            after_matches = matching_apps(after_apps, args.name, href)
+            verified = (
+                len(after_matches) == 1
+                and all(after_matches[0].get(key) == value for key, value in desired.items())
+                and len(app_tiles(after_board, app["id"])) == 1
+            )
+            if not verified:
+                raise RuntimeError("Homarr read-back did not find the exact app fields and one board tile")
+        return {
+            "appId": app.get("id"),
+            "board": args.board,
+            "createdApp": created_app,
+            "createdTile": created_tile,
+            "updatedApp": updated_app,
+            "wouldUpdateApp": would_update_app,
+            "itemId": tile.get("id"),
+            "verified": verified,
+            "dryRun": args.dry_run,
+        }
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        if not 1 <= args.remote_port <= 65535 or not 0 <= args.local_port <= 65535:
+            raise ValueError("Homarr ports must be between 1 and 65535; local port may be 0")
+        if not math.isfinite(args.lock_timeout) or args.lock_timeout < 0:
+            raise ValueError("Homarr lock timeout must be a finite non-negative number")
+        username, password = credentials_from_stdin()
+        with operation_lock(args):
+            result = execute(args, username, password)
+    except (
+        ValueError,
+        RuntimeError,
+        OSError,
+        json.JSONDecodeError,
+    ) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -21,10 +21,13 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:821e78def201b13fb42e613ffed66604eb478bd2d0faced69ac281c5b57685ef
+      reference: ghcr.io/thezoo-house/operator@sha256:0cdf7f1da141fd3da9a7eac84d0d0fcb9e9410e4511158571e63bfaf901925f5
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
+    registryCredentialsSecretRef:
+      name: ghcr-pull-secret
+      key: .dockerconfigjson
     replicaCount: 2
     resources:
       requests: {cpu: 50m, memory: 128Mi}
@@ -41,6 +44,7 @@ spec:
       annotations: {}
       spec:
         homeDomain: thezoo.house
+        releaseTracking: {channel: LatestStable, pollInterval: 10m}
         observability:
           serviceMonitors: true
           prometheusRules: true
@@ -170,7 +174,6 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/gate
-                digest: sha256:9bf575af8d431c5fcaa651184a2208578bb9937e1404435472a9ebfb1ef678f3
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute: {hostnames: [gate.thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
@@ -196,7 +199,6 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/thezoo.house
-                digest: sha256:3731873b6ff7b17c6d6b5fa10d943e6dcac8a11096a1a09ef9cb430daf18f40a
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute: {hostnames: [thezoo.house], parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]}
@@ -237,7 +239,6 @@ spec:
             workload:
               image:
                 repository: ghcr.io/thezoo-house/cowbell
-                digest: sha256:00c3a3a8b894ce0809215e0ecb405a88f773ff2c72a31227ee8e73305712811b
               replicas: 2
               imagePullSecrets: [{name: ghcr-pull-secret}]
               httpRoute:

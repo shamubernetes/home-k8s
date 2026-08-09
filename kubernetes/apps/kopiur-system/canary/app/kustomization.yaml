@@ -6,4 +6,5 @@ resources:
 - ./repositories.yaml
 - ./source.yaml
 - ./snapshotpolicy.yaml
+- ./snapshotschedule.yaml
 - ./snapshotreplication.yaml

@@ -5,11 +5,11 @@ metadata:
 spec:
   backend:
     filesystem:
-      path: /repo/kopiur/canary/nas
+      path: /repo
       volume:
         nfs:
           server: "${IPAM_IP_NFS}"
-          path: /mnt/user/Backups
+          path: /mnt/user/Backups/kopiur/canary
   encryption:
     passwordSecretRef:
       name: kopiur-nas-repository

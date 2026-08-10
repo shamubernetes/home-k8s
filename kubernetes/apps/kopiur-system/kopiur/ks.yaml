@@ -2,22 +2,21 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app grafana
+  name: &app kopiur
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: &namespace observability
+  dependsOn:
+  - name: kopiur-crds
+  targetNamespace: &namespace kopiur-system
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
-  dependsOn:
-  - name: cloudnative-pg-cluster
-  - name: external-secrets-secret-store
-  path: ./kubernetes/apps/observability/grafana/app
+  path: ./kubernetes/apps/kopiur-system/kopiur/app
   prune: true
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
-  wait: false
+  wait: true
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: 10m
@@ -25,5 +24,3 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
-      GATUS_INTERNAL_APP: grafana-v5-service
-      GATUS_INTERNAL_PORT: "3000"

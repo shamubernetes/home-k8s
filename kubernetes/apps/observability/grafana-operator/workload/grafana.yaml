@@ -1,0 +1,145 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/grafana/grafana-operator/v5.24.0/deploy/kustomize/base/crds/grafana.integreatly.org_grafanas.yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: grafana-v5
+  labels:
+    dashboards: grafana-v5
+spec:
+  version: docker.io/grafana/grafana:12.3.1@sha256:2175aaa91c96733d86d31cf270d5310b278654b03f5718c59de12a865380a31f
+  client:
+    useKubeAuth: true
+  disableDefaultAdminSecret: true
+  config:
+    analytics:
+      check_for_updates: "false"
+      check_for_plugin_updates: "false"
+      reporting_enabled: "false"
+    auth:
+      disable_login_form: "true"
+    auth.anonymous:
+      enabled: "true"
+    auth.basic:
+      enabled: "false"
+    auth.jwt:
+      enabled: "true"
+      header_name: Authorization
+      expect_claims: '{"aud": ["operator.grafana.com"]}'
+      username_claim: sub
+      email_claim: sub
+      auto_sign_up: "true"
+      role_attribute_strict: "true"
+      allow_assign_grafana_admin: "true"
+      role_attribute_path: "contains(sub, 'system:serviceaccount:observability:grafana-operator') && 'GrafanaAdmin' || contains(sub, 'system:serviceaccount:observability:grafana-v5-sa') && 'GrafanaAdmin' || 'None'"
+      jwk_set_url: https://kubernetes.default.svc/openid/v1/jwks
+      jwk_set_bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tls_client_ca: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    database:
+      max_open_conn: "10"
+      max_idle_conn: "2"
+      conn_max_lifetime: "14400"
+    feature_toggles:
+      enable: publicDashboards
+    news:
+      news_feed_enabled: "false"
+    plugins:
+      allow_loading_unsigned_plugins: pr0ps-trackmap-panel,panodata-map-panel
+      preinstall_disabled: "true"
+    security:
+      cookie_samesite: grafana
+      disable_initial_admin_creation: "true"
+    server:
+      root_url: https://grafana.${HOME_DOMAIN}
+  deployment:
+    spec:
+      replicas: 2
+      strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 0
+          maxSurge: 1
+      template:
+        metadata:
+          annotations:
+            reloader.stakater.com/auto: "true"
+        spec:
+          containers:
+          - name: grafana
+            envFrom:
+            - secretRef:
+                name: grafana-secret
+            env:
+            - name: GF_DATE_FORMATS_USE_BROWSER_LOCALE
+              value: "true"
+            - name: GF_EXPLORE_ENABLED
+              value: "true"
+            - name: GF_INSTALL_PLUGINS_FORCE
+              value: "true"
+            volumeMounts:
+            - name: grafana-v5-provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/kubernetes-sidecar.yaml
+              subPath: dashboard-provider.yaml
+              readOnly: true
+            - name: sc-dashboard-volume
+              mountPath: /var/lib/grafana/dashboards/dynamic
+          - name: grafana-sc-dashboard
+            image: quay.io/kiwigrid/k8s-sidecar:2.10.1@sha256:7eac5c4fed714a18d038fc9fea57d8744d113367935dac0ea4eb6a87cef704a3
+            env:
+            - name: METHOD
+              value: WATCH
+            - name: LABEL
+              value: grafana_dashboard
+            - name: FOLDER
+              value: /var/lib/grafana/dashboards/dynamic
+            - name: RESOURCE
+              value: both
+            - name: NAMESPACE
+              value: ALL
+            - name: FOLDER_ANNOTATION
+              value: grafana_folder
+            - name: SCRIPT
+              value: /opt/grafana-sidecar/reload.py
+            resources:
+              requests:
+                cpu: 100m
+                memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            volumeMounts:
+            - name: sc-dashboard-volume
+              mountPath: /var/lib/grafana/dashboards/dynamic
+            - name: grafana-v5-provisioning
+              mountPath: /opt/grafana-sidecar/reload.py
+              subPath: reload.py
+              readOnly: true
+            - name: grafana-v5-kubeauth-token
+              mountPath: /var/run/secrets/grafana.com/serviceaccount
+              readOnly: true
+          topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app: grafana-v5
+          volumes:
+          - name: grafana-v5-provisioning
+            configMap:
+              name: grafana-v5-provisioning
+              defaultMode: 0555
+          - name: sc-dashboard-volume
+            emptyDir: {}
+          - name: grafana-v5-kubeauth-token
+            projected:
+              sources:
+              - serviceAccountToken:
+                  audience: operator.grafana.com
+                  expirationSeconds: 3600
+                  path: token

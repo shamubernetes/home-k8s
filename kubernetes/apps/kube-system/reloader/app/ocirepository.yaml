@@ -9,7 +9,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/stakater/charts/reloader
   ref:
-    tag: 2.2.15
+    tag: 2.2.16
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

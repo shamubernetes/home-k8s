@@ -1,0 +1,82 @@
+# Disposable source data for Workstream L backup and restore proof.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kopiur-canary-data
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: ceph-block
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kopiur-canary-seed
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kopiur-canary
+        app.kubernetes.io/component: seed
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: seed
+        image: docker.io/library/busybox@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -eu
+          mkdir -p /data/nested
+          printf 'kopiur canary alpha\n' > /data/alpha.txt
+          printf 'kopiur canary bravo\n' > /data/nested/bravo.txt
+          dd if=/dev/zero of=/data/blob.bin bs=1024 count=64
+          ln -sfn nested/bravo.txt /data/bravo-link
+          chmod 0640 /data/alpha.txt
+          chmod 0600 /data/nested/bravo.txt
+          chmod 0750 /data/nested
+          printf '%s\n' \
+            '5f85c22e2f13b4ce9395120e2dd952ac300d74310de586f817df8d3bc5485f51  alpha.txt' \
+            '1b269dcb9e2de831ccd987d494a954ec0807ab85feb6bd7876083beb245f2ce5  nested/bravo.txt' \
+            'de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31  blob.bin' \
+            > /data/SHA256SUMS
+          cd /data
+          sha256sum -c SHA256SUMS
+          test "$(stat -c %a alpha.txt)" = 640
+          test "$(stat -c %a nested/bravo.txt)" = 600
+          test "$(stat -c %a nested)" = 750
+          test "$(readlink bravo-link)" = nested/bravo.txt
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: kopiur-canary-data

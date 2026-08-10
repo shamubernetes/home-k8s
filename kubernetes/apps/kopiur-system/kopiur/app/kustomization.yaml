@@ -2,10 +2,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ./configmap.yaml
-- ./rbac.yaml
-- ./grafana.yaml
-- ./pdb.yaml
-- ./servicemonitor.yaml
-- ./canary-resources.yaml
-- ./datasources.yaml
+- ./ocirepository.yaml
+- ./helmrelease.yaml

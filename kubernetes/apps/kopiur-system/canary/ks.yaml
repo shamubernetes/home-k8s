@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app kopiur-canary
+  namespace: "${KS_NAMESPACE}"
+spec:
+  dependsOn:
+  - name: kopiur
+  - name: external-secrets-secret-store
+  - name: rook-ceph-cluster
+  - name: snapshot-controller
+  targetNamespace: &namespace kopiur-canary
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  path: ./kubernetes/apps/kopiur-system/canary/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  # SnapshotReplication in Kopiur 0.10.0 leaves observedGeneration stale after
+  # schedule-only updates. Keep explicit health checks for every other canary
+  # resource; Kopiur's PrometheusRule covers replication failures and staleness.
+  healthChecks:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: kopiur-canary-data
+    namespace: kopiur-canary
+  - apiVersion: batch/v1
+    kind: Job
+    name: kopiur-canary-seed
+    namespace: kopiur-canary
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: kopiur-nas-repository
+    namespace: kopiur-canary
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: kopiur-r2-repository
+    namespace: kopiur-canary
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: nas-primary
+    namespace: kopiur-canary
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: r2-offsite
+    namespace: kopiur-canary
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotPolicy
+    name: kopiur-canary
+    namespace: kopiur-canary
+  wait: false
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: 15m
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace

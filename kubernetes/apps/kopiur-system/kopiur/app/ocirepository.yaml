@@ -4,12 +4,14 @@ kind: OCIRepository
 metadata:
   annotations:
     oci.home.arpa/allow-rollout: "true"
-  name: grafana
+  name: kopiur
 spec:
   interval: 30m
-  url: oci://ghcr.io/grafana/helm-charts/grafana
+  url: oci://ghcr.io/home-operations/charts/kopiur
   ref:
-    tag: 10.5.15
+    # renovate: datasource=docker depName=ghcr.io/home-operations/charts/kopiur
+    tag: 0.10.0
+    digest: sha256:5ce7e1ef30a218264f6095f09f4d659e6a7d872fb310cefff87ee86dc305f2bb
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

@@ -83,7 +83,7 @@ spec:
             - name: sc-dashboard-volume
               mountPath: /var/lib/grafana/dashboards/dynamic
           - name: grafana-sc-dashboard
-            image: quay.io/kiwigrid/k8s-sidecar:2.5.0@sha256:a6b3f707f883108376514489a94d6629109a327b2978e1d826cd104c4ca436df
+            image: quay.io/kiwigrid/k8s-sidecar:2.10.1@sha256:7eac5c4fed714a18d038fc9fea57d8744d113367935dac0ea4eb6a87cef704a3
             env:
             - name: METHOD
               value: WATCH

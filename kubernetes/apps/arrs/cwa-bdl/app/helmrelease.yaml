@@ -132,6 +132,8 @@ spec:
               limits:
                 memory: 64Mi
     defaultPodOptions:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-08-10T20:20:45Z"
       securityContext:
         runAsNonRoot: false
         runAsUser: 0

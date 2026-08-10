@@ -1,0 +1,14 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: kopiur-canary-daily
+spec:
+  policyRef:
+    name: kopiur-canary
+  schedule:
+    cron: "0 2 * * *"
+    jitter: 30m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3

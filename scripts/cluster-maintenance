@@ -52,7 +52,7 @@ class StatusApi:
         self.api_key = os.environ.get("STATUS_API_KEY")
         if not self.api_key:
             raise MaintenanceError(
-                "STATUS_API_KEY is required so maintenance is reflected on the public status page"
+                "STATUS_API_KEY is required when --public-status is requested"
             )
 
     def request(self, path, method="GET", payload=None):
@@ -97,7 +97,12 @@ class StatusApi:
         notice = self.request(
             f"/api/pages/{page_id}/notices",
             method="POST",
-            payload={"message": f"Scheduled maintenance: {reason}", "severity": "warning"},
+            payload={
+                "title": f"Scheduled maintenance: {reason}",
+                "initial_update": "Scheduled maintenance is now in progress.",
+                "status": "identified",
+                "severity": "warning",
+            },
         )
         notice_id = notice.get("id") if isinstance(notice, dict) else None
         if not notice_id:
@@ -109,6 +114,7 @@ class StatusApi:
         self.request(
             f"/api/pages/{page_id}/notices/{urllib.parse.quote(notice_id, safe='')}/resolve",
             method="PUT",
+            payload={"message": "Scheduled maintenance is complete."},
         )
 
 
@@ -874,12 +880,12 @@ def begin(cluster, reason, duration, allowed_alerts=None):
         }
 
 
-def coordinated_begin(cluster, status_api, reason, duration, allowed_alerts=None):
+def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None):
     if load_state(required=False):
         raise MaintenanceError(
             f"maintenance state already exists at {state_path()}; end or repair it explicitly"
         )
-    notice_id = status_api.begin_notice(reason)
+    notice_id = status_api.begin_notice(reason) if status_api else None
     silence_id = None
     try:
         result = begin(cluster, reason, duration, allowed_alerts)
@@ -901,16 +907,18 @@ def coordinated_begin(cluster, status_api, reason, duration, allowed_alerts=None
                 expire_silence(cluster, silence_id)
             except Exception as exc:
                 cleanup_errors.append(f"silence cleanup failed: {exc}")
-        try:
-            status_api.resolve_notice(notice_id)
-        except Exception as exc:
-            cleanup_errors.append(f"notice cleanup failed: {exc}")
+        if notice_id:
+            try:
+                status_api.resolve_notice(notice_id)
+            except Exception as exc:
+                cleanup_errors.append(f"notice cleanup failed: {exc}")
         if cleanup_errors:
             raise MaintenanceError(
                 f"maintenance begin failed ({action_error}); " + "; ".join(cleanup_errors)
             ) from action_error
         raise
     result["noticeId"] = notice_id
+    result["publicStatus"] = "posted" if notice_id else "not-posted"
     result["stateFile"] = str(state_path())
     return result
 
@@ -994,15 +1002,13 @@ def post_maintenance_blockers(cluster, allowed_alerts=None):
         )
 
 
-def coordinated_end(cluster, status_api, silence_id):
+def coordinated_end(cluster, silence_id, status_api=None):
     state = load_state()
     if state.get("silenceId") != silence_id:
         raise MaintenanceError(
             f"maintenance state belongs to silence {state.get('silenceId')}, not {silence_id}"
         )
     notice_id = state.get("noticeId")
-    if not notice_id:
-        raise MaintenanceError("maintenance state does not contain a public notice ID")
     post_maintenance_blockers(cluster, state.get("allowedActiveAlerts"))
     current = status(cluster, silence_id)
     if current["state"] == "active":
@@ -1020,10 +1026,11 @@ def coordinated_end(cluster, status_api, silence_id):
         raise MaintenanceError(
             f"silence {silence_id} is in unexpected state {current['state']!r}"
         )
-    status_api.resolve_notice(notice_id)
+    if notice_id:
+        (status_api or StatusApi()).resolve_notice(notice_id)
     clear_state(silence_id)
     result["noticeId"] = notice_id
-    result["noticeState"] = "resolved"
+    result["noticeState"] = "resolved" if notice_id else "not-posted"
     return result
 
 
@@ -1175,14 +1182,19 @@ def probe(cluster):
 def build_parser():
     parser = argparse.ArgumentParser(
         description=(
-            "Manage coordinated public status notices and verified, bounded "
-            "Alertmanager silences for home-k8s maintenance."
+            "Manage verified, bounded Alertmanager silences for home-k8s maintenance, "
+            "with explicit public status notices only for user-visible impact."
         )
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     begin_parser = subparsers.add_parser("begin", help="start and verify a maintenance silence")
     begin_parser.add_argument("--reason", required=True, help="human-readable maintenance reason")
     begin_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
+    begin_parser.add_argument(
+        "--public-status",
+        action="store_true",
+        help="publish a status-page incident because user-visible impact is expected",
+    )
     begin_parser.add_argument(
         "--allow-active-alert",
         action="append",
@@ -1213,12 +1225,16 @@ def main():
         with alertmanager_cluster() as cluster:
             if args.command == "begin":
                 result = coordinated_begin(
-                    cluster, StatusApi(), args.reason, args.duration, args.allow_active_alert
+                    cluster,
+                    args.reason,
+                    args.duration,
+                    args.allow_active_alert,
+                    StatusApi() if args.public_status else None,
                 )
             elif args.command == "renew":
                 result = coordinated_renew(cluster, args.id, args.duration)
             elif args.command == "end":
-                result = coordinated_end(cluster, StatusApi(), args.id)
+                result = coordinated_end(cluster, args.id)
             elif args.command == "probe":
                 result = probe(cluster)
             else:

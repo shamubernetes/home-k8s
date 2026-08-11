@@ -1,0 +1,182 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app kaneo
+spec:
+  interval: 10m
+  timeout: 15m
+  chartRef:
+    kind: OCIRepository
+    name: kaneo
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      kaneo:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          init-db:
+            image:
+              repository: ghcr.io/home-operations/postgres-init
+              tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+            envFrom: &envFrom
+            - secretRef:
+                name: kaneo-secret
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+          configure-bucket-cors:
+            image:
+              repository: docker.io/amazon/aws-cli
+              tag: 2.36.19@sha256:7e78b80fc653b9f6bdacc54709458910374da3213e3a19abdaf395680831a5da
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              set -eu
+              cat > /tmp/cors.json <<'EOF'
+              {
+                "CORSRules": [{
+                  "AllowedHeaders": ["*"],
+                  "AllowedMethods": ["GET", "PUT", "HEAD"],
+                  "AllowedOrigins": ["https://kaneo.${HOME_DOMAIN}"],
+                  "ExposeHeaders": ["ETag"],
+                  "MaxAgeSeconds": 3600
+                }]
+              }
+              EOF
+              for attempt in 1 2 3 4 5 6; do
+                if aws --endpoint-url "$S3_INTERNAL_ENDPOINT" --region "$AWS_DEFAULT_REGION" s3api put-bucket-cors --bucket "$S3_BUCKET" --cors-configuration file:///tmp/cors.json; then
+                  exit 0
+                fi
+                sleep 5
+              done
+              exit 1
+            env:
+              AWS_ACCESS_KEY_ID:
+                valueFrom:
+                  secretKeyRef:
+                    name: kaneo-bucket
+                    key: AWS_ACCESS_KEY_ID
+              AWS_SECRET_ACCESS_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: kaneo-bucket
+                    key: AWS_SECRET_ACCESS_KEY
+              AWS_DEFAULT_REGION: us-east-1
+              AWS_EC2_METADATA_DISABLED: "true"
+              S3_INTERNAL_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+              S3_BUCKET:
+                valueFrom:
+                  configMapKeyRef:
+                    name: kaneo-bucket
+                    key: BUCKET_NAME
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+        containers:
+          app:
+            image:
+              repository: ghcr.io/usekaneo/kaneo
+              tag: 2.17.1@sha256:ebcc4ba410b7dea74f6a28459e3bff65b87b99eaefa67dce8dd60ae44b00c460
+            envFrom: *envFrom
+            env:
+              KANEO_CLIENT_URL: https://kaneo.${HOME_DOMAIN}
+              KANEO_API_URL: https://kaneo.${HOME_DOMAIN}/api
+              CORS_ORIGINS: https://kaneo.${HOME_DOMAIN}
+              REDIS_URL: redis://dragonfly.database.svc.cluster.local:6379/8
+              CUSTOM_OAUTH_AUTHORIZATION_URL: https://sso.${HOME_DOMAIN}/authorize
+              CUSTOM_OAUTH_TOKEN_URL: https://sso.${HOME_DOMAIN}/api/oidc/token
+              CUSTOM_OAUTH_USER_INFO_URL: https://sso.${HOME_DOMAIN}/api/oidc/userinfo
+              CUSTOM_OAUTH_DISCOVERY_URL: https://sso.${HOME_DOMAIN}/.well-known/openid-configuration
+              CUSTOM_OAUTH_LOGOUT_URL: https://sso.${HOME_DOMAIN}/api/oidc/end-session
+              CUSTOM_OAUTH_SCOPES: openid,profile,email
+              CUSTOM_OAUTH_RESPONSE_TYPE: code
+              CUSTOM_AUTH_PKCE: "true"
+              CUSTOM_OAUTH_AUTO_LOGIN: "true"
+              DISABLE_REGISTRATION: "true"
+              DISABLE_PASSWORD_REGISTRATION: "true"
+              DISABLE_EMAIL_OTP_SIGN_IN: "true"
+              DISABLE_GUEST_ACCESS: "true"
+              DISABLE_LOGIN_FORM: "true"
+              SMTP_HOST: smtp-relay.network.svc.cluster.local
+              SMTP_PORT: "25"
+              SMTP_SECURE: "false"
+              SMTP_REQUIRE_TLS: "false"
+              S3_ENDPOINT: https://rgw.${HOME_DOMAIN}
+              S3_BUCKET:
+                valueFrom:
+                  configMapKeyRef:
+                    name: kaneo-bucket
+                    key: BUCKET_NAME
+              S3_ACCESS_KEY_ID:
+                valueFrom:
+                  secretKeyRef:
+                    name: kaneo-bucket
+                    key: AWS_ACCESS_KEY_ID
+              S3_SECRET_ACCESS_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: kaneo-bucket
+                    key: AWS_SECRET_ACCESS_KEY
+              S3_REGION: us-east-1
+              S3_FORCE_PATH_STYLE: "true"
+              S3_MAX_IMAGE_UPLOAD_BYTES: "26214400"
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health
+                    port: &port 5173
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 6
+              readiness: *probes
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health
+                    port: *port
+                  periodSeconds: 5
+                  timeoutSeconds: 3
+                  failureThreshold: 120
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            primary: true
+            port: *port
+    persistence:
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

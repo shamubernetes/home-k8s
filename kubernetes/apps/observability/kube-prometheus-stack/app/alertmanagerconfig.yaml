@@ -55,6 +55,14 @@ spec:
         value: CephPGNotDeepScrubbed
         matchType: "="
     - receiver: cowtail-investigate
+      # Cowtail records every alert but starts one Hermes investigation per batch.
+      # Group the incident into at most one warning and one critical batch so a
+      # shared outage cannot fan out into one Codex session per pod, volume, or
+      # synthetic endpoint.
+      groupBy: ["severity"]
+      groupWait: 1m
+      groupInterval: 15m
+      repeatInterval: 12h
       matchers:
       - name: severity
         value: warning|critical

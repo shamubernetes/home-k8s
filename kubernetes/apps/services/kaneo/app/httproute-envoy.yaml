@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kaneo-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Kaneo"
+    homepage.shamubernetes.com/description: "Project management"
+    homepage.shamubernetes.com/group: "Tools"
+    homepage.shamubernetes.com/order: "55"
+    homepage.shamubernetes.com/favorite: "false"
+    homepage.shamubernetes.com/icon: "selfhst:kaneo"
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "kaneo.${HOME_DOMAIN}"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: kaneo
+      port: 5173
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kaneo-github-webhook-external
+spec:
+  parentRefs:
+  - name: envoy-external
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "kaneo.${HOME_DOMAIN}"
+  rules:
+  - matches:
+    - method: POST
+      path:
+        type: Exact
+        value: /api/github-integration/webhook
+    backendRefs:
+    - name: kaneo
+      port: 5173

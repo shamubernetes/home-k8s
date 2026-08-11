@@ -102,8 +102,8 @@ spec:
           "id": 6,
           "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"hideZeros": false, "mode": "multi", "sort": "none"}},
           "targets": [
-            {"editorMode": "code", "expr": "max by (platform) (hermes_platform_up)", "legendFormat": "{{platform}} up", "range": true, "refId": "A"},
-            {"editorMode": "code", "expr": "max by (platform) (hermes_platform_degraded)", "legendFormat": "{{platform}} degraded", "range": true, "refId": "B"}
+            {"editorMode": "code", "expr": "max by (hermes_platform) (hermes_platform_up)", "legendFormat": "{{hermes_platform}} up", "range": true, "refId": "A"},
+            {"editorMode": "code", "expr": "max by (hermes_platform) (hermes_platform_degraded)", "legendFormat": "{{hermes_platform}} degraded", "range": true, "refId": "B"}
           ],
           "title": "Platform health",
           "type": "timeseries"

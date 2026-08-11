@@ -146,7 +146,7 @@ spec:
           metric_expiration: 5m
           resource_to_telemetry_conversion:
             enabled: true
-        otlphttp/victorialogs:
+        otlp_http/victorialogs:
           logs_endpoint: http://victoria-logs.observability.svc.cluster.local:9428/insert/opentelemetry/v1/logs
           compression: gzip
           sending_queue:
@@ -154,7 +154,7 @@ spec:
             queue_size: 1000
           retry_on_failure:
             enabled: true
-        otlphttp/victoriatraces:
+        otlp_http/victoriatraces:
           traces_endpoint: http://victoria-traces.observability.svc.cluster.local:10428/insert/opentelemetry/v1/traces
           compression: gzip
           sending_queue:
@@ -174,8 +174,8 @@ spec:
           logs:
             receivers: [otlp]
             processors: [memory_limiter, batch]
-            exporters: [otlphttp/victorialogs]
+            exporters: [otlp_http/victorialogs]
           traces:
             receivers: [otlp]
             processors: [memory_limiter, batch]
-            exporters: [otlphttp/victoriatraces]
+            exporters: [otlp_http/victoriatraces]

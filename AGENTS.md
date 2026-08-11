@@ -51,12 +51,17 @@ task github:deliver-pr pr=<number> args="--merge"
 # Watch Flux converge a pushed app
 task kubernetes:reconcile-app app=tools/searxng
 
-# Start a paired public status notice and verified, bounded Alertmanager silence.
-# STATUS_API_KEY must be injected from the TheZoo Status item in 1Password.
+# Start a verified, bounded Alertmanager silence. Routine app deployments and
+# internal cluster work stay off the public status page.
 export MAINTENANCE_KUBECONFIG="$HOME/.kube/config"
-export STATUS_API_URL="https://status.thezoo.house"
 scripts/cluster-maintenance begin \
   --reason "planned cluster maintenance" --duration 4h
+
+# Add --public-status only when user-visible service impact is expected.
+# That opt-in requires STATUS_API_KEY from the TheZoo Status item in 1Password.
+export STATUS_API_URL="https://status.thezoo.house"
+scripts/cluster-maintenance begin \
+  --reason "planned public service interruption" --duration 4h --public-status
 
 # Admit the exact known persistent SMART interface-speed baseline while still
 # failing closed on every other warning or critical alert.
@@ -220,19 +225,22 @@ and continue to reject every additional warning or critical alert.
 
 The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
 and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.
-The default window is four hours and the hard maximum is 24 hours. `begin` requires
-`STATUS_API_KEY`, creates the public notice before the Alertmanager silence, and
-atomically persists both IDs under
+The default window is four hours and the hard maximum is 24 hours. Routine `begin`
+creates only the Alertmanager silence. Do not publish internal implementation work,
+new app deployments, rehearsals, or changes with no expected user-visible impact.
+Add `--public-status` only when users are expected to see an outage or degraded
+service; that opt-in requires `STATUS_API_KEY` and creates an identified maintenance
+incident before the silence. The helper atomically persists its state under
 `~/.local/state/home-k8s/cluster-maintenance.json` (override with
-`MAINTENANCE_STATE_FILE`). If either side fails, it compensates the side that already
-succeeded. Renew only the returned silence ID. Call `end` only after the merged
+`MAINTENANCE_STATE_FILE`). For a public window, if either side fails, it compensates
+the side that already succeeded. Renew only the returned silence ID. Call `end` only after the merged
 revision, Flux/Tuppr convergence, affected workloads, cluster health, and
 component-relevant routes or APIs are verified. `end` refuses to restore alerting or
-resolve the public notice while unexpected warning or critical alerts remain. It
-expires the silence before resolving the notice. A failed rollout keeps the window
+resolve any public notice while unexpected warning or critical alerts remain. It
+expires the silence before resolving an attached notice. A failed rollout keeps the window
 active only while a protected GitOps rollback is being executed and verified. If the
 operator dies, the finite Alertmanager expiry restores alerting automatically while
-the persisted state preserves the public notice for explicit resolution.
+the persisted state preserves any public notice for explicit resolution.
 
 Run `scripts/cluster-maintenance probe` to exercise Alertmanager's create/read/delete
 lifecycle with a unique, preflighted alert name. The probe rejects any collision,

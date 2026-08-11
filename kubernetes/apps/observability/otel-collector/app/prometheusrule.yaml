@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: otel-collector-rules
+spec:
+  groups:
+  - name: hermes.telemetry
+    rules:
+    - alert: HermesGatewayUnavailable
+      annotations:
+        summary: Hermes reports that the gateway is unavailable.
+      expr: max without (instance, pod, endpoint, job) (hermes_gateway_up) == 0
+      for: 2m
+      labels:
+        severity: critical
+    - alert: HermesPlatformUnavailable
+      annotations:
+        summary: A configured Hermes platform is unavailable.
+      expr: max without (instance, pod, endpoint, job) (hermes_platform_up) == 0
+      for: 5m
+      labels:
+        severity: critical
+    - alert: HermesPlatformDegraded
+      annotations:
+        summary: A configured Hermes platform is degraded.
+      expr: max without (instance, pod, endpoint, job) (hermes_platform_degraded) > 0
+      for: 10m
+      labels:
+        severity: warning
+  - name: otel-collector.health
+    rules:
+    - alert: OpenTelemetryCollectorUnavailable
+      annotations:
+        summary: Fewer than two OpenTelemetry Collector replicas are available.
+      expr: count(up{job=~".*otel-collector.*"} == 1) < 2
+      for: 5m
+      labels:
+        severity: warning
+    - alert: OpenTelemetryCollectorExportFailure
+      annotations:
+        summary: The OpenTelemetry Collector is failing to export telemetry.
+      expr: |
+        sum(increase(otelcol_exporter_send_failed_spans_total[5m]))
+        + sum(increase(otelcol_exporter_send_failed_log_records_total[5m]))
+        + sum(increase(otelcol_exporter_send_failed_metric_points_total[5m])) > 0
+      for: 10m
+      labels:
+        severity: warning
+    - alert: OpenTelemetryCollectorRefusingData
+      annotations:
+        summary: The OpenTelemetry Collector is refusing incoming telemetry.
+      expr: |
+        sum(increase(otelcol_receiver_refused_spans_total[5m]))
+        + sum(increase(otelcol_receiver_refused_log_records_total[5m]))
+        + sum(increase(otelcol_receiver_refused_metric_points_total[5m])) > 0
+      for: 5m
+      labels:
+        severity: critical

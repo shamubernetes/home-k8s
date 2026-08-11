@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/helmrepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: opentelemetry
+spec:
+  interval: 30m
+  url: https://open-telemetry.github.io/opentelemetry-helm-charts

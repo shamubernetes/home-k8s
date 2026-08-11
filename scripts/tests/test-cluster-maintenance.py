@@ -346,7 +346,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         return result
 
-    def test_begin_creates_verified_bounded_silence_and_preserves_heartbeat(self):
+    def test_routine_begin_creates_only_a_verified_bounded_silence(self):
         self.alertmanager.add_alert("RoutineInfo", severity="info")
         self.alertmanager.add_alert("Watchdog", severity="none")
         result = self.run_command("begin", "--reason", "Renovate PR #123", "--duration", "4h")
@@ -354,14 +354,15 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
         self.assertEqual(output["state"], "active")
         self.assertEqual(output["silenceId"], "maintenance-1")
-        self.assertEqual(output["noticeId"], "notice-1")
+        self.assertIsNone(output["noticeId"])
+        self.assertEqual(output["publicStatus"], "not-posted")
         self.assertEqual(output["coveredAlerts"], 1)
         self.assertEqual(output["excludedAlerts"], ["Watchdog"])
         self.assertEqual(len(self.alertmanager.posts), 1)
         state = json.loads(Path(self.tmpdir.name, "maintenance.json").read_text())
         self.assertEqual(state["silenceId"], "maintenance-1")
-        self.assertEqual(state["noticeId"], "notice-1")
-        self.assertFalse(self.status_api.notices["notice-1"]["resolved"])
+        self.assertIsNone(state["noticeId"])
+        self.assertEqual(self.status_api.notices, {})
 
         posted = self.alertmanager.posts[0]
         self.assertEqual(posted["createdBy"], MANAGED_BY)
@@ -389,11 +390,37 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         self.assertIn("CephHealthError", result.stderr)
         self.assertEqual(self.alertmanager.posts, [])
+        self.assertEqual(self.status_api.resolved, [])
+
+    def test_public_begin_posts_an_identified_maintenance_incident(self):
+        result = self.run_command(
+            "begin", "--reason", "public service migration", "--public-status"
+        )
+        output = json.loads(result.stdout)
+        self.assertEqual(output["noticeId"], "notice-1")
+        self.assertEqual(output["publicStatus"], "posted")
+        notice = self.status_api.notices["notice-1"]
+        self.assertEqual(notice["status"], "identified")
+        self.assertEqual(notice["severity"], "warning")
+
+    def test_public_begin_cleans_up_notice_when_admission_fails(self):
+        self.alertmanager.add_alert("CephHealthError", severity="critical")
+        result = self.run_command(
+            "begin",
+            "--reason",
+            "public service migration",
+            "--public-status",
+            expected=1,
+        )
+        self.assertIn("CephHealthError", result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
         self.assertEqual(self.status_api.resolved, ["notice-1"])
 
     def test_begin_does_not_create_a_silence_when_public_notice_creation_fails(self):
         self.status_api.fail_creates = True
-        result = self.run_command("begin", "--reason", "routine maintenance", expected=1)
+        result = self.run_command(
+            "begin", "--reason", "public maintenance", "--public-status", expected=1
+        )
         self.assertIn("status API", result.stderr)
         self.assertEqual(self.alertmanager.posts, [])
         self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
@@ -545,6 +572,22 @@ class ClusterMaintenanceTest(unittest.TestCase):
         self.assertEqual(self.alertmanager.silences[silence_id]["status"]["state"], "expired")
         self.assertEqual(self.alertmanager.deletes, [silence_id])
         self.assertEqual(self.status_api.resolved, ["notice-1"])
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_routine_begin_and_end_need_no_status_api_key(self):
+        env = self.command_env(STATUS_API_KEY="")
+        started = self.run_command(
+            "begin", "--reason", "deploy Kaneo", env=env
+        )
+        start_output = json.loads(started.stdout)
+        self.assertIsNone(start_output["noticeId"])
+        self.assertEqual(start_output["publicStatus"], "not-posted")
+        ended = self.run_command(
+            "end", "--id", start_output["silenceId"], env=env
+        )
+        end_output = json.loads(ended.stdout)
+        self.assertEqual(end_output["noticeState"], "not-posted")
+        self.assertEqual(self.status_api.notices, {})
         self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
 
     def test_end_preserves_silence_and_notice_while_cluster_alerts_are_unhealthy(self):

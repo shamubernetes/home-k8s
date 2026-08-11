@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/configmap-v1.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kaneo-gatus-ep
+  labels:
+    gatus.io/enabled: "true"
+data:
+  config.yaml: |
+    endpoints:
+    - name: Kaneo
+      group: Internal Apps
+      url: http://kaneo.services.svc.cluster.local:5173/api/health
+      interval: 1m
+      ui:
+        hide-hostname: true
+        hide-url: true
+      extra-labels:
+        alerting: "true"
+      conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == ok"

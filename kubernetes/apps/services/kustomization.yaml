@@ -14,6 +14,7 @@ resources:
 - ./homarr/ks.yaml
 - ./homepage/ks.yaml
 - ./documenso/ks.yaml
+- ./kaneo/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./plane/ks.yaml
 - ./plane-github-bridge/ks.yaml

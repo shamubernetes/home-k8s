@@ -11,12 +11,60 @@ spec:
       app.kubernetes.io/name: *app
   dependsOn:
   - name: external-secrets-secret-store
+  - name: kopiur
+  - name: rook-ceph-cluster
+  - name: snapshot-controller
   path: ./kubernetes/apps/services/homarr/app
   prune: true
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
+  # Kopiur 0.10.0 can leave SnapshotReplication observedGeneration stale after
+  # schedule-only updates. Evaluate the meaningful phase, Ready condition, and
+  # last-run failure count directly so replication failures still fail Flux.
+  healthChecks:
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: homarr-kopiur-nas
+    namespace: services
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: homarr-kopiur-r2
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: homarr-nas
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: homarr-r2
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotPolicy
+    name: homarr
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotSchedule
+    name: homarr-daily
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotReplication
+    name: homarr-nas-to-r2
+    namespace: services
+  healthCheckExprs:
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotReplication
+    failed: >-
+      has(self.status) && self.status.phase == 'Failed'
+    inProgress: >-
+      !has(self.status) || self.status.phase == 'Replicating'
+    current: >-
+      has(self.status) &&
+      self.status.phase in ['Pending', 'Succeeded'] &&
+      self.status.conditions.exists(c,
+        c.type == 'Ready' && c.status == 'True') &&
+      (!has(self.status.lastRun) || self.status.lastRun.failed == 0)
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

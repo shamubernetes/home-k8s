@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app pelican
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: &namespace services
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: cloudnative-pg-cluster
+  - name: external-secrets-secret-store
+  - name: rook-ceph-cluster
+  path: ./kubernetes/apps/services/pelican/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: false
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: *app
+      NAMESPACE: *namespace
+      GATUS_APP_NAME: Pelican
+      GATUS_INTERNAL_APP: pelican
+      GATUS_INTERNAL_PORT: "80"
+      GATUS_PATH: /up
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: Secret
+      name: cluster-secrets
+    - kind: ConfigMap
+      name: cluster-ipam

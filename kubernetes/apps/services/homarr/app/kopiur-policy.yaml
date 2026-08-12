@@ -38,8 +38,8 @@ spec:
           const fs = require("fs");
           const Database = require("better-sqlite3");
           const dir = "/appdata/kopiur";
-          const tmp = `${dir}/homarr-online.sqlite.tmp`;
-          const dst = `${dir}/homarr-online.sqlite`;
+          const tmp = dir + "/homarr-online.sqlite.tmp";
+          const dst = dir + "/homarr-online.sqlite";
           (async () => {
             fs.mkdirSync(dir, {recursive: true});
             for (const file of [tmp, dst]) {

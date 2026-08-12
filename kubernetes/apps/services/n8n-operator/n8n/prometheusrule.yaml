@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: n8n
+  namespace: services
+spec:
+  groups:
+  - name: n8n.rules
+    rules:
+    - alert: N8nTargetAbsent
+      annotations:
+        summary: n8n has disappeared from Prometheus target discovery.
+      expr: absent(up{job="n8n"})
+      for: 15m
+      labels:
+        severity: critical
+    - alert: N8nTargetDown
+      annotations:
+        summary: Prometheus cannot scrape n8n native metrics.
+      expr: up{job="n8n"} == 0
+      for: 10m
+      labels:
+        severity: critical
+    - alert: N8nWorkflowExecutionFailureRatioHigh
+      annotations:
+        summary: n8n workflow execution failures exceed 20 percent.
+      expr: |
+        (
+          sum(increase(n8n_workflow_execution_duration_seconds_count{job="n8n",status!="success"}[15m]))
+            /
+          clamp_min(sum(increase(n8n_workflow_execution_duration_seconds_count{job="n8n"}[15m])), 1)
+        ) > 0.2
+        and
+        sum(increase(n8n_workflow_execution_duration_seconds_count{job="n8n"}[15m])) >= 5
+      for: 15m
+      labels:
+        severity: warning

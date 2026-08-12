@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.envoyproxy.io/securitypolicy_v1alpha1.json
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: n8n-block-metrics
+  namespace: services
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: n8n-envoy
+    sectionName: block-metrics
+  authorization:
+    defaultAction: Deny

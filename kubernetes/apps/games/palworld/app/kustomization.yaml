@@ -5,4 +5,5 @@ resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
 - ./dnsendpoint.yaml
+- ./gamekeeper-agent.yaml
 - ./helmrelease.yaml

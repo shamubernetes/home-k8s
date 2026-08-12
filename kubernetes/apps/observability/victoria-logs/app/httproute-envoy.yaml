@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: victoria-logs-envoy
+  annotations:
+    homepage.shamubernetes.com/enabled: "true"
+    homepage.shamubernetes.com/name: "Logs"
+    homepage.shamubernetes.com/description: "Search and tail cluster logs"
+    homepage.shamubernetes.com/group: "Observability"
+    homepage.shamubernetes.com/order: "15"
+    homepage.shamubernetes.com/favorite: "true"
+    homepage.shamubernetes.com/icon: "dashboard-icons:victoriametrics"
+    external-dns.alpha.kubernetes.io/ttl: "60"
+spec:
+  parentRefs:
+  - name: envoy-internal
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "logs.${HOME_DOMAIN}"
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /
+    filters:
+    - type: RequestRedirect
+      requestRedirect:
+        path:
+          type: ReplaceFullPath
+          replaceFullPath: /select/vmui/
+        statusCode: 302
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /select
+    backendRefs:
+    - name: victoria-logs
+      port: 9428

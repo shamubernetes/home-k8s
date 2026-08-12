@@ -19,6 +19,12 @@ spec:
   hostnames:
   - "n8n.${HOME_DOMAIN}"
   rules:
-  - backendRefs:
+  - name: block-metrics
+    matches:
+    - path:
+        type: PathPrefix
+        value: /metrics
+  - name: application
+    backendRefs:
     - name: n8n
       port: 5678

@@ -21,7 +21,7 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:beb15228893edd4290d6290fc880a6fe91943d061ba431a0812d23b7ad17d818
+      reference: ghcr.io/thezoo-house/operator@sha256:05dfde5e2cffded210c0ba90eb831d01510e8c3b0e1207acc5938dd38f818582
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
@@ -70,6 +70,28 @@ spec:
               - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_DBNAME}}
               - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_USER}}
               - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_PASS}}
+              - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
+          - name: gamekeeper-runtime
+            targetSecretName: gamekeeper-runtime
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: oidc-client-secret, remoteRef: {key: The Zoo - Gamekeeper, property: OIDC_CLIENT_SECRET}}
+              - {secretKey: session-key, remoteRef: {key: The Zoo - Gamekeeper, property: SESSION_KEY}}
+              - {secretKey: cs2-rcon-password, remoteRef: {key: counterstrike2, property: CS2_RCONPW}}
+              - {secretKey: palworld-rest-password, remoteRef: {key: palworld, property: ADMIN_PASSWORD}}
+          - name: gamekeeper-postgres
+            targetSecretName: gamekeeper-postgres
+            managementPolicy: Owner
+            refreshInterval: 1h
+            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
+            data:
+              - {secretKey: url, remoteRef: {key: The Zoo - Gamekeeper, property: DATABASE_URL}}
+              - {secretKey: INIT_POSTGRES_HOST, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_HOST}}
+              - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_DBNAME}}
+              - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_USER}}
+              - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_PASS}}
               - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
           - name: zoo-auth
             targetSecretName: zoo-auth
@@ -173,6 +195,26 @@ spec:
               userSecretRef: {name: gate-postgres, key: INIT_POSTGRES_USER}
               passwordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_SUPER_PASS}
+          - name: gamekeeper
+            replicas: 2
+            route:
+              httpRoute:
+                hostnames: [gamekeeper.thezoo.house]
+                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
+            values:
+              oidcClientID: gate-OC3ujRqmLEmyedMUwG4pTmGZCeiC2HC1
+            secretRefs:
+              databaseURL: {name: gamekeeper-postgres, key: url}
+              oidcClientSecret: {name: gamekeeper-runtime, key: oidc-client-secret}
+              sessionKey: {name: gamekeeper-runtime, key: session-key}
+              cs2RCONPassword: {name: gamekeeper-runtime, key: cs2-rcon-password}
+              palworldRESTPassword: {name: gamekeeper-runtime, key: palworld-rest-password}
+            databaseInitialization:
+              hostSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_HOST}
+              databaseNameSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_DBNAME}
+              userSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_USER}
+              passwordSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_PASS}
+              superuserPasswordSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_SUPER_PASS}
           - name: zoo
             replicas: 2
             route:

@@ -1,0 +1,22 @@
+# Internal trace store. Only the collector, Grafana, and Prometheus may connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: victoria-traces
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: victoria-traces
+      app.kubernetes.io/name: vt-single
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+    ports:
+    - port: 10428
+      protocol: TCP
+  egress: []

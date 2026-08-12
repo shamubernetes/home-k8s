@@ -2,17 +2,19 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app palworld
+  name: &app victoria-traces
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: &namespace games
+  targetNamespace: &namespace observability
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-    - name: external-secrets-secret-store
-    - name: rook-ceph-cluster
-  path: ./kubernetes/apps/games/palworld/app
+  - name: external-secrets-secret-store
+  - name: kube-prometheus-stack
+  - name: rook-ceph-cluster
+  - name: volsync
+  path: ./kubernetes/apps/observability/victoria-traces/app
   prune: true
   sourceRef:
     kind: GitRepository
@@ -25,3 +27,5 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_VICTORIA_TRACES}"
+      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_VICTORIA_TRACES}"

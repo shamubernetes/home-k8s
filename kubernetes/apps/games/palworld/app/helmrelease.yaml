@@ -69,6 +69,11 @@ spec:
           game:
             port: 8211
             protocol: UDP
+      rest:
+        controller: *app
+        ports:
+          rest:
+            port: 8212
 
     persistence:
       saved:
@@ -80,7 +85,7 @@ spec:
         globalMounts:
           - path: /pal/Package/Pal/Saved
       settings:
-        type: configMap
+        type: secret
         name: palworld-settings
         advancedMounts:
           palworld:

@@ -38,33 +38,24 @@ spec:
           const fs = require("fs");
           const Database = require("better-sqlite3");
           const dir = "/appdata/kopiur";
-          const tmp = dir + "/homarr-online.sqlite.tmp";
           const dst = dir + "/homarr-online.sqlite";
-          (async () => {
-            fs.mkdirSync(dir, {recursive: true});
-            for (const file of [tmp, dst]) {
-              try { fs.unlinkSync(file); } catch (error) {
-                if (error.code !== "ENOENT") throw error;
-              }
-            }
-            const source = new Database("/appdata/db.sqlite", {readonly: true});
-            if (source.pragma("quick_check", {simple: true}) !== "ok") {
-              throw new Error("source SQLite quick_check failed");
-            }
-            await source.backup(tmp);
-            source.close();
-            const backup = new Database(tmp, {readonly: true});
-            if (backup.pragma("integrity_check", {simple: true}) !== "ok") {
-              throw new Error("online backup SQLite integrity_check failed");
-            }
-            backup.close();
-            fs.renameSync(tmp, dst);
-            fs.chownSync(dst, 568, 568);
-            fs.chmodSync(dst, 0o640);
-          })().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
+          fs.mkdirSync(dir, {recursive: true});
+          try { fs.unlinkSync(dst); } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+          }
+          const source = new Database("/appdata/db.sqlite", {readonly: true});
+          if (source.pragma("quick_check", {simple: true}) !== "ok") {
+            throw new Error("source SQLite quick_check failed");
+          }
+          source.exec("VACUUM INTO '/appdata/kopiur/homarr-online.sqlite'");
+          source.close();
+          const backup = new Database(dst, {readonly: true});
+          if (backup.pragma("integrity_check", {simple: true}) !== "ok") {
+            throw new Error("online backup SQLite integrity_check failed");
+          }
+          backup.close();
+          fs.chownSync(dst, 568, 568);
+          fs.chmodSync(dst, 0o640);
         timeout: 2m
         continueOnFailure: false
     afterSnapshot:

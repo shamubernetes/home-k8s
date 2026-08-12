@@ -39,9 +39,12 @@ spec:
           const Database = require("better-sqlite3");
           const dir = "/appdata/kopiur";
           const dst = dir + "/homarr-online.sqlite";
+          const artifacts = [dst, dst + "-journal", dst + "-wal", dst + "-shm"];
           fs.mkdirSync(dir, {recursive: true});
-          try { fs.unlinkSync(dst); } catch (error) {
-            if (error.code !== "ENOENT") throw error;
+          for (const file of artifacts) {
+            try { fs.unlinkSync(file); } catch (error) {
+              if (error.code !== "ENOENT") throw error;
+            }
           }
           const source = new Database("/appdata/db.sqlite", {readonly: true});
           if (source.pragma("quick_check", {simple: true}) !== "ok") {
@@ -54,8 +57,16 @@ spec:
             throw new Error("online backup SQLite integrity_check failed");
           }
           backup.close();
+          const sidecars = artifacts.slice(1).filter((file) => fs.existsSync(file));
+          if (sidecars.length > 0) {
+            throw new Error("online backup left SQLite sidecars: " + sidecars.join(", "));
+          }
           fs.chownSync(dst, 568, 568);
           fs.chmodSync(dst, 0o640);
+          const fileHandle = fs.openSync(dst, "r");
+          try { fs.fsyncSync(fileHandle); } finally { fs.closeSync(fileHandle); }
+          const dirHandle = fs.openSync(dir, "r");
+          try { fs.fsyncSync(dirHandle); } finally { fs.closeSync(dirHandle); }
         timeout: 2m
         continueOnFailure: false
     afterSnapshot:
@@ -67,7 +78,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        - rm -f /appdata/kopiur/homarr-online.sqlite.tmp /appdata/kopiur/homarr-online.sqlite
+        - rm -f /appdata/kopiur/homarr-online.sqlite /appdata/kopiur/homarr-online.sqlite-journal /appdata/kopiur/homarr-online.sqlite-wal /appdata/kopiur/homarr-online.sqlite-shm
         timeout: 30s
         continueOnFailure: true
   mover:

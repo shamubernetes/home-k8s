@@ -7,3 +7,5 @@ resources:
 - ./cluster.yaml
 - ./topology.yaml
 - ./networkpolicy.yaml
+- ./servicemonitor.yaml
+- ./prometheusrule.yaml

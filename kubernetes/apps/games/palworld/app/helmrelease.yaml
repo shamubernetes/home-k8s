@@ -24,7 +24,7 @@ spec:
           prepare:
             image:
               repository: &imageRepository ghcr.io/pocketpairjp/palserver
-              tag: &imageTag v1.0.2.101103@sha256:09343cac3d92b997634f034ade4ce702388e156ec726668c85ad3bc47faa33f4
+              tag: &imageTag v1.0.3.101283@sha256:ffb778dd63a04cf0d901b95e934e547e1fee67234e33102d5b5bf7da36e2b264
             command: ["/bin/sh", "-c"]
             args:
               - |
@@ -69,6 +69,11 @@ spec:
           game:
             port: 8211
             protocol: UDP
+      rest:
+        controller: *app
+        ports:
+          rest:
+            port: 8212
 
     persistence:
       saved:
@@ -80,7 +85,7 @@ spec:
         globalMounts:
           - path: /pal/Package/Pal/Saved
       settings:
-        type: configMap
+        type: secret
         name: palworld-settings
         advancedMounts:
           palworld:

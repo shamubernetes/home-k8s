@@ -147,9 +147,12 @@ def route_rows(document: dict) -> list[tuple]:
     host = hostnames[0]
     rows = []
     for rule in document["spec"]["rules"]:
+        backends = rule.get("backendRefs") or []
+        if not backends:
+            continue
         matches = rule.get("matches") or [{"path": {"type": "PathPrefix", "value": "/"}}]
         timeout = str((rule.get("timeouts") or {}).get("request", ""))
-        for backend in rule["backendRefs"]:
+        for backend in backends:
             for match in matches:
                 path = match.get("path") or {"type": "PathPrefix", "value": "/"}
                 rows.append((name, parent_names, host, path.get("type", "PathPrefix"), path.get("value", "/"), backend["name"], int(backend["port"]), timeout))

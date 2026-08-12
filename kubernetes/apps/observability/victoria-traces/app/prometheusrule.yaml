@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: victoria-traces-rules
+spec:
+  groups:
+  - name: victoria-traces.health
+    rules:
+    - alert: VictoriaTracesDown
+      annotations:
+        summary: VictoriaTraces is unavailable.
+      expr: up{job=~".*victoria-traces.*"} == 0
+      for: 2m
+      labels:
+        severity: critical
+    - alert: VictoriaTracesTargetMissing
+      annotations:
+        summary: The VictoriaTraces Prometheus target is missing.
+      expr: absent(up{job=~".*victoria-traces.*"})
+      for: 5m
+      labels:
+        severity: critical
+    - alert: VictoriaTracesStorageGrowth
+      annotations:
+        summary: VictoriaTraces storage is above 70%; review growth and retention.
+      expr: |
+        1 - (
+          kubelet_volume_stats_available_bytes{namespace="observability",persistentvolumeclaim="server-volume-victoria-traces-0"}
+          /
+          kubelet_volume_stats_capacity_bytes{namespace="observability",persistentvolumeclaim="server-volume-victoria-traces-0"}
+        ) > 0.70
+      for: 30m
+      labels:
+        severity: warning
+    - alert: VictoriaTracesExpansionRequired
+      annotations:
+        summary: VictoriaTraces storage is above 85%; expand the PVC or reduce retention.
+      expr: |
+        1 - (
+          kubelet_volume_stats_available_bytes{namespace="observability",persistentvolumeclaim="server-volume-victoria-traces-0"}
+          /
+          kubelet_volume_stats_capacity_bytes{namespace="observability",persistentvolumeclaim="server-volume-victoria-traces-0"}
+        ) > 0.85
+      for: 15m
+      labels:
+        severity: critical

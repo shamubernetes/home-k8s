@@ -9,3 +9,4 @@ resources:
 - ./servicemonitor.yaml
 - ./canary-resources.yaml
 - ./datasources.yaml
+- ./hermes-telemetry-dashboard.yaml

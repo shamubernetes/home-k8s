@@ -5,7 +5,6 @@ resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
-- ./service-envoy-dns.yaml
 - ./prometheusrule.yaml
 - ./vmalert-deployment.yaml
 - ./vmalert-service.yaml

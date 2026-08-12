@@ -67,3 +67,7 @@ spec:
       ports:
         - port: 3001
           protocol: TCP
+        - port: 27015
+          protocol: TCP
+        - port: 27015
+          protocol: UDP

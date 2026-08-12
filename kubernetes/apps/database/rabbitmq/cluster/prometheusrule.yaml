@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rabbitmq
+  namespace: database
+spec:
+  groups:
+  - name: rabbitmq.rules
+    rules:
+    - alert: RabbitMQTargetAbsent
+      annotations:
+        summary: RabbitMQ has disappeared from Prometheus target discovery.
+      expr: absent(up{job="rabbitmq"})
+      for: 15m
+      labels:
+        severity: critical
+    - alert: RabbitMQTargetDown
+      annotations:
+        summary: Prometheus cannot scrape RabbitMQ native metrics.
+      expr: up{job="rabbitmq"} == 0
+      for: 10m
+      labels:
+        severity: critical
+    - alert: RabbitMQResourceAlarm
+      annotations:
+        summary: RabbitMQ has activated a memory, disk, or file-descriptor alarm.
+      expr: |
+        max by (namespace, pod) (
+          rabbitmq_alarms_memory_used_watermark{job="rabbitmq"}
+          or rabbitmq_alarms_free_disk_space_watermark{job="rabbitmq"}
+          or rabbitmq_alarms_file_descriptor_limit{job="rabbitmq"}
+        ) > 0
+      for: 5m
+      labels:
+        severity: critical
+    - alert: RabbitMQDiskSpaceLow
+      annotations:
+        summary: RabbitMQ disk headroom is nearing its configured free-space limit.
+      expr: |
+        rabbitmq_disk_space_available_bytes{job="rabbitmq"}
+          < 1.25 * rabbitmq_disk_space_available_limit_bytes{job="rabbitmq"}
+      for: 15m
+      labels:
+        severity: warning
+    - alert: RabbitMQClusterPeerUnreachable
+      annotations:
+        summary: RabbitMQ reports an unreachable cluster peer.
+      expr: rabbitmq_unreachable_cluster_peers_count{job="rabbitmq"} > 0
+      for: 5m
+      labels:
+        severity: critical
+    - alert: RabbitMQMessagesUnacknowledged
+      annotations:
+        summary: RabbitMQ has sustained unacknowledged messages.
+      expr: rabbitmq_queue_messages_unacked{job="rabbitmq"} > 100
+      for: 15m
+      labels:
+        severity: warning

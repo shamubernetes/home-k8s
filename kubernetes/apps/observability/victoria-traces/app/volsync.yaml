@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: victoria-traces-volsync
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: victoria-traces-volsync-secret
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: "/repository/victoria-traces"
+        RESTIC_PASSWORD: "{{ .RESTIC_PASSWORD }}"
+  dataFrom:
+  - extract:
+      key: volsync-template
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: victoria-traces
+spec:
+  sourcePVC: server-volume-victoria-traces-0
+  trigger:
+    schedule: "${VOLSYNC_SCHEDULE}"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 14
+    repository: victoria-traces-volsync-secret
+    volumeSnapshotClassName: csi-ceph-blockpool
+    cacheCapacity: 2Gi
+    cacheStorageClassName: ceph-block
+    cacheAccessModes: ["ReadWriteOnce"]
+    storageClassName: ceph-block
+    accessModes: ["ReadWriteOnce"]
+    moverSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    retain:
+      hourly: 24
+      daily: 7
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: victoria-traces-volsync-r2
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: victoria-traces-volsync-r2-secret
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: "s3:${R2_ENDPOINT}/storage-backup/volsync/victoria-traces"
+        RESTIC_PASSWORD: "{{ .RESTIC_PASSWORD }}"
+        AWS_ACCESS_KEY_ID: "{{ .VOLSYNC_R2_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "{{ .VOLSYNC_R2_SECRET_ACCESS_KEY }}"
+  dataFrom:
+  - extract:
+      key: volsync-template
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: victoria-traces-r2
+spec:
+  sourcePVC: server-volume-victoria-traces-0
+  trigger:
+    schedule: "${VOLSYNC_R2_SCHEDULE}"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 14
+    repository: victoria-traces-volsync-r2-secret
+    volumeSnapshotClassName: csi-ceph-blockpool
+    cacheCapacity: 2Gi
+    cacheStorageClassName: ceph-block
+    cacheAccessModes: ["ReadWriteOnce"]
+    storageClassName: ceph-block
+    accessModes: ["ReadWriteOnce"]
+    moverSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    retain:
+      daily: 7
+      weekly: 4

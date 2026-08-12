@@ -2,7 +2,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: n8n
+  name: n8n-native
   namespace: services
 spec:
   selector:

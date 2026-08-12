@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
 - ./prometheusrule.yaml
 - ./vmalert-deployment.yaml
 - ./vmalert-service.yaml

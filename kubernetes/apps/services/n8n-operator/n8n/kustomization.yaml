@@ -6,6 +6,9 @@ resources:
   - externalsecrets.yaml
   - n8ninstance.yaml
   - httproute-envoy.yaml
+  - securitypolicy-metrics.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml
   - credentials/postgres.yaml
   - credentials/onepassword.yaml
   - credentials/smtp.yaml

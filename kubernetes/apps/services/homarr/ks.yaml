@@ -20,9 +20,9 @@ spec:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
-  # SnapshotReplication in Kopiur 0.10.0 leaves observedGeneration stale after
-  # schedule-only updates. Health-check every other Homarr trial resource while
-  # Kopiur alerts cover replication failures and staleness.
+  # Kopiur 0.10.0 can leave SnapshotReplication observedGeneration stale after
+  # schedule-only updates. Evaluate the meaningful phase, Ready condition, and
+  # last-run failure count directly so replication failures still fail Flux.
   healthChecks:
   - apiVersion: external-secrets.io/v1
     kind: ExternalSecret
@@ -44,6 +44,27 @@ spec:
     kind: SnapshotPolicy
     name: homarr
     namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotSchedule
+    name: homarr-daily
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotReplication
+    name: homarr-nas-to-r2
+    namespace: services
+  healthCheckExprs:
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotReplication
+    failed: >-
+      has(self.status) && self.status.phase == 'Failed'
+    inProgress: >-
+      !has(self.status) || self.status.phase == 'Replicating'
+    current: >-
+      has(self.status) &&
+      self.status.phase in ['Pending', 'Succeeded'] &&
+      self.status.conditions.exists(c,
+        c.type == 'Ready' && c.status == 'True') &&
+      (!has(self.status.lastRun) || self.status.lastRun.failed == 0)
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

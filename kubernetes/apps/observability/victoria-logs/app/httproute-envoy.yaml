@@ -12,6 +12,7 @@ metadata:
     homepage.shamubernetes.com/favorite: "true"
     homepage.shamubernetes.com/icon: "dashboard-icons:victoriametrics"
     external-dns.alpha.kubernetes.io/ttl: "60"
+    external-dns.alpha.kubernetes.io/controller: ignore
 spec:
   parentRefs:
   - name: envoy-internal

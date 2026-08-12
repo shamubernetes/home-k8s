@@ -20,9 +20,9 @@ spec:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
-  # Kopiur 0.10.0 leaves observedGeneration stale after some schedule-only
-  # updates. Keep the native Ready/Stalled health check here, and verify the
-  # latest-run counters explicitly during every replication drill.
+  # Kopiur 0.10.0 leaves SnapshotReplication observedGeneration stale after
+  # schedule-only updates, so do not gate Flux readiness on that resource.
+  # Replication alerts and drills verify phase, Ready, and latest-run counters.
   healthChecks:
   - apiVersion: external-secrets.io/v1
     kind: ExternalSecret
@@ -47,10 +47,6 @@ spec:
   - apiVersion: kopiur.home-operations.com/v1alpha1
     kind: SnapshotSchedule
     name: homarr-daily
-    namespace: services
-  - apiVersion: kopiur.home-operations.com/v1alpha1
-    kind: SnapshotReplication
-    name: homarr-nas-to-r2
     namespace: services
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"

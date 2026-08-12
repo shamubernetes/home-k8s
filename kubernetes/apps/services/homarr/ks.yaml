@@ -58,7 +58,7 @@ spec:
     failed: >-
       has(self.status) && self.status.phase == 'Failed'
     inProgress: >-
-      !has(self.status) || self.status.phase == 'Replicating'
+      has(self.status) && self.status.phase == 'Replicating'
     current: >-
       has(self.status) &&
       self.status.phase in ['Pending', 'Succeeded'] &&

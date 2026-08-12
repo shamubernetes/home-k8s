@@ -77,7 +77,7 @@ spec:
 
   metrics:
     enabled: true
-    includeWorkflowIdLabel: true
+    includeWorkflowIdLabel: false
     includeApiEndpoints: true
 
   resources:

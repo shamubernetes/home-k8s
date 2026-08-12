@@ -7,6 +7,8 @@ resources:
 - ./kube-prometheus-stack/ks.yaml
 - ./gatus/ks.yaml
 - ./victoria-logs/ks.yaml
+- ./victoria-traces/ks.yaml
+- ./otel-collector/ks.yaml
 - ./victoria-metrics-ha/ks.yaml
 - ./tautulli/ks.yaml
 - ./grafana-operator-crds/ks.yaml

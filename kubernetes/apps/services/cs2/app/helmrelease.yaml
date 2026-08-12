@@ -55,7 +55,7 @@ spec:
           agent:
             image:
               repository: ghcr.io/thezoo-house/gamekeeper
-              tag: v0.2.1@sha256:1eb7bbfcd5432c5473b4e66828609307fe90f2630536d280d9952418e45b223e
+              tag: v0.3.0@sha256:5b94185fc1cd85e5271bc54ac45850b60ea7c50b22c380abf6df227b90a5b54d
             command:
               - bun
               - --no-install

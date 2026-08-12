@@ -68,8 +68,12 @@ spec:
                 }
 
                 mkdirSync(dirname(target), { recursive: true });
+                const gamekeeperDirectory = "/pal/Package/Pal/Saved/.gamekeeper";
+                mkdirSync(gamekeeperDirectory, { recursive: true, mode: 0o700 });
+                chownSync(gamekeeperDirectory, 999, 999);
+                chmodSync(gamekeeperDirectory, 0o700);
                 writeFileSync(temporary, content, { encoding: "utf8", mode: 0o600 });
-                chownSync(temporary, 1000, 1000);
+                chownSync(temporary, 999, 999);
                 chmodSync(temporary, 0o600);
                 renameSync(temporary, target);
             securityContext:
@@ -151,9 +155,9 @@ spec:
               allowPrivilegeEscalation: false
               capabilities: {drop: ["ALL"]}
               readOnlyRootFilesystem: true
-              runAsGroup: 1000
+              runAsGroup: 999
               runAsNonRoot: true
-              runAsUser: 1000
+              runAsUser: 999
             resources:
               requests:
                 cpu: 10m
@@ -165,6 +169,8 @@ spec:
       annotations:
         descheduler.alpha.kubernetes.io/evict: "false"
       securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: {type: RuntimeDefault}
     service:
       app:
@@ -194,8 +200,15 @@ spec:
         advancedMounts:
           palworld:
             agent:
-              - path: /game/palworld
               - path: /game/palworld/Pal/Saved
+              - path: /game/palworld/.gamekeeper
+                subPath: .gamekeeper
+      agent-root:
+        type: emptyDir
+        advancedMounts:
+          palworld:
+            agent:
+              - path: /game/palworld
       settings:
         type: secret
         name: palworld-settings

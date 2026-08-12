@@ -81,7 +81,6 @@ spec:
               - {secretKey: session-key, remoteRef: {key: The Zoo - Gamekeeper, property: SESSION_KEY}}
               - {secretKey: cs2-rcon-password, remoteRef: {key: counterstrike2, property: CS2_RCONPW}}
               - {secretKey: palworld-rest-password, remoteRef: {key: palworld, property: ADMIN_PASSWORD}}
-              - {secretKey: lifecycle-control-token, remoteRef: {key: The Zoo - Gamekeeper, property: LIFECYCLE_CONTROL_TOKEN}}
               - {secretKey: cs2-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: CS2_AGENT_TOKEN}}
               - {secretKey: palworld-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: PALWORLD_AGENT_TOKEN}}
           - name: gamekeeper-postgres
@@ -212,7 +211,7 @@ spec:
               sessionKey: {name: gamekeeper-runtime, key: session-key}
               cs2RCONPassword: {name: gamekeeper-runtime, key: cs2-rcon-password}
               palworldRESTPassword: {name: gamekeeper-runtime, key: palworld-rest-password}
-              lifecycleControlToken: {name: gamekeeper-runtime, key: lifecycle-control-token}
+              lifecycleControlToken: {name: gamekeeper-control, key: token}
               cs2AgentToken: {name: gamekeeper-runtime, key: cs2-agent-token}
               palworldAgentToken: {name: gamekeeper-runtime, key: palworld-agent-token}
             databaseInitialization:
@@ -284,5 +283,5 @@ spec:
     controlAPI:
       enabled: true
       existingSecret:
-        name: gamekeeper-runtime
-        key: lifecycle-control-token
+        name: gamekeeper-control
+        key: token

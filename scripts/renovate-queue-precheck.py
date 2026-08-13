@@ -24,6 +24,18 @@ WORKFLOW_RUN_STATUSES = {
     "waiting",
 }
 ACTIVE_WORKFLOW_RUN_STATUSES = WORKFLOW_RUN_STATUSES - {"completed"}
+CHECK_RUN_STATUSES = {"completed", "in_progress", "pending", "queued", "requested", "waiting"}
+CHECK_RUN_CONCLUSIONS = {
+    "action_required",
+    "cancelled",
+    "failure",
+    "neutral",
+    "skipped",
+    "stale",
+    "startup_failure",
+    "success",
+    "timed_out",
+}
 
 
 def gh_json(*args: str) -> Any:
@@ -57,16 +69,27 @@ def checks_green(
         name = check.get("name")
         app = check.get("app")
         app_id = app.get("id") if isinstance(app, dict) else None
+        status = check.get("status")
+        conclusion = check.get("conclusion")
         if (
             not isinstance(name, str)
             or not name
             or type(app_id) is not int
+            or status not in CHECK_RUN_STATUSES
+            or (
+                status == "completed"
+                and (
+                    not isinstance(conclusion, str)
+                    or conclusion not in CHECK_RUN_CONCLUSIONS
+                )
+            )
+            or (status != "completed" and conclusion is not None)
             or check.get("head_sha") != expected_head_sha
         ):
             return False
         if (
-            check.get("status") == "completed"
-            and check.get("conclusion") in {"success", "neutral", "skipped"}
+            status == "completed"
+            and conclusion in {"success", "neutral", "skipped"}
         ):
             successful_checks.add((name, app_id))
     return bool(required_checks) and required_checks <= successful_checks

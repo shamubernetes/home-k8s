@@ -25,10 +25,13 @@ def gh_json(*args: str) -> Any:
     return json.loads(result.stdout)
 
 
-def checks_green(rollup: list[dict[str, object]]) -> bool:
+def checks_green(
+    rollup: list[dict[str, object]], required_checks: set[str]
+) -> bool:
     if not rollup:
         return False
 
+    successful_checks: set[str] = set()
     for check in rollup:
         kind = check.get("__typename")
         if kind == "CheckRun":
@@ -36,17 +39,29 @@ def checks_green(rollup: list[dict[str, object]]) -> bool:
                 return False
             if check.get("conclusion") not in {"SUCCESS", "NEUTRAL", "SKIPPED"}:
                 return False
+            name = check.get("name")
+            if isinstance(name, str):
+                successful_checks.add(name)
         elif kind == "StatusContext":
             if check.get("state") != "SUCCESS":
                 return False
         else:
             return False
-    return True
+    return bool(required_checks) and required_checks <= successful_checks
 
 
 def main() -> int:
     rate_limit = gh_json("api", "rate_limit")
     core = rate_limit["resources"]["core"]
+    protection = gh_json(
+        "api",
+        f"repos/{REPOSITORY}/branches/main/protection/required_status_checks",
+    )
+    required_checks = {
+        check["context"]
+        for check in protection["checks"]
+        if isinstance(check.get("context"), str)
+    }
     workflow_runs = [
         *gh_json(
             "run",
@@ -103,7 +118,7 @@ def main() -> int:
         if not pr["isDraft"]
         and pr["mergeable"] == "MERGEABLE"
         and pr["mergeStateStatus"] in {"CLEAN", "BEHIND"}
-        and checks_green(pr["statusCheckRollup"])
+        and checks_green(pr["statusCheckRollup"], required_checks)
     ]
 
     quota_ok = core["remaining"] >= MIN_CORE_REMAINING

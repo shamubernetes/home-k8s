@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: "static-analysis-${{ github.ref }}"
+  group: "static-analysis-${{ github.event.pull_request.number || github.ref }}"
   cancel-in-progress: true
 
 jobs:
@@ -62,6 +62,7 @@ jobs:
       with:
         install_args: ${{ matrix.install_args }}
         cache: true
+        fetch_from_github: false
 
     - name: Run ${{ matrix.name }}
       shell: bash
@@ -121,6 +122,7 @@ jobs:
       with:
         install_args: crane flux2 helm jq kubectl kyverno python asdf:sudermanjr/asdf-yq
         cache: true
+        fetch_from_github: false
 
     - name: Log in to GHCR for private chart validation
       env:
@@ -134,6 +136,8 @@ jobs:
         python scripts/tests/test-home-assistant-renovate-guard.py
         python scripts/tests/test-renovate-ceph-guard.py
         python scripts/tests/test-renovate-group-precedence.py
+        python scripts/tests/test-renovate-queue-precheck.py
+        python scripts/tests/test-renovate-ci-quota-hardening.py
         python scripts/tests/test-deployment-tooling.py
         python scripts/tests/test-homarr-upsert-app.py
         scripts/tests/test-validation.sh
@@ -180,6 +184,7 @@ jobs:
       with:
         install_args: kubectl asdf:sudermanjr/asdf-yq
         cache: true
+        fetch_from_github: false
 
     - name: Check raw workload images
       run: scripts/check-image-pins kubernetes/apps
@@ -221,6 +226,7 @@ jobs:
       with:
         install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
         cache: true
+        fetch_from_github: false
 
     - name: Log in to GHCR for private chart rendering
       env:

@@ -14,6 +14,10 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: "talos-image-availability-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}"
+  cancel-in-progress: true
+
 jobs:
   preflight:
     name: Verify provenance and required checks
@@ -42,6 +46,7 @@ jobs:
       with:
         install_args: crane
         cache: true
+        fetch_from_github: false
 
     - name: Log in to GHCR for private image inspection
       env:

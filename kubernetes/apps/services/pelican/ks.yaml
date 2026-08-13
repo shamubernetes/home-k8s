@@ -2,16 +2,18 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app cs2
+  name: &app pelican
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: services
+  targetNamespace: &namespace services
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-    - name: external-secrets-secret-store
-  path: ./kubernetes/apps/services/cs2/app
+  - name: cloudnative-pg-cluster
+  - name: external-secrets-secret-store
+  - name: rook-ceph-cluster
+  path: ./kubernetes/apps/services/pelican/app
   prune: true
   sourceRef:
     kind: GitRepository
@@ -23,3 +25,15 @@ spec:
   postBuild:
     substitute:
       APP: *app
+      NAMESPACE: *namespace
+      GATUS_APP_NAME: Pelican
+      GATUS_INTERNAL_APP: pelican
+      GATUS_INTERNAL_PORT: "80"
+      GATUS_PATH: /up
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: Secret
+      name: cluster-secrets
+    - kind: ConfigMap
+      name: cluster-ipam

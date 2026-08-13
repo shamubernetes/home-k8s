@@ -420,6 +420,20 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         payload["total_count"] += 1
         self.assertFalse(MODULE.checks_green(payload, self.REQUIRED_CHECKS, "a" * 40))
 
+    def test_check_suite_only_conclusion_is_not_a_valid_check_run(self) -> None:
+        payload = self.successful_check_runs()
+        payload["check_runs"].append(
+            {
+                "name": "optional",
+                "status": "completed",
+                "conclusion": "startup_failure",
+                "app": {"id": self.APP_ID},
+                "head_sha": "a" * 40,
+            }
+        )
+        payload["total_count"] += 1
+        self.assertFalse(MODULE.checks_green(payload, self.REQUIRED_CHECKS, "a" * 40))
+
     def test_check_runs_from_other_head_are_not_green(self) -> None:
         self.assertFalse(
             MODULE.checks_green(

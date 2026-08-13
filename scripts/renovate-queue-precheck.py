@@ -40,7 +40,6 @@ CHECK_RUN_CONCLUSIONS = {
     "neutral",
     "skipped",
     "stale",
-    "startup_failure",
     "success",
     "timed_out",
 }

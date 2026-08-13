@@ -198,6 +198,33 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         self.assertFalse(result["context"]["mutation_allowed"])
         self.assertEqual(result["context"]["mutation_blockers"], ["workflow-run-capacity"])
 
+    def test_every_nonterminal_status_counts_toward_capacity(self) -> None:
+        for status in ("in_progress", "pending", "queued", "requested", "waiting"):
+            with self.subTest(status=status):
+                result = self.run_main(
+                    core_remaining=5000,
+                    active_runs=MODULE.MAX_ACTIVE_RUNS,
+                    active_status=status,
+                )
+                self.assertFalse(result["context"]["mutation_allowed"])
+                self.assertEqual(
+                    result["context"]["active_or_queued_workflow_run_count"],
+                    MODULE.MAX_ACTIVE_RUNS,
+                )
+                self.assertEqual(
+                    result["context"]["mutation_blockers"],
+                    ["workflow-run-capacity"],
+                )
+
+    def test_completed_runs_do_not_count_toward_capacity(self) -> None:
+        result = self.run_main(
+            core_remaining=5000,
+            active_runs=MODULE.MAX_ACTIVE_RUNS,
+            active_status="completed",
+        )
+        self.assertTrue(result["context"]["mutation_allowed"])
+        self.assertEqual(result["context"]["active_or_queued_workflow_run_count"], 0)
+
     def test_older_in_progress_run_pressure_blocks_mutation(self) -> None:
         result = self.run_main(
             core_remaining=5000,

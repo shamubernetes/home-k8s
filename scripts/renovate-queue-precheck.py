@@ -23,6 +23,7 @@ WORKFLOW_RUN_STATUSES = {
     "requested",
     "waiting",
 }
+ACTIVE_WORKFLOW_RUN_STATUSES = WORKFLOW_RUN_STATUSES - {"completed"}
 
 
 def gh_json(*args: str) -> Any:
@@ -138,7 +139,7 @@ def main() -> int:
             workflow_run_snapshot if isinstance(workflow_run_snapshot, list) else []
         )
         if isinstance(run, dict)
-        and run.get("status") in {"queued", "in_progress"}
+        and run.get("status") in ACTIVE_WORKFLOW_RUN_STATUSES
     ]
     # Self-hosted jobs can execute for up to five days. Cover older running
     # work separately; the fixed creation-time ranges do not overlap, so a

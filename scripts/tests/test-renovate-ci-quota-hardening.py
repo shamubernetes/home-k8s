@@ -56,5 +56,16 @@ class RenovateCIQuotaHardeningTests(unittest.TestCase):
         self.assertIn('"platforms.linux-x64"', lockfile)
         self.assertIn('"platforms.macos-arm64"', lockfile)
 
+    def test_yq_has_locked_platform_artifacts(self) -> None:
+        config = (ROOT / ".mise.toml").read_text()
+        lockfile = (ROOT / "mise.lock").read_text()
+        self.assertIn('"yq" = "4.53.3"', config)
+        self.assertNotIn("asdf-yq", config)
+        yq_entry = lockfile.split("[[tools.yq]]", 1)[1].split("[[tools.zizmor]]", 1)[0]
+        for platform in ("linux-x64", "macos-arm64"):
+            self.assertIn(f'platforms.{platform}', yq_entry)
+        self.assertEqual(yq_entry.count("checksum ="), 2)
+        self.assertEqual(yq_entry.count("url ="), 2)
+
 if __name__ == "__main__":
     unittest.main()

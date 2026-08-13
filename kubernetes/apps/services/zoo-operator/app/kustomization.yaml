@@ -3,6 +3,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./ocirepository.yaml
+- ./gamekeeper-control-externalsecret.yaml
 - ./gate-schema-bootstrap.yaml
 - ./zoo-database-bootstrap.yaml
 - ./cowbell-rollback-externalsecret.yaml

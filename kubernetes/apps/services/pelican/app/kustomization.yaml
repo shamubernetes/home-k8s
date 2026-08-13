@@ -4,6 +4,6 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
-- ./dnsendpoint.yaml
-- ./gamekeeper-agent.yaml
 - ./helmrelease.yaml
+- ./httproute-envoy.yaml
+- ../../../../templates/gatus/guarded

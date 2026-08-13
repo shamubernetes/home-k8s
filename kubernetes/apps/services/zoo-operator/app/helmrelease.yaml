@@ -21,7 +21,7 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:05dfde5e2cffded210c0ba90eb831d01510e8c3b0e1207acc5938dd38f818582
+      reference: ghcr.io/thezoo-house/operator@sha256:44cf8068bfe2a7f0a96e198a2cb0b5f11d009ae890c723caa2db225fa6e2eb11
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
@@ -81,6 +81,8 @@ spec:
               - {secretKey: session-key, remoteRef: {key: The Zoo - Gamekeeper, property: SESSION_KEY}}
               - {secretKey: cs2-rcon-password, remoteRef: {key: counterstrike2, property: CS2_RCONPW}}
               - {secretKey: palworld-rest-password, remoteRef: {key: palworld, property: ADMIN_PASSWORD}}
+              - {secretKey: cs2-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: CS2_AGENT_TOKEN}}
+              - {secretKey: palworld-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: PALWORLD_AGENT_TOKEN}}
           - name: gamekeeper-postgres
             targetSecretName: gamekeeper-postgres
             managementPolicy: Owner
@@ -209,6 +211,9 @@ spec:
               sessionKey: {name: gamekeeper-runtime, key: session-key}
               cs2RCONPassword: {name: gamekeeper-runtime, key: cs2-rcon-password}
               palworldRESTPassword: {name: gamekeeper-runtime, key: palworld-rest-password}
+              lifecycleControlToken: {name: gamekeeper-control, key: token}
+              cs2AgentToken: {name: gamekeeper-runtime, key: cs2-agent-token}
+              palworldAgentToken: {name: gamekeeper-runtime, key: palworld-agent-token}
             databaseInitialization:
               hostSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_HOST}
               databaseNameSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_DBNAME}
@@ -275,3 +280,8 @@ spec:
               passwordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_SUPER_PASS}
     accessPolicy: {enabled: false}
+    controlAPI:
+      enabled: true
+      existingSecret:
+        name: gamekeeper-control
+        key: token

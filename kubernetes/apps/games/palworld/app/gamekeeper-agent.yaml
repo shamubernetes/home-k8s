@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: palworld-gamekeeper
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: palworld-gamekeeper
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        token: "{{ .TOKEN }}"
+  data:
+    - secretKey: TOKEN
+      remoteRef:
+        key: The Zoo - Gamekeeper
+        property: PALWORLD_AGENT_TOKEN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: palworld-gamekeeper
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/controller: palworld
+    app.kubernetes.io/instance: palworld
+    app.kubernetes.io/name: palworld
+  ports:
+    - name: agent
+      port: 3001
+      protocol: TCP
+      targetPort: 3001
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: palworld-gamekeeper
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/controller: palworld
+      app.kubernetes.io/instance: palworld
+      app.kubernetes.io/name: palworld
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 8211
+          protocol: UDP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: services
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: zoo
+              app.kubernetes.io/name: gamekeeper
+      ports:
+        - port: 3001
+          protocol: TCP
+        - port: 8212
+          protocol: TCP

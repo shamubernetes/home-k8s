@@ -13,6 +13,16 @@ REPOSITORY = "shamubernetes/home-k8s"
 MIN_CORE_REMAINING = 1500
 MIN_GRAPHQL_REMAINING = 1500
 MAX_ACTIVE_RUNS = 12
+WORKFLOW_RUN_LOOKBACK_SECONDS = 24 * 60 * 60
+WORKFLOW_RUN_SNAPSHOT_LIMIT = 1000
+WORKFLOW_RUN_STATUSES = {
+    "completed",
+    "in_progress",
+    "pending",
+    "queued",
+    "requested",
+    "waiting",
+}
 
 
 def gh_json(*args: str) -> Any:
@@ -27,28 +37,60 @@ def gh_json(*args: str) -> Any:
 
 
 def checks_green(
-    rollup: list[dict[str, object]], required_checks: set[str]
+    check_runs: dict[str, object],
+    required_checks: set[tuple[str, int]],
+    expected_head_sha: str,
 ) -> bool:
-    if not rollup:
+    runs = check_runs.get("check_runs")
+    if not isinstance(runs, list) or not runs:
         return False
 
-    successful_checks: set[str] = set()
-    for check in rollup:
-        kind = check.get("__typename")
-        if kind == "CheckRun":
-            if check.get("status") != "COMPLETED":
-                return False
-            if check.get("conclusion") not in {"SUCCESS", "NEUTRAL", "SKIPPED"}:
-                return False
-            name = check.get("name")
-            if isinstance(name, str):
-                successful_checks.add(name)
-        elif kind == "StatusContext":
-            if check.get("state") != "SUCCESS":
-                return False
-        else:
+    total_count = check_runs.get("total_count")
+    if type(total_count) is not int or total_count != len(runs):
+        return False
+
+    successful_checks: set[tuple[str, int]] = set()
+    for check in runs:
+        if not isinstance(check, dict):
             return False
+        name = check.get("name")
+        app = check.get("app")
+        app_id = app.get("id") if isinstance(app, dict) else None
+        if (
+            not isinstance(name, str)
+            or not name
+            or type(app_id) is not int
+            or check.get("head_sha") != expected_head_sha
+        ):
+            return False
+        if (
+            check.get("status") == "completed"
+            and check.get("conclusion") in {"success", "neutral", "skipped"}
+        ):
+            successful_checks.add((name, app_id))
     return bool(required_checks) and required_checks <= successful_checks
+
+
+def workflow_runs_valid(
+    runs: object, *, expected_status: str | None = None
+) -> bool:
+    if not isinstance(runs, list):
+        return False
+    seen_ids: set[int] = set()
+    for run in runs:
+        if not isinstance(run, dict):
+            return False
+        database_id = run.get("databaseId")
+        status = run.get("status")
+        if (
+            type(database_id) is not int
+            or database_id in seen_ids
+            or status not in WORKFLOW_RUN_STATUSES
+            or (expected_status is not None and status != expected_status)
+        ):
+            return False
+        seen_ids.add(database_id)
+    return True
 
 
 def main() -> int:
@@ -56,37 +98,71 @@ def main() -> int:
         "api",
         f"repos/{REPOSITORY}/branches/main/protection/required_status_checks",
     )
+    configured_checks = protection.get("checks") if isinstance(protection, dict) else None
+    if not isinstance(configured_checks, list):
+        configured_checks = []
     required_checks = {
-        check["context"]
-        for check in protection["checks"]
-        if isinstance(check.get("context"), str)
+        (check["context"], check["app_id"])
+        for check in configured_checks
+        if isinstance(check, dict)
+        and isinstance(check.get("context"), str)
+        and type(check.get("app_id")) is int
+        and check["app_id"] > 0
     }
-    workflow_runs = [
-        *gh_json(
-            "run",
-            "list",
-            "--repo",
-            REPOSITORY,
-            "--status",
-            "in_progress",
-            "--limit",
-            "100",
-            "--json",
-            "databaseId",
-        ),
-        *gh_json(
-            "run",
-            "list",
-            "--repo",
-            REPOSITORY,
-            "--status",
-            "queued",
-            "--limit",
-            "100",
-            "--json",
-            "databaseId",
-        ),
+    required_check_identity_complete = (
+        bool(configured_checks) and len(required_checks) == len(configured_checks)
+    )
+    workflow_run_cutoff = time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ",
+        time.gmtime(time.time() - WORKFLOW_RUN_LOOKBACK_SECONDS),
+    )
+    workflow_run_snapshot = gh_json(
+        "run",
+        "list",
+        "--repo",
+        REPOSITORY,
+        "--created",
+        f">={workflow_run_cutoff}",
+        "--limit",
+        str(WORKFLOW_RUN_SNAPSHOT_LIMIT),
+        "--json",
+        "databaseId,status",
+    )
+    workflow_run_snapshot_valid = workflow_runs_valid(workflow_run_snapshot)
+    workflow_run_snapshot_complete = workflow_run_snapshot_valid and (
+        len(workflow_run_snapshot) < WORKFLOW_RUN_SNAPSHOT_LIMIT
+    )
+    recent_workflow_runs = [
+        run
+        for run in (
+            workflow_run_snapshot if isinstance(workflow_run_snapshot, list) else []
+        )
+        if isinstance(run, dict)
+        and run.get("status") in {"queued", "in_progress"}
     ]
+    # Self-hosted jobs can execute for up to five days. Cover older running
+    # work separately; the fixed creation-time ranges do not overlap, so a
+    # queued-to-running transition cannot disappear between the queries.
+    older_in_progress_runs = gh_json(
+        "run",
+        "list",
+        "--repo",
+        REPOSITORY,
+        "--created",
+        f"<{workflow_run_cutoff}",
+        "--status",
+        "in_progress",
+        "--limit",
+        str(MAX_ACTIVE_RUNS),
+        "--json",
+        "databaseId,status",
+    )
+    older_in_progress_runs_valid = workflow_runs_valid(
+        older_in_progress_runs, expected_status="in_progress"
+    )
+    if not isinstance(older_in_progress_runs, list):
+        older_in_progress_runs = []
+    workflow_runs = [*recent_workflow_runs, *older_in_progress_runs]
     pull_requests = gh_json(
         "pr",
         "list",
@@ -101,34 +177,50 @@ def main() -> int:
         "--limit",
         "100",
         "--json",
-        "number,title,headRefOid,mergeable,mergeStateStatus,isDraft,updatedAt,statusCheckRollup",
+        "number,title,headRefOid,mergeable,mergeStateStatus,isDraft,updatedAt",
     )
+    candidates = []
+    if required_check_identity_complete:
+        for pr in pull_requests:
+            if (
+                pr["isDraft"]
+                or pr["mergeable"] != "MERGEABLE"
+                or pr["mergeStateStatus"] not in {"CLEAN", "BEHIND"}
+            ):
+                continue
+            check_runs = gh_json(
+                "api",
+                f"repos/{REPOSITORY}/commits/{pr['headRefOid']}/check-runs?per_page=100",
+            )
+            if checks_green(check_runs, required_checks, pr["headRefOid"]):
+                candidates.append(
+                    {
+                        "number": pr["number"],
+                        "title": pr["title"],
+                        "head_sha": pr["headRefOid"],
+                        "mergeable": pr["mergeable"],
+                        "merge_state": pr["mergeStateStatus"],
+                        "updated_at": pr["updatedAt"],
+                    }
+                )
     # Sample quota after discovery so the mutation decision reflects every API
     # request the precheck itself consumed, including GraphQL PR inventory.
     rate_limit = gh_json("api", "rate_limit")
     core = rate_limit["resources"]["core"]
     graphql = rate_limit["resources"]["graphql"]
 
-    candidates = [
-        {
-            "number": pr["number"],
-            "title": pr["title"],
-            "head_sha": pr["headRefOid"],
-            "mergeable": pr["mergeable"],
-            "merge_state": pr["mergeStateStatus"],
-            "updated_at": pr["updatedAt"],
-        }
-        for pr in pull_requests
-        if not pr["isDraft"]
-        and pr["mergeable"] == "MERGEABLE"
-        and pr["mergeStateStatus"] in {"CLEAN", "BEHIND"}
-        and checks_green(pr["statusCheckRollup"], required_checks)
-    ]
-
     quota_ok = core["remaining"] >= MIN_CORE_REMAINING
     graphql_quota_ok = graphql["remaining"] >= MIN_GRAPHQL_REMAINING
     run_capacity_ok = len(workflow_runs) < MAX_ACTIVE_RUNS
-    mutation_allowed = quota_ok and graphql_quota_ok and run_capacity_ok
+    mutation_allowed = (
+        quota_ok
+        and graphql_quota_ok
+        and run_capacity_ok
+        and workflow_run_snapshot_valid
+        and workflow_run_snapshot_complete
+        and older_in_progress_runs_valid
+        and required_check_identity_complete
+    )
     context = {
         "repository": REPOSITORY,
         "open_renovate_pr_count": len(pull_requests),
@@ -151,6 +243,19 @@ def main() -> int:
                 (not quota_ok, "github-core-quota-reserve"),
                 (not graphql_quota_ok, "github-graphql-quota-reserve"),
                 (not run_capacity_ok, "workflow-run-capacity"),
+                (
+                    not workflow_run_snapshot_valid
+                    or not older_in_progress_runs_valid,
+                    "workflow-run-snapshot-malformed",
+                ),
+                (
+                    not workflow_run_snapshot_complete,
+                    "workflow-run-snapshot-truncated",
+                ),
+                (
+                    not required_check_identity_complete,
+                    "required-check-identity-incomplete",
+                ),
             )
             if blocked
         ],
@@ -175,6 +280,13 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (json.JSONDecodeError, KeyError, OSError, subprocess.SubprocessError) as exc:
+    except (
+        json.JSONDecodeError,
+        KeyError,
+        OSError,
+        subprocess.SubprocessError,
+        TypeError,
+        ValueError,
+    ) as exc:
         print(f"Renovate queue precheck failed: {exc}", file=sys.stderr)
         raise SystemExit(1)

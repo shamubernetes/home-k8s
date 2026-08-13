@@ -15,7 +15,10 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: "talos-image-availability-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}"
+  # pull_requests is empty for our pull_request_target planner runs. The source
+  # run's branch is stable across synchronized heads, so a newer planner result
+  # cancels the older API-heavy verifier for the same PR branch.
+  group: "talos-image-availability-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}"
   cancel-in-progress: true
 
 jobs:

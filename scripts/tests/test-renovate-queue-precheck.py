@@ -18,6 +18,13 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RenovateQueuePrecheckTests(unittest.TestCase):
+    REQUIRED_CHECKS = {
+        "Flate - Success",
+        "Static Analysis - Success",
+        "Talos - Validate",
+        "Talos Image Availability",
+    }
+
     def run_main(self, *, remaining: int, active_runs: int) -> dict[str, Any]:
         responses = [
             {
@@ -25,6 +32,7 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                     "core": {"limit": 5000, "remaining": remaining, "reset": 1786632277}
                 }
             },
+            {"checks": [{"context": name} for name in self.REQUIRED_CHECKS]},
             [{"databaseId": number} for number in range(active_runs)],
             [],
             [
@@ -37,11 +45,15 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                     "isDraft": False,
                     "updatedAt": "2026-08-13T00:00:00Z",
                     "statusCheckRollup": [
-                        {
-                            "__typename": "CheckRun",
-                            "status": "COMPLETED",
-                            "conclusion": "SUCCESS",
-                        }
+                        *[
+                            {
+                                "__typename": "CheckRun",
+                                "name": name,
+                                "status": "COMPLETED",
+                                "conclusion": "SUCCESS",
+                            }
+                            for name in self.REQUIRED_CHECKS
+                        ]
                     ],
                 }
             ],
@@ -72,6 +84,7 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                     "core": {"limit": 5000, "remaining": 5000, "reset": 1786632277}
                 }
             },
+            {"checks": [{"context": name} for name in self.REQUIRED_CHECKS]},
             [],
             [{"databaseId": number} for number in range(12)],
             [],
@@ -89,6 +102,18 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         self.assertTrue(result["context"]["mutation_allowed"])
         self.assertEqual(result["context"]["green_precheck_candidates"][0]["number"], 42)
         self.assertIn("Never mutate more than one", result["context"]["operator_contract"])
+
+    def test_missing_required_check_is_not_green(self) -> None:
+        rollup = [
+            {
+                "__typename": "CheckRun",
+                "name": name,
+                "status": "COMPLETED",
+                "conclusion": "SUCCESS",
+            }
+            for name in self.REQUIRED_CHECKS - {"Static Analysis - Success"}
+        ]
+        self.assertFalse(MODULE.checks_green(rollup, self.REQUIRED_CHECKS))
 
 
 if __name__ == "__main__":

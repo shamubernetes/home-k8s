@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/namespace-v1.json
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubewings-mvp
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io-audit: restricted
+    pod-security.kubernetes.io-audit-version: latest
+    pod-security.kubernetes.io-warn: restricted
+    pod-security.kubernetes.io-warn-version: latest

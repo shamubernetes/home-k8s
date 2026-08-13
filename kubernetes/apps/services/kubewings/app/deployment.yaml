@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/apps/v1/deployment.json
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubewings
+  namespace: services
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubewings
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubewings
+        app.kubernetes.io/managed-by: kubewings
+        app.kubernetes.io/component: gateway
+    spec:
+      serviceAccountName: kubewings
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        fsGroup: 10000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: gateway
+        image: ghcr.io/thezoo-house/kubewings@sha256:a0c0309cfd5e024f8d9d213c5207022581db8aa6379bc997c5af0d2701ad9518
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: KUBEWINGS_LISTEN
+          value: :8080
+        - name: KUBEWINGS_PANEL_URL
+          value: https://pelican.${HOME_DOMAIN}
+        - name: KUBEWINGS_RUNTIME_NAMESPACE
+          value: kubewings-mvp
+        - name: KUBEWINGS_GATEWAY_NAMESPACE
+          value: services
+        - name: KUBEWINGS_AGENT_IMAGE
+          value: ghcr.io/thezoo-house/kubewings@sha256:a0c0309cfd5e024f8d9d213c5207022581db8aa6379bc997c5af0d2701ad9518
+        - name: KUBEWINGS_STORAGE_CLASS
+          value: ceph-block
+        - name: KUBEWINGS_SERVICE_TYPE
+          value: LoadBalancer
+        - name: KUBEWINGS_MIN_STORAGE_MIB
+          value: "1024"
+        - name: KUBEWINGS_MAX_FILE_READ_BYTES
+          value: "4194304"
+        - name: KUBEWINGS_MAX_FILE_WRITE_BYTES
+          value: "16777216"
+        envFrom:
+        - secretRef:
+            name: kubewings-node-secret
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 256Mi

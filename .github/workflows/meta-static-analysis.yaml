@@ -120,7 +120,7 @@ jobs:
     - name: Setup validation tools
       uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
       with:
-        install_args: crane flux2 helm jq kubectl kyverno python asdf:sudermanjr/asdf-yq
+        install_args: crane flux2 helm jq kubectl kyverno python yq
         cache: true
         fetch_from_github: false
 
@@ -182,7 +182,7 @@ jobs:
     - name: Setup rendering tools
       uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
       with:
-        install_args: kubectl asdf:sudermanjr/asdf-yq
+        install_args: kubectl yq
         cache: true
         fetch_from_github: false
 
@@ -224,7 +224,7 @@ jobs:
     - name: Setup rendering tools
       uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
       with:
-        install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
+        install_args: flux2 helm jq kubectl python yq
         cache: true
         fetch_from_github: false
 

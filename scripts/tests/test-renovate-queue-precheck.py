@@ -25,13 +25,14 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         "Talos Image Availability",
     }
 
-    def run_main(self, *, remaining: int, active_runs: int) -> dict[str, Any]:
+    def run_main(
+        self,
+        *,
+        core_remaining: int,
+        graphql_remaining: int = 5000,
+        active_runs: int,
+    ) -> dict[str, Any]:
         responses = [
-            {
-                "resources": {
-                    "core": {"limit": 5000, "remaining": remaining, "reset": 1786632277}
-                }
-            },
             {"checks": [{"context": name} for name in self.REQUIRED_CHECKS]},
             [{"databaseId": number} for number in range(active_runs)],
             [],
@@ -57,6 +58,20 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                     ],
                 }
             ],
+            {
+                "resources": {
+                    "core": {
+                        "limit": 5000,
+                        "remaining": core_remaining,
+                        "reset": 1786632277,
+                    },
+                    "graphql": {
+                        "limit": 5000,
+                        "remaining": graphql_remaining,
+                        "reset": 1786632277,
+                    },
+                }
+            },
         ]
         with mock.patch.object(MODULE, "gh_json", side_effect=responses), mock.patch(
             "builtins.print"
@@ -65,7 +80,7 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         return json.loads(output.call_args.args[0])
 
     def test_low_quota_blocks_mutation_but_keeps_read_only_wakeup(self) -> None:
-        result = self.run_main(remaining=1499, active_runs=0)
+        result = self.run_main(core_remaining=1499, active_runs=0)
         self.assertTrue(result["wakeAgent"])
         self.assertFalse(result["context"]["mutation_allowed"])
         self.assertEqual(
@@ -73,21 +88,22 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         )
 
     def test_active_run_pressure_blocks_mutation(self) -> None:
-        result = self.run_main(remaining=5000, active_runs=12)
+        result = self.run_main(core_remaining=5000, active_runs=12)
         self.assertFalse(result["context"]["mutation_allowed"])
         self.assertEqual(result["context"]["mutation_blockers"], ["workflow-run-capacity"])
 
     def test_queued_run_pressure_blocks_mutation(self) -> None:
         responses = [
-            {
-                "resources": {
-                    "core": {"limit": 5000, "remaining": 5000, "reset": 1786632277}
-                }
-            },
             {"checks": [{"context": name} for name in self.REQUIRED_CHECKS]},
             [],
             [{"databaseId": number} for number in range(12)],
             [],
+            {
+                "resources": {
+                    "core": {"limit": 5000, "remaining": 5000, "reset": 1786632277},
+                    "graphql": {"limit": 5000, "remaining": 5000, "reset": 1786632277},
+                }
+            },
         ]
         with mock.patch.object(MODULE, "gh_json", side_effect=responses), mock.patch(
             "builtins.print"
@@ -98,10 +114,26 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         self.assertEqual(result["context"]["mutation_blockers"], ["workflow-run-capacity"])
 
     def test_behind_green_candidate_does_not_require_refresh(self) -> None:
-        result = self.run_main(remaining=5000, active_runs=0)
+        result = self.run_main(core_remaining=5000, active_runs=0)
         self.assertTrue(result["context"]["mutation_allowed"])
         self.assertEqual(result["context"]["green_precheck_candidates"][0]["number"], 42)
         self.assertIn("Never mutate more than one", result["context"]["operator_contract"])
+
+    def test_graphql_quota_reserve_blocks_mutation(self) -> None:
+        result = self.run_main(
+            core_remaining=5000, graphql_remaining=1499, active_runs=0
+        )
+        self.assertFalse(result["context"]["mutation_allowed"])
+        self.assertEqual(
+            result["context"]["mutation_blockers"],
+            ["github-graphql-quota-reserve"],
+        )
+
+    def test_quota_threshold_is_inclusive(self) -> None:
+        result = self.run_main(
+            core_remaining=1500, graphql_remaining=1500, active_runs=0
+        )
+        self.assertTrue(result["context"]["mutation_allowed"])
 
     def test_missing_required_check_is_not_green(self) -> None:
         rollup = [

@@ -11,6 +11,7 @@ from typing import Any
 
 REPOSITORY = "shamubernetes/home-k8s"
 MIN_CORE_REMAINING = 1500
+MIN_GRAPHQL_REMAINING = 1500
 MAX_ACTIVE_RUNS = 12
 
 
@@ -51,8 +52,6 @@ def checks_green(
 
 
 def main() -> int:
-    rate_limit = gh_json("api", "rate_limit")
-    core = rate_limit["resources"]["core"]
     protection = gh_json(
         "api",
         f"repos/{REPOSITORY}/branches/main/protection/required_status_checks",
@@ -104,6 +103,11 @@ def main() -> int:
         "--json",
         "number,title,headRefOid,mergeable,mergeStateStatus,isDraft,updatedAt,statusCheckRollup",
     )
+    # Sample quota after discovery so the mutation decision reflects every API
+    # request the precheck itself consumed, including GraphQL PR inventory.
+    rate_limit = gh_json("api", "rate_limit")
+    core = rate_limit["resources"]["core"]
+    graphql = rate_limit["resources"]["graphql"]
 
     candidates = [
         {
@@ -122,8 +126,9 @@ def main() -> int:
     ]
 
     quota_ok = core["remaining"] >= MIN_CORE_REMAINING
+    graphql_quota_ok = graphql["remaining"] >= MIN_GRAPHQL_REMAINING
     run_capacity_ok = len(workflow_runs) < MAX_ACTIVE_RUNS
-    mutation_allowed = quota_ok and run_capacity_ok
+    mutation_allowed = quota_ok and graphql_quota_ok and run_capacity_ok
     context = {
         "repository": REPOSITORY,
         "open_renovate_pr_count": len(pull_requests),
@@ -133,12 +138,18 @@ def main() -> int:
         "github_core_reset_at": time.strftime(
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime(core["reset"])
         ),
+        "github_graphql_limit": graphql["limit"],
+        "github_graphql_remaining": graphql["remaining"],
+        "github_graphql_reset_at": time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(graphql["reset"])
+        ),
         "active_or_queued_workflow_run_count": len(workflow_runs),
         "mutation_allowed": mutation_allowed,
         "mutation_blockers": [
             blocker
             for blocked, blocker in (
                 (not quota_ok, "github-core-quota-reserve"),
+                (not graphql_quota_ok, "github-graphql-quota-reserve"),
                 (not run_capacity_ok, "workflow-run-capacity"),
             )
             if blocked

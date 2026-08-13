@@ -55,11 +55,26 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         check_runs: dict[str, Any] | None = None,
         recent_snapshot: object | None = None,
         older_snapshot: object | None = None,
+        older_snapshots: dict[str, object] | None = None,
     ) -> dict[str, Any]:
         protection_checks = [
             {"context": name, "app_id": configured_app_id}
             for name in self.REQUIRED_CHECK_NAMES
         ]
+        if older_snapshots is None:
+            older_snapshots = {
+                status: (
+                    older_snapshot
+                    if older_snapshot is not None and status == "in_progress"
+                    else [
+                        {"databaseId": 10_000 + number, "status": status}
+                        for number in range(older_active_runs)
+                    ]
+                    if status == "in_progress"
+                    else []
+                )
+                for status in MODULE.ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER
+            }
         responses: list[Any] = [
             {"checks": protection_checks},
             recent_snapshot
@@ -68,12 +83,10 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                 {"databaseId": number, "status": active_status}
                 for number in range(active_runs)
             ],
-            older_snapshot
-            if older_snapshot is not None
-            else [
-                {"databaseId": 10_000 + number, "status": "in_progress"}
-                for number in range(older_active_runs)
-            ],
+            *(
+                older_snapshots[status]
+                for status in MODULE.ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER
+            ),
             [
                 {
                     "number": 42,
@@ -129,24 +142,32 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                 "databaseId,status",
             ),
         )
-        older_args = calls[2].args
-        self.assertEqual(older_args[:4], ("run", "list", "--repo", MODULE.REPOSITORY))
-        self.assertEqual(older_args[4], "--created")
-        self.assertRegex(older_args[5], r"^<\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-        self.assertEqual(older_args[5][1:], recent_args[5][2:])
+        for index, status in enumerate(
+            MODULE.ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER, start=2
+        ):
+            older_args = calls[index].args
+            self.assertEqual(
+                older_args[:4], ("run", "list", "--repo", MODULE.REPOSITORY)
+            )
+            self.assertEqual(older_args[4], "--created")
+            self.assertRegex(
+                older_args[5], r"^<\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+            )
+            self.assertEqual(older_args[5][1:], recent_args[5][2:])
+            self.assertEqual(
+                older_args[6:],
+                (
+                    "--status",
+                    status,
+                    "--limit",
+                    str(MODULE.MAX_ACTIVE_RUNS),
+                    "--json",
+                    "databaseId,status",
+                ),
+            )
+        pr_call_index = 2 + len(MODULE.ACTIVE_WORKFLOW_RUN_STATUSES)
         self.assertEqual(
-            older_args[6:],
-            (
-                "--status",
-                "in_progress",
-                "--limit",
-                str(MODULE.MAX_ACTIVE_RUNS),
-                "--json",
-                "databaseId,status",
-            ),
-        )
-        self.assertEqual(
-            calls[3],
+            calls[pr_call_index],
             mock.call(
                 "pr",
                 "list",
@@ -164,11 +185,11 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                 "number,title,headRefOid,mergeable,mergeStateStatus,isDraft,updatedAt",
             ),
         )
-        expected_call_count = 5
+        expected_call_count = pr_call_index + 2
         if configured_app_id is not None and configured_app_id > 0:
-            expected_call_count = 6
+            expected_call_count += 1
             self.assertEqual(
-                calls[4],
+                calls[pr_call_index + 1],
                 mock.call(
                     "api",
                     f"repos/{MODULE.REPOSITORY}/commits/{'a' * 40}/check-runs?per_page=100",
@@ -232,7 +253,65 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
             older_active_runs=MODULE.MAX_ACTIVE_RUNS,
         )
         self.assertFalse(result["context"]["mutation_allowed"])
-        self.assertEqual(result["context"]["mutation_blockers"], ["workflow-run-capacity"])
+        self.assertIn("workflow-run-capacity", result["context"]["mutation_blockers"])
+        self.assertIn(
+            "workflow-run-snapshot-truncated", result["context"]["mutation_blockers"]
+        )
+
+    def test_every_older_nonterminal_status_counts_toward_capacity(self) -> None:
+        for status in MODULE.ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER:
+            with self.subTest(status=status):
+                snapshots: dict[str, object] = {
+                    state: [] for state in MODULE.ACTIVE_WORKFLOW_RUN_STATUSES
+                }
+                snapshots[status] = [
+                    {"databaseId": 10_000 + number, "status": status}
+                    for number in range(MODULE.MAX_ACTIVE_RUNS - 1)
+                ]
+                result = self.run_main(
+                    core_remaining=5000,
+                    active_runs=1,
+                    older_snapshots=snapshots,
+                )
+                self.assertFalse(result["context"]["mutation_allowed"])
+                self.assertEqual(
+                    result["context"]["active_or_queued_workflow_run_count"],
+                    MODULE.MAX_ACTIVE_RUNS,
+                )
+                self.assertIn(
+                    "workflow-run-capacity", result["context"]["mutation_blockers"]
+                )
+
+    def test_duplicate_older_run_ids_are_counted_once(self) -> None:
+        snapshots: dict[str, object] = {
+            state: [] for state in MODULE.ACTIVE_WORKFLOW_RUN_STATUSES
+        }
+        snapshots["queued"] = [{"databaseId": 99, "status": "queued"}]
+        snapshots["waiting"] = [{"databaseId": 99, "status": "waiting"}]
+        result = self.run_main(
+            core_remaining=5000,
+            active_runs=0,
+            older_snapshots=snapshots,
+        )
+        self.assertEqual(result["context"]["active_or_queued_workflow_run_count"], 1)
+
+    def test_truncated_older_snapshot_blocks_mutation(self) -> None:
+        snapshots: dict[str, object] = {
+            state: [] for state in MODULE.ACTIVE_WORKFLOW_RUN_STATUSES
+        }
+        snapshots["queued"] = [
+            {"databaseId": number, "status": "queued"}
+            for number in range(MODULE.MAX_ACTIVE_RUNS)
+        ]
+        result = self.run_main(
+            core_remaining=5000,
+            active_runs=0,
+            older_snapshots=snapshots,
+        )
+        self.assertFalse(result["context"]["mutation_allowed"])
+        self.assertIn(
+            "workflow-run-snapshot-truncated", result["context"]["mutation_blockers"]
+        )
 
     def test_truncated_workflow_snapshot_blocks_mutation(self) -> None:
         result = self.run_main(

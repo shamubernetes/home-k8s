@@ -41,5 +41,5 @@ spec:
       capacity: 1Gi
       storageClassName: ceph-block
       parallel: 2
-    successExpr: "stats.files > 0 && stats.errors == 0"
+    successExpr: "stats.bytes > 0 && stats.errors == 0"
     verifyFilesPercent: 100

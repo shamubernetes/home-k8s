@@ -6,4 +6,5 @@ resources:
   - ./pvc.yaml
   - ./externalsecret.yaml
   - ./configmap.yaml
+  - ./gamekeeper-agent.yaml
   - ./helmrelease.yaml

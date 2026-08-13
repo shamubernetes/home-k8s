@@ -299,6 +299,48 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
         payload["total_count"] += 1
         self.assertFalse(MODULE.checks_green(payload, self.REQUIRED_CHECKS, "a" * 40))
 
+    def test_malformed_check_run_status_is_not_green(self) -> None:
+        payload = self.successful_check_runs()
+        payload["check_runs"].append(
+            {
+                "name": "optional",
+                "status": 123,
+                "conclusion": None,
+                "app": {"id": self.APP_ID},
+                "head_sha": "a" * 40,
+            }
+        )
+        payload["total_count"] += 1
+        self.assertFalse(MODULE.checks_green(payload, self.REQUIRED_CHECKS, "a" * 40))
+
+    def test_malformed_check_run_conclusion_is_not_green(self) -> None:
+        payload = self.successful_check_runs()
+        payload["check_runs"].append(
+            {
+                "name": "optional",
+                "status": "completed",
+                "conclusion": {},
+                "app": {"id": self.APP_ID},
+                "head_sha": "a" * 40,
+            }
+        )
+        payload["total_count"] += 1
+        self.assertFalse(MODULE.checks_green(payload, self.REQUIRED_CHECKS, "a" * 40))
+
+    def test_noncompleted_check_run_requires_null_conclusion(self) -> None:
+        payload = self.successful_check_runs()
+        payload["check_runs"].append(
+            {
+                "name": "optional",
+                "status": "in_progress",
+                "conclusion": "success",
+                "app": {"id": self.APP_ID},
+                "head_sha": "a" * 40,
+            }
+        )
+        payload["total_count"] += 1
+        self.assertFalse(MODULE.checks_green(payload, self.REQUIRED_CHECKS, "a" * 40))
+
     def test_check_runs_from_other_head_are_not_green(self) -> None:
         self.assertFalse(
             MODULE.checks_green(

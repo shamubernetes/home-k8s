@@ -36,6 +36,7 @@ servers:
     configBlock: |-
       ${IPAM_IP_ENVOY_INTERNAL} sso.${HOME_DOMAIN}
       ${IPAM_IP_ENVOY_INTERNAL} elasticsearch.${HOME_DOMAIN}
+      ${IPAM_IP_ENVOY_INTERNAL} pelican.${HOME_DOMAIN}
       ${IPAM_IP_ENVOY_INTERNAL} plex.${HOME_DOMAIN}
       ${IPAM_IP_MOSQUITTO} mqtt.${HOME_DOMAIN}
       10.0.10.95 hermes-gateway.thezoo.house

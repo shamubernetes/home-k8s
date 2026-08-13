@@ -47,18 +47,32 @@ def checks_green(rollup: list[dict[str, object]]) -> bool:
 def main() -> int:
     rate_limit = gh_json("api", "rate_limit")
     core = rate_limit["resources"]["core"]
-    active_runs = gh_json(
-        "run",
-        "list",
-        "--repo",
-        REPOSITORY,
-        "--status",
-        "in_progress",
-        "--limit",
-        "100",
-        "--json",
-        "databaseId",
-    )
+    workflow_runs = [
+        *gh_json(
+            "run",
+            "list",
+            "--repo",
+            REPOSITORY,
+            "--status",
+            "in_progress",
+            "--limit",
+            "100",
+            "--json",
+            "databaseId",
+        ),
+        *gh_json(
+            "run",
+            "list",
+            "--repo",
+            REPOSITORY,
+            "--status",
+            "queued",
+            "--limit",
+            "100",
+            "--json",
+            "databaseId",
+        ),
+    ]
     pull_requests = gh_json(
         "pr",
         "list",
@@ -93,7 +107,7 @@ def main() -> int:
     ]
 
     quota_ok = core["remaining"] >= MIN_CORE_REMAINING
-    run_capacity_ok = len(active_runs) < MAX_ACTIVE_RUNS
+    run_capacity_ok = len(workflow_runs) < MAX_ACTIVE_RUNS
     mutation_allowed = quota_ok and run_capacity_ok
     context = {
         "repository": REPOSITORY,
@@ -104,7 +118,7 @@ def main() -> int:
         "github_core_reset_at": time.strftime(
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime(core["reset"])
         ),
-        "active_workflow_run_count": len(active_runs),
+        "active_or_queued_workflow_run_count": len(workflow_runs),
         "mutation_allowed": mutation_allowed,
         "mutation_blockers": [
             blocker

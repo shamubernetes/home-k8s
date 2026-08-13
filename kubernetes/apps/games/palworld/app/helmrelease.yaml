@@ -20,28 +20,73 @@ spec:
     controllers:
       palworld:
         strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
         initContainers:
           prepare:
             image:
-              repository: &imageRepository ghcr.io/pocketpairjp/palserver
-              tag: &imageTag v1.0.3.101283@sha256:ffb778dd63a04cf0d901b95e934e547e1fee67234e33102d5b5bf7da36e2b264
-            command: ["/bin/sh", "-c"]
+              repository: ghcr.io/thezoo-house/gamekeeper
+              tag: v0.2.1@sha256:1eb7bbfcd5432c5473b4e66828609307fe90f2630536d280d9952418e45b223e
+            command: ["bun", "-e"]
             args:
               - |
-                mkdir -p /pal/Package/Pal/Saved/Config/LinuxServer
-                cp /config/PalWorldSettings.ini /pal/Package/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
-                chown -R user:usergroup /pal/Package/Pal/Saved
+                import {
+                  chownSync,
+                  chmodSync,
+                  existsSync,
+                  mkdirSync,
+                  readFileSync,
+                  renameSync,
+                  statSync,
+                  writeFileSync,
+                } from "node:fs";
+                import { dirname } from "node:path";
+
+                const source = "/config/PalWorldSettings.ini";
+                const target = "/pal/Package/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini";
+                const temporary = target + ".gamekeeper-sync";
+                const seed = readFileSync(source, "utf8");
+                let content = !existsSync(target) || statSync(target).size === 0
+                  ? seed
+                  : readFileSync(target, "utf8");
+
+                const protectedSettings = [
+                  "AdminPassword",
+                  "RESTAPIEnabled",
+                  "RESTAPIPort",
+                ];
+                const valuePattern = '(?:"(?:\\\\.|[^"\\\\])*"|[^,)]+)';
+                for (const name of protectedSettings) {
+                  const expression = new RegExp(name + "=(" + valuePattern + ")", "g");
+                  const sourceMatches = [...seed.matchAll(expression)];
+                  const targetMatches = [...content.matchAll(expression)];
+                  if (sourceMatches.length !== 1 || targetMatches.length !== 1) {
+                    throw new Error("Palworld protected settings are malformed");
+                  }
+                  const replacement = name + "=" + sourceMatches[0][1];
+                  content = content.replace(expression, replacement);
+                }
+
+                mkdirSync(dirname(target), { recursive: true });
+                const gamekeeperDirectory = "/pal/Package/Pal/Saved/.gamekeeper";
+                mkdirSync(gamekeeperDirectory, { recursive: true, mode: 0o700 });
+                chownSync(gamekeeperDirectory, 999, 999);
+                chmodSync(gamekeeperDirectory, 0o700);
+                writeFileSync(temporary, content, { encoding: "utf8", mode: 0o600 });
+                chownSync(temporary, 999, 999);
+                chmodSync(temporary, 0o600);
+                renameSync(temporary, target);
             securityContext:
               runAsUser: 0
               allowPrivilegeEscalation: false
               capabilities:
                 drop: ["ALL"]
-                add: ["CHOWN", "DAC_OVERRIDE"]
+                add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
         containers:
           app:
             image:
-              repository: *imageRepository
-              tag: *imageTag
+              repository: ghcr.io/pocketpairjp/palserver
+              tag: v1.0.3.101283@sha256:ffb778dd63a04cf0d901b95e934e547e1fee67234e33102d5b5bf7da36e2b264
             args:
               - -port=8211
             securityContext:
@@ -54,10 +99,78 @@ spec:
               limits:
                 cpu: 8
                 memory: 40Gi
+          agent:
+            image:
+              repository: ghcr.io/thezoo-house/gamekeeper
+              tag: v0.2.1@sha256:1eb7bbfcd5432c5473b4e66828609307fe90f2630536d280d9952418e45b223e
+            command:
+              - bun
+              - --no-install
+              - --no-env-file
+              - scripts/game-agent.ts
+            env:
+              GAMEKEEPER_AGENT_PROFILE: palworld
+              GAMEKEEPER_AGENT_ROOT: /game/palworld
+              GAMEKEEPER_AGENT_PORT: "3001"
+              GAMEKEEPER_AGENT_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: palworld-gamekeeper
+                    key: token
+            probes:
+              liveness: &agentProbes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health/live
+                    port: &agentPort 3001
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 3
+              readiness:
+                <<: *agentProbes
+                spec:
+                  httpGet:
+                    path: /health/ready
+                    port: *agentPort
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 3
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health/ready
+                    port: *agentPort
+                  periodSeconds: 2
+                  timeoutSeconds: 2
+                  failureThreshold: 30
+            ports:
+              - name: agent
+                containerPort: *agentPort
+                protocol: TCP
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+              readOnlyRootFilesystem: true
+              runAsGroup: 999
+              runAsNonRoot: true
+              runAsUser: 999
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
     defaultPodOptions:
       annotations:
         descheduler.alpha.kubernetes.io/evict: "false"
       securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: {type: RuntimeDefault}
     service:
       app:
@@ -84,6 +197,18 @@ spec:
         size: 50Gi
         globalMounts:
           - path: /pal/Package/Pal/Saved
+        advancedMounts:
+          palworld:
+            agent:
+              - path: /game/palworld/Pal/Saved
+              - path: /game/palworld/.gamekeeper
+                subPath: .gamekeeper
+      agent-root:
+        type: emptyDir
+        advancedMounts:
+          palworld:
+            agent:
+              - path: /game/palworld
       settings:
         type: secret
         name: palworld-settings

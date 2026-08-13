@@ -26,6 +26,7 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
                 }
             },
             [{"databaseId": number} for number in range(active_runs)],
+            [],
             [
                 {
                     "number": 42,
@@ -61,6 +62,25 @@ class RenovateQueuePrecheckTests(unittest.TestCase):
 
     def test_active_run_pressure_blocks_mutation(self) -> None:
         result = self.run_main(remaining=5000, active_runs=12)
+        self.assertFalse(result["context"]["mutation_allowed"])
+        self.assertEqual(result["context"]["mutation_blockers"], ["workflow-run-capacity"])
+
+    def test_queued_run_pressure_blocks_mutation(self) -> None:
+        responses = [
+            {
+                "resources": {
+                    "core": {"limit": 5000, "remaining": 5000, "reset": 1786632277}
+                }
+            },
+            [],
+            [{"databaseId": number} for number in range(12)],
+            [],
+        ]
+        with mock.patch.object(MODULE, "gh_json", side_effect=responses), mock.patch(
+            "builtins.print"
+        ) as output:
+            self.assertEqual(MODULE.main(), 0)
+        result = json.loads(output.call_args.args[0])
         self.assertFalse(result["context"]["mutation_allowed"])
         self.assertEqual(result["context"]["mutation_blockers"], ["workflow-run-capacity"])
 

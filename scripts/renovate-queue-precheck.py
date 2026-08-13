@@ -24,6 +24,14 @@ WORKFLOW_RUN_STATUSES = {
     "waiting",
 }
 ACTIVE_WORKFLOW_RUN_STATUSES = WORKFLOW_RUN_STATUSES - {"completed"}
+ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER = (
+    "requested",
+    "pending",
+    "queued",
+    "waiting",
+    "in_progress",
+)
+assert set(ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER) == ACTIVE_WORKFLOW_RUN_STATUSES
 CHECK_RUN_STATUSES = {"completed", "in_progress", "pending", "queued", "requested", "waiting"}
 CHECK_RUN_CONCLUSIONS = {
     "action_required",
@@ -164,29 +172,48 @@ def main() -> int:
         if isinstance(run, dict)
         and run.get("status") in ACTIVE_WORKFLOW_RUN_STATUSES
     ]
-    # Self-hosted jobs can execute for up to five days. Cover older running
-    # work separately; the fixed creation-time ranges do not overlap, so a
-    # queued-to-running transition cannot disappear between the queries.
-    older_in_progress_runs = gh_json(
-        "run",
-        "list",
-        "--repo",
-        REPOSITORY,
-        "--created",
-        f"<{workflow_run_cutoff}",
-        "--status",
-        "in_progress",
-        "--limit",
-        str(MAX_ACTIVE_RUNS),
-        "--json",
-        "databaseId,status",
+    # Cover every older nonterminal state separately. The fixed creation-time
+    # ranges do not overlap, and run IDs are deduplicated across status queries.
+    older_workflow_run_snapshots = {
+        status: gh_json(
+            "run",
+            "list",
+            "--repo",
+            REPOSITORY,
+            "--created",
+            f"<{workflow_run_cutoff}",
+            "--status",
+            status,
+            "--limit",
+            str(MAX_ACTIVE_RUNS),
+            "--json",
+            "databaseId,status",
+        )
+        for status in ACTIVE_WORKFLOW_RUN_STATUS_QUERY_ORDER
+    }
+    older_workflow_run_snapshots_valid = all(
+        workflow_runs_valid(snapshot, expected_status=status)
+        for status, snapshot in older_workflow_run_snapshots.items()
     )
-    older_in_progress_runs_valid = workflow_runs_valid(
-        older_in_progress_runs, expected_status="in_progress"
+    older_workflow_run_snapshots_complete = (
+        older_workflow_run_snapshots_valid
+        and all(
+            len(snapshot) < MAX_ACTIVE_RUNS
+            for snapshot in older_workflow_run_snapshots.values()
+        )
     )
-    if not isinstance(older_in_progress_runs, list):
-        older_in_progress_runs = []
-    workflow_runs = [*recent_workflow_runs, *older_in_progress_runs]
+    workflow_runs = {
+        run["databaseId"]: run
+        for run in [
+            *recent_workflow_runs,
+            *(
+                run
+                for snapshot in older_workflow_run_snapshots.values()
+                if isinstance(snapshot, list)
+                for run in snapshot
+            ),
+        ]
+    }
     pull_requests = gh_json(
         "pr",
         "list",
@@ -242,7 +269,8 @@ def main() -> int:
         and run_capacity_ok
         and workflow_run_snapshot_valid
         and workflow_run_snapshot_complete
-        and older_in_progress_runs_valid
+        and older_workflow_run_snapshots_valid
+        and older_workflow_run_snapshots_complete
         and required_check_identity_complete
     )
     context = {
@@ -269,11 +297,12 @@ def main() -> int:
                 (not run_capacity_ok, "workflow-run-capacity"),
                 (
                     not workflow_run_snapshot_valid
-                    or not older_in_progress_runs_valid,
+                    or not older_workflow_run_snapshots_valid,
                     "workflow-run-snapshot-malformed",
                 ),
                 (
-                    not workflow_run_snapshot_complete,
+                    not workflow_run_snapshot_complete
+                    or not older_workflow_run_snapshots_complete,
                     "workflow-run-snapshot-truncated",
                 ),
                 (

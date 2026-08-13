@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: "schema-validate-${{ github.ref }}"
+  group: "schema-validate-${{ github.event.pull_request.number || github.ref }}"
   cancel-in-progress: true
 
 jobs:
@@ -37,6 +37,7 @@ jobs:
       with:
         install_args: asdf:sudermanjr/asdf-yq
         cache: true
+        fetch_from_github: false
 
     - name: Setup Python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

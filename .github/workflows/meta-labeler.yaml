@@ -7,6 +7,10 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     branches: ["main"]
 
+concurrency:
+  group: "labeler-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
 jobs:
   labeler:
     name: Labeler

@@ -21,6 +21,7 @@ crane = "0.21.9"
 kyverno = "1.18.2"
 
 [env]
+MISE_LOCKED = "1"
 KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"
 SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
 K8S_AUTH_KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"

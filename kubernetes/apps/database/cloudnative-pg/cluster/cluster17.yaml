@@ -5,7 +5,7 @@ metadata:
   name: postgres17
 spec:
   instances: 3
-  imageName: ghcr.io/cloudnative-pg/postgresql:17.11
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11@sha256:26ca47f8c5ebe5dad7d7818474681f8c5fc8d1fcaa136c8a8d8f716904d683a1
   primaryUpdateStrategy: unsupervised
   # Use switchover (not restart) for faster, cleaner failovers
   primaryUpdateMethod: switchover

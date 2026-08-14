@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: gateway
-        image: ghcr.io/thezoo-house/kubewings@sha256:a0c0309cfd5e024f8d9d213c5207022581db8aa6379bc997c5af0d2701ad9518
+        image: ghcr.io/thezoo-house/kubewings@sha256:32362bed664b7e18cd481b7b3d6c2149878d135d42733b419dfb355584369b1b
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -40,13 +40,15 @@ spec:
         - name: KUBEWINGS_LISTEN
           value: :8080
         - name: KUBEWINGS_PANEL_URL
+          value: http://pelican.services.svc.cluster.local
+        - name: KUBEWINGS_PANEL_ORIGIN
           value: https://pelican.${HOME_DOMAIN}
         - name: KUBEWINGS_RUNTIME_NAMESPACE
           value: kubewings-mvp
         - name: KUBEWINGS_GATEWAY_NAMESPACE
           value: services
         - name: KUBEWINGS_AGENT_IMAGE
-          value: ghcr.io/thezoo-house/kubewings@sha256:a0c0309cfd5e024f8d9d213c5207022581db8aa6379bc997c5af0d2701ad9518
+          value: ghcr.io/thezoo-house/kubewings@sha256:32362bed664b7e18cd481b7b3d6c2149878d135d42733b419dfb355584369b1b
         - name: KUBEWINGS_STORAGE_CLASS
           value: ceph-block
         - name: KUBEWINGS_SERVICE_TYPE

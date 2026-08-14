@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: "static-analysis-${{ github.ref }}"
+  group: "static-analysis-${{ github.event.pull_request.number || github.ref }}"
   cancel-in-progress: true
 
 jobs:
@@ -58,10 +58,11 @@ jobs:
         persist-credentials: false
 
     - name: Setup Mise
-      uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+      uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
       with:
         install_args: ${{ matrix.install_args }}
         cache: true
+        fetch_from_github: false
 
     - name: Run ${{ matrix.name }}
       shell: bash
@@ -117,10 +118,11 @@ jobs:
         persist-credentials: false
 
     - name: Setup validation tools
-      uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+      uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
       with:
-        install_args: crane flux2 helm jq kubectl kyverno python asdf:sudermanjr/asdf-yq
+        install_args: crane flux2 helm jq kubectl kyverno python yq
         cache: true
+        fetch_from_github: false
 
     - name: Log in to GHCR for private chart validation
       env:
@@ -134,6 +136,8 @@ jobs:
         python scripts/tests/test-home-assistant-renovate-guard.py
         python scripts/tests/test-renovate-ceph-guard.py
         python scripts/tests/test-renovate-group-precedence.py
+        python scripts/tests/test-renovate-queue-precheck.py
+        python scripts/tests/test-renovate-ci-quota-hardening.py
         python scripts/tests/test-deployment-tooling.py
         python scripts/tests/test-homarr-upsert-app.py
         scripts/tests/test-validation.sh
@@ -176,10 +180,11 @@ jobs:
         persist-credentials: false
 
     - name: Setup rendering tools
-      uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+      uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
       with:
-        install_args: kubectl asdf:sudermanjr/asdf-yq
+        install_args: kubectl yq
         cache: true
+        fetch_from_github: false
 
     - name: Check raw workload images
       run: scripts/check-image-pins kubernetes/apps
@@ -217,10 +222,11 @@ jobs:
         persist-credentials: false
 
     - name: Setup rendering tools
-      uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+      uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
       with:
-        install_args: flux2 helm jq kubectl python asdf:sudermanjr/asdf-yq
+        install_args: flux2 helm jq kubectl python yq
         cache: true
+        fetch_from_github: false
 
     - name: Log in to GHCR for private chart rendering
       env:

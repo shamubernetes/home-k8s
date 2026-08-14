@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: gateway
-        image: ghcr.io/thezoo-house/kubewings@sha256:57ff63f785cf640d7087a5c6d1a2758226a27d36a33f901dbd3adb2a411e82ff
+        image: ghcr.io/thezoo-house/kubewings@sha256:33eb66e2a9568e0b8cb23e621579753c46a74856b7b341c2bbd605780632761b
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -48,11 +48,13 @@ spec:
         - name: KUBEWINGS_GATEWAY_NAMESPACE
           value: services
         - name: KUBEWINGS_AGENT_IMAGE
-          value: ghcr.io/thezoo-house/kubewings@sha256:57ff63f785cf640d7087a5c6d1a2758226a27d36a33f901dbd3adb2a411e82ff
+          value: ghcr.io/thezoo-house/kubewings@sha256:33eb66e2a9568e0b8cb23e621579753c46a74856b7b341c2bbd605780632761b
         - name: KUBEWINGS_STORAGE_CLASS
           value: ceph-block
         - name: KUBEWINGS_SERVICE_TYPE
           value: LoadBalancer
+        - name: KUBEWINGS_SERVICE_FORWARDING_MODE
+          value: snat
         - name: KUBEWINGS_MIN_STORAGE_MIB
           value: "1024"
         - name: KUBEWINGS_MAX_FILE_READ_BYTES

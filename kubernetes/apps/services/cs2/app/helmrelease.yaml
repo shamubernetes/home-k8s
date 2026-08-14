@@ -19,6 +19,9 @@ spec:
   values:
     controllers:
       cs2:
+        # The live server is managed by Pelican on KubeWings. Keep this
+        # release and its PVCs as the rollback path without running a pod.
+        replicas: 0
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
@@ -123,6 +126,7 @@ spec:
         descheduler.alpha.kubernetes.io/evict: "false"
     service:
       app:
+        enabled: false
         controller: cs2
         type: LoadBalancer
         annotations:

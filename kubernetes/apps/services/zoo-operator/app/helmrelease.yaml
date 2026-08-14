@@ -21,7 +21,7 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:44cf8068bfe2a7f0a96e198a2cb0b5f11d009ae890c723caa2db225fa6e2eb11
+      reference: ghcr.io/thezoo-house/operator@sha256:907d715e00b367fa2be56c10297628525f7549a70183183da996ba74e3ac9dde
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
@@ -285,3 +285,8 @@ spec:
       existingSecret:
         name: gamekeeper-control
         key: token
+      kubeWings:
+        url: http://kubewings.services.svc.cluster.local
+        existingSecret:
+          name: kubewings-node-secret
+          key: KUBEWINGS_NODE_TOKEN

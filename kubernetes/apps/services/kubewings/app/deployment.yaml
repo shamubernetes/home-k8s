@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: gateway
-        image: ghcr.io/thezoo-house/kubewings@sha256:b3c6e92f22e68b255f14ed79e07c7dfe23e923b87cf96b98d8e874578cc9d383
+        image: ghcr.io/thezoo-house/kubewings@sha256:295601a3f3f067ac1e8e1b5de95acbe4292ad2bf8abb50bbcb0262c7acb13bdf
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -48,7 +48,13 @@ spec:
         - name: KUBEWINGS_GATEWAY_NAMESPACE
           value: services
         - name: KUBEWINGS_AGENT_IMAGE
-          value: ghcr.io/thezoo-house/kubewings@sha256:b3c6e92f22e68b255f14ed79e07c7dfe23e923b87cf96b98d8e874578cc9d383
+          value: ghcr.io/thezoo-house/kubewings@sha256:295601a3f3f067ac1e8e1b5de95acbe4292ad2bf8abb50bbcb0262c7acb13bdf
+        - name: KUBEWINGS_GAMEKEEPER_SERVER_UUID
+          value: 82805dd0-125f-4d7d-a0b0-7c8dcaf615f1
+        - name: KUBEWINGS_GAMEKEEPER_AGENT_IMAGE
+          value: ghcr.io/thezoo-house/gamekeeper@sha256:102ee2bacd3452a0ab08c9c1e8517fe280e9d7b2baae5992672a91289104ce76
+        - name: KUBEWINGS_GAMEKEEPER_AGENT_SECRET
+          value: cs2-gamekeeper
         - name: KUBEWINGS_STORAGE_CLASS
           value: ceph-block
         - name: KUBEWINGS_SERVICE_TYPE

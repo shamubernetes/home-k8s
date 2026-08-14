@@ -14,6 +14,13 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  # pull_requests is empty for our pull_request_target planner runs. The source
+  # run's branch is stable across synchronized heads, so a newer planner result
+  # cancels the older API-heavy verifier for the same PR branch.
+  group: "talos-image-availability-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}"
+  cancel-in-progress: true
+
 jobs:
   preflight:
     name: Verify provenance and required checks
@@ -42,6 +49,7 @@ jobs:
       with:
         install_args: crane
         cache: true
+        fetch_from_github: false
 
     - name: Log in to GHCR for private image inspection
       env:

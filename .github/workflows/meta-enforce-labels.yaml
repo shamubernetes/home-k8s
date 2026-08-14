@@ -10,6 +10,10 @@ on:
     - labeled
     - unlabeled
 
+concurrency:
+  group: "enforce-pr-labels-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
 jobs:
   enforce-label:
     name: Enforce PR labels

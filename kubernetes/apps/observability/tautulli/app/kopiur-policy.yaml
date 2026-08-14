@@ -1,0 +1,170 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: tautulli
+spec:
+  repository:
+    kind: Repository
+    name: tautulli-nas
+  identity:
+    username: tautulli
+    hostname: observability
+  sources:
+  - pvc:
+      name: tautulli
+    sourcePathOverride: /pvc/tautulli
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: tautulli
+        container: app
+        command:
+        - /usr/local/bin/python
+        - -c
+        - |
+          import os
+          import sqlite3
+
+          directory = "/config/kopiur"
+          source_path = "/config/tautulli.db"
+          destination_path = directory + "/tautulli-online.db"
+          artifacts = [
+              destination_path,
+              destination_path + "-journal",
+              destination_path + "-wal",
+              destination_path + "-shm",
+          ]
+
+          os.makedirs(directory, exist_ok=True)
+          for path in artifacts:
+              try:
+                  os.unlink(path)
+              except FileNotFoundError:
+                  pass
+
+          source = sqlite3.connect("file:" + source_path + "?mode=ro", uri=True)
+          try:
+              if source.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                  raise RuntimeError("source SQLite quick_check failed")
+              destination = sqlite3.connect(destination_path)
+              try:
+                  source.backup(destination)
+                  destination.commit()
+                  if destination.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                      raise RuntimeError("online backup SQLite integrity_check failed")
+              finally:
+                  destination.close()
+          finally:
+              source.close()
+
+          sidecars = [path for path in artifacts[1:] if os.path.exists(path)]
+          if sidecars:
+              raise RuntimeError("online backup left SQLite sidecars: " + ", ".join(sidecars))
+
+          os.chown(destination_path, 568, 568)
+          os.chmod(destination_path, 0o640)
+          file_descriptor = os.open(destination_path, os.O_RDONLY)
+          try:
+              os.fsync(file_descriptor)
+          finally:
+              os.close(file_descriptor)
+          directory_descriptor = os.open(directory, os.O_RDONLY)
+          try:
+              os.fsync(directory_descriptor)
+          finally:
+              os.close(directory_descriptor)
+        timeout: 2m
+        continueOnFailure: false
+    afterSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: tautulli
+        container: app
+        command:
+        - /bin/sh
+        - -c
+        - rm -f /config/kopiur/tautulli-online.db /config/kopiur/tautulli-online.db-journal /config/kopiur/tautulli-online.db-wal /config/kopiur/tautulli-online.db-shm
+        timeout: 30s
+        continueOnFailure: true
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: "30 8 * * *"
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: "30 9 * * 0"
+        jitter: 1h
+      capacity: 1Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: "stats.files > 0 && stats.errors == 0"
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: tautulli-daily
+spec:
+  policyRef:
+    name: tautulli
+  schedule:
+    cron: "30 1 * * *"
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: tautulli-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: tautulli-nas
+  destinationRef:
+    kind: Repository
+    name: tautulli-r2
+  schedule:
+    cron: "15 7 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: tautulli
+        hostname: observability
+        sourcePath: /pvc/tautulli
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

@@ -19,6 +19,9 @@ spec:
   values:
     controllers:
       cs2:
+        # The live server is managed by Pelican on KubeWings. Keep this
+        # release and its PVCs as the rollback path without running a pod.
+        enabled: false
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
@@ -123,6 +126,7 @@ spec:
         descheduler.alpha.kubernetes.io/evict: "false"
     service:
       app:
+        enabled: false
         controller: cs2
         type: LoadBalancer
         annotations:
@@ -143,6 +147,7 @@ spec:
             protocol: UDP
     persistence:
       config:
+        enabled: false
         existingClaim: cs2
         globalMounts:
           - path: /home/steam/cs2-dedicated
@@ -151,10 +156,12 @@ spec:
             agent:
               - path: /game/cs2-dedicated
       home:
+        enabled: false
         existingClaim: cs2-home
         globalMounts:
           - path: /home/steam/Steam
       scripts:
+        enabled: false
         type: configMap
         name: cs2-scripts
         defaultMode: 0755

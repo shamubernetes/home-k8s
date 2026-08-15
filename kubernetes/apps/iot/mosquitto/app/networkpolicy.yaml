@@ -37,10 +37,4 @@ spec:
     ports:
     - port: 1883
       protocol: TCP
-  egress:
-  - to:
-    - ipBlock:
-        cidr: 10.107.107.2/32
-    ports:
-    - port: 1883
-      protocol: TCP
+  egress: []

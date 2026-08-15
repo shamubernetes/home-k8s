@@ -8,7 +8,7 @@ set -eu
 : "${MQTT_ESPRESENSE_BAR_PASSWORD:?MQTT_ESPRESENSE_BAR_PASSWORD is required}"
 : "${MQTT_ESPRESENSE_LIVINGROOM_PASSWORD:?MQTT_ESPRESENSE_LIVINGROOM_PASSWORD is required}"
 : "${MQTT_RATGDO_MAIN_PASSWORD:?MQTT_RATGDO_MAIN_PASSWORD is required}"
-: "${MQTT_RATGDO_BRIDGE_PASSWORD:?MQTT_RATGDO_BRIDGE_PASSWORD is required}"
+: "${MQTT_RATGDO_LEGACY_PASSWORD:?MQTT_RATGDO_LEGACY_PASSWORD is required}"
 
 MQTT_PORT=8883
 ADMIN_OPTIONS=/work/admin-options
@@ -73,7 +73,7 @@ ensure_assignment() {
 remove_obsolete_managed_roles() {
   for role in $(ctrl listRoles | grep '^ha-migration-' || true); do
     case "$role" in
-      "$HA_ROLE"|"$BAR_ROLE"|"$LIVINGROOM_ROLE"|"$RATGDO_ROLE"|"$BRIDGE_ROLE") ;;
+      "$HA_ROLE"|"$BAR_ROLE"|"$LIVINGROOM_ROLE"|"$RATGDO_ROLE"|"$LEGACY_RATGDO_ROLE") ;;
       *) ctrl deleteRole "$role" >/dev/null ;;
     esac
   done
@@ -83,18 +83,18 @@ HA_USER=home-assistant
 BAR_USER=espresense-bar
 LIVINGROOM_USER=espresense-livingroom
 RATGDO_USER=ratgdo-main-garage
-BRIDGE_USER=ratgdo-legacy-bridge
+LEGACY_RATGDO_USER=ratgdo
 HA_ROLE=ha-migration-home-assistant-v1
 BAR_ROLE=ha-migration-espresense-bar-v1
 LIVINGROOM_ROLE=ha-migration-espresense-livingroom-v1
 RATGDO_ROLE=ha-migration-ratgdo-main-v1
-BRIDGE_ROLE=ha-migration-ratgdo-legacy-bridge-v1
+LEGACY_RATGDO_ROLE=ha-migration-ratgdo-legacy-v1
 
 ensure_client "$HA_USER" "$MQTT_HA_PASSWORD"
 ensure_client "$BAR_USER" "$MQTT_ESPRESENSE_BAR_PASSWORD"
 ensure_client "$LIVINGROOM_USER" "$MQTT_ESPRESENSE_LIVINGROOM_PASSWORD"
 ensure_client "$RATGDO_USER" "$MQTT_RATGDO_MAIN_PASSWORD"
-ensure_client "$BRIDGE_USER" "$MQTT_RATGDO_BRIDGE_PASSWORD"
+ensure_client "$LEGACY_RATGDO_USER" "$MQTT_RATGDO_LEGACY_PASSWORD"
 
 ensure_role "$HA_ROLE" \
   subscribePattern 'homeassistant/#' \
@@ -173,7 +173,7 @@ ensure_role "$RATGDO_ROLE" \
   unsubscribePattern 'ratgdo_Main_Garage_Door/command/#' \
   publishClientReceive 'ratgdo_Main_Garage_Door/command/#'
 
-ensure_role "$BRIDGE_ROLE" \
+ensure_role "$LEGACY_RATGDO_ROLE" \
   publishClientSend 'homeassistant/+/Main_Garage_Door/#' \
   publishClientSend 'homeassistant/+/Small_Garage_Door/#' \
   publishClientSend 'ratgdo_Main_Garage_Door/status/#' \
@@ -192,7 +192,7 @@ ensure_assignment "$HA_USER" "$HA_ROLE"
 ensure_assignment "$BAR_USER" "$BAR_ROLE"
 ensure_assignment "$LIVINGROOM_USER" "$LIVINGROOM_ROLE"
 ensure_assignment "$RATGDO_USER" "$RATGDO_ROLE"
-ensure_assignment "$BRIDGE_USER" "$BRIDGE_ROLE"
+ensure_assignment "$LEGACY_RATGDO_USER" "$LEGACY_RATGDO_ROLE"
 remove_obsolete_managed_roles
 
 rm -f "$ADMIN_OPTIONS"

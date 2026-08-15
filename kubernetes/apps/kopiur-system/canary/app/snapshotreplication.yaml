@@ -5,7 +5,7 @@ metadata:
 spec:
   sourceRef:
     kind: Repository
-    name: nas-primary
+    name: nas-smb-primary
   destinationRef:
     kind: Repository
     name: r2-offsite
@@ -21,4 +21,4 @@ spec:
     retention:
       keepDaily: 7
       keepWeekly: 4
-  suspend: true
+  suspend: false

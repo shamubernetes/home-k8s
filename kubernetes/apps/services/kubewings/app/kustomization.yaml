@@ -7,7 +7,6 @@ resources:
 - ./crd-kubegameserveroperations.yaml
 - ./admission.yaml
 - ./externalsecret.yaml
-- ./gamekeeper-agent-secret.yaml
 - ./rbac.yaml
 - ./deployment.yaml
 - ./service.yaml

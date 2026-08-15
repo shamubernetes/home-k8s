@@ -179,7 +179,7 @@ url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/47201952
 provenance = "cosign"
 
 [[tools."npm:renovate"]]
-version = "44.30.3"
+version = "44.29.5"
 backend = "npm:renovate"
 
 [tools."npm:renovate".options]

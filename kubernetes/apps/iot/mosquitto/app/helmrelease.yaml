@@ -23,10 +23,58 @@ spec:
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
-          initialize-dynamic-security:
+          generate-ratgdo-legacy-bridge:
             image:
               repository: &imageRepository docker.io/library/eclipse-mosquitto
               tag: &imageTag 2.1.2-alpine@sha256:6f8d8a947c506f8a2290ec65cd4bd2bc7cb4d43fb5f6271f861cb013e2ef9797
+            command: ["/bin/sh", "-ec"]
+            args:
+            - |
+              umask 077
+              cat > /mosquitto/generated/ratgdo-legacy-bridge.conf <<EOF
+              connection ratgdo-legacy
+              address 10.107.107.2:1883
+              bridge_protocol_version mqttv311
+              bridge_attempt_unsubscribe true
+              cleansession false
+              local_clientid ratgdo-legacy-local
+              local_username ratgdo-legacy-bridge
+              local_password ${MQTT_LOCAL_PASSWORD}
+              notifications false
+              remote_clientid ratgdo-legacy-cluster
+              remote_username ratgdo
+              remote_password ${MQTT_LEGACY_PASSWORD}
+              restart_timeout 5 30
+              start_type automatic
+              try_private true
+              topic homeassistant/+/Main_Garage_Door/# in 0
+              topic homeassistant/+/Small_Garage_Door/# in 0
+              topic ratgdo_Main_Garage_Door/status/# in 0
+              topic ratgdo_Small_Garage_Door/status/# in 0
+              topic homeassistant/status out 0
+              topic ratgdo_Main_Garage_Door/command/# out 0
+              topic ratgdo_Small_Garage_Door/command/# out 0
+              EOF
+              chmod 0600 /mosquitto/generated/ratgdo-legacy-bridge.conf
+            env:
+              MQTT_LOCAL_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: mosquitto-secret
+                    key: ratgdo-main-password
+              MQTT_LEGACY_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: mosquitto-ratgdo-legacy-bridge
+                    key: password
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+          initialize-dynamic-security:
+            image:
+              repository: *imageRepository
+              tag: *imageTag
             command: ["/bin/sh", "-ec"]
             args:
             - |
@@ -140,6 +188,16 @@ spec:
             app:
             - path: /mosquitto/config/mosquitto.conf
               subPath: mosquitto.conf
+              readOnly: true
+      generated:
+        type: emptyDir
+        medium: Memory
+        advancedMounts:
+          mosquitto:
+            generate-ratgdo-legacy-bridge:
+            - path: /mosquitto/generated
+            app:
+            - path: /mosquitto/generated
               readOnly: true
       scripts:
         type: configMap

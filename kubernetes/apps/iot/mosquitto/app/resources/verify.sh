@@ -8,6 +8,7 @@ set -eu
 : "${MQTT_ESPRESENSE_BAR_PASSWORD:?MQTT_ESPRESENSE_BAR_PASSWORD is required}"
 : "${MQTT_ESPRESENSE_LIVINGROOM_PASSWORD:?MQTT_ESPRESENSE_LIVINGROOM_PASSWORD is required}"
 : "${MQTT_RATGDO_MAIN_PASSWORD:?MQTT_RATGDO_MAIN_PASSWORD is required}"
+: "${MQTT_RATGDO_BRIDGE_PASSWORD:?MQTT_RATGDO_BRIDGE_PASSWORD is required}"
 
 MQTT_PORT=8883
 CA_FILE=/etc/ssl/certs/ca-certificates.crt
@@ -302,10 +303,13 @@ HA_USER=home-assistant
 BAR_USER=espresense-bar
 LIVINGROOM_USER=espresense-livingroom
 RATGDO_USER=ratgdo-main-garage
+BRIDGE_USER=ratgdo-legacy-bridge
 
 BAR_TOPIC="espresense/rooms/bar/verify/${RUN_ID}"
 LIVINGROOM_TOPIC="espresense/rooms/livingroom/verify/${RUN_ID}"
 RATGDO_STATUS_TOPIC="ratgdo_Main_Garage_Door/status/verify/${RUN_ID}"
+BRIDGE_STATUS_TOPIC="ratgdo_Small_Garage_Door/status/verify/${RUN_ID}"
+BRIDGE_COMMAND_TOPIC="ratgdo_Small_Garage_Door/command/verify/${RUN_ID}"
 BAR_DISCOVERY_TOPIC="homeassistant/sensor/espresense_5c1fa8/verify/${RUN_ID}"
 ESP_SETTING_TOPIC="espresense/settings/verify-${RUN_ID}/config"
 ESP_BROADCAST_TOPIC="espresense/rooms/*/verify-${RUN_ID}/set"
@@ -333,12 +337,35 @@ mqtt_plain_pub "$RATGDO_USER" "$MQTT_RATGDO_MAIN_PASSWORD" \
 wait "$ha_ratgdo_subscriber"
 grep -qx "$RUN_ID" /work/ha-ratgdo
 
+mqtt_sub "$HA_USER" "$MQTT_HA_PASSWORD" -W 10 -C 1 -t "$BRIDGE_STATUS_TOPIC" > /work/ha-bridge-status &
+ha_bridge_status_subscriber=$!
+sleep 1
+mqtt_pub "$BRIDGE_USER" "$MQTT_RATGDO_BRIDGE_PASSWORD" \
+  -t "$BRIDGE_STATUS_TOPIC" -m "$RUN_ID"
+wait "$ha_bridge_status_subscriber"
+grep -qx "$RUN_ID" /work/ha-bridge-status
+
+mqtt_sub "$BRIDGE_USER" "$MQTT_RATGDO_BRIDGE_PASSWORD" \
+  -W 10 -C 1 -t "$BRIDGE_COMMAND_TOPIC" > /work/bridge-command &
+bridge_command_subscriber=$!
+sleep 1
+mqtt_pub "$HA_USER" "$MQTT_HA_PASSWORD" \
+  -t "$BRIDGE_COMMAND_TOPIC" -m "$RUN_ID"
+wait "$bridge_command_subscriber"
+grep -qx "$RUN_ID" /work/bridge-command
+
 ha_role_contract="$(ctrl getRole ha-migration-home-assistant-v1)"
 printf '%s\n' "$ha_role_contract" | grep -Fq 'publishClientSend'
 printf '%s\n' "$ha_role_contract" | grep -Fq 'ratgdo_Main_Garage_Door/command/#'
+printf '%s\n' "$ha_role_contract" | grep -Fq 'ratgdo_Small_Garage_Door/command/#'
 ratgdo_role_contract="$(ctrl getRole ha-migration-ratgdo-main-v1)"
 printf '%s\n' "$ratgdo_role_contract" | grep -Fq 'publishClientReceive'
 printf '%s\n' "$ratgdo_role_contract" | grep -Fq 'ratgdo_Main_Garage_Door/command/#'
+bridge_role_contract="$(ctrl getRole ha-migration-ratgdo-legacy-bridge-v1)"
+printf '%s\n' "$bridge_role_contract" | grep -Fq 'publishClientSend'
+printf '%s\n' "$bridge_role_contract" | grep -Fq 'ratgdo_Small_Garage_Door/status/#'
+printf '%s\n' "$bridge_role_contract" | grep -Fq 'publishClientReceive'
+printf '%s\n' "$bridge_role_contract" | grep -Fq 'ratgdo_Small_Garage_Door/command/#'
 
 mqtt_sub "$HA_USER" "$MQTT_HA_PASSWORD" -W 10 -C 1 \
   -t 'homeassistant/#' > /work/ha-bar-discovery &
@@ -390,6 +417,8 @@ expect_subscription_blocked plain \
   "$BAR_TOPIC" "$BAR_TOPIC"
 expect_publish_blocked plain "$RATGDO_USER" "$MQTT_RATGDO_MAIN_PASSWORD" \
   "ratgdo_Small_Garage_Door/status/verify/${RUN_ID}"
+expect_publish_blocked tls "$BRIDGE_USER" "$MQTT_RATGDO_BRIDGE_PASSWORD" \
+  "node-red/verify/${RUN_ID}"
 for denied_topic in \
   "zoo/fleet/v1/products/verify/targets/verify/devices/verify/desired" \
   "ps5-mqtt/verify/${RUN_ID}" \

@@ -23,10 +23,13 @@ spec:
               values:
               - kopiur-canary
               - nas-primary
+              - nas-smb-primary
               - homarr
               - homarr-nas
+              - homarr-nas-smb
               - tautulli
               - tautulli-nas
+              - tautulli-nas-smb
     mutate:
       patchStrategicMerge:
         spec:

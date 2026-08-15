@@ -36,6 +36,7 @@ spec:
       retentionPeriod: 10y
       extraArgs:
         dedup.minScrapeInterval: 1ms
+        memory.allowedPercent: 40
         envflag.enable: true
         envflag.prefix: VM_
         loggerFormat: json

@@ -21,4 +21,4 @@ spec:
     retention:
       keepDaily: 7
       keepWeekly: 4
-  suspend: false
+  suspend: true

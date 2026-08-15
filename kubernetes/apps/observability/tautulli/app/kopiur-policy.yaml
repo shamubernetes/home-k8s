@@ -5,7 +5,7 @@ metadata:
 spec:
   repository:
     kind: Repository
-    name: tautulli-nas
+    name: tautulli-r2
   identity:
     username: tautulli
     hostname: observability
@@ -167,4 +167,4 @@ spec:
     retention:
       keepDaily: 7
       keepWeekly: 4
-  suspend: false
+  suspend: true

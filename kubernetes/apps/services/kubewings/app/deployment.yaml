@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: gateway
-        image: ghcr.io/thezoo-house/kubewings@sha256:a059235c8ee6849a0c6edc3cf7811f3d582aad1ad29cabcee518455fc6ca2f41
+        image: ghcr.io/thezoo-house/kubewings@sha256:295601a3f3f067ac1e8e1b5de95acbe4292ad2bf8abb50bbcb0262c7acb13bdf
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -48,7 +48,7 @@ spec:
         - name: KUBEWINGS_GATEWAY_NAMESPACE
           value: services
         - name: KUBEWINGS_AGENT_IMAGE
-          value: ghcr.io/thezoo-house/kubewings@sha256:a059235c8ee6849a0c6edc3cf7811f3d582aad1ad29cabcee518455fc6ca2f41
+          value: ghcr.io/thezoo-house/kubewings@sha256:295601a3f3f067ac1e8e1b5de95acbe4292ad2bf8abb50bbcb0262c7acb13bdf
         - name: KUBEWINGS_GAMEKEEPER_SERVER_UUID
           value: 82805dd0-125f-4d7d-a0b0-7c8dcaf615f1
         - name: KUBEWINGS_GAMEKEEPER_AGENT_IMAGE

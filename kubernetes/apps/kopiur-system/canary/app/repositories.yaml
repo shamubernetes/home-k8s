@@ -15,26 +15,19 @@ spec:
       name: kopiur-nas-repository
       key: KOPIA_PASSWORD
   create:
-    enabled: true
+    enabled: false
+  # Preserve retained NAS points without scheduling work against Unraid's
+  # multi-disk /mnt/user NFS view, which does not provide stable file handles.
+  mode: ReadOnly
   scheduleDefaults:
     timezone: America/New_York
   deletionProtection:
     threshold: 10
   health:
     probe:
-      enabled: true
-      interval: 5m
-      failureThreshold: 3
-      onFailure: Degrade
+      enabled: false
   maintenance:
-    enabled: true
-    schedule:
-      quick:
-        cron: "0 */6 * * *"
-        jitter: 30m
-      full:
-        cron: "30 3 * * *"
-        jitter: 1h
+    enabled: false
   moverDefaults:
     podSecurityContext:
       runAsUser: 568

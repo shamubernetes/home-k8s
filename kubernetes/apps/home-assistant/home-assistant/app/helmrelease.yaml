@@ -34,6 +34,13 @@ spec:
             envFrom: &envFrom
             - secretRef:
                 name: home-assistant-secret
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
           install-hacs:
             image:
               repository: busybox
@@ -48,6 +55,13 @@ spec:
               mkdir -p /config/custom_components/hacs
               rm -rf /config/custom_components/hacs
               busybox wget -qO- "https://github.com/hacs/integration/releases/download/$${HACS_VERSION}/hacs.zip"  | busybox unzip -d /config/custom_components/hacs -
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
         containers:
           app:
             image:
@@ -62,8 +76,10 @@ spec:
               capabilities: {drop: ["ALL"]}
             resources:
               requests:
-                cpu: 10m
+                cpu: 2
+                memory: 2Gi
               limits:
+                cpu: 2
                 memory: 2Gi
           code-server:
             image:
@@ -72,12 +88,17 @@ spec:
             args: ["--auth", "none", "--user-data-dir", "/config/.vscode", "--extensions-dir", "/config/.vscode", "--port", "12321", "/config"]
             resources:
               requests:
-                cpu: 10m
+                cpu: 250m
+                memory: 512Mi
               limits:
+                cpu: 250m
                 memory: 512Mi
     defaultPodOptions:
       annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
         descheduler.alpha.kubernetes.io/evict: "false"
+      priorityClassName: home-assistant-critical
+      terminationGracePeriodSeconds: 300
       securityContext:
         runAsNonRoot: true
         runAsUser: 568

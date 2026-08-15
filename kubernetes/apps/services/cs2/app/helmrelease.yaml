@@ -19,6 +19,9 @@ spec:
   values:
     controllers:
       cs2:
+        # The live server is managed by Pelican on KubeWings. Keep this
+        # release and its PVCs as the rollback path without running a pod.
+        enabled: false
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
@@ -52,77 +55,12 @@ spec:
             resources:
               requests:
                 cpu: 10m
-          agent:
-            image:
-              repository: ghcr.io/thezoo-house/gamekeeper
-              tag: v0.3.1@sha256:102ee2bacd3452a0ab08c9c1e8517fe280e9d7b2baae5992672a91289104ce76
-            command:
-              - bun
-              - --no-install
-              - --no-env-file
-              - scripts/game-agent.ts
-            env:
-              GAMEKEEPER_AGENT_PROFILE: cs2
-              GAMEKEEPER_AGENT_ROOT: /game/cs2-dedicated
-              GAMEKEEPER_AGENT_PORT: "3001"
-              GAMEKEEPER_AGENT_TOKEN:
-                valueFrom:
-                  secretKeyRef:
-                    name: cs2-gamekeeper
-                    key: token
-            probes:
-              liveness: &agentProbes
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /health/live
-                    port: &agentPort 3001
-                  periodSeconds: 10
-                  timeoutSeconds: 2
-                  failureThreshold: 3
-              readiness:
-                <<: *agentProbes
-                spec:
-                  httpGet:
-                    path: /health/ready
-                    port: *agentPort
-                  periodSeconds: 10
-                  timeoutSeconds: 2
-                  failureThreshold: 3
-              startup:
-                enabled: true
-                custom: true
-                spec:
-                  httpGet:
-                    path: /health/ready
-                    port: *agentPort
-                  periodSeconds: 2
-                  timeoutSeconds: 2
-                  failureThreshold: 30
-            ports:
-              - name: agent
-                containerPort: *agentPort
-                protocol: TCP
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities: {drop: ["ALL"]}
-              readOnlyRootFilesystem: true
-              runAsGroup: 1000
-              runAsNonRoot: true
-              runAsUser: 1000
-            resources:
-              requests:
-                cpu: 10m
-                memory: 64Mi
-              limits:
-                cpu: 500m
-                memory: 256Mi
     defaultPodOptions:
       annotations:
         descheduler.alpha.kubernetes.io/evict: "false"
     service:
       app:
+        enabled: false
         controller: cs2
         type: LoadBalancer
         annotations:
@@ -143,18 +81,17 @@ spec:
             protocol: UDP
     persistence:
       config:
+        enabled: false
         existingClaim: cs2
         globalMounts:
           - path: /home/steam/cs2-dedicated
-        advancedMounts:
-          cs2:
-            agent:
-              - path: /game/cs2-dedicated
       home:
+        enabled: false
         existingClaim: cs2-home
         globalMounts:
           - path: /home/steam/Steam
       scripts:
+        enabled: false
         type: configMap
         name: cs2-scripts
         defaultMode: 0755

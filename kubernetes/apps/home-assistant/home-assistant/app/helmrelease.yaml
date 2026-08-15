@@ -5,6 +5,7 @@ metadata:
   name: &app home-assistant
 spec:
   interval: 10m
+  timeout: 10m
   chartRef:
     kind: OCIRepository
     name: home-assistant

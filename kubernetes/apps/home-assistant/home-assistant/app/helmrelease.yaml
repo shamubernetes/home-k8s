@@ -98,6 +98,8 @@ spec:
                 cpu: 250m
                 memory: 512Mi
     defaultPodOptions:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       priorityClassName: home-assistant-critical

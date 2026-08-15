@@ -19,6 +19,19 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: home-assistant
+    # Home Assistant uses hostNetwork for HomeKit. Its traffic reaches Cilium
+    # with the node IP rather than the pod namespace identity, so permit only
+    # the current Kubernetes nodes instead of the broader node subnet.
+    - ipBlock:
+        cidr: 10.100.47.35/32
+    - ipBlock:
+        cidr: 10.100.47.48/32
+    - ipBlock:
+        cidr: 10.100.47.49/32
+    - ipBlock:
+        cidr: 10.100.47.50/32
+    - ipBlock:
+        cidr: 10.100.47.51/32
     ports:
     - port: 8428
       protocol: TCP

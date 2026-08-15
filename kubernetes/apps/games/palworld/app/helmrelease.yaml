@@ -19,6 +19,7 @@ spec:
   values:
     controllers:
       palworld:
+        replicas: 0
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"

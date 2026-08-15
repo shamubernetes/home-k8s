@@ -26,7 +26,7 @@ spec:
           prepare:
             image:
               repository: ghcr.io/thezoo-house/gamekeeper
-              tag: v0.3.1@sha256:102ee2bacd3452a0ab08c9c1e8517fe280e9d7b2baae5992672a91289104ce76
+              tag: v0.3.2@sha256:ce6311d811b2e40b3f342643205e1b03ed6df0a2659d8167ecb951650ef6c800
             command: ["bun", "-e"]
             args:
               - |
@@ -102,7 +102,7 @@ spec:
           agent:
             image:
               repository: ghcr.io/thezoo-house/gamekeeper
-              tag: v0.3.1@sha256:102ee2bacd3452a0ab08c9c1e8517fe280e9d7b2baae5992672a91289104ce76
+              tag: v0.3.2@sha256:ce6311d811b2e40b3f342643205e1b03ed6df0a2659d8167ecb951650ef6c800
             command:
               - bun
               - --no-install

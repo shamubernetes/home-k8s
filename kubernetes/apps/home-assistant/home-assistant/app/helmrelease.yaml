@@ -96,7 +96,6 @@ spec:
     defaultPodOptions:
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
-        descheduler.alpha.kubernetes.io/evict: "false"
       priorityClassName: home-assistant-critical
       terminationGracePeriodSeconds: 300
       securityContext:

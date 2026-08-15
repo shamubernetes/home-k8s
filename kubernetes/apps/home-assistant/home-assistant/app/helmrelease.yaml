@@ -25,6 +25,7 @@ spec:
   values:
     controllers:
       home-assistant:
+        replicas: 0
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
@@ -43,6 +44,7 @@ spec:
                 cpu: 100m
                 memory: 128Mi
           install-hacs:
+            enabled: false
             image:
               repository: busybox
               tag: 1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
@@ -83,6 +85,7 @@ spec:
                 cpu: 2
                 memory: 2Gi
           code-server:
+            enabled: false
             image:
               repository: ghcr.io/coder/code-server
               tag: 4.132.0@sha256:b88ed46a6ace76a0294a17a24f39aa88032ed0a3692c3d8ab5433b47ab57ccbf
@@ -112,8 +115,6 @@ spec:
         ports:
           http:
             port: 8123
-          code-server:
-            port: 12321
     persistence:
       config:
         existingClaim: home-assistant

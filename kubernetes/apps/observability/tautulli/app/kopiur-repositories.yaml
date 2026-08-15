@@ -83,11 +83,12 @@ spec:
       fsGroup: 568
       fsGroupChangePolicy: OnRootMismatch
     resources:
+      # The rclone SMB mover exceeded 512Mi while snapshotting Tautulli's data.
       requests:
         cpu: 25m
-        memory: 128Mi
+        memory: 256Mi
       limits:
-        memory: 512Mi
+        memory: 1Gi
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository

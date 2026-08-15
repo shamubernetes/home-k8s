@@ -61,6 +61,11 @@ spec:
                 secretKeyRef:
                   name: mosquitto-secret
                   key: ratgdo-main-password
+            - name: MQTT_RATGDO_BRIDGE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-secret
+                  key: ratgdo-main-password
             resources:
               requests:
                 cpu: 10m

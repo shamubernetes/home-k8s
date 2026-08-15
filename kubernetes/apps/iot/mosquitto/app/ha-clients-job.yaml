@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: mosquitto-home-assistant-clients-v2
+  name: mosquitto-home-assistant-clients-v3
 spec:
   backoffLimit: 6
   activeDeadlineSeconds: 600
@@ -52,6 +52,11 @@ spec:
               name: mosquitto-secret
               key: espresense-livingroom-password
         - name: MQTT_RATGDO_MAIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mosquitto-secret
+              key: ratgdo-main-password
+        - name: MQTT_RATGDO_BRIDGE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: mosquitto-secret

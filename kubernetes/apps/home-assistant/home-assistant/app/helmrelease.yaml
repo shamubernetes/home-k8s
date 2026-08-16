@@ -29,6 +29,84 @@ spec:
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
+          00-migrate-git-metadata:
+            image: &homeAssistantImage
+              repository: ghcr.io/home-operations/home-assistant
+              tag: 2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+            command:
+            - python
+            - -c
+            args:
+            - |
+              from pathlib import Path
+              import shutil
+              import subprocess
+
+              config_git = Path("/config/.git")
+              staged_git = Path("/config/.git.migrated")
+              git_dir = Path("/git/repository")
+
+              if config_git.is_dir():
+                  # A partial destination can only be an interrupted copy from this initializer.
+                  if git_dir.exists():
+                      shutil.rmtree(git_dir)
+
+                  # Interrupted repacks are not Git objects and consumed most of the PVC.
+                  for temporary_pack in (config_git / "objects" / "pack").glob("tmp_pack_*"):
+                      temporary_pack.unlink()
+
+                  shutil.copytree(config_git, git_dir, copy_function=shutil.copy2)
+                  subprocess.run(
+                      [
+                          "git",
+                          f"--git-dir={git_dir}",
+                          "--work-tree=/config",
+                          "rev-parse",
+                          "--verify",
+                          "HEAD",
+                      ],
+                      check=True,
+                  )
+                  config_git.rename(staged_git)
+                  config_git.write_text("gitdir: /git/repository\n")
+                  shutil.rmtree(staged_git)
+                  print("Moved Git metadata outside the Home Assistant backup tree")
+              elif config_git.is_file():
+                  if config_git.read_text().strip() != "gitdir: /git/repository":
+                      raise RuntimeError("Unexpected /config/.git pointer")
+              elif (git_dir / "HEAD").is_file():
+                  config_git.write_text("gitdir: /git/repository\n")
+              else:
+                  subprocess.run(
+                      ["git", "init", "--separate-git-dir=/git/repository", "/config"],
+                      check=True,
+                  )
+                  config_git.write_text("gitdir: /git/repository\n")
+
+              if staged_git.exists():
+                  shutil.rmtree(staged_git)
+
+              # Keep runtime archives out of future commits without changing the config repo.
+              exclude_path = git_dir / "info" / "exclude"
+              exclude_path.parent.mkdir(parents=True, exist_ok=True)
+              existing = exclude_path.read_text() if exclude_path.exists() else ""
+              entries = ["backups/", "recorder-archive/"]
+              missing = [entry for entry in entries if entry not in existing.splitlines()]
+              if missing:
+                  with exclude_path.open("a") as exclude_file:
+                      if existing and not existing.endswith("\n"):
+                          exclude_file.write("\n")
+                      exclude_file.write("# Home Assistant runtime archives\n")
+                      exclude_file.write("\n".join(missing) + "\n")
+
+              subprocess.run(["git", "-C", "/config", "rev-parse", "--is-inside-work-tree"], check=True)
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 1
+                memory: 512Mi
           init-db:
             image:
               repository: ghcr.io/home-operations/postgres-init
@@ -46,9 +124,7 @@ spec:
           # Recovery bootstrap only; existing HACS is preserved and upgraded in Home Assistant.
           bootstrap-hacs:
             enabled: true
-            image: &homeAssistantImage
-              repository: ghcr.io/home-operations/home-assistant
-              tag: 2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+            image: *homeAssistantImage
             command:
             - python
             - -c
@@ -176,6 +252,10 @@ spec:
         existingClaim: home-assistant
         globalMounts:
         - path: /config
+      git:
+        existingClaim: home-assistant-git
+        globalMounts:
+        - path: /git
       logs:
         type: emptyDir
         globalMounts:

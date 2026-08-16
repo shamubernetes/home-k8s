@@ -73,6 +73,25 @@ class HomeAssistantRenovateGuardTest(unittest.TestCase):
         ]
         self.assertNotIn("hacs/integration", matching[0]["matchPackageNames"])
 
+    def test_vscode_identity_is_generated_without_an_editor_sidecar(self) -> None:
+        self.assertIn("init-vscode-identity:", self.manifest)
+        self.assertIn('uid = "568"', self.manifest)
+        self.assertIn('gid = "568"', self.manifest)
+        self.assertIn(
+            'homeassistant:x:568:568:Home Assistant:/config:/bin/bash',
+            self.manifest,
+        )
+        self.assertIn('homeassistant:x:568:', self.manifest)
+        self.assertIn('Path("/etc/passwd").read_text()', self.manifest)
+        self.assertIn('Path("/etc/group").read_text()', self.manifest)
+        self.assertIn("vscode-identity:", self.manifest)
+        self.assertIn("path: /etc/passwd", self.manifest)
+        self.assertIn("path: /etc/group", self.manifest)
+        self.assertRegex(
+            self.manifest,
+            r"(?m)^\s*code-server:\n\s*enabled: false$",
+        )
+
     def test_unrelated_dependencies_are_not_disabled(self) -> None:
         matching = [
             rule for rule in self.rules if rule.get("description") == RULE_DESCRIPTION

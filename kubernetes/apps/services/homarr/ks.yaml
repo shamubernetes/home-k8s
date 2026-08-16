@@ -38,6 +38,10 @@ spec:
     namespace: services
   - apiVersion: kopiur.home-operations.com/v1alpha1
     kind: Repository
+    name: homarr-nas-smb
+    namespace: services
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
     name: homarr-r2
     namespace: services
   - apiVersion: kopiur.home-operations.com/v1alpha1

@@ -74,6 +74,10 @@ spec:
               limits:
                 memory: 1Gi
     defaultPodOptions:
+      hostAliases:
+      - ip: 10.100.47.100
+        hostnames:
+        - mnemosyne.thezoo.house
       securityContext:
         runAsNonRoot: true
         runAsUser: 82

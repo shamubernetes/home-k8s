@@ -45,6 +45,10 @@ spec:
     namespace: kopiur-canary
   - apiVersion: kopiur.home-operations.com/v1alpha1
     kind: Repository
+    name: nas-smb-primary
+    namespace: kopiur-canary
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
     name: r2-offsite
     namespace: kopiur-canary
   - apiVersion: kopiur.home-operations.com/v1alpha1

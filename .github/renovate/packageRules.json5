@@ -2,12 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
     {
-      description: "Home Assistant and HACS core use the rehearsed upgrade workflow",
+      description: "Home Assistant core uses the rehearsed upgrade workflow",
       matchFileNames: ["kubernetes/apps/home-assistant/home-assistant/app/helmrelease.yaml"],
-      matchPackageNames: [
-        "ghcr.io/home-operations/home-assistant",
-        "hacs/integration",
-      ],
+      matchPackageNames: ["ghcr.io/home-operations/home-assistant"],
       enabled: false,
     },
     {

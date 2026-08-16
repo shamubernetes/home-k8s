@@ -1,0 +1,8 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: home-assistant-critical
+value: 1000000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: Critical household control workload, below Kubernetes system-critical classes.

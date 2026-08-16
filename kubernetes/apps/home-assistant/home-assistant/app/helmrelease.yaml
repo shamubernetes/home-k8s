@@ -99,7 +99,18 @@ spec:
                       exclude_file.write("# Home Assistant runtime archives\n")
                       exclude_file.write("\n".join(missing) + "\n")
 
-              subprocess.run(["git", "-C", "/config", "rev-parse", "--is-inside-work-tree"], check=True)
+              subprocess.run(
+                  [
+                      "git",
+                      "-c",
+                      "safe.directory=/config",
+                      "-C",
+                      "/config",
+                      "rev-parse",
+                      "--is-inside-work-tree",
+                  ],
+                  check=True,
+              )
             resources:
               requests:
                 cpu: 100m

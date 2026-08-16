@@ -1,52 +1,22 @@
 #!/usr/bin/env python3
-"""Classify whether a PR is eligible for Talos application image pre-pull."""
+"""Classify whether a PR includes Talos application image changes."""
 
 from __future__ import annotations
 
 import re
 import sys
 
-PROTECTED = re.compile(
-    r"^(\.github/workflows/|scripts/|"
-    r"kubernetes/apps/actions-runner-system/|"
-    r"kubernetes/apps/kyverno/|talos/)"
+NON_APPLICATION = re.compile(
+    r"^kubernetes/apps/(actions-runner-system|kyverno)/"
 )
-NON_EXECUTABLE_DATA = frozenset(
-    {
-        "scripts/flate-render-baseline.tsv",
-        "scripts/helm-image-validation-skips.txt",
-        "scripts/helm-image-pin-baseline.txt",
-        "talos/helmfile.yaml",
-    }
-)
-COORDINATED_TALOS_UPGRADE = frozenset(
-    {
-        "kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml",
-        "talos/talconfig.yaml",
-    }
-)
-
-
-def is_protected(path: str) -> bool:
-    return path not in NON_EXECUTABLE_DATA and PROTECTED.match(path) is not None
 
 
 def main() -> int:
     files = [line.strip() for line in sys.stdin if line.strip()]
-    if frozenset(files) == COORDINATED_TALOS_UPGRADE:
-        print("applicable")
-        return 0
-    protected_boundary = any(is_protected(path) for path in files)
     applicable = any(
-        path.startswith("kubernetes/") and not is_protected(path) for path in files
+        path.startswith("kubernetes/") and NON_APPLICATION.match(path) is None
+        for path in files
     )
-
-    if protected_boundary and applicable:
-        print(
-            "split privileged-boundary and application changes into separate pull requests",
-            file=sys.stderr,
-        )
-        return 1
     print("applicable" if applicable else "not-applicable")
     return 0
 

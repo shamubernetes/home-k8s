@@ -5,6 +5,7 @@ metadata:
   name: &app home-assistant
 spec:
   interval: 10m
+  timeout: 10m
   chartRef:
     kind: OCIRepository
     name: home-assistant
@@ -24,6 +25,7 @@ spec:
   values:
     controllers:
       home-assistant:
+        replicas: 1
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
@@ -34,25 +36,94 @@ spec:
             envFrom: &envFrom
             - secretRef:
                 name: home-assistant-secret
-          install-hacs:
-            image:
-              repository: busybox
-              tag: 1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+          # Recovery bootstrap only; existing HACS is preserved and upgraded in Home Assistant.
+          bootstrap-hacs:
+            enabled: true
+            image: &homeAssistantImage
+              repository: ghcr.io/home-operations/home-assistant
+              tag: 2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
             command:
-            - "/bin/sh"
+            - python
             - -c
             args:
             - |
+              from pathlib import Path
+              import os
+              import shutil
+              import tempfile
+              import urllib.request
+              import zipfile
+
+              hacs_version = os.environ["HACS_VERSION"]
+              hacs_dir = Path("/config/custom_components/hacs")
+              if (hacs_dir / "manifest.json").is_file():
+                  print("HACS is already installed; preserving the Home Assistant-managed version")
+                  raise SystemExit(0)
+
+              with tempfile.TemporaryDirectory() as work_dir_name:
+                  work_dir = Path(work_dir_name)
+                  archive = work_dir / "hacs.zip"
+                  extracted = work_dir / "hacs"
+                  url = f"https://github.com/hacs/integration/releases/download/{hacs_version}/hacs.zip"
+                  with urllib.request.urlopen(url, timeout=60) as response, archive.open("wb") as output:
+                      shutil.copyfileobj(response, output)
+                  with zipfile.ZipFile(archive) as hacs_zip:
+                      hacs_zip.extractall(extracted)
+                  if not (extracted / "manifest.json").is_file():
+                      raise RuntimeError("Downloaded HACS archive has no manifest.json")
+
+                  hacs_dir.parent.mkdir(parents=True, exist_ok=True)
+                  if hacs_dir.exists():
+                      shutil.rmtree(hacs_dir)
+                  shutil.move(extracted, hacs_dir)
+              print(f"Bootstrapped HACS {hacs_version}")
+            env:
               # renovate: datasource=github-releases depName=hacs/integration
-              HACS_VERSION=2.0.1
-              mkdir -p /config/custom_components/hacs
-              rm -rf /config/custom_components/hacs
-              busybox wget -qO- "https://github.com/hacs/integration/releases/download/$${HACS_VERSION}/hacs.zip"  | busybox unzip -d /config/custom_components/hacs -
+              HACS_VERSION: 2.0.1
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+          # VS Code Dev Containers requires the runtime UID/GID to have names.
+          init-vscode-identity:
+            image: *homeAssistantImage
+            command:
+            - python
+            - -c
+            args:
+            - |
+              from pathlib import Path
+
+              uid = "568"
+              gid = "568"
+              passwd = Path("/etc/passwd").read_text().rstrip("\n").splitlines()
+              group = Path("/etc/group").read_text().rstrip("\n").splitlines()
+              if not any(line.split(":")[2] == uid for line in passwd):
+                  passwd.append("homeassistant:x:568:568:Home Assistant:/config:/bin/bash")
+              if not any(line.split(":")[2] == gid for line in group):
+                  group.append("homeassistant:x:568:")
+              Path("/identity/passwd").write_text("\n".join(passwd) + "\n")
+              Path("/identity/group").write_text("\n".join(group) + "\n")
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                cpu: 10m
+                memory: 32Mi
         containers:
           app:
-            image:
-              repository: ghcr.io/home-operations/home-assistant
-              tag: 2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+            image: *homeAssistantImage
             env:
               TZ: America/New_York
             envFrom: *envFrom
@@ -62,22 +133,31 @@ spec:
               capabilities: {drop: ["ALL"]}
             resources:
               requests:
-                cpu: 10m
+                cpu: 2
+                memory: 2Gi
               limits:
+                cpu: 2
                 memory: 2Gi
           code-server:
+            enabled: false
             image:
               repository: ghcr.io/coder/code-server
               tag: 4.132.0@sha256:b88ed46a6ace76a0294a17a24f39aa88032ed0a3692c3d8ab5433b47ab57ccbf
             args: ["--auth", "none", "--user-data-dir", "/config/.vscode", "--extensions-dir", "/config/.vscode", "--port", "12321", "/config"]
             resources:
               requests:
-                cpu: 10m
+                cpu: 250m
+                memory: 512Mi
               limits:
+                cpu: 250m
                 memory: 512Mi
     defaultPodOptions:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       annotations:
-        descheduler.alpha.kubernetes.io/evict: "false"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      priorityClassName: home-assistant-critical
+      terminationGracePeriodSeconds: 300
       securityContext:
         runAsNonRoot: true
         runAsUser: 568
@@ -91,8 +171,6 @@ spec:
         ports:
           http:
             port: 8123
-          code-server:
-            port: 12321
     persistence:
       config:
         existingClaim: home-assistant
@@ -110,3 +188,16 @@ spec:
         type: emptyDir
         globalMounts:
         - path: /tmp
+      vscode-identity:
+        type: emptyDir
+        advancedMounts:
+          home-assistant:
+            init-vscode-identity:
+            - path: /identity
+            app:
+            - path: /etc/passwd
+              subPath: passwd
+              readOnly: true
+            - path: /etc/group
+              subPath: group
+              readOnly: true

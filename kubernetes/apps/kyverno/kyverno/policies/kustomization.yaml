@@ -5,6 +5,7 @@ resources:
 - ./defaultPodResources.yaml
 - ./disallowEmptyIngress.yaml
 - ./ghcrPullSecret.yaml
+- ./kopiur-movers.yaml
 - ./safeToEvict.yaml
 - ./talos-runner-boundary.yaml
 - ./volsync-movers.yaml

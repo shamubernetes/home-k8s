@@ -71,28 +71,6 @@ spec:
               - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_USER}}
               - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_PASS}}
               - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
-          - name: gamekeeper-runtime
-            targetSecretName: gamekeeper-runtime
-            managementPolicy: Owner
-            refreshInterval: 1h
-            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
-            data:
-              - {secretKey: oidc-client-secret, remoteRef: {key: The Zoo - Gamekeeper, property: OIDC_CLIENT_SECRET}}
-              - {secretKey: session-key, remoteRef: {key: The Zoo - Gamekeeper, property: SESSION_KEY}}
-              - {secretKey: palworld-rest-password, remoteRef: {key: palworld, property: ADMIN_PASSWORD}}
-              - {secretKey: palworld-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: PALWORLD_AGENT_TOKEN}}
-          - name: gamekeeper-postgres
-            targetSecretName: gamekeeper-postgres
-            managementPolicy: Owner
-            refreshInterval: 1h
-            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
-            data:
-              - {secretKey: url, remoteRef: {key: The Zoo - Gamekeeper, property: DATABASE_URL}}
-              - {secretKey: INIT_POSTGRES_HOST, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_HOST}}
-              - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_DBNAME}}
-              - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_USER}}
-              - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_PASS}}
-              - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
           - name: zoo-auth
             targetSecretName: zoo-auth
             managementPolicy: Owner
@@ -195,27 +173,6 @@ spec:
               userSecretRef: {name: gate-postgres, key: INIT_POSTGRES_USER}
               passwordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_SUPER_PASS}
-          - name: gamekeeper
-            replicas: 2
-            route:
-              httpRoute:
-                hostnames: [gamekeeper.thezoo.house]
-                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
-            values:
-              oidcClientID: gate-OC3ujRqmLEmyedMUwG4pTmGZCeiC2HC1
-            secretRefs:
-              databaseURL: {name: gamekeeper-postgres, key: url}
-              oidcClientSecret: {name: gamekeeper-runtime, key: oidc-client-secret}
-              sessionKey: {name: gamekeeper-runtime, key: session-key}
-              palworldRESTPassword: {name: gamekeeper-runtime, key: palworld-rest-password}
-              lifecycleControlToken: {name: gamekeeper-control, key: token}
-              palworldAgentToken: {name: gamekeeper-runtime, key: palworld-agent-token}
-            databaseInitialization:
-              hostSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_HOST}
-              databaseNameSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_DBNAME}
-              userSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_USER}
-              passwordSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_PASS}
-              superuserPasswordSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_SUPER_PASS}
           - name: zoo
             replicas: 2
             route:
@@ -276,8 +233,4 @@ spec:
               passwordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_SUPER_PASS}
     accessPolicy: {enabled: false}
-    controlAPI:
-      enabled: true
-      existingSecret:
-        name: gamekeeper-control
-        key: token
+    controlAPI: {enabled: false}

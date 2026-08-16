@@ -5,6 +5,8 @@ resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
 - ../../../../templates/volsync
+- ./priorityclass.yaml
+- ./poddisruptionbudget.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded

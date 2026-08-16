@@ -5,7 +5,7 @@ metadata:
 spec:
   repository:
     kind: Repository
-    name: tautulli-nas
+    name: tautulli-nas-smb
   identity:
     username: tautulli
     hostname: observability
@@ -146,7 +146,7 @@ metadata:
 spec:
   sourceRef:
     kind: Repository
-    name: tautulli-nas
+    name: tautulli-nas-smb
   destinationRef:
     kind: Repository
     name: tautulli-r2

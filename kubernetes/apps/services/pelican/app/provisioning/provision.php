@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\EggFormat;
 use App\Models\Egg;
 use App\Models\Node;
+use App\Models\Role;
 use App\Services\Eggs\Sharing\EggImporterService;
 use App\Traits\EnvironmentWriterTrait;
 use Illuminate\Contracts\Console\Kernel;
@@ -51,6 +52,14 @@ $nodeTags = collect($node->tags ?? [])
     ->all();
 $node->forceFill(['tags' => $nodeTags])->save();
 
+// Pelican roles grant administrator capabilities. Friends get no admin
+// permissions here because owners already receive every permission on their
+// own servers. Keeping this role empty preserves full self-service access
+// without exposing the panel, other servers, nodes, users, roles, or plugins.
+$friendsRole = Role::findOrCreate('Friends', Role::DEFAULT_GUARD_NAME);
+$friendsRole->syncPermissions([]);
+$friendsRole->nodes()->sync([$node->id]);
+
 $environmentWriter = new class
 {
     use EnvironmentWriterTrait;
@@ -70,4 +79,10 @@ $environmentWriter->writeToEnvironment([
 fwrite(STDOUT, json_encode([
     'eggs' => $importedEggs,
     'node' => ['id' => $node->id, 'name' => $node->name, 'tags' => $nodeTags],
+    'role' => [
+        'id' => $friendsRole->id,
+        'name' => $friendsRole->name,
+        'permissions' => $friendsRole->permissions()->pluck('name')->all(),
+        'nodes' => $friendsRole->nodes()->pluck('nodes.id')->all(),
+    ],
 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . PHP_EOL);

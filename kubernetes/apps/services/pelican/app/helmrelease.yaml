@@ -30,11 +30,70 @@ spec:
             envFrom: &envFrom
             - secretRef:
                 name: pelican-secret
-        containers:
-          app:
+          sync-plugins:
             image:
+              repository: alpine
+              tag: latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+            command:
+            - /bin/sh
+            - -ec
+            - |
+              revision="85d0691533f9d94ce83528a1c6edc0e82069f1d6"
+              checksum="ee42481ce500f0e153a6a11c150aae02b0d15f0b63b202db35b99c70edca694a"
+              destination="/plugins/user-creatable-servers"
+
+              if [ -f "$destination/.source-revision" ] && [ "$(cat "$destination/.source-revision")" = "$revision" ]; then
+                echo "User Creatable Servers is already pinned to $revision"
+                exit 0
+              fi
+
+              workdir="$(mktemp -d)"
+              archive="$workdir/plugins.tar.gz"
+              staging="/plugins/.user-creatable-servers.new"
+              trap 'rm -rf "$workdir" "$staging"' EXIT
+
+              wget -q -O "$archive" "https://github.com/pelican-dev/plugins/archive/$revision.tar.gz"
+              echo "$checksum  $archive" | sha256sum -c -
+              tar -xzf "$archive" -C "$workdir"
+
+              rm -rf "$staging"
+              cp -R "$workdir/plugins-$revision/user-creatable-servers" "$staging"
+
+              # Upstream 1.1.1 overrides protected egg variables during
+              # self-service creation. Keep Pelican's user_editable guard.
+              sed -i 's/->disabled(false),/->disabled(fn (Get $get) => !$get("user_editable")),/' \
+                "$staging/src/Filament/App/Pages/CreateServerPage.php"
+              if grep -Fq -- '->disabled(false)' "$staging/src/Filament/App/Pages/CreateServerPage.php" || \
+                ! grep -Fq -- '->disabled(fn (Get $get) => !$get("user_editable")),' \
+                  "$staging/src/Filament/App/Pages/CreateServerPage.php"; then
+                echo "Protected-variable patch did not apply" >&2
+                exit 1
+              fi
+
+              printf '%s\n' "$revision" > "$staging/.source-revision"
+              rm -rf "$destination"
+              mv "$staging" "$destination"
+              echo "Installed pinned User Creatable Servers source $revision"
+          install-plugins:
+            image: &panelImage
               repository: ghcr.io/pelican-dev/panel
               tag: v1.0.0-beta36@sha256:45cecf27176630ac628ebc9badc0ad273bdaa9bf441648c363dd8daeb9cc3bff
+            envFrom: *envFrom
+            command:
+            - /bin/ash
+            - -ec
+            - |
+              php artisan p:plugin:install user-creatable-servers
+              php artisan p:plugin:list
+          provision-catalog:
+            image: *panelImage
+            envFrom: *envFrom
+            command:
+            - php
+            - /provisioning/provision.php
+        containers:
+          app:
+            image: *panelImage
             envFrom: *envFrom
             env:
               APP_URL: https://pelican.${HOME_DOMAIN}
@@ -101,6 +160,10 @@ spec:
           pelican:
             app:
             - path: /pelican-data
+            install-plugins:
+            - path: /pelican-data
+            provision-catalog:
+            - path: /pelican-data
       plugins:
         type: persistentVolumeClaim
         accessMode: ReadWriteOnce
@@ -110,15 +173,37 @@ spec:
           pelican:
             app:
             - path: /var/www/html/plugins
+            sync-plugins:
+            - path: /plugins
+            install-plugins:
+            - path: /var/www/html/plugins
+            provision-catalog:
+            - path: /var/www/html/plugins
+      provisioning:
+        type: configMap
+        name: pelican-provisioning
+        advancedMounts:
+          pelican:
+            provision-catalog:
+            - path: /provisioning
+              readOnly: true
       logs:
         type: emptyDir
         advancedMounts:
           pelican:
             app:
             - path: /var/www/html/storage/logs
+            install-plugins:
+            - path: /var/www/html/storage/logs
+            provision-catalog:
+            - path: /var/www/html/storage/logs
       tmp:
         type: emptyDir
         advancedMounts:
           pelican:
             app:
+            - path: /tmp
+            install-plugins:
+            - path: /tmp
+            provision-catalog:
             - path: /tmp

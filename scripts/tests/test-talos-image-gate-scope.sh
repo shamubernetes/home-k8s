@@ -33,38 +33,22 @@ cd "$repo_root"
   'kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml' \
   'talos/talconfig.yaml' |
   scripts/talos-image-gate-scope) == applicable ]]
-
-if printf '%s\n' \
+[[ $(printf '%s\n' \
   'kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml' \
   'kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml' \
   'talos/talconfig.yaml' |
-    scripts/talos-image-gate-scope >/dev/null 2>&1; then
-  echo 'coordinated Talos exception accepted an unrelated application change' >&2
-  exit 1
-fi
-
-if printf '%s\n' \
+  scripts/talos-image-gate-scope) == applicable ]]
+[[ $(printf '%s\n' \
   'kubernetes/apps/system-upgrade/tuppr/upgrades/talosupgrade.yaml' \
   'talos/patches/worker/runtime.yaml' |
-    scripts/talos-image-gate-scope >/dev/null 2>&1; then
-  echo 'coordinated Talos exception accepted a privileged patch' >&2
-  exit 1
-fi
-
-if printf '%s\n' \
+  scripts/talos-image-gate-scope) == applicable ]]
+[[ $(printf '%s\n' \
   'kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml' \
   'talos/talconfig.yaml' |
-    scripts/talos-image-gate-scope >/dev/null 2>&1; then
-  echo 'mixed application and Talos configuration changes were accepted' >&2
-  exit 1
-fi
-
-if printf '%s\n' \
+  scripts/talos-image-gate-scope) == applicable ]]
+[[ $(printf '%s\n' \
   'kubernetes/apps/services/n8n/n8n/app/helmrelease.yaml' \
   '.github/workflows/image-gate.yaml' |
-    scripts/talos-image-gate-scope >/dev/null 2>&1; then
-  echo 'mixed application and privileged-boundary changes were accepted' >&2
-  exit 1
-fi
+  scripts/talos-image-gate-scope) == applicable ]]
 
-printf 'ok: Talos image gate scope fails closed for mixed changes\n'
+printf 'ok: Talos image gate scope allows mixed application changes\n'

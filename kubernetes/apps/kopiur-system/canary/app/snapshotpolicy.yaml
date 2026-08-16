@@ -5,7 +5,7 @@ metadata:
 spec:
   repository:
     kind: Repository
-    name: nas-primary
+    name: nas-smb-primary
   sources:
   - pvc:
       name: kopiur-canary-data

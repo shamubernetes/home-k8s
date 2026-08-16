@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kyverno.io/clusterpolicy_v1.json
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: kopiur-mover-deadline
+  annotations:
+    policies.kyverno.io/title: Cap Kopiur mover jobs
+    policies.kyverno.io/subject: Job
+spec:
+  rules:
+  - name: cap-low-risk-kopiur-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/config
+              operator: In
+              values:
+              - kopiur-canary
+              - nas-primary
+              - nas-smb-primary
+              - homarr
+              - homarr-nas
+              - homarr-nas-smb
+              - tautulli
+              - tautulli-nas
+              - tautulli-nas-smb
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600

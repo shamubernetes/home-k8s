@@ -86,7 +86,7 @@ spec:
               print(f"Bootstrapped HACS {hacs_version}")
             env:
               # renovate: datasource=github-releases depName=hacs/integration
-              HACS_VERSION: 2.0.1
+              HACS_VERSION: 2.0.5
             resources:
               requests:
                 cpu: 100m

@@ -63,3 +63,17 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+  - name: cap-low-risk-kopiur-snapshot-delete-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+              kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600

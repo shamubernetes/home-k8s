@@ -94,6 +94,33 @@ spec:
               limits:
                 cpu: 100m
                 memory: 128Mi
+          # VS Code Dev Containers requires the runtime UID/GID to have names.
+          init-vscode-identity:
+            image: *homeAssistantImage
+            command:
+            - python
+            - -c
+            args:
+            - |
+              from pathlib import Path
+
+              uid = "568"
+              gid = "568"
+              passwd = Path("/etc/passwd").read_text().rstrip("\n").splitlines()
+              group = Path("/etc/group").read_text().rstrip("\n").splitlines()
+              if not any(line.split(":")[2] == uid for line in passwd):
+                  passwd.append("homeassistant:x:568:568:Home Assistant:/config:/bin/bash")
+              if not any(line.split(":")[2] == gid for line in group):
+                  group.append("homeassistant:x:568:")
+              Path("/identity/passwd").write_text("\n".join(passwd) + "\n")
+              Path("/identity/group").write_text("\n".join(group) + "\n")
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                cpu: 10m
+                memory: 32Mi
         containers:
           app:
             image: *homeAssistantImage
@@ -161,3 +188,16 @@ spec:
         type: emptyDir
         globalMounts:
         - path: /tmp
+      vscode-identity:
+        type: emptyDir
+        advancedMounts:
+          home-assistant:
+            init-vscode-identity:
+            - path: /identity
+            app:
+            - path: /etc/passwd
+              subPath: passwd
+              readOnly: true
+            - path: /etc/group
+              subPath: group
+              readOnly: true

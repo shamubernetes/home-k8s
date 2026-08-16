@@ -23,14 +23,14 @@ spec:
           reloader.stakater.com/auto: "true"
         strategy: Recreate
         initContainers:
-          init-db:
+          00-init-db:
             image:
               repository: ghcr.io/home-operations/postgres-init
               tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
             envFrom: &envFrom
             - secretRef:
                 name: pelican-secret
-          sync-plugins:
+          10-sync-plugins:
             image:
               repository: alpine
               tag: latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
@@ -74,7 +74,7 @@ spec:
               rm -rf "$destination"
               mv "$staging" "$destination"
               echo "Installed pinned User Creatable Servers source $revision"
-          install-plugins:
+          20-install-plugins:
             image: &panelImage
               repository: ghcr.io/pelican-dev/panel
               tag: v1.0.0-beta36@sha256:45cecf27176630ac628ebc9badc0ad273bdaa9bf441648c363dd8daeb9cc3bff
@@ -84,8 +84,16 @@ spec:
             - -ec
             - |
               php artisan p:plugin:install user-creatable-servers
+
+              plugin_file="/var/www/html/plugins/user-creatable-servers/plugin.json"
+              if ! grep -Fq '"status": "enabled"' "$plugin_file"; then
+                echo "User Creatable Servers did not become enabled" >&2
+                exit 1
+              fi
+
+              php artisan tinker --execute="if (!Illuminate\\Support\\Facades\\Schema::hasTable('user_resource_limits')) { throw new RuntimeException('User Creatable Servers migration is missing'); }"
               php artisan p:plugin:list
-          provision-catalog:
+          30-provision-catalog:
             image: *panelImage
             envFrom: *envFrom
             command:
@@ -160,9 +168,9 @@ spec:
           pelican:
             app:
             - path: /pelican-data
-            install-plugins:
+            20-install-plugins:
             - path: /pelican-data
-            provision-catalog:
+            30-provision-catalog:
             - path: /pelican-data
       plugins:
         type: persistentVolumeClaim
@@ -173,18 +181,18 @@ spec:
           pelican:
             app:
             - path: /var/www/html/plugins
-            sync-plugins:
+            10-sync-plugins:
             - path: /plugins
-            install-plugins:
+            20-install-plugins:
             - path: /var/www/html/plugins
-            provision-catalog:
+            30-provision-catalog:
             - path: /var/www/html/plugins
       provisioning:
         type: configMap
         name: pelican-provisioning
         advancedMounts:
           pelican:
-            provision-catalog:
+            30-provision-catalog:
             - path: /provisioning
               readOnly: true
       logs:
@@ -193,9 +201,9 @@ spec:
           pelican:
             app:
             - path: /var/www/html/storage/logs
-            install-plugins:
+            20-install-plugins:
             - path: /var/www/html/storage/logs
-            provision-catalog:
+            30-provision-catalog:
             - path: /var/www/html/storage/logs
       tmp:
         type: emptyDir
@@ -203,7 +211,7 @@ spec:
           pelican:
             app:
             - path: /tmp
-            install-plugins:
+            20-install-plugins:
             - path: /tmp
-            provision-catalog:
+            30-provision-catalog:
             - path: /tmp

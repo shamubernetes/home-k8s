@@ -6,4 +6,3 @@ resources:
 # - ./mc-router/ks.yaml
 # - ./minecraft-stoneblock4/ks.yaml
 - ./romm/ks.yaml
-- ./palworld/ks.yaml

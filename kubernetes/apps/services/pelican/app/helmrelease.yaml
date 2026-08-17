@@ -39,11 +39,13 @@ spec:
             - -ec
             - |
               revision="85d0691533f9d94ce83528a1c6edc0e82069f1d6"
+              patch_revision="network-profiles-v1"
+              installed_revision="$revision:$patch_revision"
               checksum="ee42481ce500f0e153a6a11c150aae02b0d15f0b63b202db35b99c70edca694a"
               destination="/plugins/user-creatable-servers"
 
-              if [ -f "$destination/.source-revision" ] && [ "$(cat "$destination/.source-revision")" = "$revision" ]; then
-                echo "User Creatable Servers is already pinned to $revision"
+              if [ -f "$destination/.source-revision" ] && [ "$(cat "$destination/.source-revision")" = "$installed_revision" ]; then
+                echo "User Creatable Servers is already pinned to $installed_revision"
                 exit 0
               fi
 
@@ -70,10 +72,15 @@ spec:
                 exit 1
               fi
 
-              printf '%s\n' "$revision" > "$staging/.source-revision"
+              cp /provisioning/UserResourceLimits.php "$staging/src/Models/UserResourceLimits.php"
+              cp /provisioning/user-creatable-servers.php "$staging/config/user-creatable-servers.php"
+              cmp -s /provisioning/UserResourceLimits.php "$staging/src/Models/UserResourceLimits.php"
+              cmp -s /provisioning/user-creatable-servers.php "$staging/config/user-creatable-servers.php"
+
+              printf '%s\n' "$installed_revision" > "$staging/.source-revision"
               rm -rf "$destination"
               mv "$staging" "$destination"
-              echo "Installed pinned User Creatable Servers source $revision"
+              echo "Installed pinned User Creatable Servers source $installed_revision"
           20-install-plugins:
             image: &panelImage
               repository: ghcr.io/pelican-dev/panel
@@ -192,6 +199,9 @@ spec:
         name: pelican-provisioning
         advancedMounts:
           pelican:
+            10-sync-plugins:
+            - path: /provisioning
+              readOnly: true
             30-provision-catalog:
             - path: /provisioning
               readOnly: true

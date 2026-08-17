@@ -7,6 +7,8 @@ configMapGenerator:
   - ./provisioning/provision.php
   - ./provisioning/catalog/project-zomboid.json
   - ./provisioning/catalog/windrose.json
+  - ./provisioning/plugin-overrides/UserResourceLimits.php
+  - ./provisioning/plugin-overrides/user-creatable-servers.php
 generatorOptions:
   disableNameSuffixHash: true
 resources:

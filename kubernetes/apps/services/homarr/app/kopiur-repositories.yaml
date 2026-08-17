@@ -15,6 +15,47 @@ spec:
       name: homarr-kopiur-nas
       key: KOPIA_PASSWORD
   create:
+    enabled: false
+  # Preserve historical recovery points without scheduling new NFS work.
+  mode: ReadOnly
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: false
+  maintenance:
+    enabled: false
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: homarr-nas-smb
+spec:
+  backend:
+    rclone:
+      remotePath: mnemosyne:Backups/kopiur/homarr-smb
+      configSecretRef:
+        name: homarr-kopiur-nas
+      startupTimeout: 2m
+  encryption:
+    passwordSecretRef:
+      name: homarr-kopiur-nas
+      key: KOPIA_PASSWORD
+  create:
     enabled: true
   scheduleDefaults:
     timezone: America/New_York
@@ -30,10 +71,10 @@ spec:
     enabled: true
     schedule:
       quick:
-        cron: "15 */6 * * *"
+        cron: "30 */6 * * *"
         jitter: 30m
       full:
-        cron: "45 3 * * *"
+        cron: "30 3 * * *"
         jitter: 1h
   moverDefaults:
     podSecurityContext:

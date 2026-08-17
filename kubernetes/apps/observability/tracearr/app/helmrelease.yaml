@@ -19,6 +19,7 @@ spec:
   values:
     controllers:
       tracearr:
+        replicas: 0
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:

@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumnetworkpolicy_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: victoria-metrics-ha-host-network
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: victoria-metrics-ha
+      app.kubernetes.io/name: victoria-metrics-single
+  ingress:
+  # Home Assistant uses hostNetwork for HomeKit and therefore has no Cilium
+  # endpoint identity. Limit its node-identity path to this endpoint and port.
+  - fromEntities:
+    - host
+    - remote-node
+    toPorts:
+    - ports:
+      - port: "8428"
+        protocol: TCP

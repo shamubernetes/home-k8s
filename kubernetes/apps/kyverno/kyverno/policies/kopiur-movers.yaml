@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kyverno.io/clusterpolicy_v1.json
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: kopiur-mover-deadline
+  annotations:
+    policies.kyverno.io/title: Cap Kopiur mover jobs
+    policies.kyverno.io/subject: Job
+spec:
+  rules:
+  - name: cap-low-risk-kopiur-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/config
+              operator: In
+              values:
+              - kopiur-canary
+              - nas-primary
+              - nas-smb-primary
+              - r2-offsite
+              - homarr
+              - homarr-nas
+              - homarr-nas-smb
+              - homarr-r2
+              - tautulli
+              - tautulli-nas
+              - tautulli-nas-smb
+              - tautulli-r2
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
+  - name: cap-low-risk-kopiur-maintenance-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/maintenance
+              operator: In
+              values:
+              - nas-primary
+              - nas-smb-primary
+              - r2-offsite
+              - homarr-nas
+              - homarr-nas-smb
+              - homarr-r2
+              - tautulli-nas
+              - tautulli-nas-smb
+              - tautulli-r2
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
+  - name: cap-low-risk-kopiur-snapshot-delete-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+              kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600

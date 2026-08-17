@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: plane-init-uploads-bucket
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   backoffLimit: 6
   template:
@@ -10,7 +12,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: init-bucket
-        image: docker.io/amazon/aws-cli:2.36.23@sha256:c7b16ed4f08f8a61634d9c219dd2388cf61c5425f3c096b5a5b235521d7ea5cc
+        image: docker.io/amazon/aws-cli:2.36.24@sha256:cd11f6e909d42f066a03e15f072853fcc19f033e343cb83b2d553e2082cbb5a7
         envFrom:
         - secretRef:
             name: plane-doc-store-secret

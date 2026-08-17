@@ -21,7 +21,7 @@ spec:
     crds: CreateReplace
   values:
     image:
-      reference: ghcr.io/thezoo-house/operator@sha256:44cf8068bfe2a7f0a96e198a2cb0b5f11d009ae890c723caa2db225fa6e2eb11
+      reference: ghcr.io/thezoo-house/operator@sha256:433f83f5df0eac7583f3712c385da819da73273962746d1fdf4516e684272be1
       pullPolicy: IfNotPresent
     imagePullSecrets:
       - name: ghcr-pull-secret
@@ -70,30 +70,6 @@ spec:
               - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_DBNAME}}
               - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_USER}}
               - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gate, property: INIT_POSTGRES_PASS}}
-              - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
-          - name: gamekeeper-runtime
-            targetSecretName: gamekeeper-runtime
-            managementPolicy: Owner
-            refreshInterval: 1h
-            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
-            data:
-              - {secretKey: oidc-client-secret, remoteRef: {key: The Zoo - Gamekeeper, property: OIDC_CLIENT_SECRET}}
-              - {secretKey: session-key, remoteRef: {key: The Zoo - Gamekeeper, property: SESSION_KEY}}
-              - {secretKey: cs2-rcon-password, remoteRef: {key: counterstrike2, property: CS2_RCONPW}}
-              - {secretKey: palworld-rest-password, remoteRef: {key: palworld, property: ADMIN_PASSWORD}}
-              - {secretKey: cs2-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: CS2_AGENT_TOKEN}}
-              - {secretKey: palworld-agent-token, remoteRef: {key: The Zoo - Gamekeeper, property: PALWORLD_AGENT_TOKEN}}
-          - name: gamekeeper-postgres
-            targetSecretName: gamekeeper-postgres
-            managementPolicy: Owner
-            refreshInterval: 1h
-            storeRef: {name: op-secret-store, kind: ClusterSecretStore}
-            data:
-              - {secretKey: url, remoteRef: {key: The Zoo - Gamekeeper, property: DATABASE_URL}}
-              - {secretKey: INIT_POSTGRES_HOST, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_HOST}}
-              - {secretKey: INIT_POSTGRES_DBNAME, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_DBNAME}}
-              - {secretKey: INIT_POSTGRES_USER, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_USER}}
-              - {secretKey: INIT_POSTGRES_PASS, remoteRef: {key: The Zoo - Gamekeeper, property: INIT_POSTGRES_PASS}}
               - {secretKey: INIT_POSTGRES_SUPER_PASS, remoteRef: {key: cloudnative-pg, property: POSTGRES_SUPER_PASS}}
           - name: zoo-auth
             targetSecretName: zoo-auth
@@ -197,29 +173,6 @@ spec:
               userSecretRef: {name: gate-postgres, key: INIT_POSTGRES_USER}
               passwordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: gate-postgres, key: INIT_POSTGRES_SUPER_PASS}
-          - name: gamekeeper
-            replicas: 2
-            route:
-              httpRoute:
-                hostnames: [gamekeeper.thezoo.house]
-                parentRefs: [{name: envoy-external, namespace: network, sectionName: https}]
-            values:
-              oidcClientID: gate-OC3ujRqmLEmyedMUwG4pTmGZCeiC2HC1
-            secretRefs:
-              databaseURL: {name: gamekeeper-postgres, key: url}
-              oidcClientSecret: {name: gamekeeper-runtime, key: oidc-client-secret}
-              sessionKey: {name: gamekeeper-runtime, key: session-key}
-              cs2RCONPassword: {name: gamekeeper-runtime, key: cs2-rcon-password}
-              palworldRESTPassword: {name: gamekeeper-runtime, key: palworld-rest-password}
-              lifecycleControlToken: {name: gamekeeper-control, key: token}
-              cs2AgentToken: {name: gamekeeper-runtime, key: cs2-agent-token}
-              palworldAgentToken: {name: gamekeeper-runtime, key: palworld-agent-token}
-            databaseInitialization:
-              hostSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_HOST}
-              databaseNameSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_DBNAME}
-              userSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_USER}
-              passwordSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_PASS}
-              superuserPasswordSecretRef: {name: gamekeeper-postgres, key: INIT_POSTGRES_SUPER_PASS}
           - name: zoo
             replicas: 2
             route:
@@ -280,8 +233,4 @@ spec:
               passwordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_PASS}
               superuserPasswordSecretRef: {name: cowbell-postgres, key: INIT_POSTGRES_SUPER_PASS}
     accessPolicy: {enabled: false}
-    controlAPI:
-      enabled: true
-      existingSecret:
-        name: gamekeeper-control
-        key: token
+    controlAPI: {enabled: false}

@@ -32,7 +32,7 @@ spec:
           books-canary:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:bd314405a9ca1eb176d1618c38f19948a1feb18ec4190a7665d3096163eab0a4
+              tag: latest@sha256:1a23ba495cc7a0284276aa510664dfd276854f7d5264acfa1e8e1015f9cc0b20
             command:
               - /bin/sh
               - -ec
@@ -45,7 +45,7 @@ spec:
           app:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:bd314405a9ca1eb176d1618c38f19948a1feb18ec4190a7665d3096163eab0a4
+              tag: latest@sha256:1a23ba495cc7a0284276aa510664dfd276854f7d5264acfa1e8e1015f9cc0b20
             env:
               TZ: ${TIMEZONE}
               PUID: "568"
@@ -95,7 +95,7 @@ spec:
           books-monitor:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:bd314405a9ca1eb176d1618c38f19948a1feb18ec4190a7665d3096163eab0a4
+              tag: latest@sha256:1a23ba495cc7a0284276aa510664dfd276854f7d5264acfa1e8e1015f9cc0b20
             command:
               - /bin/sh
               - -ec
@@ -132,6 +132,8 @@ spec:
               limits:
                 memory: 64Mi
     defaultPodOptions:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-08-10T20:20:45Z"
       securityContext:
         runAsNonRoot: false
         runAsUser: 0

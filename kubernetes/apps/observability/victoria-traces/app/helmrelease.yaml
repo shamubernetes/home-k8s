@@ -1,0 +1,73 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-traces
+spec:
+  interval: 30m
+  chartRef:
+    kind: OCIRepository
+    name: victoria-traces
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: kube-prometheus-stack
+    namespace: observability
+  values:
+    rbac:
+      create: false
+    serviceAccount:
+      create: true
+      automountToken: false
+    server:
+      fullnameOverride: victoria-traces
+      image:
+        registry: docker.io
+        repository: victoriametrics/victoria-traces
+        tag: v0.11.0@sha256:9947b14b6b9baa61b8efef64467a7118ee54ccd6be6b7c1849f6fdd65d8e17fd
+      retentionPeriod: 14d
+      retentionDiskSpaceUsage: 25GiB
+      extraArgs:
+        envflag.enable: true
+        envflag.prefix: VT_
+        loggerFormat: json
+        storage.minFreeDiskSpaceBytes: 2GB
+      persistentVolume:
+        enabled: true
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: ceph-block
+        size: 30Gi
+      podSecurityContext:
+        enabled: true
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      securityContext:
+        enabled: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: "2"
+          memory: 2Gi
+      service:
+        clusterIP: ""
+      serviceMonitor:
+        enabled: true
+        interval: 30s
+      terminationGracePeriodSeconds: 120

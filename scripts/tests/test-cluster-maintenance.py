@@ -37,6 +37,7 @@ class FakeAlertmanager:
         self.deletes = []
         self.ignore_silence_application = False
         self.fail_alert_reads_after_post = False
+        self.proxy_style_not_found: str | None = None
         self.mirror_source: FakeAlertmanager | None = None
         self.mirror_matchers: list[dict[str, object]] | None = None
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self.handler())
@@ -157,7 +158,26 @@ class FakeAlertmanager:
                             if owner.mirror_matchers is not None:
                                 silence["matchers"] = owner.mirror_matchers
                             owner.silences[silence["id"]] = silence
-                    self.send_json(200 if silence else 404, silence or {"message": "not found"})
+                    if silence is None:
+                        if owner.proxy_style_not_found == "html":
+                            body = b"<html>proxy not found</html>"
+                            self.send_response(404)
+                            self.send_header("Content-Type", "text/html")
+                            self.send_header("Content-Length", str(len(body)))
+                            self.end_headers()
+                            self.wfile.write(body)
+                        elif owner.proxy_style_not_found == "misleading-empty":
+                            self.send_response(404)
+                            self.send_header("Cache-Control", "x-no-store")
+                            self.send_header("Content-Length", "0")
+                            self.end_headers()
+                        else:
+                            self.send_response(404)
+                            self.send_header("Cache-Control", "no-store")
+                            self.send_header("Content-Length", "0")
+                            self.end_headers()
+                        return
+                    self.send_json(200, silence)
                     return
                 self.send_json(404, {"message": "not found"})
 
@@ -197,6 +217,90 @@ class FakeAlertmanager:
         return Handler
 
 
+class FakeStatusApi:
+    def __init__(self):
+        self.page_id = "page-1"
+        self.notices = {}
+        self.created = []
+        self.resolved = []
+        self.fail_creates = False
+        self.fail_resolves = False
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), self.handler())
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def url(self):
+        host = self.server.server_address[0]
+        port = self.server.server_address[1]
+        return f"http://{host}:{port}"
+
+    def close(self):
+        self.server.shutdown()
+        self.thread.join(timeout=5)
+        self.server.server_close()
+
+    def add_notice(self, notice_id="notice-1", message="Scheduled maintenance: test"):
+        self.notices[notice_id] = {"id": notice_id, "message": message, "resolved": False}
+        return notice_id
+
+    def handler(self):
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                del format, args
+
+            def send_json(self, status, payload):
+                body = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                if self.path == "/api/pages":
+                    self.send_json(200, [{"id": owner.page_id, "slug": "thezoo"}])
+                    return
+                self.send_json(404, {"message": "not found"})
+
+            def do_POST(self):
+                if self.path != f"/api/pages/{owner.page_id}/notices":
+                    self.send_json(404, {"message": "not found"})
+                    return
+                if owner.fail_creates:
+                    self.send_json(500, {"message": "injected create failure"})
+                    return
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length))
+                notice_id = f"notice-{len(owner.notices) + 1}"
+                notice = {"id": notice_id, **payload, "resolved": False}
+                owner.notices[notice_id] = notice
+                owner.created.append(notice_id)
+                self.send_json(200, notice)
+
+            def do_PUT(self):
+                prefix = f"/api/pages/{owner.page_id}/notices/"
+                suffix = "/resolve"
+                if not self.path.startswith(prefix) or not self.path.endswith(suffix):
+                    self.send_json(404, {"message": "not found"})
+                    return
+                if owner.fail_resolves:
+                    self.send_json(500, {"message": "injected resolve failure"})
+                    return
+                notice_id = self.path[len(prefix) : -len(suffix)]
+                notice = owner.notices.get(notice_id)
+                if not notice:
+                    self.send_json(404, {"message": "not found"})
+                    return
+                notice["resolved"] = True
+                owner.resolved.append(notice_id)
+                self.send_json(200, notice)
+
+        return Handler
+
+
 class ClusterMaintenanceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -210,10 +314,12 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def setUp(self):
         self.alertmanager = FakeAlertmanager()
+        self.status_api = FakeStatusApi()
         self.tmpdir = tempfile.TemporaryDirectory()
 
     def tearDown(self):
         self.alertmanager.close()
+        self.status_api.close()
         self.tmpdir.cleanup()
 
     def command_env(self, **overrides):
@@ -223,8 +329,23 @@ class ClusterMaintenanceTest(unittest.TestCase):
         env["MAINTENANCE_LOCK_FILE"] = str(Path(self.tmpdir.name) / "begin.lock")
         env["MAINTENANCE_VERIFY_TIMEOUT_SECONDS"] = "1"
         env["MAINTENANCE_ALLOW_DUPLICATE_MEMBERS"] = "1"
+        env["MAINTENANCE_STATE_FILE"] = str(Path(self.tmpdir.name) / "maintenance.json")
+        env["STATUS_API_URL"] = self.status_api.url
+        env["STATUS_API_KEY"] = "test-key"
         env.update(overrides)
         return env
+
+    def seed_state(self, silence_id, notice_id="notice-1", allowed_alerts=None):
+        self.status_api.add_notice(notice_id)
+        state = {
+            "silenceId": silence_id,
+            "noticeId": notice_id,
+            "reason": "test",
+            "startedAt": timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=1)),
+            "endsAt": timestamp(dt.datetime.now(UTC) + dt.timedelta(hours=4)),
+            "allowedActiveAlerts": allowed_alerts or [],
+        }
+        Path(self.tmpdir.name, "maintenance.json").write_text(json.dumps(state))
 
     def raw_command(self, *args, env=None):
         return subprocess.run(
@@ -245,7 +366,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         return result
 
-    def test_begin_creates_verified_bounded_silence_and_preserves_heartbeat(self):
+    def test_routine_begin_creates_only_a_verified_bounded_silence(self):
         self.alertmanager.add_alert("RoutineInfo", severity="info")
         self.alertmanager.add_alert("Watchdog", severity="none")
         result = self.run_command("begin", "--reason", "Renovate PR #123", "--duration", "4h")
@@ -253,9 +374,15 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
         self.assertEqual(output["state"], "active")
         self.assertEqual(output["silenceId"], "maintenance-1")
+        self.assertIsNone(output["noticeId"])
+        self.assertEqual(output["publicStatus"], "not-posted")
         self.assertEqual(output["coveredAlerts"], 1)
         self.assertEqual(output["excludedAlerts"], ["Watchdog"])
         self.assertEqual(len(self.alertmanager.posts), 1)
+        state = json.loads(Path(self.tmpdir.name, "maintenance.json").read_text())
+        self.assertEqual(state["silenceId"], "maintenance-1")
+        self.assertIsNone(state["noticeId"])
+        self.assertEqual(self.status_api.notices, {})
 
         posted = self.alertmanager.posts[0]
         self.assertEqual(posted["createdBy"], MANAGED_BY)
@@ -283,6 +410,40 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         self.assertIn("CephHealthError", result.stderr)
         self.assertEqual(self.alertmanager.posts, [])
+        self.assertEqual(self.status_api.resolved, [])
+
+    def test_public_begin_posts_an_identified_maintenance_incident(self):
+        result = self.run_command(
+            "begin", "--reason", "public service migration", "--public-status"
+        )
+        output = json.loads(result.stdout)
+        self.assertEqual(output["noticeId"], "notice-1")
+        self.assertEqual(output["publicStatus"], "posted")
+        notice = self.status_api.notices["notice-1"]
+        self.assertEqual(notice["status"], "identified")
+        self.assertEqual(notice["severity"], "warning")
+
+    def test_public_begin_cleans_up_notice_when_admission_fails(self):
+        self.alertmanager.add_alert("CephHealthError", severity="critical")
+        result = self.run_command(
+            "begin",
+            "--reason",
+            "public service migration",
+            "--public-status",
+            expected=1,
+        )
+        self.assertIn("CephHealthError", result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
+        self.assertEqual(self.status_api.resolved, ["notice-1"])
+
+    def test_begin_does_not_create_a_silence_when_public_notice_creation_fails(self):
+        self.status_api.fail_creates = True
+        result = self.run_command(
+            "begin", "--reason", "public maintenance", "--public-status", expected=1
+        )
+        self.assertIn("status API", result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
 
     def test_begin_allows_one_exact_known_baseline_alert(self):
         self.alertmanager.add_alert(
@@ -340,7 +501,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
             "alertname=SmartDeviceInterfaceSlow",
             expected=2,
         )
-        self.assertIn("at least one scoping label", result.stderr)
+        self.assertIn("at least one identifying", result.stderr)
 
     def test_begin_requires_healthy_two_peer_alertmanager_cluster(self):
         self.alertmanager.peers = [{"name": "am-0"}]
@@ -385,6 +546,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_renew_extends_only_a_managed_active_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         old_end = self.alertmanager.silences[silence_id]["endsAt"]
         result = self.run_command("renew", "--id", silence_id, "--duration", "6h")
         output = json.loads(result.stdout)
@@ -394,6 +556,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_failed_renewal_expires_the_unverified_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         self.alertmanager.add_alert("RoutineInfo", severity="info")
         self.alertmanager.ignore_silence_application = True
         result = self.run_command(
@@ -407,6 +570,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_renew_rejects_drifted_matchers_before_writing(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         self.alertmanager.silences[silence_id]["matchers"] = [
             {
                 "name": "alertname",
@@ -421,14 +585,322 @@ class ClusterMaintenanceTest(unittest.TestCase):
 
     def test_end_expires_only_a_managed_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         result = self.run_command("end", "--id", silence_id)
         output = json.loads(result.stdout)
         self.assertEqual(output["state"], "expired")
         self.assertEqual(self.alertmanager.silences[silence_id]["status"]["state"], "expired")
         self.assertEqual(self.alertmanager.deletes, [silence_id])
+        self.assertEqual(self.status_api.resolved, ["notice-1"])
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_routine_begin_and_end_need_no_status_api_key(self):
+        env = self.command_env(STATUS_API_KEY="")
+        started = self.run_command(
+            "begin", "--reason", "deploy Kaneo", env=env
+        )
+        start_output = json.loads(started.stdout)
+        self.assertIsNone(start_output["noticeId"])
+        self.assertEqual(start_output["publicStatus"], "not-posted")
+        ended = self.run_command(
+            "end", "--id", start_output["silenceId"], env=env
+        )
+        end_output = json.loads(ended.stdout)
+        self.assertEqual(end_output["noticeState"], "not-posted")
+        self.assertEqual(self.status_api.notices, {})
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_end_preserves_silence_and_notice_while_cluster_alerts_are_unhealthy(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.add_alert(
+            "CephHealthError", severity="critical", silenced_by=[silence_id]
+        )
+        self.seed_state(silence_id)
+        result = self.run_command("end", "--id", silence_id, expected=1)
+        self.assertIn("CephHealthError", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_end_persists_observed_expiry_before_notice_resolution(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        observed_end = timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=1))
+        self.alertmanager.silences[silence_id]["endsAt"] = observed_end
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        self.seed_state(silence_id)
+        state_path = Path(self.tmpdir.name, "maintenance.json")
+        self.status_api.fail_resolves = True
+
+        result = self.run_command("end", "--id", silence_id, expected=1)
+
+        self.assertIn("injected resolve failure", result.stderr)
+        state = json.loads(state_path.read_text())
+        self.assertEqual(state["alertmanagerEndedAt"], observed_end)
+        self.assertTrue(state_path.exists())
+
+    def test_repair_requires_explicit_approval_for_a_separately_silenced_alert(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        baseline_id = "known-baseline"
+        self.alertmanager.add_alert(
+            "SmartDeviceInterfaceSlow",
+            severity="critical",
+            silenced_by=[baseline_id],
+            kubernetes_node="k8s-rhea",
+            device="sda",
+        )
+        self.seed_state(silence_id)
+
+        rejected = self.run_command("repair", "--id", silence_id, expected=1)
+        self.assertIn("SmartDeviceInterfaceSlow", rejected.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+
+        result = self.run_command(
+            "repair",
+            "--id",
+            silence_id,
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda",
+        )
+
+        output = json.loads(result.stdout)
+        self.assertEqual(output["state"], "expired")
+        self.assertEqual(output["repairState"], "cleared")
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertEqual(self.alertmanager.alerts[0]["status"]["silencedBy"], [baseline_id])
+        self.assertEqual(self.alertmanager.alerts[0]["status"]["state"], "suppressed")
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_repair_rejects_unscoped_baseline_selector(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        self.seed_state(silence_id)
+        result = self.run_command(
+            "repair",
+            "--id",
+            silence_id,
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow",
+            expected=2,
+        )
+        self.assertIn("at least one identifying", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+
+    def test_repair_rejects_severity_as_the_only_scope_label(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        self.seed_state(silence_id)
+        result = self.run_command(
+            "repair",
+            "--id",
+            silence_id,
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow,severity=critical",
+            expected=2,
+        )
+        self.assertIn("other than severity", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+
+    def test_repair_persists_allowance_for_an_interrupted_retry(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        observed_end = timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=1))
+        self.alertmanager.silences[silence_id]["endsAt"] = observed_end
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        self.alertmanager.add_alert(
+            "SmartDeviceInterfaceSlow",
+            severity="critical",
+            silenced_by=["known-baseline"],
+            kubernetes_node="k8s-rhea",
+            device="sda",
+        )
+        self.seed_state(silence_id)
+        self.status_api.fail_resolves = True
+
+        failed = self.run_command(
+            "repair",
+            "--id",
+            silence_id,
+            "--allow-active-alert",
+            "alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda",
+            expected=1,
+        )
+        self.assertIn("injected resolve failure", failed.stderr)
+        state = json.loads(Path(self.tmpdir.name, "maintenance.json").read_text())
+        self.assertEqual(
+            state["allowedRepairAlerts"],
+            [
+                {
+                    "alertname": "SmartDeviceInterfaceSlow",
+                    "kubernetes_node": "k8s-rhea",
+                    "device": "sda",
+                }
+            ],
+        )
+        self.assertEqual(state["alertmanagerEndedAt"], observed_end)
+        del self.alertmanager.silences[silence_id]
+
+        self.status_api.fail_resolves = False
+        retried = self.run_command("repair", "--id", silence_id)
+        self.assertEqual(json.loads(retried.stdout)["noticeState"], "resolved")
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_repair_rejects_an_active_owned_silence(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        result = self.run_command("repair", "--id", silence_id, expected=1)
+        self.assertIn("requires an expired owned silence", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_repair_rejects_invalid_persisted_alert_selectors(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        self.seed_state(
+            silence_id,
+            allowed_alerts=[
+                {"alertname": "SmartDeviceInterfaceSlow", "severity": "critical"}
+            ],
+        )
+
+        result = self.run_command("repair", "--id", silence_id, expected=1)
+
+        self.assertIn("invalid alert selector", result.stderr)
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_end_rejects_invalid_persisted_alert_selectors(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(
+            silence_id,
+            allowed_alerts=[
+                {"alertname": "SmartDeviceInterfaceSlow", "severity": "critical"}
+            ],
+        )
+
+        result = self.run_command("end", "--id", silence_id, expected=1)
+
+        self.assertIn("invalid alert selector", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_end_rejects_falsy_malformed_persisted_alert_selectors(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        state_path = Path(self.tmpdir.name, "maintenance.json")
+        state = json.loads(state_path.read_text())
+        state["allowedActiveAlerts"] = {}
+        state_path.write_text(json.dumps(state))
+
+        result = self.run_command("end", "--id", silence_id, expected=1)
+
+        self.assertIn("must be a list", result.stderr)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(state_path.exists())
+
+    def test_repair_rejects_divergent_retained_silence_definitions(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.alertmanager.silences[silence_id]["status"] = {"state": "expired"}
+        second = FakeAlertmanager()
+        try:
+            second.silences[silence_id] = json.loads(
+                json.dumps(self.alertmanager.silences[silence_id])
+            )
+            second.silences[silence_id]["comment"] = COMMENT_PREFIX + "different reason"
+            self.seed_state(silence_id)
+            env = self.command_env(
+                ALERTMANAGER_URLS=f"{self.alertmanager.url},{second.url}"
+            )
+
+            result = self.run_command("repair", "--id", silence_id, expected=1, env=env)
+
+            self.assertIn("divergent silence definitions", result.stderr)
+            self.assertEqual(self.status_api.resolved, [])
+            self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+        finally:
+            second.close()
+
+    def test_repair_clears_state_after_alertmanager_garbage_collects_expired_silence(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        state_path = Path(self.tmpdir.name, "maintenance.json")
+        state = json.loads(state_path.read_text())
+        state["endsAt"] = timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=5))
+        state_path.write_text(json.dumps(state))
+        del self.alertmanager.silences[silence_id]
+
+        result = self.run_command("repair", "--id", silence_id)
+
+        output = json.loads(result.stdout)
+        self.assertEqual(output["state"], "expired")
+        self.assertEqual(output["repairState"], "cleared")
+        self.assertFalse(state_path.exists())
+
+    def test_repair_rejects_absent_silence_before_saved_expiry(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        del self.alertmanager.silences[silence_id]
+
+        result = self.run_command("repair", "--id", silence_id, expected=1)
+
+        self.assertIn("cannot treat absent silence", result.stderr)
+        self.assertTrue(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_repair_rejects_proxy_style_not_found_responses(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        state_path = Path(self.tmpdir.name, "maintenance.json")
+        state = json.loads(state_path.read_text())
+        state["endsAt"] = timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=5))
+        state_path.write_text(json.dumps(state))
+        del self.alertmanager.silences[silence_id]
+        self.alertmanager.proxy_style_not_found = "html"
+
+        result = self.run_command("repair", "--id", silence_id, expected=1)
+
+        self.assertIn("HTTP 404", result.stderr)
+        self.assertIn("proxy not found", result.stderr)
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(state_path.exists())
+
+    def test_repair_rejects_empty_404_without_exact_no_store_directive(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        state_path = Path(self.tmpdir.name, "maintenance.json")
+        state = json.loads(state_path.read_text())
+        state["endsAt"] = timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=5))
+        state_path.write_text(json.dumps(state))
+        del self.alertmanager.silences[silence_id]
+        self.alertmanager.proxy_style_not_found = "misleading-empty"
+
+        result = self.run_command("repair", "--id", silence_id, expected=1)
+
+        self.assertIn("HTTP 404", result.stderr)
+        self.assertEqual(self.status_api.resolved, [])
+        self.assertTrue(state_path.exists())
+
+    def test_repair_uses_recorded_early_end_after_silence_is_garbage_collected(self):
+        silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
+        state_path = Path(self.tmpdir.name, "maintenance.json")
+        state = json.loads(state_path.read_text())
+        recorded_end = timestamp(dt.datetime.now(UTC) - dt.timedelta(minutes=1))
+        state["alertmanagerEndedAt"] = recorded_end
+        state_path.write_text(json.dumps(state))
+        del self.alertmanager.silences[silence_id]
+
+        result = self.run_command("repair", "--id", silence_id)
+
+        output = json.loads(result.stdout)
+        self.assertEqual(output["endedAt"], recorded_end)
+        self.assertEqual(output["repairState"], "cleared")
+        self.assertFalse(state_path.exists())
 
     def test_end_rejects_a_foreign_silence(self):
         silence_id = self.alertmanager.add_managed_silence()
+        self.seed_state(silence_id)
         self.alertmanager.silences[silence_id]["createdBy"] = "someone else"
         result = self.run_command("end", "--id", silence_id, expected=1)
         self.assertIn("not owned", result.stderr)

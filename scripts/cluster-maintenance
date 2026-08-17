@@ -11,9 +11,11 @@ import queue
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -37,10 +39,138 @@ VERIFY_TIMEOUT_SECONDS = float(os.environ.get("MAINTENANCE_VERIFY_TIMEOUT_SECOND
 LEASE_NAME = "cluster-maintenance-begin-lock"
 LEASE_DURATION_SECONDS = 120
 LEASE_RENEW_INTERVAL_SECONDS = 30
+STATUS_PAGE_SLUG = os.environ.get("STATUS_PAGE_SLUG", "thezoo")
 
 
 class MaintenanceError(RuntimeError):
     pass
+
+
+class AlertmanagerNotFoundError(MaintenanceError):
+    pass
+
+
+class StatusApi:
+    def __init__(self):
+        self.base_url = os.environ.get("STATUS_API_URL", "https://status.thezoo.house").rstrip("/")
+        self.api_key = os.environ.get("STATUS_API_KEY")
+        if not self.api_key:
+            raise MaintenanceError(
+                "STATUS_API_KEY is required when --public-status is requested"
+            )
+
+    def request(self, path, method="GET", payload=None):
+        body = None
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "home-k8s-cluster-maintenance/1.0",
+            "X-API-Key": self.api_key,
+        }
+        if payload is not None:
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            self.base_url + path, data=body, headers=headers, method=method
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                response_body = response.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")
+            raise MaintenanceError(
+                f"status API {method} {path} returned HTTP {exc.code}: {detail[:500]}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise MaintenanceError(f"status API {method} {path} failed: {exc.reason}") from exc
+        if not response_body:
+            return None
+        try:
+            return json.loads(response_body)
+        except json.JSONDecodeError as exc:
+            raise MaintenanceError(f"status API {method} {path} returned non-JSON data") from exc
+
+    def page_id(self):
+        pages = self.request("/api/pages")
+        page = next((page for page in pages if page.get("slug") == STATUS_PAGE_SLUG), None)
+        if not page:
+            raise MaintenanceError(f"status page {STATUS_PAGE_SLUG!r} does not exist")
+        return page["id"]
+
+    def begin_notice(self, reason):
+        page_id = self.page_id()
+        notice = self.request(
+            f"/api/pages/{page_id}/notices",
+            method="POST",
+            payload={
+                "title": f"Scheduled maintenance: {reason}",
+                "initial_update": "Scheduled maintenance is now in progress.",
+                "status": "identified",
+                "severity": "warning",
+            },
+        )
+        notice_id = notice.get("id") if isinstance(notice, dict) else None
+        if not notice_id:
+            raise MaintenanceError("status API did not return a maintenance notice ID")
+        return notice_id
+
+    def resolve_notice(self, notice_id):
+        page_id = self.page_id()
+        self.request(
+            f"/api/pages/{page_id}/notices/{urllib.parse.quote(notice_id, safe='')}/resolve",
+            method="PUT",
+            payload={"message": "Scheduled maintenance is complete."},
+        )
+
+
+def state_path():
+    configured = os.environ.get("MAINTENANCE_STATE_FILE")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".local" / "state" / "home-k8s" / "cluster-maintenance.json"
+
+
+def load_state(required=True):
+    path = state_path()
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        if required:
+            raise MaintenanceError(f"maintenance state file does not exist: {path}")
+        return None
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MaintenanceError(f"could not read maintenance state {path}: {exc}") from exc
+
+
+def write_state(state):
+    path = state_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            os.chmod(temporary, 0o600)
+            json.dump(state, handle, separators=(",", ":"), sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except OSError as exc:
+        with contextlib.suppress(OSError, UnboundLocalError):
+            temporary.unlink()
+        raise MaintenanceError(f"could not persist maintenance state {path}: {exc}") from exc
+
+
+def clear_state(silence_id):
+    state = load_state()
+    if state.get("silenceId") != silence_id:
+        raise MaintenanceError(
+            f"maintenance state belongs to silence {state.get('silenceId')}, not {silence_id}"
+        )
+    try:
+        state_path().unlink()
+    except OSError as exc:
+        raise MaintenanceError(f"could not remove maintenance state {state_path()}: {exc}") from exc
 
 
 def utc_now():
@@ -86,6 +216,31 @@ def compact_alert(alert):
     }
 
 
+def has_identifying_alert_scope(labels):
+    return "alertname" in labels and bool(set(labels) - {"alertname", "severity"})
+
+
+def validate_persisted_alert_selectors(selectors, field):
+    if not isinstance(selectors, list):
+        raise MaintenanceError(f"maintenance state {field} must be a list")
+    for selector in selectors:
+        if (
+            not isinstance(selector, dict)
+            or any(
+                not isinstance(name, str)
+                or not name
+                or not isinstance(expected, str)
+                or not expected
+                for name, expected in selector.items()
+            )
+            or not has_identifying_alert_scope(selector)
+        ):
+            raise MaintenanceError(
+                f"maintenance state {field} contains an invalid alert selector"
+            )
+    return selectors
+
+
 def parse_alert_selector(value):
     labels = {}
     for item in value.split(","):
@@ -97,9 +252,10 @@ def parse_alert_selector(value):
                 "active-alert selectors must use label=value pairs separated by commas"
             )
         labels[name] = expected
-    if "alertname" not in labels or len(labels) < 2:
+    if not has_identifying_alert_scope(labels):
         raise argparse.ArgumentTypeError(
-            "active-alert selectors must include alertname and at least one scoping label"
+            "active-alert selectors must include alertname and at least one identifying "
+            "scoping label other than severity"
         )
     return labels
 
@@ -118,6 +274,17 @@ def matcher_signature(matchers):
             bool(matcher.get("isEqual", True)),
         )
         for matcher in matchers
+    )
+
+
+def silence_definition_signature(silence):
+    return (
+        silence.get("id"),
+        silence.get("startsAt"),
+        silence.get("endsAt"),
+        silence.get("createdBy"),
+        silence.get("comment"),
+        tuple(matcher_signature(silence.get("matchers", []))),
     )
 
 
@@ -167,7 +334,21 @@ class AlertmanagerApi:
             with urllib.request.urlopen(request, timeout=15) as response:
                 response_body = response.read()
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(errors="replace")
+            response_body = exc.read()
+            detail = response_body.decode(errors="replace")
+            cache_control_directives = {
+                directive.strip().lower()
+                for directive in (exc.headers.get("Cache-Control") or "").split(",")
+                if directive.strip()
+            }
+            if (
+                exc.code == 404
+                and not response_body
+                and "no-store" in cache_control_directives
+            ):
+                raise AlertmanagerNotFoundError(
+                    f"Alertmanager member {self.name} {method} {path} returned its native empty HTTP 404"
+                ) from exc
             raise MaintenanceError(
                 f"Alertmanager member {self.name} {method} {path} returned HTTP {exc.code}: {detail[:500]}"
             ) from exc
@@ -195,6 +376,12 @@ class AlertmanagerApi:
 
     def get_silence(self, silence_id):
         return self.request(f"/api/v2/silence/{silence_id}")
+
+    def get_optional_silence(self, silence_id):
+        try:
+            return self.get_silence(silence_id)
+        except AlertmanagerNotFoundError:
+            return None
 
     def put_silence(self, silence):
         result = self.request("/api/v2/silences", method="POST", payload=silence)
@@ -626,16 +813,7 @@ def verify_coverage(cluster, silence_id):
     while time.monotonic() < deadline:
         try:
             results = [member_coverage(member, silence_id) for member in cluster.members]
-            signatures = {
-                (
-                    result[0].get("startsAt"),
-                    result[0].get("endsAt"),
-                    result[0].get("createdBy"),
-                    result[0].get("comment"),
-                    tuple(matcher_signature(result[0].get("matchers", []))),
-                )
-                for result in results
-            }
+            signatures = {silence_definition_signature(result[0]) for result in results}
             if len(signatures) != 1:
                 raise MaintenanceError("Alertmanager members report divergent silence definitions")
             covered = set().union(*(result[1] for result in results))
@@ -754,6 +932,49 @@ def begin(cluster, reason, duration, allowed_alerts=None):
         }
 
 
+def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None):
+    if load_state(required=False):
+        raise MaintenanceError(
+            f"maintenance state already exists at {state_path()}; end or repair it explicitly"
+        )
+    notice_id = status_api.begin_notice(reason) if status_api else None
+    silence_id = None
+    try:
+        result = begin(cluster, reason, duration, allowed_alerts)
+        silence_id = result["silenceId"]
+        write_state(
+            {
+                "silenceId": silence_id,
+                "noticeId": notice_id,
+                "reason": reason,
+                "startedAt": result["startsAt"],
+                "endsAt": result["endsAt"],
+                "allowedActiveAlerts": allowed_alerts or [],
+            }
+        )
+    except Exception as action_error:
+        cleanup_errors = []
+        if silence_id:
+            try:
+                expire_silence(cluster, silence_id)
+            except Exception as exc:
+                cleanup_errors.append(f"silence cleanup failed: {exc}")
+        if notice_id:
+            try:
+                status_api.resolve_notice(notice_id)
+            except Exception as exc:
+                cleanup_errors.append(f"notice cleanup failed: {exc}")
+        if cleanup_errors:
+            raise MaintenanceError(
+                f"maintenance begin failed ({action_error}); " + "; ".join(cleanup_errors)
+            ) from action_error
+        raise
+    result["noticeId"] = notice_id
+    result["publicStatus"] = "posted" if notice_id else "not-posted"
+    result["stateFile"] = str(state_path())
+    return result
+
+
 def renew(cluster, silence_id, duration):
     cluster.require_healthy()
     silences = owned_silences(cluster, silence_id, canonical=True)
@@ -785,6 +1006,20 @@ def renew(cluster, silence_id, duration):
     }
 
 
+def coordinated_renew(cluster, silence_id, duration):
+    state = load_state()
+    if state.get("silenceId") != silence_id:
+        raise MaintenanceError(
+            f"maintenance state belongs to silence {state.get('silenceId')}, not {silence_id}"
+        )
+    result = renew(cluster, silence_id, duration)
+    state["endsAt"] = result["endsAt"]
+    write_state(state)
+    result["noticeId"] = state.get("noticeId")
+    result["stateFile"] = str(state_path())
+    return result
+
+
 def end(cluster, silence_id):
     silences = owned_silences(cluster, silence_id)
     result = expire_silence(cluster, silence_id)
@@ -793,6 +1028,155 @@ def end(cluster, silence_id):
         "state": result["status"]["state"],
         "endedAt": result["endsAt"],
         "reason": silences[0][1]["comment"][len(COMMENT_PREFIX) :],
+    }
+
+
+def post_maintenance_blockers(cluster, allowed_alerts=None):
+    cluster.require_healthy()
+    blockers = {}
+    for member, alerts in cluster.all_alerts():
+        for alert in alerts:
+            labels = alert.get("labels", {})
+            alertname = labels.get("alertname", "unknown")
+            if alertname in EXCLUDED_ALERTS or labels.get("severity") not in {"warning", "critical"}:
+                continue
+            if any(alert_matches_selector(alert, selector) for selector in (allowed_alerts or [])):
+                continue
+            key = json.dumps(labels, sort_keys=True)
+            blockers.setdefault(key, {"members": [], **compact_alert(alert)})["members"].append(
+                member.name
+            )
+    if blockers:
+        details = sorted(blockers.values(), key=lambda item: item["alertname"])
+        raise MaintenanceError(
+            "refusing to end maintenance while warning/critical alerts remain active: "
+            + json.dumps(details, separators=(",", ":"))
+        )
+
+
+def coordinated_end(cluster, silence_id, status_api=None):
+    state = load_state()
+    if state.get("silenceId") != silence_id:
+        raise MaintenanceError(
+            f"maintenance state belongs to silence {state.get('silenceId')}, not {silence_id}"
+        )
+    notice_id = state.get("noticeId")
+    allowed_active_alerts = validate_persisted_alert_selectors(
+        state.get("allowedActiveAlerts", []), "allowedActiveAlerts"
+    )
+    post_maintenance_blockers(cluster, allowed_active_alerts)
+    current = status(cluster, silence_id)
+    if current["state"] == "active":
+        result = end(cluster, silence_id)
+        state["alertmanagerEndedAt"] = result["endedAt"]
+        write_state(state)
+    elif current["state"] == "expired":
+        result = {
+            "silenceId": silence_id,
+            "state": "expired",
+            "endedAt": current["endsAt"],
+            "reason": current["reason"],
+        }
+        state["alertmanagerEndedAt"] = result["endedAt"]
+        write_state(state)
+    else:
+        raise MaintenanceError(
+            f"silence {silence_id} is in unexpected state {current['state']!r}"
+        )
+    if notice_id:
+        (status_api or StatusApi()).resolve_notice(notice_id)
+    clear_state(silence_id)
+    result["noticeId"] = notice_id
+    result["noticeState"] = "resolved" if notice_id else "not-posted"
+    return result
+
+
+def coordinated_repair(cluster, silence_id, allowed_alerts=None, status_api=None):
+    state = load_state()
+    if state.get("silenceId") != silence_id:
+        raise MaintenanceError(
+            f"maintenance state belongs to silence {state.get('silenceId')}, not {silence_id}"
+        )
+    cluster.require_healthy()
+    retained = [member.get_optional_silence(silence_id) for member in cluster.members]
+    if all(silence is None for silence in retained):
+        recorded_end = state.get("alertmanagerEndedAt") or state.get("endsAt")
+        ended_at = parse_timestamp(recorded_end)
+        if ended_at > utc_now():
+            raise MaintenanceError(
+                f"repair cannot treat absent silence {silence_id} as expired before {recorded_end}"
+            )
+        current = {
+            "silenceId": silence_id,
+            "state": "expired",
+            "endsAt": recorded_end,
+            "reason": state.get("reason", "unknown maintenance"),
+        }
+    elif any(silence is None for silence in retained):
+        raise MaintenanceError(
+            f"Alertmanager members disagree whether silence {silence_id} exists"
+        )
+    else:
+        retained_silences = [silence for silence in retained if silence is not None]
+        for member, silence in zip(cluster.members, retained_silences, strict=True):
+            if (
+                silence.get("id") != silence_id
+                or silence.get("createdBy") != MANAGED_BY
+                or not silence.get("comment", "").startswith(COMMENT_PREFIX)
+            ):
+                raise MaintenanceError(
+                    f"silence {silence_id} on {member.name} is not the expected owned silence"
+                )
+        if len({silence_definition_signature(silence) for silence in retained_silences}) != 1:
+            raise MaintenanceError("Alertmanager members report divergent silence definitions")
+        states = {silence.get("status", {}).get("state") for silence in retained_silences}
+        if len(states) != 1:
+            raise MaintenanceError(
+                f"Alertmanager members report divergent silence states for {silence_id}"
+            )
+        silence = retained_silences[0]
+        current = {
+            "silenceId": silence_id,
+            "state": next(iter(states)),
+            "endsAt": silence.get("endsAt"),
+            "reason": silence["comment"][len(COMMENT_PREFIX) :],
+        }
+    if current["state"] != "expired":
+        raise MaintenanceError(
+            f"repair requires an expired owned silence; {silence_id} is {current['state']!r}"
+        )
+    persisted_active_alerts = validate_persisted_alert_selectors(
+        state.get("allowedActiveAlerts", []), "allowedActiveAlerts"
+    )
+    persisted_repair_alerts = validate_persisted_alert_selectors(
+        state.get("allowedRepairAlerts", []), "allowedRepairAlerts"
+    )
+    repair_alerts = [*persisted_repair_alerts, *(allowed_alerts or [])]
+    post_maintenance_blockers(
+        cluster,
+        [*persisted_active_alerts, *repair_alerts],
+    )
+    state_changed = False
+    if repair_alerts != persisted_repair_alerts:
+        state["allowedRepairAlerts"] = repair_alerts
+        state_changed = True
+    if state.get("alertmanagerEndedAt") != current["endsAt"]:
+        state["alertmanagerEndedAt"] = current["endsAt"]
+        state_changed = True
+    if state_changed:
+        write_state(state)
+    notice_id = state.get("noticeId")
+    if notice_id:
+        (status_api or StatusApi()).resolve_notice(notice_id)
+    clear_state(silence_id)
+    return {
+        "silenceId": silence_id,
+        "state": "expired",
+        "endedAt": current["endsAt"],
+        "reason": current["reason"],
+        "noticeId": notice_id,
+        "noticeState": "resolved" if notice_id else "not-posted",
+        "repairState": "cleared",
     }
 
 
@@ -943,12 +1327,20 @@ def probe(cluster):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Manage verified, bounded Alertmanager silences for home-k8s maintenance."
+        description=(
+            "Manage verified, bounded Alertmanager silences for home-k8s maintenance, "
+            "with explicit public status notices only for user-visible impact."
+        )
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     begin_parser = subparsers.add_parser("begin", help="start and verify a maintenance silence")
     begin_parser.add_argument("--reason", required=True, help="human-readable maintenance reason")
     begin_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
+    begin_parser.add_argument(
+        "--public-status",
+        action="store_true",
+        help="publish a status-page incident because user-visible impact is expected",
+    )
     begin_parser.add_argument(
         "--allow-active-alert",
         action="append",
@@ -965,6 +1357,21 @@ def build_parser():
     renew_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
     end_parser = subparsers.add_parser("end", help="expire an owned maintenance silence")
     end_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
+    repair_parser = subparsers.add_parser(
+        "repair", help="clear retained state for an already-expired owned silence"
+    )
+    repair_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
+    repair_parser.add_argument(
+        "--allow-active-alert",
+        action="append",
+        type=parse_alert_selector,
+        default=[],
+        metavar="LABEL=VALUE,...",
+        help=(
+            "allow one exact, known baseline warning/critical alert during stale-state repair; "
+            "repeatable and must include alertname plus a scoping label"
+        ),
+    )
     status_parser = subparsers.add_parser("status", help="inspect an owned maintenance silence")
     status_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
     subparsers.add_parser(
@@ -978,11 +1385,19 @@ def main():
     try:
         with alertmanager_cluster() as cluster:
             if args.command == "begin":
-                result = begin(cluster, args.reason, args.duration, args.allow_active_alert)
+                result = coordinated_begin(
+                    cluster,
+                    args.reason,
+                    args.duration,
+                    args.allow_active_alert,
+                    StatusApi() if args.public_status else None,
+                )
             elif args.command == "renew":
-                result = renew(cluster, args.id, args.duration)
+                result = coordinated_renew(cluster, args.id, args.duration)
             elif args.command == "end":
-                result = end(cluster, args.id)
+                result = coordinated_end(cluster, args.id)
+            elif args.command == "repair":
+                result = coordinated_repair(cluster, args.id, args.allow_active_alert)
             elif args.command == "probe":
                 result = probe(cluster)
             else:

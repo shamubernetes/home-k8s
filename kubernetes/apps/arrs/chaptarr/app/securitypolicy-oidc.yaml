@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/gateway.envoyproxy.io/securitypolicy_v1alpha1.json
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: chaptarr-oidc
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: chaptarr-envoy-browser
+  oidc:
+    provider:
+      issuer: https://sso.${HOME_DOMAIN}
+    clientIDRef:
+      group: ""
+      kind: Secret
+      name: chaptarr-oidc-secret
+    clientSecret:
+      group: ""
+      kind: Secret
+      name: chaptarr-oidc-secret
+    redirectURL: https://chaptarr.${HOME_DOMAIN}/oauth2/callback
+    logoutPath: /oauth2/logout
+    cookieConfig:
+      sameSite: Lax
+    cookieNames:
+      accessToken: chaptarr-access-token
+      idToken: chaptarr-id-token
+    forwardAccessToken: false
+    passThroughAuthHeader: false
+    scopes:
+    - openid
+    - profile
+    - email

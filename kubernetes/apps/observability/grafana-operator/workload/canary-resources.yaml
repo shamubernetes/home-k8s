@@ -1,0 +1,56 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaFolder
+metadata:
+  name: operator-canary
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana-v5
+  title: Operator Canary
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: operator-canary
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana-v5
+  folderRef: operator-canary
+  uid: operator-canary
+  plugins:
+  - name: grafana-clock-panel
+    version: 3.2.2
+  - name: pr0ps-trackmap-panel
+    version: 3.0.2
+  - name: victoriametrics-logs-datasource
+    version: 0.30.1
+  - name: vonage-status-panel
+    version: 2.0.4
+  json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 0,
+      "links": [],
+      "panels": [
+        {
+          "datasource": {"type": "datasource", "uid": "grafana"},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+          "id": 1,
+          "options": {"content": "# Grafana Operator canary\n\nThis dashboard is reconciled through the Grafana Operator.", "mode": "markdown"},
+          "pluginVersion": "12.3.1",
+          "title": "Ownership canary",
+          "type": "text"
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 42,
+      "tags": ["grafana-operator", "canary"],
+      "templating": {"list": []},
+      "time": {"from": "now-6h", "to": "now"},
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Grafana Operator Canary",
+      "version": 1
+    }

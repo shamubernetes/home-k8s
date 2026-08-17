@@ -1,0 +1,143 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: tautulli-nas
+spec:
+  backend:
+    filesystem:
+      path: /repo
+      volume:
+        nfs:
+          server: "${IPAM_IP_NFS}"
+          path: /mnt/user/Backups/kopiur/tautulli
+  encryption:
+    passwordSecretRef:
+      name: tautulli-kopiur-nas
+      key: KOPIA_PASSWORD
+  create:
+    enabled: false
+  # Preserve historical recovery points without scheduling new NFS work.
+  mode: ReadOnly
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: false
+  maintenance:
+    enabled: false
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: tautulli-nas-smb
+spec:
+  backend:
+    rclone:
+      remotePath: mnemosyne:Backups/kopiur/tautulli-smb
+      configSecretRef:
+        name: tautulli-kopiur-nas
+      startupTimeout: 2m
+  encryption:
+    passwordSecretRef:
+      name: tautulli-kopiur-nas
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: true
+    schedule:
+      quick:
+        cron: "40 */6 * * *"
+        jitter: 30m
+      full:
+        cron: "0 4 * * *"
+        jitter: 1h
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      # The rclone SMB mover exceeded 512Mi while snapshotting Tautulli's data.
+      requests:
+        cpu: 25m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: tautulli-r2
+spec:
+  backend:
+    s3:
+      bucket: storage-backup
+      prefix: kopiur/tautulli/r2/
+      endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
+      region: auto
+      auth:
+        secretRef:
+          name: tautulli-kopiur-r2
+  encryption:
+    passwordSecretRef:
+      name: tautulli-kopiur-r2
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: true
+    schedule:
+      quick:
+        cron: "55 */6 * * *"
+        jitter: 30m
+      full:
+        cron: "15 5 * * *"
+        jitter: 1h
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi

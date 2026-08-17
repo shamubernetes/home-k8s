@@ -71,6 +71,8 @@ spec:
               limits:
                 memory: 1Gi
     defaultPodOptions:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-08-10T19:07:25Z"
       securityContext:
         runAsNonRoot: true
         runAsUser: 568
@@ -88,14 +90,6 @@ spec:
     persistence:
       config:
         existingClaim: "${APP}"
-      pushover-notify:
-        type: configMap
-        name: "${APP}-configmap"
-        defaultMode: 0775
-        globalMounts:
-        - path: /scripts/pushover-notify.sh
-          subPath: pushover-notify.sh
-          readOnly: true
       tmp:
         type: emptyDir
       media:

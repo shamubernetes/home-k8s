@@ -1,0 +1,227 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app pelican
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: pelican
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      pelican:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        strategy: Recreate
+        initContainers:
+          00-init-db:
+            image:
+              repository: ghcr.io/home-operations/postgres-init
+              tag: 17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+            envFrom: &envFrom
+            - secretRef:
+                name: pelican-secret
+          10-sync-plugins:
+            image:
+              repository: alpine
+              tag: latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+            command:
+            - /bin/sh
+            - -ec
+            - |
+              revision="85d0691533f9d94ce83528a1c6edc0e82069f1d6"
+              patch_revision="network-profiles-v1"
+              installed_revision="$revision:$patch_revision"
+              checksum="ee42481ce500f0e153a6a11c150aae02b0d15f0b63b202db35b99c70edca694a"
+              destination="/plugins/user-creatable-servers"
+
+              if [ -f "$destination/.source-revision" ] && [ "$(cat "$destination/.source-revision")" = "$installed_revision" ]; then
+                echo "User Creatable Servers is already pinned to $installed_revision"
+                exit 0
+              fi
+
+              workdir="$(mktemp -d)"
+              archive="$workdir/plugins.tar.gz"
+              staging="/plugins/.user-creatable-servers.new"
+              trap 'rm -rf "$workdir" "$staging"' EXIT
+
+              wget -q -O "$archive" "https://github.com/pelican-dev/plugins/archive/$revision.tar.gz"
+              echo "$checksum  $archive" | sha256sum -c -
+              tar -xzf "$archive" -C "$workdir"
+
+              rm -rf "$staging"
+              cp -R "$workdir/plugins-$revision/user-creatable-servers" "$staging"
+
+              # Upstream 1.1.1 overrides protected egg variables during
+              # self-service creation. Keep Pelican's user_editable guard.
+              sed -i 's/->disabled(false),/->disabled(fn (Get $get) => !$get("user_editable")),/' \
+                "$staging/src/Filament/App/Pages/CreateServerPage.php"
+              if grep -Fq -- '->disabled(false)' "$staging/src/Filament/App/Pages/CreateServerPage.php" || \
+                ! grep -Fq -- '->disabled(fn (Get $get) => !$get("user_editable")),' \
+                  "$staging/src/Filament/App/Pages/CreateServerPage.php"; then
+                echo "Protected-variable patch did not apply" >&2
+                exit 1
+              fi
+
+              cp /provisioning/UserResourceLimits.php "$staging/src/Models/UserResourceLimits.php"
+              cp /provisioning/user-creatable-servers.php "$staging/config/user-creatable-servers.php"
+              cmp -s /provisioning/UserResourceLimits.php "$staging/src/Models/UserResourceLimits.php"
+              cmp -s /provisioning/user-creatable-servers.php "$staging/config/user-creatable-servers.php"
+
+              printf '%s\n' "$installed_revision" > "$staging/.source-revision"
+              rm -rf "$destination"
+              mv "$staging" "$destination"
+              echo "Installed pinned User Creatable Servers source $installed_revision"
+          20-install-plugins:
+            image: &panelImage
+              repository: ghcr.io/pelican-dev/panel
+              tag: v1.0.0-beta36@sha256:45cecf27176630ac628ebc9badc0ad273bdaa9bf441648c363dd8daeb9cc3bff
+            envFrom: *envFrom
+            command:
+            - /bin/ash
+            - -ec
+            - |
+              php artisan p:plugin:install user-creatable-servers
+
+              plugin_file="/var/www/html/plugins/user-creatable-servers/plugin.json"
+              if ! grep -Fq '"status": "enabled"' "$plugin_file"; then
+                echo "User Creatable Servers did not become enabled" >&2
+                exit 1
+              fi
+
+              php artisan tinker --execute="if (!Illuminate\\Support\\Facades\\Schema::hasTable('user_resource_limits')) { throw new RuntimeException('User Creatable Servers migration is missing'); }"
+              php artisan p:plugin:list
+          30-provision-catalog:
+            image: *panelImage
+            envFrom: *envFrom
+            command:
+            - php
+            - /provisioning/provision.php
+        containers:
+          app:
+            image: *panelImage
+            envFrom: *envFrom
+            env:
+              APP_URL: https://pelican.${HOME_DOMAIN}
+              BEHIND_PROXY: "true"
+              TRUSTED_PROXIES: 10.69.0.0/16
+              TZ: ${TIMEZONE}
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /up
+                    port: &port 80
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /up
+                    port: *port
+                  periodSeconds: 5
+                  timeoutSeconds: 3
+                  failureThreshold: 60
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    defaultPodOptions:
+      hostAliases:
+      - ip: 10.100.47.100
+        hostnames:
+        - mnemosyne.thezoo.house
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 82
+        runAsGroup: 82
+        fsGroup: 82
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: pelican
+        ports:
+          http:
+            port: *port
+    persistence:
+      data:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        storageClass: ceph-block
+        advancedMounts:
+          pelican:
+            app:
+            - path: /pelican-data
+            20-install-plugins:
+            - path: /pelican-data
+            30-provision-catalog:
+            - path: /pelican-data
+      plugins:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 2Gi
+        storageClass: ceph-block
+        advancedMounts:
+          pelican:
+            app:
+            - path: /var/www/html/plugins
+            10-sync-plugins:
+            - path: /plugins
+            20-install-plugins:
+            - path: /var/www/html/plugins
+            30-provision-catalog:
+            - path: /var/www/html/plugins
+      provisioning:
+        type: configMap
+        name: pelican-provisioning
+        advancedMounts:
+          pelican:
+            10-sync-plugins:
+            - path: /provisioning
+              readOnly: true
+            30-provision-catalog:
+            - path: /provisioning
+              readOnly: true
+      logs:
+        type: emptyDir
+        advancedMounts:
+          pelican:
+            app:
+            - path: /var/www/html/storage/logs
+            20-install-plugins:
+            - path: /var/www/html/storage/logs
+            30-provision-catalog:
+            - path: /var/www/html/storage/logs
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          pelican:
+            app:
+            - path: /tmp
+            20-install-plugins:
+            - path: /tmp
+            30-provision-catalog:
+            - path: /tmp

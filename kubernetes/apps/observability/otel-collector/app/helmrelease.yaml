@@ -1,0 +1,181 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: otel-collector
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: opentelemetry-collector
+      version: 0.170.0
+      sourceRef:
+        kind: HelmRepository
+        name: opentelemetry
+      interval: 30m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    fullnameOverride: otel-collector
+    mode: deployment
+    replicaCount: 2
+    image:
+      repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
+      tag: 0.158.0@sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5
+      digest: sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5
+    command:
+      name: otelcol-contrib
+    presets:
+      kubernetesAttributes:
+        enabled: false
+      kubeletMetrics:
+        enabled: false
+      logsCollection:
+        enabled: false
+      hostMetrics:
+        enabled: false
+      kubernetesEvents:
+        enabled: false
+      clusterMetrics:
+        enabled: false
+    extraEnvs:
+    - name: HERMES_OTLP_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: otel-collector-auth
+          key: HERMES_TOKEN
+    ports:
+      otlp:
+        enabled: false
+      otlp-http:
+        enabled: true
+        containerPort: 4318
+        servicePort: 4318
+        protocol: TCP
+        appProtocol: http
+      jaeger-compact:
+        enabled: false
+      jaeger-thrift:
+        enabled: false
+      jaeger-grpc:
+        enabled: false
+      zipkin:
+        enabled: false
+      metrics:
+        enabled: true
+        containerPort: 8888
+        servicePort: 8888
+        protocol: TCP
+      prometheus:
+        enabled: true
+        containerPort: 8889
+        servicePort: 8889
+        protocol: TCP
+    serviceMonitor:
+      enabled: true
+      metricsEndpoints:
+      - port: metrics
+        interval: 30s
+      - port: prometheus
+        interval: 30s
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      fsGroup: 10001
+      fsGroupChangePolicy: OnRootMismatch
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: otel-collector
+          app.kubernetes.io/name: opentelemetry-collector
+    config:
+      extensions:
+        health_check:
+          endpoint: 0.0.0.0:13133
+        bearertokenauth/server:
+          tokens:
+          - "$${env:HERMES_OTLP_TOKEN}"
+      receivers:
+        jaeger: null
+        prometheus: null
+        zipkin: null
+        otlp:
+          protocols:
+            grpc: null
+            http:
+              endpoint: 0.0.0.0:4318
+              auth:
+                authenticator: bearertokenauth/server
+      processors:
+        memory_limiter:
+          check_interval: 5s
+          limit_percentage: 75
+          spike_limit_percentage: 20
+        batch:
+          timeout: 5s
+          send_batch_size: 8192
+      exporters:
+        debug: null
+        prometheus:
+          endpoint: 0.0.0.0:8889
+          metric_expiration: 5m
+          resource_to_telemetry_conversion:
+            enabled: true
+        otlp_http/victorialogs:
+          logs_endpoint: http://victoria-logs.observability.svc.cluster.local:9428/insert/opentelemetry/v1/logs
+          compression: gzip
+          sending_queue:
+            enabled: true
+            queue_size: 1000
+          retry_on_failure:
+            enabled: true
+        otlp_http/victoriatraces:
+          traces_endpoint: http://victoria-traces.observability.svc.cluster.local:10428/insert/opentelemetry/v1/traces
+          compression: gzip
+          sending_queue:
+            enabled: true
+            queue_size: 1000
+          retry_on_failure:
+            enabled: true
+      service:
+        extensions:
+        - health_check
+        - bearertokenauth/server
+        pipelines:
+          metrics:
+            receivers: [otlp]
+            processors: [memory_limiter, batch]
+            exporters: [prometheus]
+          logs:
+            receivers: [otlp]
+            processors: [memory_limiter, batch]
+            exporters: [otlp_http/victorialogs]
+          traces:
+            receivers: [otlp]
+            processors: [memory_limiter, batch]
+            exporters: [otlp_http/victoriatraces]

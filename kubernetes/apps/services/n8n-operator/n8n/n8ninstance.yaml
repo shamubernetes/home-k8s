@@ -7,7 +7,7 @@ metadata:
 spec:
   replicas: 1
   deploymentStrategy: Recreate
-  image: docker.io/n8nio/n8n:2.34.4@sha256:f69bad7a699300702af665b9f13fc67455b93c9fb9174bca6c37f3d4a47b8583
+  image: docker.io/n8nio/n8n:2.35.3@sha256:31375a4f730081a139bba2d379bf2efaa8e662cc9e131d12bb5e15859d4f0282
   imagePullPolicy: IfNotPresent
   timezone: "America/New_York"
 
@@ -77,7 +77,7 @@ spec:
 
   metrics:
     enabled: true
-    includeWorkflowIdLabel: true
+    includeWorkflowIdLabel: false
     includeApiEndpoints: true
 
   resources:

@@ -13,3 +13,14 @@ tasks:
   update-kubeconfig:
     desc: Update the kubeconfig file
     cmd: gh secret set KUBECONFIG --body "$(command cat {{.ROOT_DIR}}/kubeconfig | base64 | tr -d '\n')"
+
+  deliver-pr:
+    desc: Watch one PR head and optionally merge it with an explicit repository
+    summary: |
+      pr: Pull request number or URL (required)
+      args: Optional flags passed to scripts/pr-deliver, for example --merge
+    cmd: '{{.ROOT_DIR}}/scripts/pr-deliver {{.pr}} {{.args}}'
+    vars:
+      args: '{{.args | default ""}}'
+    requires:
+      vars: ["pr"]

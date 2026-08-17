@@ -3,6 +3,9 @@ module.exports = {
   allowCustomCrateRegistries: true,
   allowPlugins: true,
   allowScripts: true,
+  // Allow Renovate's built-in Mise manager to refresh mise.lock atomically
+  // with tool bumps. This does not permit arbitrary repository commands.
+  allowedUnsafeExecutions: ["mise"],
   assigneesFromCodeOwners: true,
   autodiscover: true,
   autodiscoverFilter: ["shamubernetes/*", "kiliantyler/*"],

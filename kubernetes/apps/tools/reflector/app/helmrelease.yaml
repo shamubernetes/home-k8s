@@ -19,4 +19,4 @@ spec:
   values:
     image:
       repository: docker.io/emberstack/kubernetes-reflector
-      tag: 10.0.63@sha256:37573bf06aa199ee0d61766a3ec6a1507d2eba4a682baa25b5f66e5acdb393c9
+      tag: 10.0.65@sha256:51dbd5880929dc26678f6e190c70abfbcccd3846679ff464e5815823fd782f1a

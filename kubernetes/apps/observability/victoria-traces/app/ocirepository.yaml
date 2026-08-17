@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  annotations:
+    oci.home.arpa/allow-rollout: "true"
+  name: victoria-traces
+spec:
+  interval: 30m
+  url: oci://ghcr.io/victoriametrics/helm-charts/victoria-traces-single
+  ref:
+    tag: 0.1.11
+    digest: sha256:9596eb94cff3743069111c9c773e57a8b853a257ea1f850d32d32a76526c82d4
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

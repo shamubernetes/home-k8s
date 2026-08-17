@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/validate-yaml <path> [path ...]
+
+Validates focused YAML files with yayamlls. A single GitOps application root
+(kubernetes/apps/<category>/<app> or its app/ directory) is automatically sent
+to scripts/validate-app, which performs the canonical Kustomize and Helm checks.
+Set VALIDATE_YAML_APP_MODE to offline, online, or auto. Offline is the default
+and never reads the active Kubernetes context. Online is explicit; auto opts in
+to online validation when any Kubernetes API is reachable.
+USAGE
+}
+
+if [[ ${1:-} == -h || ${1:-} == --help || $# -eq 0 ]]; then
+  usage
+  exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+validate_app=${VALIDATE_APP_BIN:-"${repo_root}/scripts/validate-app"}
+yayamlls=${YAYAMLLS_BIN:-yayamlls}
+
+if [[ $# -eq 1 ]]; then
+  input=${1%/}
+  relative=${input#"${repo_root}/"}
+  relative=${relative#./}
+  if [[ $relative =~ ^kubernetes/apps/([^/]+)/([^/]+)(/app)?$ ]]; then
+    category=${BASH_REMATCH[1]}
+    app=${BASH_REMATCH[2]}
+    if [[ -f "${repo_root}/kubernetes/apps/${category}/${app}/ks.yaml" && -f "${repo_root}/kubernetes/apps/${category}/${app}/app/kustomization.yaml" ]]; then
+      mode=${VALIDATE_YAML_APP_MODE:-offline}
+      app_args=()
+      case "$mode" in
+        online) ;;
+        offline) app_args+=(--offline) ;;
+        auto)
+          if ! command -v kubectl >/dev/null 2>&1 || ! kubectl version --request-timeout=3s >/dev/null 2>&1; then
+            app_args+=(--offline)
+          fi
+          ;;
+        *)
+          printf 'VALIDATE_YAML_APP_MODE must be auto, online, or offline\n' >&2
+          exit 2
+          ;;
+      esac
+      if (( ${#app_args[@]} )); then
+        printf '==> detected GitOps app %s/%s; using scripts/validate-app --offline\n' "$category" "$app" >&2
+      else
+        printf '==> detected GitOps app %s/%s; using scripts/validate-app\n' "$category" "$app" >&2
+      fi
+      exec "$validate_app" "${app_args[@]}" "${category}/${app}"
+    fi
+  fi
+fi
+
+if ! command -v "$yayamlls" >/dev/null 2>&1; then
+  printf 'missing required command: %s\n' "$yayamlls" >&2
+  exit 127
+fi
+
+set +e
+"$yayamlls" validate --root "$repo_root" "$@"
+status=$?
+set -e
+if [[ $status -eq 201 ]]; then
+  cat >&2 <<'MSG'
+yayamlls exited 201: schema validation failed or the resource schema is unsupported.
+For a GitOps app directory, pass kubernetes/apps/<category>/<app> so this helper
+can run the canonical scripts/validate-app workflow instead.
+MSG
+fi
+exit "$status"

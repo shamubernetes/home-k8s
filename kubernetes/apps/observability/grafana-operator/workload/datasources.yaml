@@ -1,0 +1,109 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victorialogs
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana-v5
+  datasource:
+    name: VictoriaLogs
+    type: victoriametrics-logs-datasource
+    uid: victorialogs
+    access: proxy
+    url: http://victoria-logs.observability.svc.cluster.local:9428
+    isDefault: false
+    jsonData:
+      otelPreset:
+        enabled: true
+        detection:
+          traceIdField: trace_id
+          severity:
+            field: severity_text
+            valueCase: string
+            source: manual
+      derivedFields:
+      - name: trace_id
+        matcherType: label
+        matcherRegex: trace_id
+        url: "$${__value.raw}"
+        urlDisplayLabel: View trace
+        datasourceUid: victoria-traces
+  plugins:
+  - name: victoriametrics-logs-datasource
+    version: 0.30.1
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victoria-traces
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana-v5
+  datasource:
+    name: VictoriaTraces
+    type: tempo
+    uid: victoria-traces
+    access: proxy
+    url: http://victoria-traces.observability.svc.cluster.local:10428/select/tempo
+    isDefault: false
+    jsonData:
+      httpMethod: GET
+      tracesToLogsV2:
+        datasourceUid: victorialogs
+        spanStartTimeShift: -2m
+        spanEndTimeShift: 2m
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: 'trace_id:"$${__span.traceId}"'
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: -2m
+        spanEndTimeShift: 2m
+        tags:
+        - key: service.name
+          value: service_name
+        queries:
+        - name: Gateway health
+          query: 'max by (service_name) (hermes_gateway_up{$$__tags})'
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: prometheus
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana-v5
+  datasource:
+    name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus-operated.observability.svc.cluster.local:9090
+    isDefault: true
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: home-assistant-metrics
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana-v5
+  datasource:
+    name: Home Assistant Metrics
+    type: prometheus
+    uid: victoriametrics-ha
+    access: proxy
+    url: http://victoria-metrics-ha.observability.svc.cluster.local:8428
+    isDefault: false
+    jsonData:
+      prometheusType: VictoriaMetrics
+      prometheusVersion: 1.149.0

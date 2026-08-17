@@ -9,9 +9,11 @@ Options:
   --internal              Add internal ingress at <app>.${HOME_DOMAIN} (default)
   --external              Add external ingress at <app>.${HOME_DOMAIN}
   --no-ingress            Do not add ingress
+  --health-path <path>    Generate HTTP probes (legacy default: /)
+  --no-health-endpoint    Disable generated HTTP probes explicitly
   --secret                Add ExternalSecret skeleton targeting <app>-secret
   --config-file <path>    Mount a ConfigMap file at the given container path
-  --chart-version <ver>   app-template version (default: 4.6.2)
+  --chart-version <ver>   app-template OCI chart version (default: 5.0.1)
 
 Creates a standard Flux/app-template app skeleton and wires it into the parent
 category kustomization. Review generated files before committing.
@@ -26,12 +28,20 @@ fi
 category=$1
 app=$2
 shift 2
+dns_label='^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+if [[ ! $category =~ $dns_label || ${#category} -gt 63 || ! $app =~ $dns_label || ${#app} -gt 63 ]]; then
+  echo "category and app must be lowercase DNS labels" >&2
+  exit 1
+fi
 image=""
 port=""
 ingress="internal"
 with_secret=false
 config_file=""
-chart_version="4.6.2"
+chart_version="5.0.1"
+health_path="/"
+probes_enabled=true
+probes_decided=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +50,8 @@ while [[ $# -gt 0 ]]; do
     --internal) ingress="internal"; shift ;;
     --external) ingress="external"; shift ;;
     --no-ingress) ingress="none"; shift ;;
+    --health-path) health_path=${2:?}; probes_enabled=true; probes_decided=true; shift 2 ;;
+    --no-health-endpoint) health_path=""; probes_enabled=false; probes_decided=true; shift ;;
     --secret) with_secret=true; shift ;;
     --config-file) config_file=${2:?}; shift 2 ;;
     --chart-version) chart_version=${2:?}; shift 2 ;;
@@ -49,6 +61,42 @@ done
 
 [[ -n "$image" ]] || { echo "--image is required" >&2; exit 1; }
 [[ -n "$port" ]] || { echo "--port is required" >&2; exit 1; }
+if [[ $probes_decided != true ]]; then
+  echo "warning: no probe decision supplied; defaulting to --health-path / for app.scaffold compatibility" >&2
+fi
+if [[ ! $port =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+  echo "--port must be an integer between 1 and 65535" >&2
+  exit 1
+fi
+if [[ $image == *[$' \t\r\n']* || $image != *@sha256:* ]]; then
+  echo "--image must be an immutable image:tag@sha256 reference from scripts/preflight-new-app" >&2
+  exit 1
+fi
+digest_value=${image##*@sha256:}
+if [[ ! $digest_value =~ ^[a-fA-F0-9]{64}$ ]]; then
+  echo "--image sha256 digest must contain exactly 64 hexadecimal characters" >&2
+  exit 1
+fi
+before_digest=${image%@sha256:*}
+last_segment=${before_digest##*/}
+if [[ $last_segment != *:* ]]; then
+  echo "--image with a digest must preserve its tag, for example repo/app:tag@sha256:${digest_value}" >&2
+  exit 1
+fi
+image_repo=${before_digest%:*}
+image_tag="${before_digest##*:}@sha256:${digest_value}"
+if [[ ! $chart_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.-]+)?$ ]]; then
+  echo "--chart-version must be a semantic version" >&2
+  exit 1
+fi
+if [[ $probes_enabled == true && $health_path != /* ]]; then
+  echo "--health-path must be an absolute HTTP path" >&2
+  exit 1
+fi
+if [[ -n $config_file && $config_file != /* ]]; then
+  echo "--config-file must be an absolute container path" >&2
+  exit 1
+fi
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 base="${repo_root}/kubernetes/apps/${category}/${app}"
@@ -103,11 +151,31 @@ cat > "${app_dir}/kustomization.yaml" <<'EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./ocirepository.yaml
 EOF
 if [[ "$with_secret" == true ]]; then
   echo "- ./externalsecret.yaml" >> "${app_dir}/kustomization.yaml"
 fi
 echo "- ./helmrelease.yaml" >> "${app_dir}/kustomization.yaml"
+if [[ "$ingress" != "none" ]]; then
+  echo "- ./httproute-envoy.yaml" >> "${app_dir}/kustomization.yaml"
+fi
+
+cat > "${app_dir}/ocirepository.yaml" <<EOF
+# yaml-language-server: \$schema=https://k8s-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: ${app}
+spec:
+  interval: 30m
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    tag: ${chart_version}
+  url: oci://ghcr.io/bjw-s-labs/helm/app-template
+EOF
 
 if [[ "$with_secret" == true ]]; then
 cat > "${app_dir}/externalsecret.yaml" <<EOF
@@ -133,21 +201,6 @@ spec:
 EOF
 fi
 
-if [[ "$image" == *@sha256:* ]]; then
-  before_digest=${image%@sha256:*}
-  digest="sha256:${image##*@sha256:}"
-  last_segment=${before_digest##*/}
-  if [[ "$last_segment" != *:* ]]; then
-    echo "--image with a digest must include a tag for app-template, for example repo/app:tag@${digest}" >&2
-    exit 1
-  fi
-  image_repo=${before_digest%:*}
-  image_tag="${before_digest##*:}@${digest}"
-else
-  image_repo=${image%:*}
-  image_tag=${image##*:}
-fi
-
 cat > "${app_dir}/helmrelease.yaml" <<EOF
 # yaml-language-server: \$schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
@@ -156,14 +209,9 @@ metadata:
   name: &app ${app}
 spec:
   interval: 10m
-  chart:
-    spec:
-      chart: app-template
-      version: ${chart_version}
-      sourceRef:
-        kind: HelmRepository
-        name: bjw-s
-        namespace: flux-system
+  chartRef:
+    kind: OCIRepository
+    name: ${app}
   install:
     remediation:
       retries: 3
@@ -192,6 +240,7 @@ cat >> "${app_dir}/helmrelease.yaml" <<EOF
                 name: ${app}-secret
 EOF
 fi
+if [[ "$probes_enabled" == true ]]; then
 cat >> "${app_dir}/helmrelease.yaml" <<EOF
             probes:
               liveness: &probes
@@ -199,13 +248,16 @@ cat >> "${app_dir}/helmrelease.yaml" <<EOF
                 custom: true
                 spec:
                   httpGet:
-                    path: /
-                    port: &port ${port}
+                    path: ${health_path}
+                    port: ${port}
                   initialDelaySeconds: 15
                   periodSeconds: 30
                   timeoutSeconds: 5
                   failureThreshold: 5
               readiness: *probes
+EOF
+fi
+cat >> "${app_dir}/helmrelease.yaml" <<EOF
             securityContext:
               allowPrivilegeEscalation: false
               capabilities: {drop: ["ALL"]}
@@ -223,24 +275,8 @@ cat >> "${app_dir}/helmrelease.yaml" <<EOF
         controller: ${app}
         ports:
           http:
-            port: *port
+            port: ${port}
 EOF
-if [[ "$ingress" != "none" ]]; then
-cat >> "${app_dir}/helmrelease.yaml" <<EOF
-    ingress:
-      app:
-        annotations:
-          external-dns.alpha.kubernetes.io/target: ${ingress}.\${HOME_DOMAIN}
-        className: ${ingress}
-        hosts:
-        - host: "{{ .Release.Name }}.\${HOME_DOMAIN}"
-          paths:
-          - path: /
-            service:
-              identifier: app
-              port: http
-EOF
-fi
 if [[ -n "$config_file" ]]; then
 key=$(basename "$config_file")
 cat >> "${app_dir}/helmrelease.yaml" <<EOF
@@ -275,6 +311,36 @@ cat >> "${app_dir}/helmrelease.yaml" <<EOF
           ${app}:
             app:
             - path: /tmp
+EOF
+fi
+
+if [[ "$ingress" != "none" ]]; then
+  gateway="envoy-${ingress}"
+  cat > "${app_dir}/httproute-envoy.yaml" <<EOF
+# yaml-language-server: \$schema=https://k8s-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ${app}-envoy
+spec:
+  hostnames:
+  - ${app}.\${HOME_DOMAIN}
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ${gateway}
+    namespace: network
+    sectionName: https
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: ${app}
+      port: ${port}
 EOF
 fi
 

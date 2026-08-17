@@ -34,7 +34,6 @@ EXPECTED_ROUTE_NAMES = set(['adguard-home-origin-envoy',
  'grafana-envoy',
  'grimmory-envoy',
  'hermes-webhooks-envoy',
- 'home-assistant-code-server-envoy',
  'home-assistant-envoy',
  'hubble-ui-envoy',
  'konflate-envoy',
@@ -82,12 +81,11 @@ EXPECTED = [('adguard-home-origin-envoy', 'envoy-internal', 'adguard.${HOME_DOMA
  ('documenso-envoy', 'envoy-internal', 'documenso.${HOME_DOMAIN}', 'PathPrefix', '/', 'documenso', 3000, ''),
  ('firecrawl-envoy', 'envoy-internal', 'firecrawl.${HOME_DOMAIN}', 'PathPrefix', '/', 'firecrawl-api', 3002, ''),
  ('flux-webhook-envoy', 'envoy-external', 'flux-webhook.${HOME_DOMAIN}', 'PathPrefix', '/hook/', 'webhook-receiver', 80, ''),
- ('gatus-envoy', 'envoy-external', 'status.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
+ ('gatus-envoy', 'envoy-internal', 'gatus.${HOME_DOMAIN}', 'PathPrefix', '/', 'gatus', 80, ''),
  ('gitmirror-envoy', 'envoy-external', 'gitmirror.${HOME_DOMAIN}', 'PathPrefix', '/webhooks/github', 'git-mirror-operator-github-webhook-service', 8082, ''),
- ('grafana-envoy', 'envoy-internal', 'grafana.${HOME_DOMAIN}', 'PathPrefix', '/', 'grafana', 80, ''),
+ ('grafana-envoy', 'envoy-internal', 'grafana.${HOME_DOMAIN}', 'PathPrefix', '/', 'grafana-v5-service', 3000, ''),
  ('grimmory-envoy', 'envoy-internal', 'grimmory.${HOME_DOMAIN}', 'PathPrefix', '/', 'grimmory', 6060, ''),
  ('hermes-webhooks-envoy', 'envoy-external', 'hermes-webhooks.${HOME_DOMAIN}', 'Exact', '/webhooks/firecrawl-automation', 'hermes-webhooks', 80, ''),
- ('home-assistant-code-server-envoy', 'envoy-internal', 'code.ha.${HOME_DOMAIN}', 'PathPrefix', '/', 'home-assistant', 12321, ''),
  ('home-assistant-envoy', 'envoy-internal', 'ha.${HOME_DOMAIN}', 'PathPrefix', '/', 'home-assistant', 8123, ''),
  ('hubble-ui-envoy', 'envoy-internal', 'hubble.${HOME_DOMAIN}', 'PathPrefix', '/', 'hubble-ui', 80, ''),
  ('konflate-envoy', 'envoy-internal', 'konflate.${HOME_DOMAIN}', 'PathPrefix', '/', 'konflate', 8080, ''),
@@ -147,9 +145,12 @@ def route_rows(document: dict) -> list[tuple]:
     host = hostnames[0]
     rows = []
     for rule in document["spec"]["rules"]:
+        backends = rule.get("backendRefs") or []
+        if not backends:
+            continue
         matches = rule.get("matches") or [{"path": {"type": "PathPrefix", "value": "/"}}]
         timeout = str((rule.get("timeouts") or {}).get("request", ""))
-        for backend in rule["backendRefs"]:
+        for backend in backends:
             for match in matches:
                 path = match.get("path") or {"type": "PathPrefix", "value": "/"}
                 rows.append((name, parent_names, host, path.get("type", "PathPrefix"), path.get("value", "/"), backend["name"], int(backend["port"]), timeout))

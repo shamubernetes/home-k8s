@@ -48,8 +48,8 @@ spec:
     - --ignore-ingress-tls-spec
     - --gateway-name=envoy-internal
     - --gateway-namespace=network
-    - --webhook-provider-read-timeout=30s
-    - --webhook-provider-write-timeout=30s
+    - --webhook-provider-read-timeout=120s
+    - --webhook-provider-write-timeout=120s
     policy: sync
     sources: ["gateway-httproute", "ingress", "service"]
     txtOwnerId: k8s.

@@ -61,6 +61,11 @@ spec:
                 secretKeyRef:
                   name: mosquitto-secret
                   key: ratgdo-main-password
+            - name: MQTT_RATGDO_LEGACY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-ratgdo-legacy
+                  key: password
             resources:
               requests:
                 cpu: 10m

@@ -37,6 +37,10 @@ spec:
     namespace: observability
   - apiVersion: kopiur.home-operations.com/v1alpha1
     kind: Repository
+    name: tautulli-nas-smb
+    namespace: observability
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
     name: tautulli-r2
     namespace: observability
   - apiVersion: kopiur.home-operations.com/v1alpha1

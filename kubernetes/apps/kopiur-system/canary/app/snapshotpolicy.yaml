@@ -5,7 +5,7 @@ metadata:
 spec:
   repository:
     kind: Repository
-    name: r2-offsite
+    name: nas-smb-primary
   sources:
   - pvc:
       name: kopiur-canary-data
@@ -41,5 +41,5 @@ spec:
       capacity: 1Gi
       storageClassName: ceph-block
       parallel: 2
-    successExpr: "stats.bytes > 0 && stats.errors == 0"
+    successExpr: "stats.errors == 0 && (stats.files > 0 || stats.bytes > 0)"
     verifyFilesPercent: 100

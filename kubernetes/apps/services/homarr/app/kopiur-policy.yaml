@@ -5,7 +5,7 @@ metadata:
 spec:
   repository:
     kind: Repository
-    name: homarr-r2
+    name: homarr-nas-smb
   identity:
     username: homarr
     hostname: services
@@ -127,7 +127,7 @@ metadata:
 spec:
   sourceRef:
     kind: Repository
-    name: homarr-nas
+    name: homarr-nas-smb
   destinationRef:
     kind: Repository
     name: homarr-r2
@@ -148,4 +148,4 @@ spec:
     retention:
       keepDaily: 7
       keepWeekly: 4
-  suspend: true
+  suspend: false

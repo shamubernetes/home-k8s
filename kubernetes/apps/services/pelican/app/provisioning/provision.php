@@ -7,8 +7,10 @@ use App\Models\Allocation;
 use App\Models\Egg;
 use App\Models\Node;
 use App\Models\Role;
+use App\Models\User;
 use App\Services\Eggs\Sharing\EggImporterService;
 use App\Traits\EnvironmentWriterTrait;
+use Boy132\UserCreatableServers\Models\UserResourceLimits;
 use Illuminate\Contracts\Console\Kernel;
 
 require '/var/www/html/vendor/autoload.php';
@@ -51,7 +53,12 @@ $nodeTags = collect($node->tags ?? [])
     ->unique()
     ->values()
     ->all();
-$node->forceFill(['tags' => $nodeTags])->save();
+$node->forceFill([
+    'tags' => $nodeTags,
+    // Pelican's public flag means eligible for automatic placement. It does
+    // not expose the node's management interface to the internet.
+    'public' => true,
+])->save();
 
 $poolIp = '10.100.47.100';
 $poolFirstPort = 28000;
@@ -121,11 +128,18 @@ $profileOverrides = [
 $allowedEggIds = [];
 $allowedEggs = [];
 $networkProfiles = [];
+$seenEggNames = [];
 
 foreach (Egg::query()->with('variables')->orderBy('id')->get() as $egg) {
     if (preg_match($databaseEggPattern, $egg->name) === 1) {
         continue;
     }
+
+    $normalizedEggName = strtolower(trim($egg->name));
+    if (isset($seenEggNames[$normalizedEggName])) {
+        continue;
+    }
+    $seenEggNames[$normalizedEggName] = true;
 
     $portVariables = $egg->variables
         ->filter(static fn ($variable): bool => preg_match('/(?:^|_)PORT$/i', $variable->env_variable) === 1)
@@ -160,6 +174,27 @@ $friendsRole = Role::findOrCreate('Friends', Role::DEFAULT_GUARD_NAME);
 $friendsRole->syncPermissions([]);
 $friendsRole->nodes()->sync([$node->id]);
 
+$friendLimits = [];
+foreach (User::role($friendsRole->name)->orderBy('id')->get() as $friend) {
+    $limits = UserResourceLimits::query()->updateOrCreate(
+        ['user_id' => $friend->id],
+        [
+            'cpu' => 400,
+            'memory' => 16384,
+            'disk' => 76800,
+            'server_limit' => 1,
+        ],
+    );
+    $friendLimits[] = [
+        'user_id' => $friend->id,
+        'username' => $friend->username,
+        'cpu' => $limits->cpu,
+        'memory' => $limits->memory,
+        'disk' => $limits->disk,
+        'server_limit' => $limits->server_limit,
+    ];
+}
+
 $environmentWriter = new class
 {
     use EnvironmentWriterTrait;
@@ -189,11 +224,12 @@ fwrite(STDOUT, json_encode([
         'allocations' => $poolAllocationCount,
         'created' => count($missingPoolPorts),
     ],
-    'node' => ['id' => $node->id, 'name' => $node->name, 'tags' => $nodeTags],
+    'node' => ['id' => $node->id, 'name' => $node->name, 'public' => $node->public, 'tags' => $nodeTags],
     'role' => [
         'id' => $friendsRole->id,
         'name' => $friendsRole->name,
         'permissions' => $friendsRole->permissions()->pluck('name')->all(),
         'nodes' => $friendsRole->nodes()->pluck('nodes.id')->all(),
+        'resource_limits' => $friendLimits,
     ],
 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . PHP_EOL);

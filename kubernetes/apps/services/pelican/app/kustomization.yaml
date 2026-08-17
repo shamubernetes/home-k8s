@@ -16,4 +16,4 @@ resources:
 - ./externalsecret.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
-- ../../../../templates/gatus/guarded
+- ../../../../templates/gatus/external

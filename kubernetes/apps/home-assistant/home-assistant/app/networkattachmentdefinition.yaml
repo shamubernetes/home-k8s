@@ -16,7 +16,7 @@ spec:
         "type": "static",
         "addresses": [
           {
-            "address": "10.107.107.2/22"
+            "address": "10.107.107.5/22"
           }
         ]
       }

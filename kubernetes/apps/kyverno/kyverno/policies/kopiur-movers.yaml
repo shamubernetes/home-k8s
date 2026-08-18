@@ -13,7 +13,7 @@ spec:
       any:
       - resources:
           kinds: ["batch/v1/Job"]
-          namespaces: ["kopiur-canary", "observability", "services"]
+          namespaces: ["arrs", "kopiur-canary", "observability", "services"]
           selector:
             matchLabels:
               app.kubernetes.io/managed-by: kopiur
@@ -33,6 +33,12 @@ spec:
               - tautulli-nas
               - tautulli-nas-smb
               - tautulli-r2
+              - wizarr
+              - wizarr-nas-smb
+              - wizarr-r2
+              - changedetection
+              - changedetection-nas-smb
+              - changedetection-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -42,7 +48,7 @@ spec:
       any:
       - resources:
           kinds: ["batch/v1/Job"]
-          namespaces: ["kopiur-canary", "observability", "services"]
+          namespaces: ["arrs", "kopiur-canary", "observability", "services"]
           selector:
             matchLabels:
               app.kubernetes.io/managed-by: kopiur
@@ -59,6 +65,10 @@ spec:
               - tautulli-nas
               - tautulli-nas-smb
               - tautulli-r2
+              - wizarr-nas-smb
+              - wizarr-r2
+              - changedetection-nas-smb
+              - changedetection-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -68,7 +78,7 @@ spec:
       any:
       - resources:
           kinds: ["batch/v1/Job"]
-          namespaces: ["kopiur-canary", "observability", "services"]
+          namespaces: ["arrs", "kopiur-canary", "observability", "services"]
           selector:
             matchLabels:
               app.kubernetes.io/managed-by: kopiur

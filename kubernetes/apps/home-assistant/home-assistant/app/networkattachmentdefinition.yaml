@@ -1,0 +1,23 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: iot-vlan-107
+  namespace: home-assistant
+spec:
+  config: |-
+    {
+      "cniVersion": "1.0.0",
+      "name": "iot-vlan-107",
+      "type": "vlan",
+      "master": "enp2s0",
+      "vlanId": 107,
+      "mtu": 1500,
+      "ipam": {
+        "type": "static",
+        "addresses": [
+          {
+            "address": "10.107.107.2/22"
+          }
+        ]
+      }
+    }

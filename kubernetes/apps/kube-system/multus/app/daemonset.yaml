@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: multus
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: multus
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: multus
+    spec:
+      automountServiceAccountToken: true
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      serviceAccountName: multus
+      terminationGracePeriodSeconds: 10
+      tolerations:
+        - operator: Exists
+      initContainers:
+        - name: install-secondary-cni-plugins
+          image: docker.io/curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+          command:
+            - sh
+            - -ec
+          args:
+            - |
+              archive=/tmp/cni-plugins.tgz
+              curl --fail --location --silent --show-error \
+                https://github.com/containernetworking/plugins/releases/download/v1.9.1/cni-plugins-linux-amd64-v1.9.1.tgz \
+                --output "${archive}"
+              echo "b98f74a0f8522f0a83867178729c1aa70f2158f90c45a2ca8fa791db1c76b303  ${archive}" | sha256sum --check --strict
+              mkdir -p /tmp/cni-plugins
+              tar -xzf "${archive}" -C /tmp/cni-plugins
+              for plugin in vlan static tuning macvlan; do
+                cp "/tmp/cni-plugins/${plugin}" "/host/opt/cni/bin/${plugin}"
+                chmod 0755 "/host/opt/cni/bin/${plugin}"
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: false
+            runAsUser: 0
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: cni-bin
+              mountPath: /host/opt/cni/bin
+            - name: tmp
+              mountPath: /tmp
+        - name: install-multus
+          image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.0@sha256:ec4e5dfe12b675e4dcbf4e9cd14892f7b4c8ac27aa0dc93cf2e9be0bdd7d764a
+          command:
+            - /install_multus
+          args:
+            - --type
+            - thin
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: cni-bin
+              mountPath: /host/opt/cni/bin
+              mountPropagation: Bidirectional
+      containers:
+        - name: multus
+          image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.0@sha256:ec4e5dfe12b675e4dcbf4e9cd14892f7b4c8ac27aa0dc93cf2e9be0bdd7d764a
+          command:
+            - /thin_entrypoint
+          args:
+            - --multus-conf-file=auto
+            - --multus-master-cni-file-name=05-cilium.conflist
+            - --multus-autoconfig-dir=/host/etc/cni/net.d
+            - --cni-conf-dir=/host/etc/cni/net.d
+            - --cni-bin-dir=/host/opt/cni/bin
+            - --multus-kubeconfig-file-host=/etc/cni/net.d/multus.d/multus.kubeconfig
+            - --multus-log-level=error
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: cni-bin
+              mountPath: /host/opt/cni/bin
+            - name: cni-conf
+              mountPath: /host/etc/cni/net.d
+      volumes:
+        - name: cni-bin
+          hostPath:
+            path: /opt/cni/bin
+            type: DirectoryOrCreate
+        - name: cni-conf
+          hostPath:
+            path: /etc/cni/net.d
+            type: DirectoryOrCreate
+        - name: tmp
+          emptyDir: {}

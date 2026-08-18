@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.networking.k8s.io/httproute_v1.json
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pocket-id-oidc-external
+spec:
+  parentRefs:
+  - name: envoy-external
+    namespace: network
+    sectionName: https
+  hostnames:
+  - "sso.${HOME_DOMAIN}"
+  rules:
+  - matches:
+    - method: GET
+      path:
+        type: Exact
+        value: /.well-known/openid-configuration
+    - method: HEAD
+      path:
+        type: Exact
+        value: /.well-known/openid-configuration
+    - method: GET
+      path:
+        type: Exact
+        value: /.well-known/jwks.json
+    - method: HEAD
+      path:
+        type: Exact
+        value: /.well-known/jwks.json
+    - method: POST
+      path:
+        type: Exact
+        value: /api/oidc/token
+    - method: GET
+      path:
+        type: Exact
+        value: /api/oidc/userinfo
+    - method: POST
+      path:
+        type: Exact
+        value: /api/oidc/userinfo
+    backendRefs:
+    - name: pocket-id
+      port: 1411

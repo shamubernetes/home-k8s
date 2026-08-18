@@ -87,3 +87,25 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+  - name: cap-low-risk-kopiur-replication-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["arrs", "kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/snapshot-replication
+              operator: In
+              values:
+              - nas-primary-to-r2
+              - homarr-nas-to-r2
+              - tautulli-nas-to-r2
+              - wizarr-nas-to-r2
+              - changedetection-nas-to-r2
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600

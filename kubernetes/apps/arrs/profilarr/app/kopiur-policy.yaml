@@ -1,0 +1,141 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: profilarr
+spec:
+  repository:
+    kind: Repository
+    name: profilarr-nas-smb
+  identity:
+    username: profilarr
+    hostname: arrs
+  sources:
+  - pvc:
+      name: profilarr
+    sourcePathOverride: /pvc/profilarr
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: profilarr
+            app.kubernetes.io/controller: profilarr
+        container: app
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          response=$(curl -fsS -X POST \
+            -H "X-Api-Key: $PROFILARR_API_KEY" \
+            http://127.0.0.1:6868/api/v1/backups)
+          job_id=$(printf %s "$response" | tr -cd 0-9)
+          case "$job_id" in
+            ""|*[!0-9]*)
+              echo "invalid Profilarr backup job response" >&2
+              exit 1
+              ;;
+          esac
+          attempt=0
+          while [ "$attempt" -lt 60 ]; do
+            status=$(curl -fsS \
+              -H "X-Api-Key: $PROFILARR_API_KEY" \
+              "http://127.0.0.1:6868/api/v1/jobs/$job_id")
+            case "$status" in
+              *\"status\":\"success\"*) break ;;
+              *\"status\":\"failed\"*|*\"status\":\"cancelled\"*)
+                echo "Profilarr backup job failed" >&2
+                exit 1
+                ;;
+            esac
+            attempt=$((attempt + 1))
+            sleep 1
+          done
+          [ "$attempt" -lt 60 ] || {
+            echo "Profilarr backup job timed out" >&2
+            exit 1
+          }
+          latest=$(find /config/backups -type f -name "backup-*.tar.gz" | sort | tail -1)
+          [ -s "$latest" ]
+          tar -xOzf "$latest" data/INFO.json >/dev/null
+        timeout: 2m
+        continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: "35 8 * * *"
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: "35 9 * * 0"
+        jitter: 1h
+      capacity: 1Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: "stats.files > 0 && stats.errors == 0"
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: profilarr-daily
+spec:
+  policyRef:
+    name: profilarr
+  schedule:
+    cron: "35 1 * * *"
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: profilarr-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: profilarr-nas-smb
+  destinationRef:
+    kind: Repository
+    name: profilarr-r2
+  schedule:
+    cron: "50 7 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: profilarr
+        hostname: arrs
+        sourcePath: /pvc/profilarr
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

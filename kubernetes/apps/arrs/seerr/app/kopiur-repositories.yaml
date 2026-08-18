@@ -1,0 +1,100 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: seerr-nas-smb
+spec:
+  backend:
+    rclone:
+      remotePath: mnemosyne:Backups/kopiur/seerr-smb
+      configSecretRef:
+        name: seerr-kopiur-nas
+      startupTimeout: 2m
+  encryption:
+    passwordSecretRef:
+      name: seerr-kopiur-nas
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: true
+    schedule:
+      quick:
+        cron: "20 */6 * * *"
+        jitter: 30m
+      full:
+        cron: "20 3 * * *"
+        jitter: 1h
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: seerr-r2
+spec:
+  backend:
+    s3:
+      bucket: storage-backup
+      prefix: kopiur/seerr/r2/
+      endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
+      region: auto
+      auth:
+        secretRef:
+          name: seerr-kopiur-r2
+  encryption:
+    passwordSecretRef:
+      name: seerr-kopiur-r2
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: true
+    schedule:
+      quick:
+        cron: "35 */6 * * *"
+        jitter: 30m
+      full:
+        cron: "35 4 * * *"
+        jitter: 1h
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 512Mi

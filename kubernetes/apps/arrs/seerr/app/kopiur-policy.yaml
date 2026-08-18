@@ -1,0 +1,198 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: seerr
+spec:
+  repository:
+    kind: Repository
+    name: seerr-nas-smb
+  identity:
+    username: seerr
+    hostname: arrs
+  sources:
+  - pvc:
+      name: seerr
+    sourcePathOverride: /pvc/seerr
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: seerr
+            app.kubernetes.io/controller: seerr
+        container: app
+        command:
+        - node
+        - -e
+        - |
+          const fs = require("fs");
+          const sqlite3 = require("sqlite3");
+          const sourcePath = "/app/config/db/db.sqlite3";
+          const directory = "/app/config/kopiur";
+          const destinationPath = directory + "/seerr-online.db";
+          const artifacts = [
+            destinationPath,
+            destinationPath + "-journal",
+            destinationPath + "-wal",
+            destinationPath + "-shm",
+          ];
+          function fail(error) {
+            console.error(error);
+            process.exit(1);
+          }
+          fs.mkdirSync(directory, {recursive: true});
+          for (const path of artifacts) {
+            try {
+              fs.unlinkSync(path);
+            } catch (error) {
+              if (error.code !== "ENOENT") throw error;
+            }
+          }
+          const source = new sqlite3.Database(sourcePath, sqlite3.OPEN_READONLY);
+          source.get("PRAGMA quick_check", (error, row) => {
+            if (error || Object.values(row)[0] !== "ok") {
+              return fail(error || new Error("source quick_check failed"));
+            }
+            const backup = source.backup(destinationPath);
+            backup.step(-1, (error) => {
+              if (error) return fail(error);
+              backup.finish((error) => {
+                if (error) return fail(error);
+                const destination = new sqlite3.Database(
+                  destinationPath,
+                  sqlite3.OPEN_READONLY,
+                );
+                destination.get("PRAGMA integrity_check", (error, row) => {
+                  if (error || Object.values(row)[0] !== "ok") {
+                    return fail(
+                      error || new Error("online backup integrity_check failed"),
+                    );
+                  }
+                  destination.get(
+                    "SELECT count(*) AS count FROM sqlite_master WHERE type='table'",
+                    (error, row) => {
+                      if (error || row.count < 1) {
+                        return fail(
+                          error || new Error("online backup contains no tables"),
+                        );
+                      }
+                      destination.close((error) => {
+                        if (error) return fail(error);
+                        source.close((error) => {
+                          if (error) return fail(error);
+                          for (const path of artifacts.slice(1)) {
+                            try {
+                              fs.unlinkSync(path);
+                            } catch (error) {
+                              if (error.code !== "ENOENT") return fail(error);
+                            }
+                          }
+                          fs.chmodSync(destinationPath, 0o640);
+                          const file = fs.openSync(destinationPath, "r");
+                          fs.fsyncSync(file);
+                          fs.closeSync(file);
+                          const directoryHandle = fs.openSync(directory, "r");
+                          fs.fsyncSync(directoryHandle);
+                          fs.closeSync(directoryHandle);
+                        });
+                      });
+                    },
+                  );
+                });
+              });
+            });
+          });
+        timeout: 2m
+        continueOnFailure: false
+    afterSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: seerr
+            app.kubernetes.io/controller: seerr
+        container: app
+        command:
+        - /bin/sh
+        - -c
+        - rm -f /app/config/kopiur/seerr-online.db /app/config/kopiur/seerr-online.db-journal /app/config/kopiur/seerr-online.db-wal /app/config/kopiur/seerr-online.db-shm
+        timeout: 30s
+        continueOnFailure: true
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: "45 8 * * *"
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: "45 9 * * 0"
+        jitter: 1h
+      capacity: 1Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: "stats.files > 0 && stats.errors == 0"
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: seerr-daily
+spec:
+  policyRef:
+    name: seerr
+  schedule:
+    cron: "45 1 * * *"
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: seerr-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: seerr-nas-smb
+  destinationRef:
+    kind: Repository
+    name: seerr-r2
+  schedule:
+    cron: "0 8 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: seerr
+        hostname: arrs
+        sourcePath: /pvc/seerr
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

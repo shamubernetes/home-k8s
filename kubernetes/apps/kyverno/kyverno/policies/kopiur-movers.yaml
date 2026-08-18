@@ -39,6 +39,12 @@ spec:
               - changedetection
               - changedetection-nas-smb
               - changedetection-r2
+              - profilarr
+              - profilarr-nas-smb
+              - profilarr-r2
+              - seerr
+              - seerr-nas-smb
+              - seerr-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -69,6 +75,10 @@ spec:
               - wizarr-r2
               - changedetection-nas-smb
               - changedetection-r2
+              - profilarr-nas-smb
+              - profilarr-r2
+              - seerr-nas-smb
+              - seerr-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -105,6 +115,8 @@ spec:
               - tautulli-nas-to-r2
               - wizarr-nas-to-r2
               - changedetection-nas-to-r2
+              - profilarr-nas-to-r2
+              - seerr-nas-to-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -127,6 +139,8 @@ spec:
               - tautulli
               - wizarr
               - changedetection
+              - profilarr
+              - seerr
     mutate:
       patchStrategicMerge:
         spec:

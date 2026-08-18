@@ -10,3 +10,4 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ./httproute-email-logo-external.yaml
+- ./httproute-oidc-external.yaml

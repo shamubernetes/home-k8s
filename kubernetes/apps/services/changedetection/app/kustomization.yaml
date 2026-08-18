@@ -5,7 +5,10 @@ resources:
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./externalsecret.yaml
+- ./externalsecret-kopiur.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./kopiur-policy.yaml
+- ./kopiur-repositories.yaml
 - ./notification-sync.yaml
 - ../../../../templates/gatus/guarded

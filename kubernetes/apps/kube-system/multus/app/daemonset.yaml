@@ -34,13 +34,13 @@ spec:
               archive=/tmp/cni-plugins.tgz
               curl --fail --location --silent --show-error \
                 https://github.com/containernetworking/plugins/releases/download/v1.9.1/cni-plugins-linux-amd64-v1.9.1.tgz \
-                --output "${archive}"
-              echo "b98f74a0f8522f0a83867178729c1aa70f2158f90c45a2ca8fa791db1c76b303  ${archive}" | sha256sum -c -
+                --output "$${archive}"
+              echo "b98f74a0f8522f0a83867178729c1aa70f2158f90c45a2ca8fa791db1c76b303  $${archive}" | sha256sum -c -
               mkdir -p /tmp/cni-plugins
-              tar -xzf "${archive}" -C /tmp/cni-plugins
+              tar -xzf "$${archive}" -C /tmp/cni-plugins
               for plugin in vlan static tuning macvlan; do
-                cp "/tmp/cni-plugins/${plugin}" "/host/opt/cni/bin/${plugin}"
-                chmod 0755 "/host/opt/cni/bin/${plugin}"
+                cp "/tmp/cni-plugins/$${plugin}" "/host/opt/cni/bin/$${plugin}"
+                chmod 0755 "/host/opt/cni/bin/$${plugin}"
               done
           resources:
             requests:

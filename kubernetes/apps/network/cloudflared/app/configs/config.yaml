@@ -6,6 +6,10 @@ ingress:
   service: https://envoy-external.network.svc.cluster.local:443
 - hostname: "*.${HOME_DOMAIN}"
   service: https://envoy-external.network.svc.cluster.local:443
+- hostname: "${GAME_DOMAIN}"
+  service: https://envoy-external.network.svc.cluster.local:443
+- hostname: "*.${GAME_DOMAIN}"
+  service: https://envoy-external.network.svc.cluster.local:443
 - hostname: "pds.kiliantyler.com"
   service: https://envoy-external.network.svc.cluster.local:443
 - hostname: "*.kiliantyler.com"

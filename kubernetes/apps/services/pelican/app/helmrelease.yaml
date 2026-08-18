@@ -111,7 +111,7 @@ spec:
             image: *panelImage
             envFrom: *envFrom
             env:
-              APP_URL: https://pelican.${HOME_DOMAIN}
+              APP_URL: https://panel.${GAME_DOMAIN}
               BEHIND_PROXY: "true"
               TRUSTED_PROXIES: 10.69.0.0/16
               TZ: ${TIMEZONE}

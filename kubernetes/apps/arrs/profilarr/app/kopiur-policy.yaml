@@ -73,8 +73,8 @@ spec:
         continueOnFailure: false
   mover:
     podSecurityContext:
-      runAsUser: 0
-      runAsGroup: 0
+      runAsUser: 568
+      runAsGroup: 568
       fsGroup: 568
       fsGroupChangePolicy: OnRootMismatch
   verification:

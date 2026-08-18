@@ -109,3 +109,25 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+  - name: cap-low-risk-kopiur-verification-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["arrs", "kopiur-canary", "observability", "services"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/verify
+              operator: In
+              values:
+              - kopiur-canary
+              - homarr
+              - tautulli
+              - wizarr
+              - changedetection
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600

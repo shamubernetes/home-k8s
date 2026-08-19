@@ -13,7 +13,7 @@ metadata:
     homepage.shamubernetes.com/icon: dashboard-icons:pelican-panel
 spec:
   hostnames:
-  - pelican.${HOME_DOMAIN}
+  - panel.${GAME_DOMAIN}
   parentRefs:
   - group: gateway.networking.k8s.io
     kind: Gateway

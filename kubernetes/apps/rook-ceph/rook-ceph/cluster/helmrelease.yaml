@@ -192,7 +192,9 @@ spec:
         - name: pg_autoscaler
           enabled: true
         - name: rook
-          enabled: true
+          # Ceph tracker 79106: Tentacle records a crash every Prometheus scrape
+          # when the Rook orchestrator module lacks node_proxy_fullreport.
+          enabled: false
       network:
         provider: host
         connections:

@@ -133,6 +133,8 @@ spec:
     cephClusterSpec:
       security:
         cephx:
+          allowedCiphers:
+          - aes256k
           daemon:
             keyRotationPolicy: KeyGeneration
             keyGeneration: 2
@@ -145,7 +147,7 @@ spec:
             keyRotationPolicy: KeyGeneration
             keyGeneration: 2
             keyType: aes256k
-            keepPriorKeyCountMax: 1
+            keepPriorKeyCountMax: 0
       cephConfig:
         global:
           bdev_enable_discard: "true"

@@ -133,28 +133,31 @@ spec:
     cephClusterSpec:
       security:
         cephx:
+          # Kernel RBD clients still require AES keys. Keep only CSI identities on
+          # AES while service daemons and the userspace mirror use AES256K.
           allowedCiphers:
           - aes256k
+          - aes
           daemon:
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 2
+            keyGeneration: 4
+            keyType: aes256k
           rbdMirrorPeer:
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 2
+            keyGeneration: 4
             keyType: aes256k
           csi:
-            # Linux 6.18.42 includes the AES256K kernel-client support backported in 6.18.16.
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 2
-            keyType: aes256k
-            keepPriorKeyCountMax: 0
+            keyGeneration: 3
+            keyType: aes
+            keepPriorKeyCountMax: 1
       cephConfig:
         global:
           bdev_enable_discard: "true"
           bdev_async_discard_threads: "1"
           osd_class_update_on_start: "false"
         mgr:
-          # Bound Ceph v20.2.2's multi-megabyte Rook PodList recent-log ring.
+          # Bound Tentacle's multi-megabyte Rook PodList recent-log ring.
           # Remove after the Tentacle fixes are included in a stable release.
           log_max_recent: "100"
         osd:

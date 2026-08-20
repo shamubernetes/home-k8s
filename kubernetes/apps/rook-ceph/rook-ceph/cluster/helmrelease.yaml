@@ -136,9 +136,16 @@ spec:
           daemon:
             keyRotationPolicy: KeyGeneration
             keyGeneration: 2
+          rbdMirrorPeer:
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 2
+            keyType: aes256k
           csi:
-            # Talos 1.12 uses Linux 6.18, AES256K CSI keys require Linux 7.0+.
-            keyType: aes
+            # Linux 6.18.42 includes the AES256K kernel-client support backported in 6.18.16.
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 2
+            keyType: aes256k
+            keepPriorKeyCountMax: 1
       cephConfig:
         global:
           bdev_enable_discard: "true"

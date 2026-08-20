@@ -264,19 +264,19 @@ url = "https://github.com/go-task/task/releases/download/v3.53.1/task_darwin_arm
 url_api = "https://api.github.com/repos/go-task/task/releases/assets/519645491"
 
 [[tools.yq]]
-version = "4.53.3"
+version = "4.53.6"
 backend = "aqua:mikefarah/yq"
 
 [tools.yq."platforms.linux-x64"]
-checksum = "sha256:fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146735"
+checksum = "sha256:c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522028022"
 provenance = "cosign"
 
 [tools.yq."platforms.macos-arm64"]
-checksum = "sha256:877de31753a4dd2401aa048937aa9a7fc4d5f6ce858cf31508c5802954297213"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_darwin_arm64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146762"
+checksum = "sha256:cceb0b8d71ea5294334121f8429f33f92b920e7217d904a2f9f35443968ac424"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_darwin_arm64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522028033"
 provenance = "cosign"
 
 [[tools.zizmor]]

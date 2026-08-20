@@ -17,6 +17,24 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: Deployment
+          name: rook-ceph-tools
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: rook-ceph-tools
+            annotations:
+              reloader.stakater.com/auto: "true"
+          spec:
+            template:
+              metadata:
+                annotations:
+                  rook.home.arpa/cephx-key-generation: "2"
   dependsOn:
   - name: rook-ceph-operator
     namespace: rook-ceph

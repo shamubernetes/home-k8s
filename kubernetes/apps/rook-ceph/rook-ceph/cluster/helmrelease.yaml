@@ -133,19 +133,19 @@ spec:
     cephClusterSpec:
       security:
         cephx:
-          # Kernel RBD clients still require AES keys. Permit AES256K for retained
-          # prior-generation keys while active CSI, daemon, and mirror keys remain AES.
+          # Kernel RBD clients still require AES keys. Keep only CSI identities on
+          # AES while service daemons and the userspace mirror use AES256K.
           allowedCiphers:
           - aes256k
           - aes
           daemon:
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 3
-            keyType: aes
+            keyGeneration: 4
+            keyType: aes256k
           rbdMirrorPeer:
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 3
-            keyType: aes
+            keyGeneration: 4
+            keyType: aes256k
           csi:
             keyRotationPolicy: KeyGeneration
             keyGeneration: 3

@@ -133,8 +133,11 @@ spec:
     cephClusterSpec:
       security:
         cephx:
+          # CSI attach is not yet compatible with AES256K in the deployed Ceph-CSI path.
+          # Keep daemon and mirror identities on AES256K while CSI rotates back to AES.
           allowedCiphers:
           - aes256k
+          - aes
           daemon:
             keyRotationPolicy: KeyGeneration
             keyGeneration: 2
@@ -143,11 +146,10 @@ spec:
             keyGeneration: 2
             keyType: aes256k
           csi:
-            # Linux 6.18.42 includes the AES256K kernel-client support backported in 6.18.16.
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 2
-            keyType: aes256k
-            keepPriorKeyCountMax: 0
+            keyGeneration: 3
+            keyType: aes
+            keepPriorKeyCountMax: 1
       cephConfig:
         global:
           bdev_enable_discard: "true"

@@ -163,19 +163,13 @@ checksum = "sha256:fc8582acde13869a606730a79379d6515f30c68afcced0b5ac8789d5d002b
 url = "https://dl.k8s.io/v1.36.3/bin/darwin/arm64/kubectl"
 
 [[tools.kyverno]]
-version = "1.18.2"
+version = "1.19.0"
 backend = "aqua:kyverno/kyverno"
 
 [tools.kyverno."platforms.linux-x64"]
-checksum = "sha256:cb2feb8356149fd2fe774c894ccf0969f4a60a83867dd913af724f74ffbbc18b"
-url = "https://github.com/kyverno/kyverno/releases/download/v1.18.2/kyverno-cli_v1.18.2_linux_x86_64.tar.gz"
-url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/472019504"
 provenance = "cosign"
 
 [tools.kyverno."platforms.macos-arm64"]
-checksum = "sha256:cc69bc6638da1993146c134943fac91cbc9dd0ce60a3e88c6d7c518ae00f1abc"
-url = "https://github.com/kyverno/kyverno/releases/download/v1.18.2/kyverno-cli_v1.18.2_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/472019528"
 provenance = "cosign"
 
 [[tools."npm:renovate"]]

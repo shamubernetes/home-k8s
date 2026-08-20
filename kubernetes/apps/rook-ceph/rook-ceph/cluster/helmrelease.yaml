@@ -172,6 +172,17 @@ spec:
           osd_deep_scrub_randomize_ratio: "0.50"
           osd_scrub_interval_randomize_ratio: "0.50"
       healthCheck:
+        # These checks are expected while Talos' kernel RBD client still requires
+        # the legacy AES cipher. Keep all unrelated Ceph health warnings visible.
+        muteHealthWarning:
+          AUTH_EMERGENCY_CIPHERS_SET:
+            policy: mute
+          AUTH_INSECURE_CLIENT_KEY_TYPE:
+            policy: mute
+          AUTH_INSECURE_KEYS_ALLOWED:
+            policy: mute
+          AUTH_INSECURE_KEYS_CREATABLE:
+            policy: mute
         livenessProbe:
           mon:
             probe:

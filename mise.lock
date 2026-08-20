@@ -167,9 +167,15 @@ version = "1.19.0"
 backend = "aqua:kyverno/kyverno"
 
 [tools.kyverno."platforms.linux-x64"]
+checksum = "sha256:f5b4dc73c8e2f3f66e8e0034dc370e6eb6c4617eff7d5ae3838d2200034eb421"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.19.0/kyverno-cli_v1.19.0_linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/522057963"
 provenance = "cosign"
 
 [tools.kyverno."platforms.macos-arm64"]
+checksum = "sha256:6f4bd96c689d5049217c95643da43ebb8e9d5b58f35ca2da38f0fee9fdcdc92d"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.19.0/kyverno-cli_v1.19.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/522057918"
 provenance = "cosign"
 
 [[tools."npm:renovate"]]

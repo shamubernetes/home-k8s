@@ -138,13 +138,16 @@ spec:
           allowedCiphers:
           - aes256k
           - aes
+          # Ceph-CSI still requires AES keys, so complete the protected rollback before
+          # downgrading the Ceph operand to the last compatible release.
           daemon:
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 2
+            keyGeneration: 3
+            keyType: aes
           rbdMirrorPeer:
             keyRotationPolicy: KeyGeneration
-            keyGeneration: 2
-            keyType: aes256k
+            keyGeneration: 3
+            keyType: aes
           csi:
             keyRotationPolicy: KeyGeneration
             keyGeneration: 3

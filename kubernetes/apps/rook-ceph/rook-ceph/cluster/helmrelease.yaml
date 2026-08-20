@@ -113,6 +113,14 @@ spec:
       ; end
 
     cephClusterSpec:
+      security:
+        cephx:
+          daemon:
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 2
+          csi:
+            # Talos 1.12 uses Linux 6.18, AES256K CSI keys require Linux 7.0+.
+            keyType: aes
       cephConfig:
         global:
           bdev_enable_discard: "true"

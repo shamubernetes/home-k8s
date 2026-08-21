@@ -32,7 +32,7 @@ spec:
           books-canary:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:33955508fedbda5aaedc5f6f6d0451c4cda73d3fc4707058c350ee30e5539bb3
+              tag: latest@sha256:394b703c5409a8669af246179d8e5ec23b971565b35000c9ac1e150454d66e1c
             command:
               - /bin/sh
               - -ec
@@ -45,7 +45,7 @@ spec:
           app:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:33955508fedbda5aaedc5f6f6d0451c4cda73d3fc4707058c350ee30e5539bb3
+              tag: latest@sha256:394b703c5409a8669af246179d8e5ec23b971565b35000c9ac1e150454d66e1c
             env:
               TZ: ${TIMEZONE}
               PUID: "568"
@@ -95,7 +95,7 @@ spec:
           books-monitor:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:33955508fedbda5aaedc5f6f6d0451c4cda73d3fc4707058c350ee30e5539bb3
+              tag: latest@sha256:394b703c5409a8669af246179d8e5ec23b971565b35000c9ac1e150454d66e1c
             command:
               - /bin/sh
               - -ec

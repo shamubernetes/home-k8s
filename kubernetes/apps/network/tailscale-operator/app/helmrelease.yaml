@@ -22,7 +22,7 @@ spec:
     operatorConfig:
       image:
         repository: ghcr.io/tailscale/k8s-operator
-        tag: v1.102.2@sha256:eaef921470ada74a84ca8bbbf4a6a89452ed2581d51a0551758507aca8dc2a01
+        tag: v1.102.3@sha256:d86a8be7ad9d38714968f5d4e010ba8dad30c8f672736ef94eda9b250febeb12
         digest: sha256:eaef921470ada74a84ca8bbbf4a6a89452ed2581d51a0551758507aca8dc2a01
       hostname: titans-tailscale-operator
       defaultTags:
@@ -36,6 +36,6 @@ spec:
     proxyConfig:
       image:
         repository: ghcr.io/tailscale/tailscale
-        tag: v1.102.2@sha256:321ce041508c19079b57a28b6666c8d81ab0b08accc0a2585b3ab663d557ac24
+        tag: v1.102.3@sha256:8c42c4574ab066384fcb72f69e086a2ff1dd3652eb6f56856cee34bcf0d2f680
         digest: sha256:321ce041508c19079b57a28b6666c8d81ab0b08accc0a2585b3ab663d557ac24
       defaultTags: tag:k8s

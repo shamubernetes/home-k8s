@@ -8,6 +8,7 @@ resources:
 - ./priorityclass.yaml
 - ./poddisruptionbudget.yaml
 - ./pvc.yaml
+- ./networkattachmentdefinition.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded

@@ -239,10 +239,23 @@ spec:
                 cpu: 250m
                 memory: 512Mi
     defaultPodOptions:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: false
+      dnsPolicy: ClusterFirst
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+        k8s.v1.cni.cncf.io/networks: home-assistant/iot-vlan-107
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k8s-oceanus
+                - k8s-tethys
+                - k8s-coeus
+                - k8s-rhea
       priorityClassName: home-assistant-critical
       terminationGracePeriodSeconds: 300
       securityContext:

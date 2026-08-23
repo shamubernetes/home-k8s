@@ -36,7 +36,7 @@ spec:
           configure-bucket-cors:
             image:
               repository: docker.io/amazon/aws-cli
-              tag: 2.36.24@sha256:cd11f6e909d42f066a03e15f072853fcc19f033e343cb83b2d553e2082cbb5a7
+              tag: 2.36.29@sha256:6a1305a37e63914356f9d1808f3349c06a650cbd6e7c777f5dc4b44d630d6b39
             command: ["/bin/sh", "-c"]
             args:
             - |
@@ -85,7 +85,7 @@ spec:
           app:
             image:
               repository: ghcr.io/usekaneo/kaneo
-              tag: 2.19.1@sha256:143ccc2dc6f8989c1ad7e9958234aaaec4f06610978f3cef5330db06cad19008
+              tag: 2.22.0@sha256:362139ce143ea5f21c170d2626f654d21991bd48f51340913a54d427b4cfda2c
             envFrom: *envFrom
             env:
               KANEO_CLIENT_URL: https://kaneo.${HOME_DOMAIN}

@@ -12,7 +12,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: init-bucket
-        image: docker.io/amazon/aws-cli:2.36.24@sha256:cd11f6e909d42f066a03e15f072853fcc19f033e343cb83b2d553e2082cbb5a7
+        image: docker.io/amazon/aws-cli:2.36.29@sha256:6a1305a37e63914356f9d1808f3349c06a650cbd6e7c777f5dc4b44d630d6b39
         envFrom:
         - secretRef:
             name: plane-doc-store-secret

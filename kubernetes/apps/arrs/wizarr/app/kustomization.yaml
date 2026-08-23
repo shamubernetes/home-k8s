@@ -4,6 +4,9 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ../../../../templates/volsync
+- ./externalsecret-kopiur.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./kopiur-policy.yaml
+- ./kopiur-repositories.yaml
 - ../../../../templates/gatus/external

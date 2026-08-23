@@ -29,6 +29,8 @@ spec:
       GATUS_APP_NAME: Pelican
       GATUS_INTERNAL_APP: pelican
       GATUS_INTERNAL_PORT: "80"
+      GATUS_SUBDOMAIN: panel
+      GATUS_DOMAIN: "${GAME_DOMAIN}"
       GATUS_PATH: /up
     substituteFrom:
     - kind: ConfigMap

@@ -9,12 +9,44 @@ spec:
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
+  dependsOn:
+  - name: external-secrets-secret-store
+  - name: kopiur
+  - name: rook-ceph-cluster
+  - name: snapshot-controller
   path: ./kubernetes/apps/arrs/seerr/app
   prune: true
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
+  # SnapshotReplication readiness is monitored separately because schedule-only
+  # updates can leave observedGeneration stale on otherwise healthy resources.
+  healthChecks:
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: seerr-kopiur-nas
+    namespace: arrs
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: seerr-kopiur-r2
+    namespace: arrs
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: seerr-nas-smb
+    namespace: arrs
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: seerr-r2
+    namespace: arrs
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotPolicy
+    name: seerr
+    namespace: arrs
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotSchedule
+    name: seerr-daily
+    namespace: arrs
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

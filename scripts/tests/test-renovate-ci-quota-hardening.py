@@ -59,7 +59,7 @@ class RenovateCIQuotaHardeningTests(unittest.TestCase):
     def test_yq_has_locked_platform_artifacts(self) -> None:
         config = (ROOT / ".mise.toml").read_text()
         lockfile = (ROOT / "mise.lock").read_text()
-        self.assertIn('"yq" = "4.53.3"', config)
+        self.assertIn('"yq" = "4.53.6"', config)
         self.assertNotIn("asdf-yq", config)
         yq_entry = lockfile.split("[[tools.yq]]", 1)[1].split("[[tools.zizmor]]", 1)[0]
         for platform in ("linux-x64", "macos-arm64"):

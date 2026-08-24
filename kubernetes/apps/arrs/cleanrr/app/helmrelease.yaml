@@ -1,0 +1,109 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app cleanrr
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: *app
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      cleanrr:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/zariel/cleanrr
+              tag: v0.1.6@sha256:ff5de090d4295a56cedd8c8167d0e5b070970d3ca304090d36001c922fc8a2d0
+            env:
+              CLEANRR_LISTEN_ADDR: 0.0.0.0:8080
+              CLEANRR_POLL_INTERVAL: 1m
+              CLEANRR_MINIMUM_AGE: 6h
+              CLEANRR_DRY_RUN: "false"
+              CLEANRR_REMOVE_FROM_CLIENT: "true"
+              CLEANRR_SERVERS__SONARR__URL: http://sonarr.arrs.svc.cluster.local
+              CLEANRR_SERVERS__SONARR__API_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: sonarr-secret
+                    key: SONARR__AUTH__APIKEY
+              CLEANRR_SERVERS__RADARR__URL: http://radarr.arrs.svc.cluster.local
+              CLEANRR_SERVERS__RADARR__API_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: radarr-secret
+                    key: RADARR__AUTH__APIKEY
+              CLEANRR_SERVERS__RADARR_3D__URL: http://radarr-3d.arrs.svc.cluster.local
+              CLEANRR_SERVERS__RADARR_3D__API_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: radarr-3d-secret
+                    key: RADARR__AUTH__APIKEY
+              RUST_LOG: cleanrr=info
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health/startup
+                    port: &port 8080
+                  initialDelaySeconds: 1
+                  periodSeconds: 2
+                  timeoutSeconds: 1
+                  failureThreshold: 30
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health/live
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health/ready
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *port

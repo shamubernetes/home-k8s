@@ -11,5 +11,5 @@ spec:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    digest: sha256:a16cb556c0513f860428eb237967eb00d60d58e7f5b680725d6fda1ade0c0683
+    digest: sha256:fbd44c4287a1972199b240443430283c16f1467a8d9d8cf32156f23a4673fe92
   url: oci://ghcr.io/thezoo-house/charts/zoo-operator

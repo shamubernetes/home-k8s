@@ -1,9 +1,8 @@
 collections:
   Pixar bootstrap:
     build_collection: false
-    plex_search:
-      all:
-        studio.is: Pixar Animation Studios
+    sync_mode: append
+    tmdb_company: 3
     item_radarr_tag:
     - kids
   Kids Movies:

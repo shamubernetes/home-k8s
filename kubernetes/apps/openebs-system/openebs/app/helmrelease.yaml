@@ -16,19 +16,25 @@ spec:
     remediation:
       retries: 3
   values:
+    alloy:
+      configReloader:
+        image:
+          digest: sha256:959d47672fbff2776a04ec62b8afcec89e8c036af84dc5fade50019dab212746
+      image:
+        digest: sha256:7790f6f7fbd8e4486b4b6c6fc6a7293a73605bb79aaa7f49003cb366943724f6
     loki:
       enabled: false
     minio:
       enabled: false
     localpv-provisioner:
+      helperPod:
+        image:
+          tag: 4.6.0@sha256:a3043d266b1c06fb42377ced0c3fc190c66e1e83ae1efda7670ed73feb4ede14
       localpv:
         image:
           registry: quay.io/
+          tag: 4.6.0@sha256:99f5116f5cb83fb9d046ef5ff5b8ea98da90e7da5250d7b101bd650662238a0a
         basePath: &hostPath /var/openebs/local
-        healthCheck:
-          initialDelaySeconds: 60
-          periodSeconds: 60
-          timeoutSeconds: 5
       hostpathClass:
         enabled: true
         name: openebs-hostpath

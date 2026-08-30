@@ -20,9 +20,6 @@ observability/kuberhealthy/app	docker.io/kuberhealthy/kuberhealthy:v2.8.0-rc2
 observability/smartctl-exporter/app	quay.io/prometheuscommunity/smartctl-exporter:v0.14.0
 op/onepassword-connect/app	1password/connect-api:1.8.2
 op/onepassword-connect/app	1password/connect-sync:1.8.2
-openebs-system/openebs/app	docker.io/grafana/alloy:v1.8.1
-openebs-system/openebs/app	quay.io/openebs/provisioner-localpv:4.5.1
-openebs-system/openebs/app	quay.io/prometheus-operator/prometheus-config-reloader:v0.81.0
 services/n8n-operator/operator	ghcr.io/shamubernetes/n8n-operator:0.13.0
 services/plane/app	busybox
 services/plane/app	makeplane/admin-commercial:v2.6.3

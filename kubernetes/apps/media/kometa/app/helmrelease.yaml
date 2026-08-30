@@ -28,6 +28,22 @@ spec:
           concurrencyPolicy: Forbid
           successfulJobsHistory: 1
           failedJobsHistory: 2
+        initContainers:
+          copy-config:
+            image:
+              repository: docker.io/kometateam/kometa
+              tag: v2.4.8@sha256:c58f6d4af511613f218b6dafbfc84078af4e5a6089790c1fdba58fd7c5dad70a
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - cp /config-source/*.yml /config/
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
         containers:
           app:
             image:
@@ -74,14 +90,7 @@ spec:
         type: configMap
         name: kometa-config
         globalMounts:
-        - path: /config/config.yml
-          subPath: config.yml
-          readOnly: true
-        - path: /config/kids-movies.yml
-          subPath: kids-movies.yml
-          readOnly: true
-        - path: /config/kids-tv.yml
-          subPath: kids-tv.yml
+        - path: /config-source
           readOnly: true
       cache:
         type: emptyDir

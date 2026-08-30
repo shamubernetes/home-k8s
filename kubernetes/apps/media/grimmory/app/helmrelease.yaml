@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: docker.io/grimmory/grimmory
-              tag: v3.3.1@sha256:e7c97c493525d14a9374a5e6c9f04d325b9f87e05205c1088933b879865eaf5e
+              tag: v3.3.3@sha256:d658e472e0b6d4df8eb022453b9155076c97d2a01878739116e8b776c042dd66
             env:
               TZ: ${TIMEZONE}
               USER_ID: "568"
@@ -78,7 +78,7 @@ spec:
           mariadb:
             image:
               repository: docker.io/linuxserver/mariadb
-              tag: 11.8.8@sha256:9c3f714ffde14968ca0559cce3b757f8c550c4e92bdce29a0e6273be86c32125
+              tag: 11.8.8@sha256:2e87447280027fb084611d77bcba8b96d12e05dc0a80dd46091f26555b069f7b
             env:
               PUID: "568"
               PGID: "568"

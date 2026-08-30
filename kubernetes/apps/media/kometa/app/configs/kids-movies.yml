@@ -1,0 +1,18 @@
+collections:
+  Pixar bootstrap:
+    build_collection: false
+    plex_search:
+      all:
+        studio.is: Pixar Animation Studios
+    item_radarr_tag:
+    - kids
+  Kids Movies:
+    radarr_taglist:
+    - kids
+    smart_label: title.asc
+    item_label:
+    - Kids
+    non_item_remove_label:
+    - Kids
+    sort_title: "!001_Kids Movies"
+    collection_mode: hide

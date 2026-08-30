@@ -1,0 +1,17 @@
+collections:
+  Pixar bootstrap:
+    build_collection: false
+    sync_mode: append
+    tmdb_company: 3
+    item_radarr_tag:
+    - kids
+  Kids Movies:
+    radarr_taglist:
+    - kids
+    smart_label: title.asc
+    item_label:
+    - Kids
+    non_item_remove_label:
+    - Kids
+    sort_title: "!001_Kids Movies"
+    collection_mode: hide

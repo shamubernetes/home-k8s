@@ -2,13 +2,12 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
 metadata:
-  name: konflate
+  name: kometa
 spec:
-  interval: 1h
+  interval: 30m
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    # renovate: datasource=docker depName=ghcr.io/home-operations/charts/konflate
-    tag: 0.6.2
-  url: oci://ghcr.io/home-operations/charts/konflate
+    tag: 5.1.0
+  url: oci://ghcr.io/bjw-s-labs/helm/app-template

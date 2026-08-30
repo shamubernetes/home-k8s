@@ -36,7 +36,7 @@ spec:
           app:
             image:
               repository: ghcr.io/mend/renovate-ce
-              tag: '15.3.0-full@sha256:f55da513f0f71e40cb4d33b87ec0fce7c5e60aa984569b12e95e01c4f4e2557f'
+              tag: '15.4.0-full@sha256:a938a305f523331876b22c340f0b76ced05e432ce7a22a4572c03b1df7d19a24'
             envFrom: *envFrom
             env:
               TZ: ${TIMEZONE}

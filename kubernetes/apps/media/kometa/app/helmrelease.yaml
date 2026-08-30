@@ -1,0 +1,100 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app kometa
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: *app
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
+  values:
+    controllers:
+      kometa:
+        type: deployment
+        replicas: 1
+        strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          copy-config:
+            image:
+              repository: docker.io/kometateam/kometa
+              tag: v2.4.8@sha256:c58f6d4af511613f218b6dafbfc84078af4e5a6089790c1fdba58fd7c5dad70a
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - cp /config-source/*.yml /config/
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+        containers:
+          app:
+            image:
+              repository: docker.io/kometateam/kometa
+              tag: v2.4.8@sha256:c58f6d4af511613f218b6dafbfc84078af4e5a6089790c1fdba58fd7c5dad70a
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - python3 kometa.py --read-only-config
+            env:
+              TZ: "${TIMEZONE}"
+              KOMETA_CONFIG: /config/config.yml
+              KOMETA_TIMES: "05:00"
+            envFrom:
+            - secretRef:
+                name: kometa-secret
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                memory: 2Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+    persistence:
+      config-data:
+        existingClaim: *app
+        globalMounts:
+        - path: /config
+      config:
+        type: configMap
+        name: kometa-config
+        globalMounts:
+        - path: /config-source
+          readOnly: true
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

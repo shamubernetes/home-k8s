@@ -29,6 +29,7 @@ TEXT_SUFFIXES = {
     ".js",
     ".json",
     ".py",
+    ".rs",
     ".sh",
     ".toml",
     ".ts",

@@ -17,6 +17,24 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: Deployment
+          name: rook-ceph-tools
+        patch: |-
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: rook-ceph-tools
+            annotations:
+              reloader.stakater.com/auto: "true"
+          spec:
+            template:
+              metadata:
+                annotations:
+                  rook.home.arpa/cephx-key-generation: "2"
   dependsOn:
   - name: rook-ceph-operator
     namespace: rook-ceph
@@ -113,13 +131,33 @@ spec:
       ; end
 
     cephClusterSpec:
+      security:
+        cephx:
+          # Kernel RBD clients still require AES keys. Keep only CSI identities on
+          # AES while service daemons and the userspace mirror use AES256K.
+          allowedCiphers:
+          - aes256k
+          - aes
+          daemon:
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 4
+            keyType: aes256k
+          rbdMirrorPeer:
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 4
+            keyType: aes256k
+          csi:
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 3
+            keyType: aes
+            keepPriorKeyCountMax: 1
       cephConfig:
         global:
           bdev_enable_discard: "true"
           bdev_async_discard_threads: "1"
           osd_class_update_on_start: "false"
         mgr:
-          # Bound Ceph v20.2.2's multi-megabyte Rook PodList recent-log ring.
+          # Bound Tentacle's multi-megabyte Rook PodList recent-log ring.
           # Remove after the Tentacle fixes are included in a stable release.
           log_max_recent: "100"
         osd:
@@ -134,6 +172,17 @@ spec:
           osd_deep_scrub_randomize_ratio: "0.50"
           osd_scrub_interval_randomize_ratio: "0.50"
       healthCheck:
+        # These checks are expected while Talos' kernel RBD client still requires
+        # the legacy AES cipher. Keep all unrelated Ceph health warnings visible.
+        muteHealthWarning:
+          AUTH_EMERGENCY_CIPHERS_SET:
+            policy: mute
+          AUTH_INSECURE_CLIENT_KEY_TYPE:
+            policy: mute
+          AUTH_INSECURE_KEYS_ALLOWED:
+            policy: mute
+          AUTH_INSECURE_KEYS_CREATABLE:
+            policy: mute
         livenessProbe:
           mon:
             probe:
@@ -159,7 +208,9 @@ spec:
         - name: pg_autoscaler
           enabled: true
         - name: rook
-          enabled: true
+          # Ceph tracker 79106: Tentacle records a crash every Prometheus scrape
+          # when the Rook orchestrator module lacks node_proxy_fullreport.
+          enabled: false
       network:
         provider: host
         connections:

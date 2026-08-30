@@ -81,18 +81,18 @@ url = "https://github.com/budimanjojo/talhelper/releases/download/v3.1.16/talhel
 url_api = "https://api.github.com/repos/budimanjojo/talhelper/releases/assets/503622662"
 
 [[tools."github:home-operations/flate"]]
-version = "0.6.0"
+version = "0.6.1"
 backend = "github:home-operations/flate"
 
 [tools."github:home-operations/flate"."platforms.linux-x64"]
-checksum = "sha256:ae3bb7372b34cfa18cabae6b3d4e65ac5c473f422c296d0d589074299f358c24"
-url = "https://github.com/home-operations/flate/releases/download/v0.6.0/flate_0.6.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/525062157"
+checksum = "sha256:25de65dd4f4478575768b4c30d6bad4cbb7a75a7a38be5a3cd776ae065fd6631"
+url = "https://github.com/home-operations/flate/releases/download/v0.6.1/flate_0.6.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/531584324"
 
 [tools."github:home-operations/flate"."platforms.macos-arm64"]
-checksum = "sha256:3ce7750365ad59b21f9865a33cd1a1947d1a11a3f2abfe565a5ea591c798fcca"
-url = "https://github.com/home-operations/flate/releases/download/v0.6.0/flate_0.6.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/525062159"
+checksum = "sha256:fc41874e4ba03f65d2c78531d629f10b81942ef093bd7e9e224b5731dc043254"
+url = "https://github.com/home-operations/flate/releases/download/v0.6.1/flate_0.6.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/531584322"
 
 [[tools."github:home-operations/yayamlls"]]
 version = "0.2.0"

@@ -8,6 +8,5 @@ resources:
 - ./gatus-rwg.yaml
 - ./fs-fuse.yaml
 - ./convex-objectstoreuser.yaml
-- ./plane-objectstoreuser.yaml
 - ./httproute-dashboard-envoy.yaml
 - ./httproute-storage-envoy.yaml

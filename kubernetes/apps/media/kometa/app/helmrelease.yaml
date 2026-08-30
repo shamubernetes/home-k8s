@@ -16,18 +16,35 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
   values:
     controllers:
       kometa:
-        type: cronjob
+        type: deployment
+        replicas: 1
+        strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
-        cronjob:
-          schedule: "*/15 * * * *"
-          timeZone: "${TIMEZONE}"
-          concurrencyPolicy: Forbid
-          successfulJobsHistory: 1
-          failedJobsHistory: 2
+        initContainers:
+          copy-config:
+            image:
+              repository: docker.io/kometateam/kometa
+              tag: v2.4.8@sha256:c58f6d4af511613f218b6dafbfc84078af4e5a6089790c1fdba58fd7c5dad70a
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - cp /config-source/*.yml /config/
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
         containers:
           app:
             image:
@@ -37,10 +54,11 @@ spec:
             - /bin/sh
             - -c
             args:
-            - python3 kometa.py --run --read-only-config
+            - python3 kometa.py --read-only-config
             env:
               TZ: "${TIMEZONE}"
               KOMETA_CONFIG: /config/config.yml
+              KOMETA_TIMES: "05:00"
             envFrom:
             - secretRef:
                 name: kometa-secret
@@ -67,30 +85,15 @@ spec:
           type: RuntimeDefault
     persistence:
       config-data:
-        type: emptyDir
+        existingClaim: *app
         globalMounts:
         - path: /config
       config:
         type: configMap
         name: kometa-config
         globalMounts:
-        - path: /config/config.yml
-          subPath: config.yml
+        - path: /config-source
           readOnly: true
-        - path: /config/kids-movies.yml
-          subPath: kids-movies.yml
-          readOnly: true
-        - path: /config/kids-tv.yml
-          subPath: kids-tv.yml
-          readOnly: true
-      cache:
-        type: emptyDir
-        globalMounts:
-        - path: /config/cache
-      logs:
-        type: emptyDir
-        globalMounts:
-        - path: /config/logs
       tmp:
         type: emptyDir
         globalMounts:

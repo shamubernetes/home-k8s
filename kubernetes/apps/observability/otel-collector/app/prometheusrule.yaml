@@ -18,7 +18,7 @@ spec:
       annotations:
         summary: A configured Hermes platform is unavailable.
       expr: max without (instance, pod, endpoint, job) (hermes_platform_up) == 0
-      for: 5m
+      for: 10m
       labels:
         severity: critical
     - alert: HermesPlatformDegraded

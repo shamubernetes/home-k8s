@@ -16,18 +16,19 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
   values:
     controllers:
       kometa:
-        type: cronjob
+        type: deployment
+        replicas: 1
+        strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
-        cronjob:
-          schedule: "*/15 * * * *"
-          timeZone: "${TIMEZONE}"
-          concurrencyPolicy: Forbid
-          successfulJobsHistory: 1
-          failedJobsHistory: 2
         initContainers:
           copy-config:
             image:
@@ -53,10 +54,11 @@ spec:
             - /bin/sh
             - -c
             args:
-            - python3 kometa.py --run --read-only-config
+            - python3 kometa.py --read-only-config
             env:
               TZ: "${TIMEZONE}"
               KOMETA_CONFIG: /config/config.yml
+              KOMETA_TIMES: "05:00"
             envFrom:
             - secretRef:
                 name: kometa-secret
@@ -83,7 +85,7 @@ spec:
           type: RuntimeDefault
     persistence:
       config-data:
-        type: emptyDir
+        existingClaim: *app
         globalMounts:
         - path: /config
       config:
@@ -92,14 +94,6 @@ spec:
         globalMounts:
         - path: /config-source
           readOnly: true
-      cache:
-        type: emptyDir
-        globalMounts:
-        - path: /config/cache
-      logs:
-        type: emptyDir
-        globalMounts:
-        - path: /config/logs
       tmp:
         type: emptyDir
         globalMounts:

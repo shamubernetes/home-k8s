@@ -10,6 +10,8 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
+  - name: rook-ceph-cluster
+  - name: volsync
   - name: external-secrets-secret-store
   - name: plex
   - name: radarr
@@ -27,3 +29,6 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      VOLSYNC_CAPACITY: 1Gi
+      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_KOMETA}"
+      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_KOMETA}"

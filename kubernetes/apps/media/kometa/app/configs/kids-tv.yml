@@ -1,0 +1,12 @@
+collections:
+  Kids TV:
+    sonarr_taglist:
+    - kids
+    smart_label: title.asc
+    item_label:
+    - Kids
+    non_item_remove_label:
+    - Kids
+    sort_title: "!001_Kids TV"
+    collection_mode: hide
+    ignore_blank_results: true

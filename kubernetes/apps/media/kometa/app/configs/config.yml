@@ -37,6 +37,7 @@ tmdb:
 radarr:
   url: http://radarr.arrs.svc.cluster.local
   token: <<RADARR_API_KEY>>
+  root_folder_path: /media/Movies
   add_missing: false
   add_existing: false
   upgrade_existing: false
@@ -46,6 +47,7 @@ radarr:
 sonarr:
   url: http://sonarr.arrs.svc.cluster.local
   token: <<SONARR_API_KEY>>
+  root_folder_path: /media/TV
   add_missing: false
   add_existing: false
   upgrade_existing: false

@@ -3,9 +3,11 @@ libraries:
   Movies:
     collection_files:
     - file: /config/kids-movies.yml
+    - file: /config/finn-bootstrap-movies.yml
   TV Shows:
     collection_files:
     - file: /config/kids-tv.yml
+    - file: /config/finn-bootstrap-tv.yml
 settings:
   run_order:
   - collections

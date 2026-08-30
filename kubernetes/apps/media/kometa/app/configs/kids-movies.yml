@@ -1,10 +1,4 @@
 collections:
-  Pixar bootstrap:
-    build_collection: false
-    sync_mode: append
-    tmdb_company: 3
-    item_radarr_tag:
-    - kids
   Kids Movies:
     radarr_taglist:
     - kids

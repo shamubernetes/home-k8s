@@ -10,6 +10,8 @@ configMapGenerator:
 - name: kometa-config
   files:
   - config.yml=./configs/config.yml
+  - finn-bootstrap-movies.yml=./configs/finn-bootstrap-movies.yml
+  - finn-bootstrap-tv.yml=./configs/finn-bootstrap-tv.yml
   - kids-movies.yml=./configs/kids-movies.yml
   - kids-tv.yml=./configs/kids-tv.yml
 generatorOptions:

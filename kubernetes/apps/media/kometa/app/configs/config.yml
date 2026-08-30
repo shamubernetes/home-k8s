@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Kometa-Team/Kometa/master/json-schema/config-schema.json
+libraries:
+  Movies:
+    collection_files:
+    - file: /config/kids-movies.yml
+  TV Shows:
+    collection_files:
+    - file: /config/kids-tv.yml
+settings:
+  run_order:
+  - collections
+  cache: true
+  cache_expiration: 60
+  sync_mode: sync
+  minimum_items: 1
+  delete_below_minimum: false
+  delete_not_scheduled: false
+  show_unmanaged: false
+  show_unconfigured: false
+  show_filtered: false
+  show_options: false
+  show_missing: false
+  save_report: false
+  verify_ssl: true
+plex:
+  url: http://plex.media.svc.cluster.local:32400
+  token: <<PLEX_API_KEY>>
+  timeout: 60
+  clean_bundles: false
+  empty_trash: false
+  optimize: false
+  verify_ssl: true
+tmdb:
+  apikey: <<TMDB_API_KEY>>
+  cache_expiration: 60
+  language: en
+radarr:
+  url: http://radarr.arrs.svc.cluster.local
+  token: <<RADARR_API_KEY>>
+  root_folder_path: /media/Movies
+  quality_profile: 1080p Efficient
+  add_missing: false
+  add_existing: false
+  upgrade_existing: false
+  monitor_existing: false
+  search: false
+  ignore_cache: false
+sonarr:
+  url: http://sonarr.arrs.svc.cluster.local
+  token: <<SONARR_API_KEY>>
+  root_folder_path: /media/TV
+  quality_profile: 1080p Efficient
+  add_missing: false
+  add_existing: false
+  upgrade_existing: false
+  monitor_existing: false
+  search: false
+  cutoff_search: false
+  ignore_cache: false

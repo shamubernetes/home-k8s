@@ -1,23 +1,23 @@
 [tools]
 actionlint = "1.7.12"
-kubectl = "1.36.4"
+kubectl = "1.37.0"
 sops = "3.13.3"
-age = "1.3.1"
+age = "1.3.2"
 task = "3.53.1"
 flux2 = "2.9.4"
 helm = "4.2.4"
 jq = "1.8.2"
 python = "3.14.7"
-"github:budimanjojo/talhelper" = "3.1.16"
-"github:home-operations/flate" = "0.5.0"
+"github:budimanjojo/talhelper" = "v3.1.17"
+"github:home-operations/flate" = "v0.6.1"
 "github:home-operations/yayamlls" = "0.2.0"
 talosctl = "1.13.8"
 krew = "0.5.0"
-"npm:renovate" = { version = "44.35.3", trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"] }
+"npm:renovate" = { version = "44.52.0", trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"] }
 shellcheck = "0.11.0"
 zizmor = "1.29.0"
 "yq" = "4.53.6"
-crane = "0.21.9"
+crane = "0.22.0"
 kyverno = "1.19.0"
 
 [env]

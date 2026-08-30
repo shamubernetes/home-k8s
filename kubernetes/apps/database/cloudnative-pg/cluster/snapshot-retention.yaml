@@ -50,7 +50,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: retention
-              image: docker.io/bitnami/kubectl:latest@sha256:4cab0102df3b978f1bbf6f15b3c06f56c6e885ea7c740d81268435a266dfe442
+              image: docker.io/bitnami/kubectl:latest@sha256:65447dcbb2813878e22265949a4ba4cca02f8d008ff3fe66a25354b511f28015
               command:
                 - /bin/sh
                 - -c

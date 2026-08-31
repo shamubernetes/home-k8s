@@ -35,10 +35,10 @@ spec:
         enabled: false
     image:
       repository: ghcr.io/open-webui/open-webui
-      tag: v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+      tag: v0.11.2@sha256:77ff490214a4b2699b309aa8d39bf4b42eca05f62d2742ef669ff846fcd10355
     extraInitContainers:
-    - name: configure-responses-api
-      image: ghcr.io/open-webui/open-webui:v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+    - name: configure-openai-api
+      image: ghcr.io/open-webui/open-webui:v0.11.2@sha256:77ff490214a4b2699b309aa8d39bf4b42eca05f62d2742ef669ff846fcd10355
       command: [python, -c]
       args:
       - |
@@ -83,10 +83,13 @@ spec:
                 raise SystemExit(0)
 
             api_configs = json.loads(row[0])
-            for index in ("0", "1"):
-                config = api_configs.setdefault(index, {})
-                config["api_type"] = "responses"
-                config["enable"] = True
+            primary_config = api_configs.setdefault("0", {})
+            primary_config["api_type"] = "responses"
+            primary_config["enable"] = True
+            # Large Responses tool events exceed Open WebUI's 128 KiB line limit.
+            maggie_config = api_configs.setdefault("1", {})
+            maggie_config.pop("api_type", None)
+            maggie_config["enable"] = True
             connection.execute(
                 "UPDATE config SET value = ?, updated_at = ? WHERE key = 'openai.api_configs'",
                 (json.dumps(api_configs, separators=(",", ":")), int(time.time())),
@@ -174,7 +177,7 @@ spec:
     openaiApiKeysExistingSecretKey: OPENAI_API_KEYS
     extraEnvVars:
     - name: OPENAI_API_CONFIGS
-      value: '{"0":{"api_type":"responses"},"1":{"api_type":"responses"}}'
+      value: '{"0":{"api_type":"responses"},"1":{}}'
     - name: BYPASS_ADMIN_ACCESS_CONTROL
       value: "false"
     - name: ENABLE_OAUTH

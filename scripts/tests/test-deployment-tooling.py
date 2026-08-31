@@ -210,6 +210,43 @@ fi
             document = json.loads(result.stdout)
             self.assertTrue(any("port 8080" in warning for warning in document["warnings"]))
 
+    def test_new_app_preflight_records_rust_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            source = Path(raw)
+            (source / "web.rs").write_text(
+                'let address = "0.0.0.0:8080";\n.route("/health/ready", get(ready));\n'
+            )
+            image = "ghcr.io/example/app:1.0.0@sha256:" + "e" * 64
+            result = subprocess.run(
+                [
+                    str(self.repo / "scripts/preflight-new-app"),
+                    "tools/example",
+                    "--image",
+                    image,
+                    "--port",
+                    "8080",
+                    "--health-path",
+                    "/health/ready",
+                    "--persistence",
+                    "none",
+                    "--database",
+                    "none",
+                    "--auth",
+                    "internal",
+                    "--source",
+                    str(source),
+                    "--strict-evidence",
+                    "--json",
+                ],
+                cwd=self.repo,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            document = json.loads(result.stdout)
+            self.assertEqual(document["sourceEvidence"]["health"], ["web.rs"])
+            self.assertEqual(document["sourceEvidence"]["port"], ["web.rs"])
+
     def test_preflight_strict_evidence_rejects_incidental_substrings(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source = Path(raw)

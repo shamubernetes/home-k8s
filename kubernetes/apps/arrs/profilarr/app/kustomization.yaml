@@ -5,10 +5,13 @@ resources:
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./externalsecret.yaml
+- ./externalsecret-kopiur.yaml
 - ./externalsecret-oidc.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy-browser.yaml
 - ./httproute-envoy-api-hermes.yaml
+- ./kopiur-policy.yaml
+- ./kopiur-repositories.yaml
 - ./securitypolicy-oidc.yaml
 - ./securitypolicy-hermes-machine.yaml
 - ./service-envoy-dns.yaml

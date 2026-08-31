@@ -10,8 +10,8 @@ spec:
   url: oci://ghcr.io/home-operations/charts/kopiur
   ref:
     # renovate: datasource=docker depName=ghcr.io/home-operations/charts/kopiur
-    tag: 0.10.2
-    digest: sha256:82ff8275edc114ed4ebc36c04216884aba6330b9b98cee29c8965577b7d86934
+    tag: 0.10.5
+    digest: sha256:63095f096cf356999c55f5dc526bd0cf10da619bc1ef6d7a6daf26ae05b74a6f
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

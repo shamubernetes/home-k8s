@@ -83,7 +83,7 @@ spec:
               echo "Installed pinned User Creatable Servers source $installed_revision"
           20-install-plugins:
             image: &panelImage
-              repository: ghcr.io/pelican-dev/panel
+              repository: ghcr.io/pelican/panel
               tag: v1.0.0-beta36@sha256:45cecf27176630ac628ebc9badc0ad273bdaa9bf441648c363dd8daeb9cc3bff
             envFrom: *envFrom
             command:
@@ -111,7 +111,7 @@ spec:
             image: *panelImage
             envFrom: *envFrom
             env:
-              APP_URL: https://pelican.${HOME_DOMAIN}
+              APP_URL: https://panel.${GAME_DOMAIN}
               BEHIND_PROXY: "true"
               TRUSTED_PROXIES: 10.69.0.0/16
               TZ: ${TIMEZONE}

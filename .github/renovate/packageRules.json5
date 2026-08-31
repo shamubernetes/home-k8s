@@ -65,6 +65,17 @@
       "matchPackageNames": ["quay.io/ceph/ceph"],
       "allowedVersions": "<20.2.3 || >=20.2.4 <21",
     },
+    {
+      "description": "n8n 2.37.4 cannot build the 1Password plugin on Node 26",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["docker.io/n8nio/n8n"],
+      "allowedVersions": "!=2.37.4",
+    },
+    {
+      "description": "Kyverno chart 3.9 requires coordinated v1.19 image pins",
+      "matchPackageNames": ["ghcr.io/kyverno/charts/kyverno"],
+      "allowedVersions": "<3.9.0",
+    },
     // Versions
     {
       "description": ["Custom versioning for http-https-echo"],

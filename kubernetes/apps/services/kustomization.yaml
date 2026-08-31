@@ -15,8 +15,6 @@ resources:
 - ./documenso/ks.yaml
 - ./kaneo/ks.yaml
 - ./n8n-operator/ks.yaml
-- ./plane/ks.yaml
-- ./plane-github-bridge/ks.yaml
 - ./pelican/ks.yaml
 - ./static-webserver/ks.yaml
 - ./zoo-operator/ks.yaml

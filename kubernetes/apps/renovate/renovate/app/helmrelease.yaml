@@ -58,10 +58,8 @@ spec:
               startup: *probe
             resources:
               requests:
-                cpu: 100m
+                cpu: 500m
                 memory: 1Gi
-              limits:
-                cpu: 1000m
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true

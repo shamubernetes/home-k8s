@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/monitoring.coreos.com/servicemonitor_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cleanrr
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: cleanrr
+      app.kubernetes.io/name: cleanrr
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    relabelings:
+    - targetLabel: job
+      replacement: cleanrr

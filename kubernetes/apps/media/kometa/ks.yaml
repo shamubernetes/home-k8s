@@ -2,16 +2,21 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app plane-mcp
+  name: &app kometa
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: &namespace tools
+  targetNamespace: &namespace media
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
-  - name: dragonfly-cluster
-  path: ./kubernetes/apps/tools/plane-mcp/app
+  - name: rook-ceph-cluster
+  - name: volsync
+  - name: external-secrets-secret-store
+  - name: plex
+  - name: radarr
+  - name: sonarr
+  path: ./kubernetes/apps/media/kometa/app
   prune: true
   sourceRef:
     kind: GitRepository
@@ -24,3 +29,6 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      VOLSYNC_CAPACITY: 1Gi
+      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_KOMETA}"
+      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_KOMETA}"

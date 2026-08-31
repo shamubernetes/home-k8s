@@ -9,7 +9,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/kyverno/charts/kyverno
   ref:
-    tag: 3.8.2
+    tag: 3.9.0
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

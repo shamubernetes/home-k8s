@@ -2,21 +2,26 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: &app plane-github-bridge
+  name: &app kometa
   namespace: "${KS_NAMESPACE}"
 spec:
-  targetNamespace: &namespace services
+  targetNamespace: &namespace media
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
+  - name: rook-ceph-cluster
+  - name: volsync
   - name: external-secrets-secret-store
-  path: ./kubernetes/apps/services/plane-github-bridge/app
+  - name: plex
+  - name: radarr
+  - name: sonarr
+  path: ./kubernetes/apps/media/kometa/app
   prune: true
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
-  wait: true
+  wait: false
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"
@@ -24,3 +29,6 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
+      VOLSYNC_CAPACITY: 1Gi
+      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_KOMETA}"
+      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_KOMETA}"

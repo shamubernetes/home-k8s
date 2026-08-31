@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: vmalert
-        image: docker.io/victoriametrics/vmalert:v1.150.0@sha256:c6e6c1ef6e43c09510dd0aff264bf0ea319c1bdfced1ccc79dad1545950a7989
+        image: docker.io/victoriametrics/vmalert:v1.151.0@sha256:e519f14c31f4d68015702e684a0fc3f1b4e559aa985d8f4462768f07f55b05c9
         imagePullPolicy: IfNotPresent
         args:
         - -datasource.url=http://victoria-logs.observability.svc.cluster.local:9428

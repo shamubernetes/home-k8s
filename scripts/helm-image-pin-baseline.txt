@@ -14,7 +14,6 @@ network/external-dns/unifi	registry.k8s.io/external-dns/external-dns:v0.21.0
 observability/grafana/app	docker.io/curlimages/curl:8.9.1
 observability/grafana/app	docker.io/grafana/grafana:12.3.1
 observability/grafana/app	quay.io/kiwigrid/k8s-sidecar:2.5.0
-observability/kube-prometheus-stack/app	registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.19.1
 observability/kuberhealthy/app	docker.io/kuberhealthy/kuberhealthy:v2.8.0-rc2
 observability/smartctl-exporter/app	quay.io/prometheuscommunity/smartctl-exporter:v0.14.0
 op/onepassword-connect/app	1password/connect-api:1.8.2

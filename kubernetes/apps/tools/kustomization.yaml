@@ -5,6 +5,5 @@ resources:
 - ./namespace.yaml
 - ./firecrawl/ks.yaml
 - ./open-webui/ks.yaml
-- ./openviking/ks.yaml
 - ./reflector/ks.yaml
 - ./searxng/ks.yaml

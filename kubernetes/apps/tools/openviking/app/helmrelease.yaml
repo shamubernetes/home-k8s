@@ -5,6 +5,7 @@ metadata:
   name: &app openviking
 spec:
   interval: 10m
+  timeout: 20m
   chartRef:
     kind: OCIRepository
     name: openviking
@@ -80,6 +81,66 @@ spec:
                 memory: 512Mi
               limits:
                 memory: 4Gi
+          ollama:
+            image:
+              repository: docker.io/ollama/ollama
+              tag: 0.33.2@sha256:020e4134285e2ef4d8fd801234176de3b4faadc992a3eb06c8e66a2f9d4c4ba2
+            env:
+              HOME: /tmp
+              OLLAMA_HOST: 127.0.0.1:11434
+              OLLAMA_KEEP_ALIVE: 10m
+              OLLAMA_MODELS: /models
+              OLLAMA_NUM_PARALLEL: "1"
+            lifecycle:
+              postStart:
+                exec:
+                  command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    until ollama list >/dev/null 2>&1; do sleep 2; done
+                    ollama pull qwen3-embedding:0.6b
+                    ollama pull qwen3.5:4b
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/tags
+                    port: &ollamaPort 11434
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/tags
+                    port: *ollamaPort
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 12
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/tags
+                    port: *ollamaPort
+                  periodSeconds: 5
+                  timeoutSeconds: 5
+                  failureThreshold: 240
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 500m
+                memory: 4Gi
+              limits:
+                memory: 10Gi
     defaultPodOptions:
       terminationGracePeriodSeconds: 60
       securityContext:
@@ -102,6 +163,17 @@ spec:
           openviking:
             app:
             - path: /app/.openviking
+      models:
+        type: persistentVolumeClaim
+        suffix: models
+        retain: true
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        storageClass: ceph-block
+        advancedMounts:
+          openviking:
+            ollama:
+            - path: /models
       tmp:
         type: emptyDir
         advancedMounts:

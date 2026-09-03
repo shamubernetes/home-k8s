@@ -90,6 +90,7 @@ spec:
             env:
               KANEO_CLIENT_URL: https://kaneo.${HOME_DOMAIN}
               KANEO_API_URL: https://kaneo.${HOME_DOMAIN}/api
+              DEVICE_AUTH_CLIENT_IDS: kaneo-cli,kaneo-mcp,oar
               CORS_ORIGINS: https://kaneo.${HOME_DOMAIN}
               REDIS_URL: redis://dragonfly.database.svc.cluster.local:6379/8
               CUSTOM_OAUTH_AUTHORIZATION_URL: https://sso.${HOME_DOMAIN}/authorize

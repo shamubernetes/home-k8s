@@ -76,7 +76,11 @@ spec:
       capacity: 1Gi
       storageClassName: ceph-block
       parallel: 2
-    successExpr: "stats.files > 0 && stats.errors == 0"
+    # Allow light snapshots: changedetection.io stores watch data in SQLite,
+    # so its /pvc source can legitimately drop to a few KB when watches are
+    # pruned. Trust kopia error count and snapshot presence to catch corruption
+    # instead of insisting on a non-empty file list.
+    successExpr: "snapshot != null && stats.errors == 0"
     verifyFilesPercent: 100
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1

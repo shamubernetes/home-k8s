@@ -178,6 +178,18 @@ url = "https://github.com/kyverno/kyverno/releases/download/v1.19.0/kyverno-cli_
 url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/522057918"
 provenance = "cosign"
 
+[[tools.node]]
+version = "24.20.0"
+backend = "core:node"
+
+[tools.node."platforms.linux-x64"]
+checksum = "sha256:855d581f8a4eb1a8117e3426de25fe02770592febcfb31369aee1ffbfee9e8ec"
+url = "https://nodejs.org/dist/v24.20.0/node-v24.20.0-linux-x64.tar.gz"
+
+[tools.node."platforms.macos-arm64"]
+checksum = "sha256:40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8"
+url = "https://nodejs.org/dist/v24.20.0/node-v24.20.0-darwin-arm64.tar.gz"
+
 [[tools."npm:renovate"]]
 version = "44.52.1"
 backend = "npm:renovate"

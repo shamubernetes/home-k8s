@@ -120,7 +120,7 @@ jobs:
     - name: Setup validation tools
       uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
       with:
-        install_args: crane flux2 helm jq kubectl kyverno python yq npm:renovate
+        install_args: crane flux2 helm jq kubectl kyverno node python yq npm:renovate
         cache: true
         fetch_from_github: false
 

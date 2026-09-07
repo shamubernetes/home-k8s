@@ -30,6 +30,9 @@ spec:
                 value: n8n-operator
   values:
     manager:
+      image:
+        repository: ghcr.io/shamubernetes/n8n-operator
+        tag: 0.13.1@sha256:9304481a0144aad2e5ac9ceb4a6afe9bcb10d33160ba04d464e96d15397b981a
       resources:
         requests:
           cpu: 10m

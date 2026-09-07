@@ -9,7 +9,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/shamubernetes/charts/n8n-operator
   ref:
-    tag: 0.13.0
+    tag: 0.13.1
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

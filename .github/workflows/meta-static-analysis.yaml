@@ -120,7 +120,7 @@ jobs:
     - name: Setup validation tools
       uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
       with:
-        install_args: crane flux2 helm jq kubectl kyverno python yq
+        install_args: crane flux2 helm jq kubectl kyverno python yq npm:renovate
         cache: true
         fetch_from_github: false
 
@@ -135,6 +135,7 @@ jobs:
         python scripts/tests/test-cluster-maintenance.py
         python scripts/tests/test-home-assistant-renovate-guard.py
         python scripts/tests/test-renovate-ceph-guard.py
+        node scripts/tests/test-renovate-n8n-guard.cjs
         python scripts/tests/test-renovate-group-precedence.py
         python scripts/tests/test-renovate-queue-precheck.py
         python scripts/tests/test-renovate-ci-quota-hardening.py

@@ -27,6 +27,25 @@ async function main() {
   assert.equal(deps[0].currentValue, 'stable', 'track the upstream stable channel, not numeric beta tags');
   assert.match(deps[0].currentDigest, /^sha256:[a-f0-9]{64}$/, 'keep an immutable digest pin');
 
+  const { extractPackageFile: extractHelm } = await load('modules/manager/helm-values/extract.js');
+  // Renovate also scans retained, undeployed manifests. Audit every tracked image reference.
+  const files = execFileSync('git', ['ls-files', '-z', 'kubernetes'], { cwd: repo, encoding: 'utf8' })
+    .split('\0').filter((file) => /\.ya?ml$/.test(file));
+  const inventory = [];
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(repo, file), 'utf8');
+    if (!content.includes('docker.io/n8nio/n8n')) continue;
+    const found = [...(extractPackageFile(content, file, {})?.deps ?? []), ...(extractHelm(content, file, {})?.deps ?? [])]
+      .filter((dep) => dep.depName === 'docker.io/n8nio/n8n');
+    assert.ok(found.length, `extract n8n reference in ${file}`);
+    for (const dep of found) {
+      assert.equal(dep.currentValue, 'stable', `stable-only n8n reference in ${file}`);
+      assert.match(dep.currentDigest, /^sha256:[a-f0-9]{64}$/, `immutable n8n pin in ${file}`);
+    }
+    inventory.push(file);
+  }
+  assert.ok(inventory.includes(packageFile), 'inventory must include the live n8n instance');
+
   const { getDatasourceFor } = await load('modules/datasource/common.js');
   const { lookupUpdates } = await load('workers/repository/process/lookup/index.js');
   const datasource = getDatasourceFor('docker');

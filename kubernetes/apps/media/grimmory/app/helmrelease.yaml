@@ -78,7 +78,7 @@ spec:
           mariadb:
             image:
               repository: docker.io/linuxserver/mariadb
-              tag: 11.8.8@sha256:2e87447280027fb084611d77bcba8b96d12e05dc0a80dd46091f26555b069f7b
+              tag: 11.8.8@sha256:1071baf9bd3afbb3c98ab36dbe59a19dbe6c9c92e3d00599579035db963a4aaf
             env:
               PUID: "568"
               PGID: "568"

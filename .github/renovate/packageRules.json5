@@ -276,6 +276,7 @@
       ],
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": "7 days",
       "semanticCommitScope": "group",
       "group": {
         "commitMessageTopic": "{{{groupName}}}",

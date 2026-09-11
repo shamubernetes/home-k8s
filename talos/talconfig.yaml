@@ -17,6 +17,7 @@ additionalApiServerCertSans: &sans
 - "titans.thezoo.house"
 - "pantheon.thezoo.house"
 additionalMachineCertSans: *sans
+allowSchedulingOnControlPlanes: true
 cniConfig:
   name: none
 
@@ -107,14 +108,11 @@ nodes:
       gateway: *gateway
 
 patches:
-- "@./patches/global/cluster-discovery.yaml"
-- "@./patches/global/containerd.yaml"
 - "@./patches/global/coredns.yaml"
 - "@./patches/global/dns-resolution.yaml"
 - "@./patches/global/ghcr-auth.sops.yaml"
 - "@./patches/global/kubelet.yaml"
 - "@./patches/global/nameserver.yaml"
-- "@./patches/global/nfs.yaml"
 - "@./patches/global/nodeLabels.yaml"
 - "@./patches/global/ntp.yaml"
 - "@./patches/global/openebs.yaml"
@@ -122,7 +120,6 @@ patches:
 
 controlPlane:
   patches:
-  - "@./patches/controlplane/admission.yaml"
   - "@./patches/controlplane/apiserver.yaml"
   - "@./patches/controlplane/cluster.yaml"
   - "@./patches/controlplane/etcd.yaml"

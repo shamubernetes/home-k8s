@@ -32,7 +32,7 @@ spec:
           app:
             image:
               repository: ghcr.io/bluesky-social/pds
-              tag: 0.4@sha256:4c94fa7f2ef793dc44e046cb167ae187199aab323f1dc9abe81ee53dc0b34a6b
+              tag: 0.4@sha256:d155af1c906d7848e7dea9d59a8a7def065a04b77aa98ae56ea05a8d4eadb63a
             env:
               LOG_ENABLED: "true"
               LOG_LEVEL: info

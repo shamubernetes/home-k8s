@@ -18,7 +18,6 @@ observability/kuberhealthy/app	docker.io/kuberhealthy/kuberhealthy:v2.8.0-rc2
 observability/smartctl-exporter/app	quay.io/prometheuscommunity/smartctl-exporter:v0.14.0
 op/onepassword-connect/app	1password/connect-api:1.8.2
 op/onepassword-connect/app	1password/connect-sync:1.8.2
-services/n8n-operator/operator	ghcr.io/shamubernetes/n8n-operator:0.13.0
 services/plane/app	busybox
 services/plane/app	makeplane/admin-commercial:v2.6.3
 services/plane/app	makeplane/backend-commercial:v2.6.3

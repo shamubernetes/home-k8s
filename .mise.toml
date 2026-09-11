@@ -1,24 +1,25 @@
 [tools]
+node = "24.21.0"
 actionlint = "1.7.12"
 kubectl = "1.37.0"
 sops = "3.13.3"
 age = "1.3.2"
 task = "3.53.1"
-flux2 = "2.9.4"
+flux2 = "2.9.5"
 helm = "4.2.4"
 jq = "1.8.2"
 python = "3.14.7"
 "github:budimanjojo/talhelper" = "v3.1.17"
-"github:home-operations/flate" = "v0.6.1"
-"github:home-operations/yayamlls" = "0.2.0"
+"github:home-operations/flate" = "v0.6.5"
+"github:home-operations/yayamlls" = "0.3.0"
 talosctl = "1.14.0"
 krew = "0.5.0"
-"npm:renovate" = { version = "44.52.1", trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"] }
+"npm:renovate" = { version = "44.80.0", trust_policy_excludes = ["@yarnpkg/libzip@3.2.2"] }
 shellcheck = "0.11.0"
-zizmor = "1.30.0"
+zizmor = "1.30.1"
 "yq" = "4.53.6"
-crane = "0.22.0"
-kyverno = "1.19.0"
+crane = "0.22.1"
+kyverno = "1.19.1"
 
 [env]
 MISE_LOCKED = "1"

@@ -19,7 +19,7 @@ spec:
     fullnameOverride: reloader
     image:
       repository: ghcr.io/stakater/reloader
-      tag: v1.4.21@sha256:b253579350a835082cdad8d8736671cedaa0f8309437c894bd1bf1c2f0e0d45e
+      tag: v1.4.22@sha256:def2480040adc164b3a57340e77674eadfd88fb7f0593df25e93297f29c7fd7c
       digest: sha256:00380aee220b9c6fac720fbd99ca244000c839f3b391cd82d401c156ab368c60
     reloader:
       readOnlyRootFileSystem: true

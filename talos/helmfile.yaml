@@ -19,7 +19,7 @@ releases:
 - name: prometheus-operator-crds
   namespace: observability
   chart: prometheus-community/prometheus-operator-crds
-  version: 31.0.1
+  version: 32.0.0
 - name: cilium
   namespace: kube-system
   chart: cilium/cilium
@@ -31,7 +31,7 @@ releases:
 - name: coredns
   namespace: kube-system
   chart: coredns/coredns
-  version: 1.47.0
+  version: 1.47.1
   values:
   - ../kubernetes/apps/kube-system/coredns/app/helm-values.yaml
   needs:
@@ -40,7 +40,7 @@ releases:
 - name: kubelet-csr-approver
   namespace: kube-system
   chart: postfinance/kubelet-csr-approver
-  version: 1.2.14
+  version: 1.2.15
   values:
   - ../kubernetes/apps/kube-system/kubelet-csr-approver/app/helm-values.yaml
   needs:
@@ -62,7 +62,7 @@ releases:
   namespace: flux-system
   createNamespace: true
   chart: oci://ghcr.io/controlplaneio-fluxcd/charts/flux-operator
-  version: 0.58.1
+  version: 0.60.0
   force: false
   values:
   - ../kubernetes/apps/flux-system/flux-operator/app/helm-values.yaml
@@ -73,7 +73,7 @@ releases:
 - name: flux-instance
   namespace: flux-system
   chart: oci://ghcr.io/controlplaneio-fluxcd/charts/flux-instance
-  version: 0.58.1
+  version: 0.60.0
   force: false
   values:
   - ../kubernetes/apps/flux-system/flux-instance/app/helm-values.yaml

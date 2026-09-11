@@ -8,8 +8,6 @@ database/mariadb-operator/app	ghcr.io/mariadb-operator/mariadb-operator:26.6.0
 games/minecraft-stoneblock4/app	itzg/mc-backup:latest
 games/minecraft-stoneblock4/app	itzg/minecraft-server:latest
 kube-system/descheduler/app	registry.k8s.io/descheduler/descheduler:v0.36.0
-network/external-dns/cloudflare	registry.k8s.io/external-dns/external-dns:v0.21.0
-network/external-dns/unifi	registry.k8s.io/external-dns/external-dns:v0.21.0
 observability/grafana/app	docker.io/curlimages/curl:8.9.1
 observability/grafana/app	docker.io/grafana/grafana:12.3.1
 observability/grafana/app	quay.io/kiwigrid/k8s-sidecar:2.5.0
@@ -17,7 +15,6 @@ observability/kuberhealthy/app	docker.io/kuberhealthy/kuberhealthy:v2.8.0-rc2
 observability/smartctl-exporter/app	quay.io/prometheuscommunity/smartctl-exporter:v0.14.0
 op/onepassword-connect/app	1password/connect-api:1.8.2
 op/onepassword-connect/app	1password/connect-sync:1.8.2
-services/n8n-operator/operator	ghcr.io/shamubernetes/n8n-operator:0.13.0
 services/plane/app	busybox
 services/plane/app	makeplane/admin-commercial:v2.6.3
 services/plane/app	makeplane/backend-commercial:v2.6.3

@@ -33,38 +33,38 @@ url_api = "https://api.github.com/repos/FiloSottile/age/releases/assets/53554189
 provenance = "github-attestations"
 
 [[tools.crane]]
-version = "0.22.0"
+version = "0.22.1"
 backend = "aqua:google/go-containerregistry"
 
 [tools.crane."platforms.linux-x64"]
-checksum = "sha256:edb74d53fad9a596860f59d1c5d04a43dfb5f441dc71f57060dd0bf39483c833"
-url = "https://github.com/google/go-containerregistry/releases/download/v0.22.0/go-containerregistry_Linux_x86_64.tar.gz"
-url_api = "https://api.github.com/repos/google/go-containerregistry/releases/assets/529609828"
+checksum = "sha256:0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0"
+url = "https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/google/go-containerregistry/releases/assets/543544389"
 
 [tools.crane."platforms.macos-arm64"]
-checksum = "sha256:0d6955caf5168b163824317b3b0caed699b3ca3ca9523dd4442e3227e83dd1ef"
-url = "https://github.com/google/go-containerregistry/releases/download/v0.22.0/go-containerregistry_Darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/google/go-containerregistry/releases/assets/529609793"
+checksum = "sha256:2231fc8df8806d20d680ff1225db44e095a55dd6ac1ae8eced4faf4b278b78fb"
+url = "https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/google/go-containerregistry/releases/assets/543544436"
 
 [[tools.flux2]]
-version = "2.9.4"
+version = "2.9.5"
 backend = "aqua:fluxcd/flux2"
 
 [tools.flux2."platforms.linux-x64"]
-checksum = "sha256:c2c397a52930f52d2005c01d276116b059d062de379386d58e98115380a766a2"
-url = "https://github.com/fluxcd/flux2/releases/download/v2.9.4/flux_2.9.4_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/fluxcd/flux2/releases/assets/505259827"
+checksum = "sha256:b853df82adfd7736f580692f9f734473d571606307139f8fd20c2a80dd1ff473"
+url = "https://github.com/fluxcd/flux2/releases/download/v2.9.5/flux_2.9.5_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/fluxcd/flux2/releases/assets/538282891"
 
 [tools.flux2."platforms.linux-x64".provenance.slsa]
-url = "https://github.com/fluxcd/flux2/releases/download/v2.9.4/provenance.intoto.jsonl"
+url = "https://github.com/fluxcd/flux2/releases/download/v2.9.5/provenance.intoto.jsonl"
 
 [tools.flux2."platforms.macos-arm64"]
-checksum = "sha256:5350675411f1c8c20fb7fd827450933e939f7ab82a2cd92f8fa2abe497761911"
-url = "https://github.com/fluxcd/flux2/releases/download/v2.9.4/flux_2.9.4_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/fluxcd/flux2/releases/assets/505259822"
+checksum = "sha256:2869ef7151a6f1b27e6b5d2a6804f3ef23c7bdaa06a74e00d3fe5bfc646547fd"
+url = "https://github.com/fluxcd/flux2/releases/download/v2.9.5/flux_2.9.5_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/fluxcd/flux2/releases/assets/538282876"
 
 [tools.flux2."platforms.macos-arm64".provenance.slsa]
-url = "https://github.com/fluxcd/flux2/releases/download/v2.9.4/provenance.intoto.jsonl"
+url = "https://github.com/fluxcd/flux2/releases/download/v2.9.5/provenance.intoto.jsonl"
 
 [[tools."github:budimanjojo/talhelper"]]
 version = "3.1.17"
@@ -81,44 +81,44 @@ url = "https://github.com/budimanjojo/talhelper/releases/download/v3.1.17/talhel
 url_api = "https://api.github.com/repos/budimanjojo/talhelper/releases/assets/530086691"
 
 [[tools."github:home-operations/flate"]]
-version = "0.6.1"
+version = "0.6.5"
 backend = "github:home-operations/flate"
 
 [tools."github:home-operations/flate"."platforms.linux-x64"]
-checksum = "sha256:25de65dd4f4478575768b4c30d6bad4cbb7a75a7a38be5a3cd776ae065fd6631"
-url = "https://github.com/home-operations/flate/releases/download/v0.6.1/flate_0.6.1_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/531584324"
+checksum = "sha256:37eb0cd91a6752340754375743aa616c263cd8367ce594abd42ee955e1ec0099"
+url = "https://github.com/home-operations/flate/releases/download/v0.6.5/flate_0.6.5_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/541337294"
 
 [tools."github:home-operations/flate"."platforms.macos-arm64"]
-checksum = "sha256:fc41874e4ba03f65d2c78531d629f10b81942ef093bd7e9e224b5731dc043254"
-url = "https://github.com/home-operations/flate/releases/download/v0.6.1/flate_0.6.1_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/531584322"
+checksum = "sha256:76274be5ef8b016e80ea0abf7b6f612adc76a89f7613d2e7f7e3550af5b9e186"
+url = "https://github.com/home-operations/flate/releases/download/v0.6.5/flate_0.6.5_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/541337298"
 
 [[tools."github:home-operations/yayamlls"]]
-version = "0.2.0"
+version = "0.3.0"
 backend = "github:home-operations/yayamlls"
 
 [tools."github:home-operations/yayamlls"."platforms.linux-x64"]
-checksum = "sha256:3982bc4c0cd5afb6cf0036f3c60faad629e409ec69bd7464601198804048edd6"
-url = "https://github.com/home-operations/yayamlls/releases/download/0.2.0/yayamlls_0.2.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/yayamlls/releases/assets/501268522"
+checksum = "sha256:036c00ed7b903e2b27950873568147dc7a96b2c36eaef11f5928516900d6a753"
+url = "https://github.com/home-operations/yayamlls/releases/download/0.3.0/yayamlls_0.3.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/yayamlls/releases/assets/537946194"
 
 [tools."github:home-operations/yayamlls"."platforms.macos-arm64"]
-checksum = "sha256:dd0897687b69fffb6a21594eca96018b4fff66f0be7abcfa6e4e90f724cbd7f0"
-url = "https://github.com/home-operations/yayamlls/releases/download/0.2.0/yayamlls_0.2.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/yayamlls/releases/assets/501268520"
+checksum = "sha256:4e32db68d1b0f998856330cc15ee7ff54814a430ba605eb5577f65cab4197664"
+url = "https://github.com/home-operations/yayamlls/releases/download/0.3.0/yayamlls_0.3.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/yayamlls/releases/assets/537946195"
 
 [[tools.helm]]
-version = "4.2.4"
+version = "4.3.0"
 backend = "aqua:helm/helm"
 
 [tools.helm."platforms.linux-x64"]
-checksum = "sha256:c306b46f719b0a4da32d0f78ee21bf90ce8d602f15b22ab753f0674d1670a7f3"
-url = "https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz"
+checksum = "sha256:86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb"
+url = "https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz"
 
 [tools.helm."platforms.macos-arm64"]
-checksum = "sha256:d747eb4e28bd2727173d15b759fa0a17822291ec09db7ced3d55af290a3661a2"
-url = "https://get.helm.sh/helm-v4.2.4-darwin-arm64.tar.gz"
+checksum = "sha256:d3870437e1e95b67f8edbde964156c84a26503f560821d40c542441658934fba"
+url = "https://get.helm.sh/helm-v4.3.0-darwin-arm64.tar.gz"
 
 [[tools.jq]]
 version = "1.8.2"
@@ -163,23 +163,35 @@ checksum = "sha256:583beedaebe422e71d3f1a96acef8b1fef86ea2f09a45ad01aa6c9ce287c1
 url = "https://dl.k8s.io/v1.37.0/bin/darwin/arm64/kubectl"
 
 [[tools.kyverno]]
-version = "1.19.0"
+version = "1.19.1"
 backend = "aqua:kyverno/kyverno"
 
 [tools.kyverno."platforms.linux-x64"]
-checksum = "sha256:f5b4dc73c8e2f3f66e8e0034dc370e6eb6c4617eff7d5ae3838d2200034eb421"
-url = "https://github.com/kyverno/kyverno/releases/download/v1.19.0/kyverno-cli_v1.19.0_linux_x86_64.tar.gz"
-url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/522057963"
+checksum = "sha256:b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/554402194"
 provenance = "cosign"
 
 [tools.kyverno."platforms.macos-arm64"]
-checksum = "sha256:6f4bd96c689d5049217c95643da43ebb8e9d5b58f35ca2da38f0fee9fdcdc92d"
-url = "https://github.com/kyverno/kyverno/releases/download/v1.19.0/kyverno-cli_v1.19.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/522057918"
+checksum = "sha256:2cf5febbedaafca5d3c7819925a49f9723bf4c3337a1327b6f72970480af385a"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/554402257"
 provenance = "cosign"
 
+[[tools.node]]
+version = "24.21.0"
+backend = "core:node"
+
+[tools.node."platforms.linux-x64"]
+checksum = "sha256:6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff"
+url = "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz"
+
+[tools.node."platforms.macos-arm64"]
+checksum = "sha256:bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057"
+url = "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz"
+
 [[tools."npm:renovate"]]
-version = "44.52.1"
+version = "44.82.0"
 backend = "npm:renovate"
 
 [tools."npm:renovate".options]
@@ -280,17 +292,17 @@ url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522028033"
 provenance = "cosign"
 
 [[tools.zizmor]]
-version = "1.30.0"
+version = "1.30.1"
 backend = "aqua:zizmorcore/zizmor"
 
 [tools.zizmor."platforms.linux-x64"]
-checksum = "sha256:ec8c95cd800845abb9bbc5f377ec7c57d2eb8e2386a00a201d3a74ee4092e5ed"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.30.0/zizmor-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/zizmorcore/zizmor/releases/assets/537081732"
+checksum = "sha256:e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/zizmorcore/zizmor/releases/assets/552067642"
 provenance = "github-attestations"
 
 [tools.zizmor."platforms.macos-arm64"]
-checksum = "sha256:c9c5d83730efb86f2cd71b487605c00a4d63903e4f9458485ed5eac3b1924ab1"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.30.0/zizmor-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/zizmorcore/zizmor/releases/assets/537081737"
+checksum = "sha256:e28d22b087f9ebb8d99da6e740d348c930f559961c7c3f12badda54f882195a2"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/zizmorcore/zizmor/releases/assets/552067640"
 provenance = "github-attestations"

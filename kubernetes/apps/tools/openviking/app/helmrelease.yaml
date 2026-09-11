@@ -47,7 +47,7 @@ spec:
           app:
             image:
               repository: ghcr.io/volcengine/openviking
-              tag: v0.4.17.1@sha256:14553ec16f2bda9bd08a188cffb659fcfff4fde5891cbb881ed1bd8488b23294
+              tag: v0.4.18.3@sha256:14aaf6245f8252181c3b331f9cb7f7dfcc16f9f17251a6b7a3686c602e02cd5f
             command:
             - /bin/sh
             - -c
@@ -112,7 +112,7 @@ spec:
           ollama:
             image:
               repository: docker.io/ollama/ollama
-              tag: 0.33.2@sha256:020e4134285e2ef4d8fd801234176de3b4faadc992a3eb06c8e66a2f9d4c4ba2
+              tag: 0.34.0@sha256:684d8674b4315fa18f4f0e973a118ec2652ed96f67563277839985175858e0ba
             env:
               HOME: /tmp
               OLLAMA_HOST: 0.0.0.0:11434

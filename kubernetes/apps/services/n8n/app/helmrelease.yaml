@@ -39,7 +39,8 @@ spec:
           app:
             image:
               repository: docker.io/n8nio/n8n
-              tag: 2.37.4@sha256:3ef785400f1a03361584e5533a2e3eb72de56311fd4dc996ac4031a7fdede8bc
+              # Retained legacy definition must follow the same stable channel.
+              tag: stable@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec
             env:
               GENERIC_TIMEZONE: "${TIMEZONE}"
               TZ: "${TIMEZONE}"

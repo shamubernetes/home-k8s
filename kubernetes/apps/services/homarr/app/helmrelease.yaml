@@ -34,7 +34,7 @@ spec:
           app:
             image:
               repository: ghcr.io/homarr-labs/homarr
-              tag: v1.76.2@sha256:7d87f7fdd35f8bbee1b922b9b74fad8ce9967a1a66b8c6db1a168780c03d693b
+              tag: v1.77.1@sha256:1f5b892aeef4ad0a4907f075777bbd0ce7120f4cdc53b9f3f028519250421aed
             env:
               AUTH_PROVIDERS: credentials
               DB_DIALECT: sqlite

@@ -3,9 +3,6 @@ apiVersion: tuppr.home-operations.com/v1alpha1
 kind: TalosUpgrade
 metadata:
   name: talos
-  annotations:
-    # K8S-63: resume only in supervised maintenance after playback is idle.
-    tuppr.home-operations.com/suspend: "playback-maintenance-pause"
 spec:
   nodeSelector:
     matchLabels:

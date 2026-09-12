@@ -35,6 +35,10 @@ tasks:
         --secret-file "$tmp/talsecret.yaml" \
         --out-dir "$tmp/clusterconfig" \
         --no-gitignore
+      "{{.ROOT_DIR}}/scripts/append-talos-config-documents" \
+        "$tmp/clusterconfig" \
+        "$tmp/talos/patches/global/containerd.yaml" \
+        "$tmp/talos/patches/global/nfs.yaml"
 
       found=false
       for config in "$tmp"/clusterconfig/*.yaml; do
@@ -57,6 +61,10 @@ tasks:
         --config-file "{{.TALOS_DIR}}/talconfig.yaml" \
         --secret-file "$secret" \
         --out-dir "{{.TALOS_DIR}}/clusterconfig"
+      "{{.ROOT_DIR}}/scripts/append-talos-config-documents" \
+        "{{.TALOS_DIR}}/clusterconfig" \
+        "{{.TALOS_DIR}}/patches/global/containerd.yaml" \
+        "{{.TALOS_DIR}}/patches/global/nfs.yaml"
 
       for config in "{{.TALOS_DIR}}"/clusterconfig/*.yaml; do
         test -e "$config" || continue
@@ -72,6 +80,8 @@ tasks:
       vars: [node, config]
     cmd: talosctl apply-config --nodes "{{.node}}" --file "{{.config}}" --dry-run
     preconditions:
+    - sh: '"{{.ROOT_DIR}}/scripts/require-talos-config-version" --node "{{.node}}" --target-version "$(yq ''.talosVersion'' "{{.TALOS_DIR}}/talconfig.yaml")"'
+      msg: Upgrade this node to the target Talos version before previewing or applying its config
     - sh: test -f "{{.config}}"
       msg: Rendered config not found; run task talos:render first
     - sh: test -f "$TALOSCONFIG"
@@ -91,6 +101,8 @@ tasks:
       vars:
         node: "{{.node}}"
     preconditions:
+    - sh: '"{{.ROOT_DIR}}/scripts/require-talos-config-version" --node "{{.node}}" --target-version "$(yq ''.talosVersion'' "{{.TALOS_DIR}}/talconfig.yaml")"'
+      msg: Upgrade this node to the target Talos version before previewing or applying its config
     - sh: test -f "{{.config}}"
       msg: Rendered config not found; run task talos:render first
     - sh: test -f "$TALOSCONFIG"

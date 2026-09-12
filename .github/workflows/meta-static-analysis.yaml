@@ -140,6 +140,7 @@ jobs:
         python scripts/tests/test-renovate-queue-precheck.py
         python scripts/tests/test-renovate-ci-quota-hardening.py
         python scripts/tests/test-deployment-tooling.py
+        python scripts/tests/test-talos-config-migration.py
         python scripts/tests/test-homarr-upsert-app.py
         scripts/tests/test-validation.sh
         scripts/tests/test-flate-render.sh

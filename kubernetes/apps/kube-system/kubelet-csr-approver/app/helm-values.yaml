@@ -1,2 +1,4 @@
 providerRegex: ^k8s-(oceanus|tethys|coeus|chronos|rhea)$
 bypassDnsResolution: true
+image:
+  tag: v1.2.15@sha256:6469ef517d2b6d3cb108fce8a913483533a48b1cd78b5d4af307fa09e04a7818

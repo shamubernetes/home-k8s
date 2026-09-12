@@ -23,14 +23,28 @@ spec:
   values:
     image:
       repository: docker.io/rook/ceph
-      tag: v1.20.6@sha256:d84289c8df92b439d56754b0af6309d0ee81a17c001e48cce525c6d495774cf9
+      tag: v1.20.7@sha256:2f970c4256179d56fa9f7867a634701f533103908c4e2ad43cf3954c1f7e33f9
     ceph-csi-operator:
       controllerManager:
         manager:
           image:
             repository: quay.io/cephcsi/ceph-csi-operator
-            tag: v1.0.4@sha256:c62933fd4083635f969f8a61932af45dba9902d48867e2b5d98a69d8e4344eb6
+            tag: v1.0.5@sha256:f8f4e990bc9f5a255ba47cdab73909a4a8f9b92086d9743dd8eaed4689228233
     csi:
+      cephcsi:
+        tag: v3.17.1@sha256:0b62db8afc9b174619186c87084a8952157daa719415c598603be22b63cc1293
+      registrar:
+        tag: v2.17.0@sha256:f9de845b170155199f2a2a3f9531cf13d78e31235e9db6b6582a8b0db0a50dad
+      provisioner:
+        tag: v6.2.0@sha256:6be9f63ca4caa6c46aae55aa372500949d8a21473d72f819da1f746076b32d4e
+      snapshotter:
+        tag: v8.5.0@sha256:da081c27e8a6d91f36042c1942362d0515ced8d06e18c11b8f893e58c4d6d797
+      attacher:
+        tag: v4.12.0@sha256:b9dc9a714a484ccdeeb6f86d88d4db9b7a5ecfc5a55da6db3a60bb3fa33c278a
+      resizer:
+        tag: v2.1.0@sha256:589e525cddef6d768e68da1f0bc9ffd0a24bf3add3dd010648eb7189976fde79
+      csiAddons:
+        tag: v0.14.0@sha256:69092d026323307933fba2bed9c57d864f2a92cfd385d644b478442ded0d2886
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true
       serviceMonitor:

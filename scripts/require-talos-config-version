@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Refuse applying target-version configs to an older or ambiguous server."""
+import argparse
+import re
+import subprocess
+import sys
+
+
+def parse_version(value):
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", value)
+    if not match:
+        raise ValueError(f"unsupported version identifier: {value!r}")
+    return tuple(map(int, match.groups()))
+
+
+def require_server(output, target):
+    _, separator, server = output.partition("Server:")
+    tags = re.findall(r"^\s*Tag:\s*(\S+)\s*$", server, re.MULTILINE)
+    if not separator or len(tags) != 1:
+        raise ValueError("expected exactly one Talos server version")
+    actual = parse_version(tags[0])
+    desired = parse_version(target)
+    if actual[:2] != desired[:2] or actual[2] < desired[2]:
+        raise ValueError(f"server {tags[0]} cannot receive target {target} config; upgrade OS first")
+    return tags[0]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--node", required=True)
+    parser.add_argument("--target-version", required=True)
+    args = parser.parse_args()
+    if not args.node or "," in args.node:
+        parser.error("one explicit node is required")
+    parse_version(args.target_version)
+    result = subprocess.run(
+        ["talosctl", "version", "--nodes", args.node, "--short"],
+        text=True, capture_output=True, check=True,
+    )
+    actual = require_server(result.stdout, args.target_version)
+    print(f"Talos config compatibility passed: {args.node} {actual}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, subprocess.CalledProcessError) as exc:
+        print(f"Talos config compatibility refused: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

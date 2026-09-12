@@ -5,17 +5,46 @@ if (( $# < 2 )); then
   echo "usage: append-talos-config-documents <output-directory> <document>..." >&2
   exit 2
 fi
-
 output_directory=$1
 shift
-found=false
-for config in "$output_directory"/*.yaml; do
-  [[ -e "$config" ]] || continue
-  for document in "$@"; do
-    [[ -f "$document" ]]
-    printf "%s\n" "" "---" >> "$config"
-    command cat "$document" >> "$config"
+shopt -s nullglob
+configs=("$output_directory"/*.yaml)
+(( ${#configs[@]} > 0 ))
+
+# Preflight the entire batch before changing any generated config.
+for document in "$@"; do
+  [[ -f "$document" ]]
+  kind=$(yq '.kind' "$document")
+  name=$(yq '.name' "$document")
+  [[ -n "$kind" && "$kind" != null && -n "$name" && "$name" != null ]]
+  for config in "${configs[@]}"; do
+    existing=$(DOC_KIND="$kind" DOC_NAME="$name" yq 'select(.kind == strenv(DOC_KIND) and .name == strenv(DOC_NAME)) | .kind' "$config")
+    if [[ -n "$existing" ]]; then
+      echo "document already exists in $config; regenerate before appending" >&2
+      exit 1
+    fi
   done
-  found=true
 done
-[[ "$found" == true ]]
+for config in "${configs[@]}"; do
+  defaults=$(yq 'select(.kind == "KubeAdmissionControlConfig" and .name == "PodSecurity") | .configuration.defaults | .enforce + ":" + .warn + ":" + .audit' "$config")
+  if [[ -n "$defaults" && "$defaults" != baseline:restricted:restricted ]]; then
+    echo "unexpected PodSecurity defaults in $config; review admission policy explicitly" >&2
+    exit 1
+  fi
+done
+
+tmp=
+trap '[[ -z "$tmp" ]] || rm -f -- "$tmp"' EXIT
+for config in "${configs[@]}"; do
+  tmp=$(mktemp "${config}.XXXXXX")
+  # The existing 1.13 source explicitly removes admissionControl. Preserve
+  # that choice, not Talhelper 1.14's newly generated default PodSecurity.
+  # Other admission and Kubernetes security documents remain untouched.
+  yq 'select(.kind != "KubeAdmissionControlConfig" or .name != "PodSecurity")' "$config" > "$tmp"
+  for document in "$@"; do
+    printf '%s\n' '' '---' >> "$tmp"
+    command cat "$document" >> "$tmp"
+  done
+  mv -- "$tmp" "$config"
+  tmp=
+done

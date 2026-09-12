@@ -24,8 +24,7 @@ spec:
   values:
     controllers:
       plex:
-        # Temporary maintenance hold. Restore after the supervised node upgrades.
-        replicas: 0
+        replicas: 1
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:

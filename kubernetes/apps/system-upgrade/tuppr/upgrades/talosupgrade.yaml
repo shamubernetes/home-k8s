@@ -21,10 +21,10 @@ spec:
     kind: CephCluster
     expr: |-
       status.ceph.health in ['HEALTH_OK']
-  - apiVersion: apps/v1
-    kind: Deployment
-    name: plex
-    namespace: media
-    description: Plex is intentionally stopped for supervised maintenance
+  - apiVersion: comcast.github.io/v1
+    kind: KuberhealthyState
+    name: plex-no-streams
+    namespace: observability
+    description: No active Plex streams
     expr: |-
-      object.spec.replicas == 0 && object.status.observedGeneration == object.metadata.generation && (!has(object.status.replicas) || object.status.replicas == 0) && (!has(object.status.availableReplicas) || object.status.availableReplicas == 0)
+      object.spec.OK == true

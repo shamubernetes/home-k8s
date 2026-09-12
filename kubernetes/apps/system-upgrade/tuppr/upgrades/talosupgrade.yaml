@@ -4,11 +4,7 @@ kind: TalosUpgrade
 metadata:
   name: talos
 spec:
-  nodeSelector:
-    matchExpressions:
-    - key: kubernetes.io/hostname
-      operator: In
-      values: [k8s-rhea, k8s-oceanus]
+  parallelism: 1
   talos:
     # renovate: datasource=github-releases depName=siderolabs/talos
     version: v1.14.0

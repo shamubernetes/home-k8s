@@ -4,9 +4,12 @@ kind: TalosUpgrade
 metadata:
   name: talos
 spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/hostname: k8s-rhea
   talos:
     # renovate: datasource=github-releases depName=siderolabs/talos
-    version: v1.13.9
+    version: v1.13.10
   policy:
     placement: hard
     rebootMode: powercycle

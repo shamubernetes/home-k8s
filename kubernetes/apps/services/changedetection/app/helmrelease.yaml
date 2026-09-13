@@ -67,7 +67,7 @@ spec:
           app:
             image:
               repository: docker.io/dgtlmoon/sockpuppetbrowser
-              tag: latest@sha256:3414a6d4a54e611a2459310c1d8c736d4822f30ce0a88170f06faa8bbc17a0e3
+              tag: latest@sha256:3eba6b4286c1477152a35a38937d20a51c684b86d2d6352e1c812abc646fbc34
             env:
               CONNECTION_TIMEOUT: "600000"
               DEFAULT_BLOCK_ADS: "true"

@@ -181,6 +181,11 @@ grep -Fq 'check-runs?filter=all&per_page=100' "$gate"
 grep -Fq 'actions: read' "$gate"
 grep -Fq "if [[ \$check_conclusion != success ]]; then" "$gate"
 grep -Fq 'download_exact_artifact' "$gate"
+grep -Fq 'max_by(.id)' "$gate"
+if grep -Fq "[[ \${#artifact_ids[@]} -eq 1 ]]" "$gate"; then
+  echo 'Talos gate rejects safe workflow rerun artifacts' >&2
+  exit 1
+fi
 grep -Fq 'trusted/scripts/talos-image-plan verify' "$gate"
 grep -Fq "talos-image-prepull-result-\${consumer_run_id}" "$gate"
 grep -Fq ".consumer_run_id == \$consumer_run_id" "$gate"

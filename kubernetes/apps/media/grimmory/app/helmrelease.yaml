@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: docker.io/grimmory/grimmory
-              tag: v3.3.3@sha256:d658e472e0b6d4df8eb022453b9155076c97d2a01878739116e8b776c042dd66
+              tag: v3.4.0@sha256:f54cd21517c20dc750a264411009468d1c443c406a3360b8279ced802d289f7f
             env:
               TZ: ${TIMEZONE}
               USER_ID: "568"

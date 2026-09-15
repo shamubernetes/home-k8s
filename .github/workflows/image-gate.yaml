@@ -101,21 +101,17 @@ jobs:
 
         download_exact_artifact() {
           local run_id=$1 artifact_name=$2 zip_path=$3 output_dir=$4 expected_file=$5 max_bytes=$6
-          local artifacts artifact_size
-          local -a artifact_ids entries
+          local artifact artifact_id artifacts artifact_size
+          local -a entries
           artifacts=$(gh api "repos/${REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100") || return 1
-          mapfile -t artifact_ids < <(jq -r \
+          artifact=$(jq -cer \
             --arg name "$artifact_name" \
-            '.artifacts[] | select(.expired == false and .name == $name) | .id' \
-            <<<"$artifacts")
-          [[ ${#artifact_ids[@]} -eq 1 ]] || return 1
-          artifact_size=$(jq -er \
-            --argjson id "${artifact_ids[0]}" \
-            '.artifacts[] | select(.id == $id) | .size_in_bytes' \
+            '[.artifacts[] | select(.expired == false and .name == $name)] | if length == 0 then empty else max_by(.id) end' \
             <<<"$artifacts") || return 1
-          [[ $artifact_size =~ ^[0-9]+$ ]] || return 1
+          artifact_id=$(jq -er '.id | select(type == "number" and . >= 1 and floor == .)' <<<"$artifact") || return 1
+          artifact_size=$(jq -er '.size_in_bytes | select(type == "number" and . >= 0 and floor == .)' <<<"$artifact") || return 1
           (( artifact_size <= max_bytes )) || return 1
-          gh api "repos/${REPOSITORY}/actions/artifacts/${artifact_ids[0]}/zip" > "$zip_path" || return 1
+          gh api "repos/${REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$zip_path" || return 1
           unzip -tq "$zip_path" >/dev/null || return 1
           mapfile -t entries < <(zipinfo -1 "$zip_path")
           [[ ${#entries[@]} -eq 1 && ${entries[0]} == "$expected_file" ]] || return 1

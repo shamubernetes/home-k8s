@@ -7,19 +7,19 @@ metadata:
 spec:
   chart:
     spec:
-      chart: app-template
-      version: 4.6.2
+      chart: podinfo
+      version: 6.15.0
       sourceRef:
         kind: HelmRepository
-        name: bjw-s
+        name: podinfo
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
-  name: bjw-s
+  name: podinfo
   namespace: tools
 spec:
-  url: https://bjw-s-labs.github.io/helm-charts
+  url: https://stefanprodan.github.io/podinfo
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository

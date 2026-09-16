@@ -32,7 +32,7 @@ spec:
       image:
         registry: docker.io
         repository: victoriametrics/victoria-traces
-        tag: v0.11.0@sha256:9947b14b6b9baa61b8efef64467a7118ee54ccd6be6b7c1849f6fdd65d8e17fd
+        tag: v0.11.1@sha256:b8e13852fa320debb9c1124f7987f62a1fd048c9de50a2ed840c390e21e232ed
       retentionPeriod: 14d
       retentionDiskSpaceUsage: 25GiB
       extraArgs:

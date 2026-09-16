@@ -27,7 +27,7 @@ assert_eq() {
 }
 
 actual=$($resolver "$helmreleases" inline tools)
-assert_eq $'app-template\t4.6.2\thttps://bjw-s-labs.github.io/helm-charts' "$actual" 'inline HelmRepository chart'
+assert_eq $'podinfo\t6.15.0\thttps://stefanprodan.github.io/podinfo' "$actual" 'inline HelmRepository chart'
 IFS=$'\t' read -r inline_chart inline_version inline_repo <<< "$actual"
 $helm_template_retry --output "${tmpdir}/inline-render.yaml" -- \
   template inline-test "$inline_chart" --version "$inline_version" --repo "$inline_repo"

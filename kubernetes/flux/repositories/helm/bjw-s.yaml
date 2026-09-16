@@ -6,4 +6,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 30m
-  url: https://bjw-s-labs.github.io/helm-charts
+  # Preserve retained HelmChart and dormant HelmRelease references without
+  # depending on the upstream GitHub Pages index or changing chart versions.
+  type: oci
+  url: oci://ghcr.io/bjw-s-labs/helm

@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: mosquitto-home-assistant-clients-v4
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   backoffLimit: 6
   activeDeadlineSeconds: 600
@@ -21,7 +23,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
       - name: provision
-        image: docker.io/library/eclipse-mosquitto:2.1.2-alpine@sha256:6f8d8a947c506f8a2290ec65cd4bd2bc7cb4d43fb5f6271f861cb013e2ef9797
+        image: docker.io/library/eclipse-mosquitto:2.1.2-alpine@sha256:38c0da4f2ef84284d47b3b3eeea1cb3bdeabe81ee10caf0cd5c5ff61ee3ea408
         command: ["/bin/sh", "/scripts/provision-ha-clients.sh"]
         env:
         - name: MQTT_HOST

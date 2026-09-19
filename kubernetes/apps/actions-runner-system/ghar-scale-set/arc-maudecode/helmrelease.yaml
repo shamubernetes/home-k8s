@@ -28,7 +28,8 @@ spec:
     githubConfigSecret: ghar-set-maudecode-secret
     githubConfigUrl: https://github.com/MaudeCode
     minRunners: 0
-    maxRunners: 2
+    # Serialize dind churn after saturation recurred with two spread runners.
+    maxRunners: 1
     containerMode:
       type: dind
     template:

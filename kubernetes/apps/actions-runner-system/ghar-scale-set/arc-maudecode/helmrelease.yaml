@@ -41,6 +41,11 @@ spec:
                 - matchExpressions:
                     - key: node-role.kubernetes.io/control-plane
                       operator: DoesNotExist
+                    # Rhea's degraded SATA link saturates even with one runner.
+                    - key: kubernetes.io/hostname
+                      operator: NotIn
+                      values:
+                        - k8s-rhea
         topologySpreadConstraints:
           - maxSkew: 1
             topologyKey: kubernetes.io/hostname

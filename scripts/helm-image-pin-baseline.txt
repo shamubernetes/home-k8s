@@ -4,7 +4,6 @@
 actions-runner-system/ghar-controller/app	ghcr.io/actions/gha-runner-scale-set-controller:0.14.2
 actions-runner-system/ghar-scale-set/arc-maudecode	docker:dind
 actions-runner-system/ghar-scale-set/arc-zoo	docker:dind
-database/mariadb-operator/app	ghcr.io/mariadb-operator/mariadb-operator:26.6.0
 games/minecraft-stoneblock4/app	itzg/mc-backup:latest
 games/minecraft-stoneblock4/app	itzg/minecraft-server:latest
 kube-system/descheduler/app	registry.k8s.io/descheduler/descheduler:v0.36.0

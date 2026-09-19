@@ -323,7 +323,7 @@ spec:
       name: n8n-api-key
       key: api-key
   workflowName: "Codex Usage PagerDuty"
-  active: true
+  active: false
   deletionPolicy: Retain
   sourceRef:
     kind: ConfigMap

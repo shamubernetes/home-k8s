@@ -20,6 +20,13 @@ spec:
     crds:
       enabled: false
     currentNamespaceOnly: false
+    image:
+      tag: 26.10.0@sha256:3be6c0fb8094e67f9d65eebfb240cd89741098632c1ed69c281445a39621562c
+    config:
+      mariadbImage:
+        tag: 12.3.3@sha256:805c8e104bd563d5bfa24fadd3f31cd419ea859cb5277f32b5dbf2db714f9ed1
+      maxscaleImage:
+        tag: 23.08.13-2@sha256:166f6e0b95f318cdc82eeddf516557a96b2ed06768f2ff2d49a0874503503020
     metrics:
       enabled: false
     resources:
@@ -29,6 +36,8 @@ spec:
       limits:
         memory: 384Mi
     webhook:
+      image:
+        tag: 26.10.0@sha256:3be6c0fb8094e67f9d65eebfb240cd89741098632c1ed69c281445a39621562c
       cert:
         certManager:
           enabled: true

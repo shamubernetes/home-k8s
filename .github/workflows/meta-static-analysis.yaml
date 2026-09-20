@@ -147,6 +147,7 @@ jobs:
         scripts/tests/test-firecrawl-promotion.sh
         scripts/tests/test-helm-image-inventory.sh
         scripts/tests/test-k8s-schemas.sh
+        bash scripts/tests/test-arc-capacity.sh
         scripts/tests/test-talos-arc-boundary.sh
         scripts/tests/test-oci-source-handoffs.sh
         scripts/tests/test-protected-app-envoy-oidc.sh

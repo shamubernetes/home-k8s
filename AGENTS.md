@@ -197,6 +197,15 @@ Prefer existing shared data platforms before adding embedded sidecars or app-loc
 - Keep browser-facing presigned URLs on a hostname the browser can reach, not an in-cluster service DNS name.
 - Store S3 credentials in 1Password and expose through `ExternalSecret`.
 
+## ARC Runner Capacity
+
+`ghar-set-zoo` and `ghar-set-maudecode` must keep `maxRunners` at least 8.
+Keep `minRunners: 0`; the separate Talos runner set is not part of this rule.
+Never lower these maximums, serialize workflows, cancel legitimate queued jobs,
+or throttle job producers as a workaround for disk saturation. Diagnose and
+repair the storage, I/O path, or demonstrated workload defect instead. Only an
+explicit owner instruction may change this capacity requirement.
+
 ## Talos Configuration
 
 - Main config: `talos/talconfig.yaml`

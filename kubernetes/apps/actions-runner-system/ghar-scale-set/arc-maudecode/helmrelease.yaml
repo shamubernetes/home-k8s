@@ -28,8 +28,9 @@ spec:
     githubConfigSecret: ghar-set-maudecode-secret
     githubConfigUrl: https://github.com/MaudeCode
     minRunners: 0
-    # Serialize dind churn after saturation recurred with two spread runners.
-    maxRunners: 1
+    # Capacity floor: never lower below 8 or serialize jobs for disk saturation.
+    # Repair the storage/I/O cause instead; changing this requires owner approval.
+    maxRunners: 8
     containerMode:
       type: dind
     template:

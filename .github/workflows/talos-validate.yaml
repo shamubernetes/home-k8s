@@ -26,9 +26,13 @@ jobs:
     - name: Install tools
       uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
       with:
-        install_args: task talosctl github:budimanjojo/talhelper
+        install_args: task talosctl github:budimanjojo/talhelper helm yq
         cache: true
         fetch_from_github: false
+
+    # Keep the capacity contract in this branch-protected job.
+    - name: Check ARC capacity floors
+      run: bash scripts/tests/test-arc-capacity.sh
 
     - name: Check coordinated Talos target
       run: scripts/check-talos-version-sync

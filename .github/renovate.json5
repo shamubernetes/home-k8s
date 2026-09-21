@@ -24,6 +24,13 @@
       enabled: false,
     },
     {
+      description: "Freeze Firecrawl schema helper digest after registry oscillation",
+      matchManagers: ["helm-values", "kubernetes"],
+      matchFileNames: ["kubernetes/apps/tools/firecrawl/app/init-nuq-schema-job.yaml"],
+      matchPackageNames: ["docker.io/library/postgres"],
+      enabled: false,
+    },
+    {
       description: "Helmfile OCI charts do not support synthesized digest fields",
       matchManagers: ["helmfile"],
       matchFileNames: ["talos/helmfile.yaml"],

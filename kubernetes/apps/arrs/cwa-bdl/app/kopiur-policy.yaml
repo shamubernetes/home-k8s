@@ -106,6 +106,13 @@ spec:
         timeout: 2m
         continueOnFailure: false
   mover:
+    # Root with drop: ALL cannot read the app UID's private 0600 files.
+    # Read/search only: do not grant DAC_OVERRIDE or change source permissions.
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+        add: [DAC_READ_SEARCH]
     podSecurityContext:
       runAsUser: 0
       runAsGroup: 0

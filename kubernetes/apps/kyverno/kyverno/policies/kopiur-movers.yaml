@@ -45,6 +45,15 @@ spec:
               - seerr
               - seerr-nas-smb
               - seerr-r2
+              - cwa-bdl
+              - cwa-bdl-nas-smb
+              - cwa-bdl-r2
+              - sabnzbd
+              - sabnzbd-nas-smb
+              - sabnzbd-r2
+              - listenarr
+              - listenarr-nas-smb
+              - listenarr-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -79,6 +88,12 @@ spec:
               - profilarr-r2
               - seerr-nas-smb
               - seerr-r2
+              - cwa-bdl-nas-smb
+              - cwa-bdl-r2
+              - sabnzbd-nas-smb
+              - sabnzbd-r2
+              - listenarr-nas-smb
+              - listenarr-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -117,6 +132,9 @@ spec:
               - changedetection-nas-to-r2
               - profilarr-nas-to-r2
               - seerr-nas-to-r2
+              - cwa-bdl-nas-to-r2
+              - sabnzbd-nas-to-r2
+              - listenarr-nas-to-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -141,6 +159,9 @@ spec:
               - changedetection
               - profilarr
               - seerr
+              - cwa-bdl
+              - sabnzbd
+              - listenarr
     mutate:
       patchStrategicMerge:
         spec:

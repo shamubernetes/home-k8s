@@ -25,7 +25,7 @@ spec:
           app:
             image:
               repository: docker.io/searxng/searxng
-              tag: latest@sha256:98a7ef5023169bb67a0782a4d36a8347d461d140426712bff92b016c90afea2d
+              tag: latest@sha256:4109ebf36dc291931c5b43f5ee451c517085255aecfa71f8ffae21000ce5c5fa
             env:
               SEARXNG_BASE_URL: https://searxng.${HOME_DOMAIN}
               SEARXNG_BIND_ADDRESS: 0.0.0.0

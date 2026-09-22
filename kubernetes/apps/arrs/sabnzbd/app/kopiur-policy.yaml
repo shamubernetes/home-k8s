@@ -1,0 +1,175 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: sabnzbd
+spec:
+  repository:
+    kind: Repository
+    name: sabnzbd-nas-smb
+  identity:
+    username: sabnzbd
+    hostname: arrs
+  sources:
+  - pvc:
+      name: sabnzbd
+    sourcePathOverride: /pvc/sabnzbd
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: sabnzbd
+            app.kubernetes.io/controller: sabnzbd
+        container: app
+        command:
+        - python3
+        - -c
+        - |
+          ROOT = '/config'
+          DATABASE = 'admin/history1.db'
+          REQUIRED_FILES = ['sabnzbd.ini']
+          import contextlib
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import sqlite3
+          import tempfile
+          import time
+
+          root = Path(ROOT)
+          source = root / DATABASE
+          for relative in [DATABASE, *REQUIRED_FILES]:
+              path = root / relative
+              if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+                  raise RuntimeError("required application state missing or unsafe: " + relative)
+              if path.suffix == ".json":
+                  with path.open() as handle:
+                      json.load(handle)
+
+          backup_dir = root / ".kopiur-consistent"
+          if backup_dir.is_symlink():
+              raise RuntimeError("unsafe consistent-backup directory")
+          backup_dir.mkdir(mode=0o700, exist_ok=True)
+          os.chmod(backup_dir, 0o700)
+          deadline = time.monotonic() + 90
+
+          def progress(status, remaining, total):
+              if time.monotonic() > deadline:
+                  raise TimeoutError("SQLite backup exceeded 90 seconds")
+
+          fd, temporary = tempfile.mkstemp(prefix="database-", suffix=".tmp", dir=backup_dir)
+          os.close(fd)
+          try:
+              with contextlib.closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=5)) as origin:
+                  with contextlib.closing(sqlite3.connect(temporary)) as destination:
+                      origin.backup(destination, pages=256, progress=progress, sleep=0.1)
+                      destination.execute("PRAGMA journal_mode=DELETE")
+                      if destination.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                          raise RuntimeError("consistent SQLite backup failed integrity_check")
+              with open(temporary, "rb") as handle:
+                  os.fsync(handle.fileno())
+                  digest = hashlib.file_digest(handle, "sha256").hexdigest() if hasattr(hashlib, "file_digest") else hashlib.sha256(handle.read()).hexdigest()
+              os.replace(temporary, backup_dir / "database.sqlite3")
+              manifest = {"version": 1, "database": DATABASE, "sha256": digest, "integrity_check": "ok"}
+              fd, manifest_tmp = tempfile.mkstemp(prefix="manifest-", suffix=".tmp", dir=backup_dir)
+              try:
+                  with os.fdopen(fd, "w") as handle:
+                      json.dump(manifest, handle, sort_keys=True)
+                      handle.flush()
+                      os.fsync(handle.fileno())
+                  os.replace(manifest_tmp, backup_dir / "manifest.json")
+              finally:
+                  if os.path.exists(manifest_tmp):
+                      os.unlink(manifest_tmp)
+              directory_fd = os.open(backup_dir, os.O_RDONLY)
+              try:
+                  os.fsync(directory_fd)
+              finally:
+                  os.close(directory_fd)
+          finally:
+              for suffix in ["", "-wal", "-shm", "-journal"]:
+                  if os.path.exists(temporary + suffix):
+                      os.unlink(temporary + suffix)
+          print("consistent SQLite recovery copy verified")
+        timeout: 2m
+        continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: 10 10 * * *
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 10 11 * * 0
+        jitter: 1h
+      capacity: 3Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.files > 0 && stats.errors == 0
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: sabnzbd-daily
+spec:
+  policyRef:
+    name: sabnzbd
+  schedule:
+    cron: 10 2 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: sabnzbd-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: sabnzbd-nas-smb
+  destinationRef:
+    kind: Repository
+    name: sabnzbd-r2
+  schedule:
+    cron: 10 8 * * *
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: sabnzbd
+        hostname: arrs
+        sourcePath: /pvc/sabnzbd
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

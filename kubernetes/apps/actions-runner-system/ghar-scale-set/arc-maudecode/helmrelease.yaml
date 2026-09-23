@@ -56,8 +56,8 @@ spec:
                 actions.github.com/scale-set-name: ghar-set-maudecode
         containers:
           - name: runner
-            # home-operations runner plus the MaudeCode CI toolchain (zsh, node-pty build tools, Ruby, Compose).
-            image: ghcr.io/shamubernetes/actions-runner:2.337.0@sha256:0e9288d68342f7640cc5709650037a6accb1cb0fd742564f5a04c50a232c142f
+            # home-operations runner plus the MaudeCode CI toolchain and a preloaded Node/Python/Ruby tool cache.
+            image: ghcr.io/shamubernetes/actions-runner:2.337.0@sha256:544a35cdaf65125f67b711040a14c9e865350ba3e75da5b70d7e9c1091f8fe2e
             command: ["/home/runner/run.sh"]
             env:
               - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER

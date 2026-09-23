@@ -17,6 +17,12 @@
       pinDigests: false,
     },
     {
+      description: "Cloudflare Wrangler Action v4.1.1 is missing its built entrypoint",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["cloudflare/wrangler-action"],
+      allowedVersions: "!=4.1.1",
+    },
+    {
       description: "Plane auth helper image is coupled to the chart planeVersion",
       matchManagers: ["kubernetes"],
       matchFileNames: ["kubernetes/apps/services/plane/app/helmrelease.yaml"],

@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.35.0-standalone-strict/service-v1.json
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage-admin
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http

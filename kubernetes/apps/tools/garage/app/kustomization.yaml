@@ -5,3 +5,6 @@ resources:
 - ./service.yaml
 - ./endpointslice.yaml
 - ./httproute-envoy.yaml
+- ./service-s3.yaml
+- ./endpointslice-s3.yaml
+- ./httproute-s3.yaml

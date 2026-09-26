@@ -78,7 +78,8 @@ spec:
         runAsUser: 568
         runAsGroup: 568
         fsGroup: 568
-        fsGroupChangePolicy: OnRootMismatch
+        # Nested stream mounts can create root-owned directories on the config volume.
+        fsGroupChangePolicy: Always
         seccompProfile: {type: RuntimeDefault}
     service:
       app:

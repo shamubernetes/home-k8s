@@ -37,8 +37,7 @@ jobs:
       K8S_AUTH_KUBECONFIG: /dev/null
       TALOSCONFIG: /dev/null
       SOPS_AGE_KEY_FILE: /dev/null
-      TMPDIR: ${{ runner.temp }}
-      MISE_TRUSTED_CONFIG_PATHS: ${{ runner.temp }}/recovery-tools
+
     steps:
     - name: Validate dispatch before checkout
       env:
@@ -62,6 +61,8 @@ jobs:
         done < "$RUNNER_TEMP/recovery-heads"
         [[ $found == true ]] || { echo 'Commit is not a repository branch tip' >&2; exit 1; }
         mkdir -p "$RUNNER_TEMP/recovery-tools"
+        printf 'TMPDIR=%s\nMISE_TRUSTED_CONFIG_PATHS=%s/recovery-tools\n' \
+          "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
 
     - name: Checkout exact candidate
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,7 +78,7 @@ jobs:
       run: |
         set -euo pipefail
         [[ $(git rev-parse HEAD) == "$COMMIT" ]]
-        printf 'Candidate: `%s`\n' "$COMMIT" >> "$GITHUB_STEP_SUMMARY"
+        printf 'Candidate: %s\n' "$COMMIT" >> "$GITHUB_STEP_SUMMARY"
 
     # Keep tooling outside the candidate checkout. Do not load its Mise hooks,
     # credential paths or unrelated tools. Export real bin paths, not Mise shims.
@@ -96,7 +97,9 @@ jobs:
           helm = "4.3.0"
           jq = "1.8.2"
           flux2 = "2.9.5"
-        cache: false
+        cache: true
+        cache_key_prefix: recovery-tunarr-v1
+        fetch_from_github: false
         github_token: ""
         env: true
         add_shims_to_path: false
@@ -113,7 +116,9 @@ jobs:
           python = "3.14.7"
           yq = "4.53.6"
           kyverno = "1.19.1"
-        cache: false
+        cache: true
+        cache_key_prefix: recovery-deadlines-v1
+        fetch_from_github: false
         github_token: ""
         env: true
         add_shims_to_path: false

@@ -26,6 +26,9 @@ spec:
           pluginConfig:
             - name: DefaultEvictor
               args:
+                # Makes the prefer-no-eviction pod annotation binding. Don't use
+                # descheduler.alpha.kubernetes.io/evict: its presence forces eviction.
+                noEvictionPolicy: Mandatory
                 podProtections:
                   defaultDisabled:
                     - FailedBarePods

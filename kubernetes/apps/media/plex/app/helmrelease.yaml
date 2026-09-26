@@ -136,7 +136,7 @@ spec:
       labels:
         titans/network-intensive: "true"
       annotations:
-        descheduler.alpha.kubernetes.io/evict: "false"
+        descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

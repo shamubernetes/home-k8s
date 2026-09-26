@@ -139,6 +139,67 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+  - name: cap-media-kopiur-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["media"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/config
+              operator: In
+              values: ["kometa", "kometa-nas-smb", "kometa-r2", "audiobookshelf", "audiobookshelf-nas-smb", "audiobookshelf-r2"]
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["media"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/maintenance
+              operator: In
+              values: ["kometa-nas-smb", "kometa-r2", "audiobookshelf-nas-smb", "audiobookshelf-r2"]
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["media"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/snapshot-replication
+              operator: In
+              values: ["kometa-nas-to-r2", "audiobookshelf-nas-to-r2"]
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["media"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/verify
+              operator: In
+              values: ["kometa", "audiobookshelf"]
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
+  - name: cap-media-kopiur-snapshot-delete-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["media"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+              kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
   - name: cap-low-risk-kopiur-verification-movers
     match:
       any:

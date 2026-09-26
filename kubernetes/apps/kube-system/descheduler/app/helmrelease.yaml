@@ -51,6 +51,11 @@ spec:
                   - requiredDuringSchedulingIgnoredDuringExecution
             - name: RemovePodsViolatingNodeTaints
             - name: RemovePodsViolatingTopologySpreadConstraint
+              args:
+                # ARC runners are single-job pods; rebalancing only kills running CI jobs.
+                namespaces:
+                  exclude:
+                    - actions-runner-system
           plugins:
             balance:
               enabled:

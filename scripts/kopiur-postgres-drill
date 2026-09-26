@@ -128,8 +128,9 @@ class DockerDrill:
 
     def database(self, name, databases):
         container = self.start(name, PG_IMAGE, env={"POSTGRES_PASSWORD": self.password, "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"})
+        # The entrypoint's temporary init server is socket-only; wait for final TCP startup.
         for _ in range(90):
-            if run("docker", "exec", container, "pg_isready", "-U", "postgres", check=False).returncode == 0:
+            if run("docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", check=False).returncode == 0:
                 break
             time.sleep(1)
         else:

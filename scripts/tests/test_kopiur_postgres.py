@@ -6,6 +6,7 @@ import runpy
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from test_kopiur_sqlite_cohort import load_documents, REPO
 
@@ -65,6 +66,50 @@ class ManifestTests(unittest.TestCase):
                 for secret in secrets:
                     self.assertEqual(secret["spec"]["dataFrom"], [{"extract": {"key": "kopiur-" + app}}])
                 self.assertNotIn("SUPER", json.dumps(secrets))
+
+
+class DatabaseStartupTests(unittest.TestCase):
+    def test_socket_only_init_server_does_not_trigger_provisioning(self):
+        drill = MODULE["DockerDrill"]("whisparr")
+        container = "fixture-postgres"
+        final_server = False
+        operations = mock.Mock()
+        operations.start.return_value = container
+
+        def readiness(*args, **kwargs):
+            # Socket probes succeed even during init; TCP only after the final start.
+            tcp = "-h" in args and args[args.index("-h") + 1] == "127.0.0.1"
+            return subprocess.CompletedProcess(args, 0 if final_server or not tcp else 2)
+
+        def finish_init(seconds):
+            nonlocal final_server
+            final_server = True
+
+        operations.run.side_effect = readiness
+        operations.sleep.side_effect = finish_init
+        # runpy's returned mapping is not the function's live globals dictionary.
+        with mock.patch.dict(drill.database.__globals__, {"run": operations.run}), \
+             mock.patch.object(MODULE["time"], "sleep", operations.sleep), \
+             mock.patch.object(drill, "start", operations.start), \
+             mock.patch.object(drill, "sql", operations.sql):
+            result = drill.database("source-db", drill.databases)
+
+        self.assertEqual(result, container)
+        probe = mock.call.run("docker", "exec", container, "pg_isready", "-h", "127.0.0.1",
+                              "-U", "postgres", check=False)
+        self.assertEqual(operations.mock_calls, [
+            mock.call.start("source-db", MODULE["PG_IMAGE"], env={
+                "POSTGRES_PASSWORD": drill.password,
+                "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256",
+            }),
+            probe,
+            mock.call.sleep(1),
+            probe,
+            mock.call.sql(container, f"CREATE ROLE app LOGIN PASSWORD '{drill.password}';\n"
+                          f"CREATE ROLE backup LOGIN PASSWORD '{drill.backup_password}';"),
+            mock.call.sql(container, 'CREATE DATABASE "whisparrv3_main" OWNER app;'),
+            mock.call.sql(container, 'CREATE DATABASE "whisparrv3_logs" OWNER app;'),
+        ])
 
 
 class ConfigTests(unittest.TestCase):

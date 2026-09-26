@@ -20,7 +20,9 @@ spec:
       retries: 3
   values:
     installScope: cluster
-    replicaCount: 2
+    # 0.10.10 continues reconciling without election after a Lease 403.
+    # Keep one writer until upstream fails closed; webhook HA is unchanged.
+    replicaCount: 1
     priorityClassName: system-cluster-critical
     podDisruptionBudget:
       enabled: true

@@ -754,7 +754,7 @@ def active_owned_silences(cluster):
     return list(found.values())
 
 
-def unsilenced_blockers(cluster, allowed_alerts=None):
+def unsilenced_blockers(cluster, allowed_alerts=None, include_suppressed=False):
     allowed_alerts = allowed_alerts or []
     blockers = {}
     allowed = {}
@@ -763,9 +763,8 @@ def unsilenced_blockers(cluster, allowed_alerts=None):
             status = alert.get("status", {})
             labels = alert.get("labels", {})
             if (
-                status.get("state") == "active"
+                (include_suppressed or (status.get("state") == "active" and not status.get("silencedBy")))
                 and labels.get("severity") in {"warning", "critical"}
-                and not status.get("silencedBy")
                 and labels.get("alertname") not in EXCLUDED_ALERTS
             ):
                 item = compact_alert(alert)
@@ -880,17 +879,35 @@ def expire_silence(cluster, silence_id):
     )
 
 
-def begin(cluster, reason, duration, allowed_alerts=None):
+def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=None):
     with begin_lock() as lock:
         lock.assert_healthy()
         peers = cluster.require_healthy()
         existing = active_owned_silences(cluster)
-        if existing:
-            ids = ", ".join(silence.get("id", "unknown") for silence in existing)
+        approved = set(independent_silences or [])
+        existing_ids = {silence.get("id", "unknown") for silence in existing}
+        if approved - existing_ids:
+            raise MaintenanceError("independent silence IDs must identify active maintenance windows")
+        concurrent = []
+        for silence_id in sorted(approved):
+            silences = owned_silences(cluster, silence_id, canonical=True)
+            if not silences or any(s.get("status", {}).get("state") != "active" for _, s in silences):
+                raise MaintenanceError(f"independent silence {silence_id} is not active on every member")
+            definitions = {json.dumps(mutable_silence(s), sort_keys=True) for _, s in silences}
+            if len(definitions) != 1:
+                raise MaintenanceError(f"independent silence {silence_id} differs between members")
+            verified = silences[0][1]
+            concurrent.append({"silenceId": silence_id,
+                               "reason": verified["comment"][len(COMMENT_PREFIX):],
+                               "endsAt": verified["endsAt"]})
+        if existing_ids - approved:
+            ids = ", ".join(sorted(existing_ids - approved))
             raise MaintenanceError(
                 f"an owned maintenance silence is already active ({ids}); renew or end it explicitly"
             )
-        blockers, allowed = unsilenced_blockers(cluster, allowed_alerts)
+        blockers, allowed = unsilenced_blockers(
+            cluster, allowed_alerts, include_suppressed=bool(approved)
+        )
         if blockers:
             names = ", ".join(item["alertname"] for item in blockers)
             raise MaintenanceError(
@@ -929,10 +946,11 @@ def begin(cluster, reason, duration, allowed_alerts=None):
             "coveredAlertNames": covered,
             "excludedAlerts": excluded,
             "allowedBaselineAlerts": allowed,
+            "independentMaintenance": concurrent,
         }
 
 
-def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None):
+def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None, independent_silences=None):
     if load_state(required=False):
         raise MaintenanceError(
             f"maintenance state already exists at {state_path()}; end or repair it explicitly"
@@ -940,7 +958,7 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
     notice_id = status_api.begin_notice(reason) if status_api else None
     silence_id = None
     try:
-        result = begin(cluster, reason, duration, allowed_alerts)
+        result = begin(cluster, reason, duration, allowed_alerts, independent_silences)
         silence_id = result["silenceId"]
         write_state(
             {
@@ -950,6 +968,7 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
                 "startedAt": result["startsAt"],
                 "endsAt": result["endsAt"],
                 "allowedActiveAlerts": allowed_alerts or [],
+                "independentMaintenance": result["independentMaintenance"],
             }
         )
     except Exception as action_error:
@@ -1352,6 +1371,12 @@ def build_parser():
             "repeatable and must include alertname plus a scoping label"
         ),
     )
+    begin_parser.add_argument(
+        "--independent-silence", action="append", default=[], metavar="ID",
+        help=("acknowledge one exact active maintenance window whose scope is independently "
+              "verified not to overlap this operation; repeat for every concurrent window; "
+              "requires a separate MAINTENANCE_STATE_FILE and never modifies those windows"),
+    )
     renew_parser = subparsers.add_parser("renew", help="extend an active owned silence")
     renew_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
     renew_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
@@ -1391,6 +1416,7 @@ def main():
                     args.duration,
                     args.allow_active_alert,
                     StatusApi() if args.public_status else None,
+                    args.independent_silence,
                 )
             elif args.command == "renew":
                 result = coordinated_renew(cluster, args.id, args.duration)

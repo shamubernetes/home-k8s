@@ -10,6 +10,10 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
+  - name: kopiur
+  - name: snapshot-controller
+  - name: rook-ceph-cluster
+  - name: volsync
   - name: external-secrets-secret-store
   - name: elasticsearch
   - name: dragonfly-cluster
@@ -19,6 +23,23 @@ spec:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
+  healthChecks:
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: tubearchivist-kopiur-nas
+    namespace: media
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: tubearchivist-kopiur-r2
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: tubearchivist-nas-smb
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: tubearchivist-r2
+    namespace: media
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

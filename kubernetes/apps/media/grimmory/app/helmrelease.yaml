@@ -137,6 +137,14 @@ spec:
           http:
             port: *port
     persistence:
+      backup-contract:
+        type: configMap
+        name: grimmory-backup-contract
+        advancedMounts:
+          grimmory:
+            mariadb:
+            - path: /backup-contract
+              readOnly: true
       config:
         existingClaim: *app
         advancedMounts:

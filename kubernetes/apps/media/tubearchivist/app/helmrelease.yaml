@@ -94,6 +94,14 @@ spec:
           http:
             port: *port
     persistence:
+      backup-contract:
+        type: configMap
+        name: tubearchivist-backup-contract
+        advancedMounts:
+          tubearchivist:
+            app:
+            - path: /backup-contract
+              readOnly: true
       cache:
         existingClaim: *app
         globalMounts:

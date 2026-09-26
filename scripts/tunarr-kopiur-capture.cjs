@@ -1,0 +1,168 @@
+// Embedded verbatim in Tunarr's beforeSnapshot hook. Tests enforce equality.
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const {DatabaseSync, backup} = require('node:sqlite');
+const ROOT = '/config/tunarr';
+const DEADLINE_MS = 90000;
+const started = performance.now();
+function deadline() { if (performance.now() - started >= DEADLINE_MS) throw Error('deadline'); }
+const VERSIONS = ['', 'stable-1.3'];
+process.umask(0o077);
+const directory = path.join(ROOT, '.kopiur-consistent');
+const generation = crypto.randomBytes(16).toString('hex');
+let locked = false;
+let timer;
+function safe(p, type) {
+  const s = fs.lstatSync(p);
+  if (s.isSymbolicLink() || !(type === 'dir' ? s.isDirectory() : s.isFile())) throw Error('unsafe state');
+  return s;
+}
+function sync(p) {
+  const fd = fs.openSync(p, 'r');
+  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+function publish(name, value) {
+  const tmp = path.join(directory, name + '.' + generation);
+  fs.writeFileSync(tmp, JSON.stringify(value), {flag: 'wx', mode: 0o600});
+  sync(tmp);
+  fs.renameSync(tmp, path.join(directory, name));
+  sync(directory);
+}
+function digest(p) { deadline(); return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
+function fail() {
+  if (locked) {
+    try { publish('attempt.json', {generation, state: 'failed'}); } catch {}
+  }
+  console.error('Tunarr consistent capture failed');
+  process.exit(1);
+}
+process.on('uncaughtException', fail);
+process.on('unhandledRejection', fail);
+process.on('SIGTERM', fail);
+process.on('SIGINT', fail);
+process.on('exit', () => {
+  if (locked) fs.rmdirSync(path.join(directory, 'lock'));
+});
+function files(root, relative) {
+  const p = path.join(root, relative);
+  const st = fs.lstatSync(p);
+  if (st.isSymbolicLink()) throw Error('symlink');
+  if (st.isFile()) return [relative];
+  if (!st.isDirectory()) throw Error('special file');
+  return fs.readdirSync(p).sort().flatMap(n => files(root, path.join(relative, n)));
+}
+function companions(root) {
+  safe(path.join(root, 'settings.json'), 'file');
+  const settings = JSON.parse(fs.readFileSync(path.join(root, 'settings.json')));
+  if (!settings.settings || !settings.system) throw Error('invalid settings');
+  for (const dir of ['channel-lineups', 'images']) safe(path.join(root, dir), 'dir');
+  const names = ['settings.json', ...files(root, 'channel-lineups'), ...files(root, 'images')];
+  const result = {};
+  for (const n of names) {
+    if (n.startsWith('channel-lineups/')) {
+      if (!/^[0-9a-f-]{36}\.json$/.test(path.basename(n))) throw Error('unknown lineup file');
+      if (!Array.isArray(JSON.parse(fs.readFileSync(path.join(root, n))).items)) throw Error('invalid lineup');
+    }
+    result[n] = digest(path.join(root, n));
+  }
+  return result;
+}
+function counts(db) {
+  return Object.fromEntries(db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all()
+    .map(({name}) => [name, db.prepare('SELECT COUNT(*) n FROM "' + name.replaceAll('"', '""') + '"').get().n]));
+}
+async function main() {
+  safe(ROOT, 'dir');
+  if (!fs.existsSync(directory)) fs.mkdirSync(directory, {mode: 0o700});
+  safe(directory, 'dir');
+  fs.chmodSync(directory, 0o700);
+  fs.mkdirSync(path.join(directory, 'lock'), {mode: 0o700});
+  locked = true;
+  timer = setTimeout(fail, DEADLINE_MS);
+  publish('attempt.json', {generation, state: 'running'});
+  let previous;
+  if (fs.existsSync(path.join(directory, 'manifest.json'))) {
+    safe(path.join(directory, 'manifest.json'), 'file');
+    previous = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'))).generation;
+    if (!/^[a-f0-9]{32}$/.test(previous)) throw Error('invalid previous generation');
+  }
+  for (const n of fs.readdirSync(directory)) {
+    if (/^capture-[a-f0-9]{32}$/.test(n) && n !== 'capture-' + previous) {
+      safe(path.join(directory, n), 'dir');
+      fs.rmSync(path.join(directory, n), {recursive: true});
+    }
+  }
+  const output = path.join(directory, 'capture-' + generation);
+  fs.mkdirSync(output, {mode: 0o700});
+  const records = [];
+  for (const version of VERSIONS) {
+    const source = path.join(ROOT, version);
+    safe(source, 'dir');
+    const before = companions(source);
+    const dest = path.join(output, version || 'retained-2026.9');
+    fs.mkdirSync(dest, {mode: 0o700});
+    for (const dir of ['channel-lineups', 'images']) fs.mkdirSync(path.join(dest, dir), {mode: 0o700});
+    for (const [name, hash] of Object.entries(before)) {
+      const target = path.join(dest, name);
+      fs.mkdirSync(path.dirname(target), {recursive: true, mode: 0o700});
+      fs.copyFileSync(path.join(source, name), target, fs.constants.COPYFILE_EXCL);
+      fs.chmodSync(target, 0o600);
+      if (digest(target) !== hash) throw Error('changed companion');
+      sync(target);
+    }
+    const dbfile = path.join(source, 'db.db');
+    if (safe(dbfile, 'file').size === 0) throw Error('empty database');
+    const origin = new DatabaseSync(dbfile, {readOnly: true});
+    try { await backup(origin, path.join(dest, 'db.db'), {rate: 256}); }
+    finally { origin.close(); }
+    const db = new DatabaseSync(path.join(dest, 'db.db'));
+    let totals;
+    try {
+      db.exec('PRAGMA journal_mode=DELETE');
+      const integrity = db.prepare('PRAGMA integrity_check').all();
+      if (integrity.length !== 1 || integrity[0].integrity_check !== 'ok') throw Error('integrity');
+      if (db.prepare('PRAGMA foreign_key_check').all().length) throw Error('foreign keys');
+      totals = counts(db);
+      if (!['channel', 'program', 'channel_programs', 'program_media_file', 'media_source'].every(n => n in totals)) throw Error('wrong schema');
+      const channels = db.prepare('SELECT uuid, duration FROM channel ORDER BY uuid').all();
+      const lineups = Object.keys(before).filter(n => n.startsWith('channel-lineups/')).map(n => path.basename(n, '.json')).sort();
+      if (JSON.stringify(channels.map(r => r.uuid)) !== JSON.stringify(lineups)) throw Error('channel/lineup mismatch');
+      const ids = new Set(db.prepare('SELECT uuid FROM program').all().map(r => r.uuid));
+      const membership = db.prepare('SELECT DISTINCT program_uuid FROM channel_programs WHERE channel_uuid = ? ORDER BY program_uuid');
+      for (const {uuid: id, duration} of channels) {
+        const lineup = JSON.parse(fs.readFileSync(path.join(dest, 'channel-lineups', id + '.json')));
+        const content = new Set();
+        let totalDuration = 0;
+        for (const item of lineup.items) {
+          if (!item || !['content', 'offline', 'redirect'].includes(item.type) ||
+              !Number.isFinite(item.durationMs) || item.durationMs <= 0) throw Error('invalid lineup item');
+          totalDuration += item.durationMs;
+          if (item.type === 'content') {
+            if (!ids.has(item.id)) throw Error('missing lineup program');
+            content.add(item.id);
+          }
+        }
+        // Both pinned runtimes commit SQL before saving JSON. Stable hashes alone
+        // miss that gap. SQL stores distinct content IDs and ALL item durations,
+        // including repeated content, offline and redirect entries.
+        if (JSON.stringify([...content].sort()) !== JSON.stringify(membership.all(id).map(r => r.program_uuid))) throw Error('lineup membership mismatch');
+        if (!Number.isFinite(totalDuration) || totalDuration !== duration) throw Error('lineup duration mismatch');
+      }
+    } finally { db.close(); }
+    if (JSON.stringify(before) !== JSON.stringify(companions(source))) throw Error('companions changed');
+    fs.chmodSync(path.join(dest, 'db.db'), 0o600);
+    sync(path.join(dest, 'db.db'));
+    const hashes = {...before, 'db.db': digest(path.join(dest, 'db.db'))};
+    for (const d of ['channel-lineups', 'images', '']) sync(path.join(dest, d));
+    records.push({source: version, artifact: path.basename(dest), counts: totals, files: hashes});
+  }
+  sync(output);
+  deadline();
+  publish('manifest.json', {version: 3, generation, completed_at: Date.now() / 1000, records});
+  publish('attempt.json', {generation, state: 'complete'});
+  clearTimeout(timer);
+  console.log('Tunarr dual-version recovery capture verified');
+}
+main().catch(fail);

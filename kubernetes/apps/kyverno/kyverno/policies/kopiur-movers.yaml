@@ -139,6 +139,78 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+  - name: cap-arr-database-kopiur-movers
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["arrs"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/config
+              operator: In
+              values:
+              - bazarr
+              - bazarr-nas-smb
+              - bazarr-r2
+              - radarr
+              - radarr-nas-smb
+              - radarr-r2
+              - radarr-3d
+              - radarr-3d-nas-smb
+              - radarr-3d-r2
+              - sonarr
+              - sonarr-nas-smb
+              - sonarr-r2
+              - whisparr
+              - whisparr-nas-smb
+              - whisparr-r2
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["arrs"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/maintenance
+              operator: In
+              values:
+              - bazarr-nas-smb
+              - bazarr-r2
+              - radarr-nas-smb
+              - radarr-r2
+              - radarr-3d-nas-smb
+              - radarr-3d-r2
+              - sonarr-nas-smb
+              - sonarr-r2
+              - whisparr-nas-smb
+              - whisparr-r2
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["arrs"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/snapshot-replication
+              operator: In
+              values: ["bazarr-nas-to-r2", "radarr-nas-to-r2", "radarr-3d-nas-to-r2", "sonarr-nas-to-r2", "whisparr-nas-to-r2"]
+      - resources:
+          kinds: ["batch/v1/Job"]
+          namespaces: ["arrs"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/verify
+              operator: In
+              values: ["bazarr", "radarr", "radarr-3d", "sonarr", "whisparr"]
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
   - name: cap-media-kopiur-movers
     match:
       any:
@@ -151,7 +223,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/config
               operator: In
-              values: ["kometa", "kometa-nas-smb", "kometa-r2", "audiobookshelf", "audiobookshelf-nas-smb", "audiobookshelf-r2", "tunarr", "tunarr-nas-smb", "tunarr-r2"]
+              values: ["kometa", "kometa-nas-smb", "kometa-r2", "audiobookshelf", "audiobookshelf-nas-smb", "audiobookshelf-r2", "tunarr", "tunarr-nas-smb", "tunarr-r2", "grimmory", "grimmory-nas-smb", "grimmory-r2", "tubearchivist", "tubearchivist-nas-smb", "tubearchivist-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["media"]
@@ -161,7 +233,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/maintenance
               operator: In
-              values: ["kometa-nas-smb", "kometa-r2", "audiobookshelf-nas-smb", "audiobookshelf-r2", "tunarr-nas-smb", "tunarr-r2"]
+              values: ["kometa-nas-smb", "kometa-r2", "audiobookshelf-nas-smb", "audiobookshelf-r2", "tunarr-nas-smb", "tunarr-r2", "grimmory-nas-smb", "grimmory-r2", "tubearchivist-nas-smb", "tubearchivist-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["media"]
@@ -171,7 +243,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/snapshot-replication
               operator: In
-              values: ["kometa-nas-to-r2", "audiobookshelf-nas-to-r2", "tunarr-nas-to-r2"]
+              values: ["kometa-nas-to-r2", "audiobookshelf-nas-to-r2", "tunarr-nas-to-r2", "grimmory-nas-to-r2", "tubearchivist-nas-to-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["media"]
@@ -181,7 +253,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/verify
               operator: In
-              values: ["kometa", "audiobookshelf", "tunarr"]
+              values: ["kometa", "audiobookshelf", "tunarr", "grimmory", "tubearchivist"]
     mutate:
       patchStrategicMerge:
         spec:

@@ -37,6 +37,8 @@ spec:
               TUNARR_BIND_ADDR: 0.0.0.0
               # Talos cgroup namespaces do not expose containerd to autodetection.
               TUNARR_DATABASE_PATH: /config/tunarr
+              # ChildProcessHelper drops cwd; keep Meilisearch dumps off the image filesystem.
+              MEILI_DUMP_DIR: /config/tunarr/dumps
               # Trust forwarding headers only from the cluster pod network.
               TUNARR_SERVER_TRUST_PROXY: 10.69.0.0/16
             probes:

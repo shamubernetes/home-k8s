@@ -1,0 +1,163 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Recovery - Verify"
+run-name: "Recovery ${{ inputs.suite }} at ${{ inputs.commit }}"
+
+# Merge this CI-only prerequisite first. Dispatch from main after reviewing the
+# exact candidate commit. No pull-request event may execute code on this runner.
+# gh workflow run recovery-verify.yaml --ref main -f suite=tunarr -f commit=<full-sha>
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Reviewed full lowercase commit SHA at a branch tip in this repository"
+        required: true
+        type: string
+      suite:
+        description: "Credential-free recovery verification suite"
+        required: true
+        type: choice
+        options:
+        - tunarr
+        - deadlines
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify recovery
+    if: ${{ github.repository == 'shamubernetes/home-k8s' && github.ref == 'refs/heads/main' }}
+    runs-on: ["ghar-set-zoo"]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      KUBECONFIG: /dev/null
+      K8S_AUTH_KUBECONFIG: /dev/null
+      TALOSCONFIG: /dev/null
+      SOPS_AGE_KEY_FILE: /dev/null
+
+    steps:
+    - name: Validate dispatch before checkout
+      env:
+        COMMIT: ${{ inputs.commit }}
+        SUITE: ${{ inputs.suite }}
+      run: |
+        set -euo pipefail
+        [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
+        case "$SUITE" in
+          tunarr|deadlines) ;;
+          *) echo 'Unknown recovery suite' >&2; exit 1 ;;
+        esac
+        # GitHub can resolve fork objects by SHA. Require an actual branch tip
+        # from this repository, not merely a commit reachable in its fork network.
+        git ls-remote --heads https://github.com/shamubernetes/home-k8s.git > "$RUNNER_TEMP/recovery-heads"
+        found=false
+        while read -r sha ref; do
+          if [[ $sha == "$COMMIT" && $ref == refs/heads/* ]]; then
+            found=true
+          fi
+        done < "$RUNNER_TEMP/recovery-heads"
+        [[ $found == true ]] || { echo 'Commit is not a repository branch tip' >&2; exit 1; }
+        mkdir -p "$RUNNER_TEMP/recovery-tools"
+        printf 'TMPDIR=%s\nMISE_TRUSTED_CONFIG_PATHS=%s/recovery-tools\n' \
+          "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
+
+    - name: Checkout exact candidate
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: shamubernetes/home-k8s
+        ref: ${{ inputs.commit }}
+        persist-credentials: false
+        fetch-depth: 1
+
+    - name: Verify checkout identity
+      env:
+        COMMIT: ${{ inputs.commit }}
+      run: |
+        set -euo pipefail
+        [[ $(git rev-parse HEAD) == "$COMMIT" ]]
+        printf 'Candidate: %s\n' "$COMMIT" >> "$GITHUB_STEP_SUMMARY"
+
+    # Keep tooling outside the candidate checkout. Do not load its Mise hooks,
+    # credential paths or unrelated tools. Export real bin paths, not Mise shims.
+    - name: Setup Tunarr tools
+      if: ${{ inputs.suite == 'tunarr' }}
+      uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      with:
+        version: 2026.9.14
+        working_directory: ${{ runner.temp }}/recovery-tools
+        mise_toml: |
+          [tools]
+          python = "3.14.7"
+          node = "24.21.0"
+          yq = "4.53.6"
+          kubectl = "1.37.1"
+          helm = "4.3.0"
+          jq = "1.8.2"
+          flux2 = "2.9.5"
+        cache: true
+        cache_key_prefix: recovery-tunarr-v1
+        fetch_from_github: false
+        github_token: ""
+        env: true
+        add_shims_to_path: false
+        export_path: true
+
+    - name: Setup deadline tools
+      if: ${{ inputs.suite == 'deadlines' }}
+      uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      with:
+        version: 2026.9.14
+        working_directory: ${{ runner.temp }}/recovery-tools
+        mise_toml: |
+          [tools]
+          python = "3.14.7"
+          yq = "4.53.6"
+          kyverno = "1.19.1"
+        cache: true
+        cache_key_prefix: recovery-deadlines-v1
+        fetch_from_github: false
+        github_token: ""
+        env: true
+        add_shims_to_path: false
+        export_path: true
+
+    - name: Tunarr host recovery regressions
+      if: ${{ inputs.suite == 'tunarr' }}
+      run: python3 scripts/tests/test_tunarr_kopiur_host.py -v
+
+    - name: Pull exact native fixture images into ARC DinD
+      if: ${{ inputs.suite == 'tunarr' }}
+      run: |
+        set -euo pipefail
+        docker info >/dev/null
+        python3 - <<'PY'
+        import re
+        import runpy
+        import subprocess
+
+        images = runpy.run_path('scripts/tunarr-kopiur-boot.py')['IMAGES']
+        if not isinstance(images, dict) or not images:
+            raise ValueError('Missing native fixture images')
+        for image in images.values():
+            if not isinstance(image, str) or not re.fullmatch(
+                r'ghcr\.io/chrisbenincasa/tunarr:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}', image
+            ):
+                raise ValueError('Native fixture image must use an immutable Tunarr digest')
+            subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', image],
+                           check=True, timeout=600)
+        PY
+
+    - name: Tunarr native schema and isolated boot regressions
+      if: ${{ inputs.suite == 'tunarr' }}
+      run: python3 scripts/tests/test_tunarr_kopiur.py -v
+
+    - name: Offline Tunarr application validation
+      if: ${{ inputs.suite == 'tunarr' }}
+      run: scripts/validate-app --offline media/tunarr
+
+    - name: Offline mover deadline policy regressions
+      if: ${{ inputs.suite == 'deadlines' }}
+      run: python3 scripts/tests/test_kopiur_mover_deadlines.py -v

@@ -55,6 +55,29 @@ class MoverDeadlineTests(unittest.TestCase):
                 with self.subTest(key=key, value=value):
                     self.assertEqual(self.mutated_deadline(key, value), 3600)
 
+    def test_media_cohort_job_types_are_capped(self):
+        for app in ('kometa', 'audiobookshelf'):
+            labels = [('config', app), ('config', app + '-nas-smb'),
+                      ('config', app + '-r2'), ('maintenance', app + '-nas-smb'),
+                      ('maintenance', app + '-r2'),
+                      ('snapshot-replication', app + '-nas-to-r2'), ('verify', app),
+                      ('op', 'snapshot-delete-batch')]
+            for key, value in labels:
+                with self.subTest(key=key, value=value):
+                    self.assertEqual(self.mutated_deadline(key, value, 'media'), 3600)
+
+    def test_media_allowlist_does_not_expand_other_namespaces(self):
+        for arguments in [('config', 'kometa', 'arrs'),
+                          ('config', 'audiobookshelf', 'default'),
+                          ('config', 'unrelated', 'media'),
+                          ('config', 'tunarr', 'media'),
+                          ('maintenance', 'tunarr-nas-smb', 'media'),
+                          ('snapshot-replication', 'tunarr-nas-to-r2', 'media'),
+                          ('verify', 'tunarr', 'media'),
+                          ('config', 'kometa', 'media', 'other-controller')]:
+            with self.subTest(arguments=arguments):
+                self.assertEqual(self.mutated_deadline(*arguments), 172800)
+
     def test_existing_coverage_is_preserved(self):
         for key, value in [('config', 'seerr'), ('maintenance', 'profilarr-nas-smb'),
                            ('snapshot-replication', 'seerr-nas-to-r2'),

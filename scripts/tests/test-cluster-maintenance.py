@@ -366,6 +366,85 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         return result
 
+    def test_independent_window_is_recorded_and_never_modified(self):
+        existing = self.alertmanager.add_managed_silence('other-window', 'unrelated workload')
+        before = json.dumps(self.alertmanager.silences[existing], sort_keys=True)
+        result = self.run_command('begin', '--reason', 'separate backup',
+                                  '--independent-silence', existing)
+        output = json.loads(result.stdout)
+        self.assertNotEqual(output['silenceId'], existing)
+        self.assertEqual(output['independentMaintenance'][0]['silenceId'], existing)
+        saved = json.loads(Path(self.tmpdir.name, 'maintenance.json').read_text())
+        self.assertEqual(saved['independentMaintenance'], output['independentMaintenance'])
+        self.run_command('end', '--id', output['silenceId'])
+        self.assertEqual(before, json.dumps(self.alertmanager.silences[existing], sort_keys=True))
+        self.assertNotIn(existing, self.alertmanager.deletes)
+
+    def test_independent_window_does_not_allow_an_unlisted_window(self):
+        self.alertmanager.add_managed_silence('approved')
+        self.alertmanager.add_managed_silence('not-approved')
+        result = self.run_command('begin', '--reason', 'separate backup',
+                                  '--independent-silence', 'approved', expected=1)
+        self.assertIn('not-approved', result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
+
+    def test_independent_window_rejects_stale_unknown_or_noncanonical_id(self):
+        for mode in ('missing', 'expired', 'noncanonical'):
+            with self.subTest(mode=mode):
+                self.alertmanager.silences.clear()
+                if mode != 'missing':
+                    self.alertmanager.add_managed_silence('other-window')
+                    if mode == 'expired':
+                        self.alertmanager.silences['other-window']['status']['state'] = 'expired'
+                    else:
+                        self.alertmanager.silences['other-window']['matchers'] = []
+                self.run_command('begin', '--reason', 'separate backup',
+                                 '--independent-silence', 'other-window', expected=1)
+                self.assertEqual(self.alertmanager.posts, [])
+
+    def test_independent_window_still_requires_empty_local_state_and_healthy_alerts(self):
+        existing = self.alertmanager.add_managed_silence('other-window')
+        self.seed_state(existing)
+        self.run_command('begin', '--reason', 'separate backup',
+                         '--independent-silence', existing, expected=1)
+        Path(self.tmpdir.name, 'maintenance.json').unlink()
+        self.alertmanager.add_alert('CephHealthError', severity='critical')
+        self.run_command('begin', '--reason', 'separate backup',
+                         '--independent-silence', existing, expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+
+    def test_independent_window_requires_baseline_for_suppressed_critical_alert(self):
+        existing = self.alertmanager.add_managed_silence('other-window')
+        self.alertmanager.add_alert('CephHealthError', severity='critical', silenced_by=[existing], namespace='observability')
+        self.alertmanager.alerts[0]['status']['state'] = 'suppressed'
+        result = self.run_command('begin', '--reason', 'separate backup',
+                                  '--independent-silence', existing, expected=1)
+        self.assertIn('CephHealthError', result.stderr)
+        self.assertEqual(self.alertmanager.posts, [])
+        result = self.run_command('begin', '--reason', 'separate backup',
+                                  '--independent-silence', existing,
+                                  '--allow-active-alert', 'alertname=CephHealthError,namespace=observability')
+        own = json.loads(result.stdout)['silenceId']
+        self.assertNotEqual(own, existing)
+        self.run_command('end', '--id', own)
+        self.assertEqual(self.alertmanager.silences[existing]['status']['state'], 'active')
+
+    def test_independent_window_requires_identical_definitions_on_both_members(self):
+        existing = self.alertmanager.add_managed_silence('other-window')
+        with mock.patch.object(self.module, 'begin_lock') as lock, \
+             mock.patch.object(self.module, 'active_owned_silences', return_value=[self.alertmanager.silences[existing]]), \
+             mock.patch.object(self.module, 'owned_silences') as read:
+            lock.return_value.__enter__.return_value = types.SimpleNamespace(assert_healthy=lambda: None)
+            original = self.alertmanager.silences[existing]
+            divergent = json.loads(json.dumps(original))
+            divergent['comment'] += ' changed'
+            read.return_value = [(types.SimpleNamespace(name='am-0'), original),
+                                 (types.SimpleNamespace(name='am-1'), divergent)]
+            cluster = mock.Mock()
+            with self.assertRaisesRegex(self.module.MaintenanceError, 'differs between members'):
+                self.module.begin(cluster, 'backup', dt.timedelta(minutes=30), independent_silences=[existing])
+            cluster.put_silence.assert_not_called()
+
     def test_routine_begin_creates_only_a_verified_bounded_silence(self):
         self.alertmanager.add_alert("RoutineInfo", severity="info")
         self.alertmanager.add_alert("Watchdog", severity="none")

@@ -11,3 +11,4 @@ resources:
 - ./audiobookshelf/ks.yaml
 - ./grimmory/ks.yaml
 - ./pasta/ks.yaml
+- ./tunarr/ks.yaml

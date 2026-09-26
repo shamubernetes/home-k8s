@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app tunarr
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: tunarr
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  dependsOn:
+  - name: rook-ceph-cluster
+    namespace: rook-ceph
+  - name: volsync
+    namespace: volsync-system
+  values:
+    controllers:
+      tunarr:
+        replicas: 1
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/chrisbenincasa/tunarr
+              tag: 2026.9.0@sha256:af8790eb57dc3f3a4e9905859b789ec1fa519c5c537c2d0a996e25c22fe80d33
+            env:
+              TZ: America/New_York
+              HOME: /tmp
+              TUNARR_BIND_ADDR: 0.0.0.0
+              # Trust forwarding headers only from the cluster pod network.
+              TUNARR_SERVER_TRUST_PROXY: 10.69.0.0/16
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/version
+                    port: &port 8000
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/version
+                    port: *port
+                  failureThreshold: 60
+                  periodSeconds: 5
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                memory: 4Gi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *port
+    persistence:
+      config:
+        existingClaim: *app
+        globalMounts:
+        - path: /config/tunarr
+      tmp:
+        type: emptyDir
+      streams:
+        type: emptyDir
+        sizeLimit: 10Gi
+        globalMounts:
+        - path: /config/tunarr/streams
+      media:
+        type: nfs
+        server: "${IPAM_IP_NFS}"
+        path: /mnt/user/Media
+        globalMounts:
+        - path: /media
+          readOnly: true

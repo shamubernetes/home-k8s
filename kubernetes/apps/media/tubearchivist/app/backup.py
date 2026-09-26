@@ -90,7 +90,8 @@ def sqlite_inventory(path):
     with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as db:
         check(db.execute('PRAGMA integrity_check').fetchall() == [('ok',)], 'SQLite integrity failed')
         tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-        check({'auth_user', 'django_migrations', 'task_customperiodictask'} <= set(tables), 'missing Django state tables')
+        # v0.5.12 config/settings.py swaps auth.User for user.Account.
+        check({'user_account', 'django_migrations', 'task_customperiodictask'} <= set(tables), 'missing Django state tables')
         return {name: db.execute('SELECT count(*) FROM "' + name.replace('"', '""') + '"').fetchone()[0] for name in tables}
 
 

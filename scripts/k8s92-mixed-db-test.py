@@ -177,7 +177,177 @@ def esready(container):
     return docker('exec', container, 'curl', '-fsS', 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s', ok=False).returncode == 0
 
 
+def ta_fixture_documents():
+    """Index-specific v0.5.12 documents, not generic dynamically mapped fields.
+
+    Sources under https://github.com/tubearchivist/tubearchivist/tree/v0.5.12/backend:
+    appsettings/index_mapping.json; channel/src/index.py; video/src/index.py,
+    comments.py and subtitle.py; download/src/queue.py; playlist/src/index.py.
+    ta_startup migrations require video.channel.channel_tabs and all four stats.
+    Config remains the real appsettings document created by normal startup.
+    """
+    channel_id = 'UC0000000000000000000000'
+    video_id = 'K8S92vid001'
+    download_id = 'K8S92dl0001'
+    playlist_id = 'PL00000000000000000000000000000000'
+    timestamp = 1750000000
+    text = 'Synthetic recovery fixture 雪'
+    artwork = 'https://example.invalid/fixture.jpg'
+    channel = {
+        'channel_id': channel_id, 'channel_name': text, 'channel_active': True,
+        'channel_description': text, 'channel_last_refresh': timestamp,
+        'channel_subs': 42, 'channel_subscribed': False, 'channel_tags': ['fixture'],
+        'channel_tabs': ['videos', 'streams', 'shorts'],
+        'channel_thumb_url': artwork, 'channel_banner_url': artwork,
+        'channel_tvart_url': artwork,
+    }
+    video = {
+        'youtube_id': video_id, 'title': text, 'description': text, 'active': True,
+        'channel': channel.copy(), 'date_downloaded': timestamp,
+        'published': timestamp, 'vid_last_refresh': timestamp,
+        'vid_thumb_url': artwork, 'vid_type': 'videos', 'category': ['fixture'],
+        'tags': ['fixture'], 'media_url': channel_id + '/' + video_id + '.mp4',
+        'media_size': 42, 'streams': [], 'playlist': [playlist_id],
+        'player': {'duration': 42, 'duration_str': '42s', 'watched': False},
+        'stats': {'view_count': 42, 'like_count': 3, 'dislike_count': 0, 'average_rating': 4.5},
+        'comment_count': 1,
+    }
+    download = {
+        'youtube_id': download_id, 'title': text, 'channel_id': channel_id,
+        'channel_name': text, 'channel_indexed': True, 'duration': '42s',
+        'published': timestamp, 'timestamp': timestamp, 'vid_thumb_url': artwork,
+        'vid_type': 'videos', 'status': 'ignore', 'auto_start': False,
+    }
+    playlist = {
+        'playlist_id': playlist_id, 'playlist_name': text, 'playlist_active': True,
+        'playlist_channel': text, 'playlist_channel_id': channel_id,
+        'playlist_description': text, 'playlist_thumbnail': artwork,
+        'playlist_last_refresh': timestamp, 'playlist_type': 'regular',
+        'playlist_subscribed': False, 'playlist_sort_order': 'top',
+        'playlist_entries': [{'youtube_id': video_id, 'title': text,
+                              'uploader': text, 'idx': 0, 'downloaded': True}],
+    }
+    subtitle_id = video_id + '-en-1'
+    subtitle = {
+        'subtitle_fragment_id': subtitle_id, 'youtube_id': video_id,
+        'subtitle_channel': text, 'subtitle_channel_id': channel_id,
+        'subtitle_lang': 'en', 'subtitle_last_refresh': timestamp,
+        'subtitle_source': 'user', 'title': text, 'subtitle_index': 1,
+        'subtitle_line': text, 'subtitle_start': '00:00:00.000',
+        'subtitle_end': '00:00:05.000',
+    }
+    comment = {
+        'youtube_id': video_id, 'comment_channel_id': channel_id,
+        'comment_last_refresh': timestamp,
+        'comment_comments': [{
+            'comment_author': text, 'comment_author_id': channel_id,
+            'comment_author_is_uploader': True, 'comment_author_thumbnail': artwork,
+            'comment_id': 'synthetic-comment-1', 'comment_is_favorited': False,
+            'comment_likecount': 0, 'comment_parent': 'root', 'comment_text': text,
+            'comment_time_text': '2025-06-15', 'comment_timestamp': timestamp,
+        }],
+    }
+    return [
+        ('ta_channel', channel_id, channel), ('ta_video', video_id, video),
+        ('ta_download', download_id, download), ('ta_playlist', playlist_id, playlist),
+        ('ta_subtitle', subtitle_id, subtitle), ('ta_comment', video_id, comment),
+    ]
+
+
+def ta_fixture_script(seed=False):
+    """Check real Django tables and fixture contents in the pinned running app."""
+    return """import os, sys, json
+from pathlib import Path
+sys.path.insert(0, '/')
+sys.path.insert(0, '/app')
+import contract
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+import django
+django.setup()
+from django.contrib.auth import get_user_model
+from django.conf import settings
+assert settings.TA_VERSION == 'v0.5.12'
+account = get_user_model()
+assert account._meta.label == 'user.Account'
+assert account._meta.db_table == 'user_account'
+counts = contract.sqlite_inventory(Path('/cache/db.sqlite3'))
+assert 'auth_user' not in counts
+assert all(counts[name] > 0 for name in ('user_account', 'django_migrations', 'task_customperiodictask'))
+fixtures = json.loads(%r)
+assert {index for index, _, _ in fixtures} == set(contract.INDICES) - {'ta_config'}
+for index, doc_id, document in fixtures:
+    path = index + '/_doc/' + doc_id
+    if %r:
+        contract.request(path + '?refresh=true', 'PUT', document)
+    assert contract.request(path)['_source'] == document, 'fixture document differs'
+assert contract.request('ta_config/_doc/appsettings')['found']
+""" % (json.dumps(ta_fixture_documents()), seed)
+
+
+def ta_contract(container, operation, directory, **kwargs):
+    # Call the same entrypoint, but retain a traceback in the runner's PRIVATE
+    # failure.log. Production /contract.py still suppresses exception details.
+    code = "import sys; sys.path.insert(0, '/'); import contract; contract.main()"
+    return docker('exec', container, 'python', '-c', code, operation, directory, **kwargs)
+
+
+def ta_failure_markers(text):
+    """Only fixed labels leave private logs. Never echo arbitrary error text."""
+    markers = {
+        'missing-django-state-tables': 'missing Django state tables',
+        'sqlite-integrity': 'SQLite integrity failed',
+        'fixture-content-mismatch': 'fixture document differs',
+        'es-http-error': 'Elasticsearch HTTP ',
+        'native-export-http-error': 'native exporter HTTP ',
+        'es-version-mismatch': 'ES version changed; requalify restore',
+        'index-coverage-mismatch': 'application index set changed; requalify coverage',
+        'native-zip-missing': 'native ZIP missing',
+        'export-count-mismatch': 'index count changed or incomplete export',
+        'restore-content-mismatch': 'restored Elasticsearch content differs',
+        'contract-deadline': 'capture/restore deadline exceeded',
+        'es-script-error': 'script_exception',
+        'es-null-pointer': 'null_pointer_exception',
+        'startup-migration-failed': 'failed to run ',
+        'sqlite-inventory-frame': 'in sqlite_inventory',
+        'assertion-error': 'AssertionError',
+        'permission-error': 'PermissionError',
+        'connection-error': 'ConnectionError',
+    }
+    return [label for label, marker in markers.items() if marker in text] or ['unclassified']
+
+
+def ta_failure_diagnostics():
+    """Bounded synthetic-only diagnostics; raw content stays in private files."""
+    sources = []
+    failure = SCRATCH / 'failure.log'
+    if failure.exists():
+        with failure.open('rb') as stream:
+            stream.seek(max(0, failure.stat().st_size - 65536))
+            sources.append(('command', stream.read(65536).decode(errors='replace')))
+    # Exact names registered by this disposable run, never a production target.
+    for label in ('ta-source', 'ta-restore-tool', 'es-source', 'es-restored'):
+        container = PREFIX + '-' + label
+        if container not in CONTAINERS:
+            continue
+        logs = docker('logs', '--tail', '100', container, ok=False, timeout=15)
+        sources.append((label, (logs.stdout + logs.stderr)[-65536:]))
+        if label == 'ta-restore-tool':
+            code = ("from pathlib import Path; p=Path('/cache/lane-boot.log'); "
+                    "f=p.open('rb'); f.seek(max(0,p.stat().st_size-65536)); "
+                    "print(f.read(65536).decode(errors='replace'))")
+            boot = docker('exec', container, 'python', '-c', code, ok=False, timeout=15)
+            sources.append(('restored-boot', (boot.stdout + boot.stderr)[-65536:]))
+    summary = {}
+    for label, text in sources:
+        (SCRATCH / ('ta-diagnostic-' + label + '.log')).write_text(text)
+        summary[label] = ta_failure_markers(text)
+    EVIDENCE['tubearchivist_failure'] = summary
+    print(json.dumps({'synthetic_ta_failure': summary,
+                      'phase': EVIDENCE.get('tubearchivist_phase', 'unknown')}), flush=True)
+
+
 def ta():
+    EVIDENCE['tubearchivist_phase'] = 'source-startup'
     net = network('ta')
     source = start('es-source', ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false', 'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-source', 'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es', '--memory=1600m'))
     wait(lambda: esready(source), 300)
@@ -186,21 +356,17 @@ def ta():
     app = start('ta-source', TA, net, env)
     wait(lambda: docker('exec', app, 'curl', '-fsS', '-H', 'Host: localhost:8000', 'http://localhost:8000/api/health/', ok=False).returncode == 0, 300)
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), app + ':/contract.py')
-    fixture = """import sys,json
-sys.path.insert(0,'/'); import contract
-for index in contract.INDICES:
-    if index == 'ta_config': continue
-    contract.request(index+'/_doc/lane_fixture?refresh=true','PUT',{'lane_fixture':'unicode-雪','lane_id':42})
-# A populated Django account and task table are created by real app startup.
-"""
-    docker('exec', '-i', app, 'python', '-', data=fixture)
-    capture = docker('exec', app, 'python', '/contract.py', 'capture', '/cache/kopiur/current', timeout=660).stdout
+    EVIDENCE['tubearchivist_phase'] = 'seed-and-check-real-schema'
+    docker('exec', '-i', app, 'python', '-', data=ta_fixture_script(seed=True))
+    EVIDENCE['tubearchivist_phase'] = 'capture'
+    ta_contract(app, 'capture', '/cache/kopiur/current', timeout=660)
     docker('cp', app + ':/cache/kopiur/current', str(SCRATCH / 'tubearchivist'))
     # Preserve the app cache too; replace its raw SQLite with the online artifact below.
     docker('cp', app + ':/cache', str(SCRATCH / 'ta-cache'))
     remove(app)
     remove(source)
     remove(redis)
+    EVIDENCE['tubearchivist_phase'] = 'fresh-restore-services'
     # Brand new server and fresh Redis. No source container or data path is reused.
     restored = start('es-restored', ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false', 'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-restore', 'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es', '--memory=1600m'))
     wait(lambda: esready(restored), 300)
@@ -209,9 +375,10 @@ for index in contract.INDICES:
     tool = start('ta-restore-tool', TA, net, env, args=('infinity',), extra=('--entrypoint', 'sleep'))
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
     docker('cp', str(SCRATCH / 'tubearchivist'), tool + ':/bundle')
-    docker('exec', tool, 'python', '/contract.py', 'verify', '/bundle')
-    result = docker('exec', tool, 'python', '/contract.py', 'restore-es', '/bundle', timeout=660).stdout.strip()
-    assert docker('exec', tool, 'python', '/contract.py', 'restore-es', '/bundle', ok=False).returncode != 0
+    EVIDENCE['tubearchivist_phase'] = 'verify-and-restore'
+    ta_contract(tool, 'verify', '/bundle')
+    result = ta_contract(tool, 'restore-es', '/bundle', timeout=660).stdout.strip()
+    assert ta_contract(tool, 'restore-es', '/bundle', ok=False).returncode != 0
     # Boot a working copy. The immutable recovery artifact stays separate.
     cache = SCRATCH / 'ta-cache'
     shutil.copy2(SCRATCH / 'tubearchivist/db.sqlite3', cache / 'db.sqlite3')
@@ -222,11 +389,16 @@ for index in contract.INDICES:
     with sqlite3.connect(cache / 'db.sqlite3') as db:
         db.execute('UPDATE django_celery_beat_periodictask SET enabled=0')
     docker('cp', str(cache) + '/.', tool + ':/cache')
+    EVIDENCE['tubearchivist_phase'] = 'restored-normal-startup'
     # Use the actual normal entrypoint after the restore, not a fake health server.
     docker('exec', '-d', tool, 'bash', '-c', 'exec /app/run.sh >/cache/lane-boot.log 2>&1')
     wait(lambda: docker('exec', tool, 'curl', '-fsS', '-H', 'Host: localhost:8000', 'http://localhost:8000/api/health/', ok=False).returncode == 0, 300)
+    EVIDENCE['tubearchivist_phase'] = 'post-startup-fixture-verification'
+    docker('exec', '-i', tool, 'python', '-', data=ta_fixture_script())
     manifest = json.loads((SCRATCH / 'tubearchivist/manifest.json').read_text())
     EVIDENCE['tubearchivist'] = {'native_export': 'pass', 'documents': {k: v['count'] for k, v in manifest['documents'].items()}, 'sqlite_tables': manifest['sqlite_tables'], 'source_removed_before_restore': True, 'es_restore': result, 'redis_initial_dbsize': 0, 'restore_rejects_nonempty_target': 'pass', 'restored_app_health': 'pass'}
+    EVIDENCE['tubearchivist'].update({'django_user_table': 'user_account', 'fixture_documents_after_normal_startup': 'pass'})
+    EVIDENCE['tubearchivist_phase'] = 'complete'
     print(json.dumps({'tubearchivist': EVIDENCE['tubearchivist']}), flush=True)
 
 
@@ -239,7 +411,20 @@ def main():
         if app in ('grimmory', 'all'):
             grimmory()
         if app in ('tubearchivist', 'all'):
-            ta()
+            # The trusted ARC dispatcher invokes this entrypoint. Run the focused
+            # schema/fixture regressions before starting native TA containers.
+            import sys
+            subprocess.run([sys.executable, '-m', 'unittest', 'discover',
+                            '-s', str(ROOT / 'scripts/tests'),
+                            '-p', 'test_k8s92_tubearchivist.py', '-v'], check=True)
+            try:
+                ta()
+            except Exception:
+                try:
+                    ta_failure_diagnostics()
+                except Exception:
+                    print('Synthetic TA diagnostics unavailable; private logs retained', flush=True)
+                raise
     finally:
         (SCRATCH / 'evidence.json').write_text(json.dumps(EVIDENCE, indent=2) + '\n')
         for container in reversed(CONTAINERS):

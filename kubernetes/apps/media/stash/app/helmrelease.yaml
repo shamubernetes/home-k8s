@@ -61,7 +61,7 @@ spec:
             workingDir: /config
     defaultPodOptions:
       annotations:
-        descheduler.alpha.kubernetes.io/evict: "false"
+        descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

@@ -22,7 +22,7 @@ spec:
   values:
     connect:
       podAnnotations:
-        descheduler.alpha.kubernetes.io/evict: "false"
+        descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"
       pdb:
         enabled: true
         maxUnavailable: 1

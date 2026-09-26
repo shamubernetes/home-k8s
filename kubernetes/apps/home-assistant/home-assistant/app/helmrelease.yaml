@@ -243,6 +243,7 @@ spec:
       dnsPolicy: ClusterFirst
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+        descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"
         k8s.v1.cni.cncf.io/networks: home-assistant/iot-vlan-107
       affinity:
         nodeAffinity:

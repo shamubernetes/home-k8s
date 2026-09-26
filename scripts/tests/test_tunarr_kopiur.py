@@ -46,7 +46,9 @@ def export_state(name, destination):
 SEED = r"""
 const fs=require('fs'),crypto=require('crypto'),{DatabaseSync}=require('node:sqlite');
 const root='/config/tunarr/stable-1.3';
-require('child_process').spawnSync('/tunarr/tunarr',['server'],{stdio:'ignore',timeout:45000});
+// Only this fresh network-none fixture may expose bounded bootstrap diagnostics.
+const bootstrap=require('child_process').spawnSync('/tunarr/tunarr',['server'],{encoding:'utf8',timeout:45000,maxBuffer:1024*1024});
+fs.writeFileSync('/tmp/fixture-bootstrap.json',JSON.stringify({status:bootstrap.status,signal:bootstrap.signal,error:bootstrap.error?.code,stdout:bootstrap.stdout?.slice(-8192),stderr:bootstrap.stderr?.slice(-8192)}),{mode:0o600});
 const settings=JSON.parse(fs.readFileSync(root+'/settings.json'));
 settings.settings.hdhr.autoDiscoveryEnabled=false;
 fs.writeFileSync(root+'/settings.json',JSON.stringify(settings));
@@ -101,7 +103,14 @@ def seed_fixture(name, version):
         code = code.replace("const root='/config/tunarr/stable-1.3';", "const root='/config/tunarr';")
         code = code.replace('version:5,lastUpdated:', 'version:6,lastUpdated:')
         code = '\n'.join(line for line in code.splitlines() if not line.startswith('for(const name of'))
-    BOOT.node(name, code)
+    result = BOOT.node(name, code, check=False)
+    if result.returncode:
+        # Never enable this in BOOT.boot: restored production state stays private.
+        diagnostic = BOOT.node(name, "console.log(require('fs').readFileSync('/tmp/fixture-bootstrap.json','utf8'))", check=False)
+        raise RuntimeError('synthetic fixture seed failed: ' + json.dumps({
+            'version': version, 'exit': result.returncode,
+            'stderr': result.stderr[-8192:], 'bootstrap': diagnostic.stdout[-20000:],
+        }))
     # The schema bootstrap can leave its search child behind after HDHR exits.
     BOOT.node(name, r"const fs=require('fs');for(const p of fs.readdirSync('/proc').filter(p=>/^\d+$/.test(p))){try{const a=fs.readFileSync('/proc/'+p+'/cmdline','utf8').split('\0');if(a[0].includes('meilisearch'))process.kill(Number(p),'SIGTERM')}catch{}}")
 

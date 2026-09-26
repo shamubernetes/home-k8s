@@ -44,6 +44,12 @@
     },
     // Allowed Versions
     {
+      "description": "Tunarr 2026.9.0 fails Plex playback; rehearse migration beyond 1.3 first (K8S-102)",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/chrisbenincasa/tunarr"],
+      "allowedVersions": "<1.4.0",
+    },
+    {
       "description": "PostgreSQL 17",
       "matchDatasources": ["docker"],
       "matchPackageNames": [

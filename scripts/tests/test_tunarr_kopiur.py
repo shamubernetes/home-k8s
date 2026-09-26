@@ -46,6 +46,10 @@ def export_state(name, destination):
 SEED = r"""
 const fs=require('fs'),crypto=require('crypto'),{DatabaseSync}=require('node:sqlite');
 const root='/config/tunarr/stable-1.3';
+const mounts=Object.fromEntries(fs.readFileSync('/proc/self/mountinfo','utf8').trim().split('\n').map(line=>line.split(' ')).filter(row=>['/tmp','/tmp/.cache/pkg','/config/tunarr'].includes(row[4])).map(row=>[row[4],row[5].split(',')]));
+for(const p of ['/tmp','/config/tunarr'])if(!mounts[p]?.includes('noexec'))throw Error('fixture data mount must remain noexec: '+p);
+if(!mounts['/tmp/.cache/pkg']||mounts['/tmp/.cache/pkg'].includes('noexec'))throw Error('pkg native module cache must allow executable mappings');
+console.log('synthetic fixture mount flags: '+JSON.stringify(mounts));
 // Only this fresh network-none fixture may expose bounded bootstrap diagnostics.
 const bootstrap=require('child_process').spawnSync('/tunarr/tunarr',['server'],{encoding:'utf8',timeout:45000,maxBuffer:1024*1024});
 fs.writeFileSync('/tmp/fixture-bootstrap.json',JSON.stringify({status:bootstrap.status,signal:bootstrap.signal,error:bootstrap.error?.code,stdout:bootstrap.stdout?.slice(-8192),stderr:bootstrap.stderr?.slice(-8192)}),{mode:0o600});
@@ -93,7 +97,9 @@ def seed_fixture(name, version):
     BOOT.docker('run', '-d', '--name', name, '--platform', 'linux/amd64', '--network', 'none',
                 '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--user', '568:568',
                 '--memory', '2g', '--cpus', '2', '--pids-limit', '256',
-                '--tmpfs', '/tmp:uid=568,gid=568,mode=700', '--tmpfs', ROOT + ':uid=568,gid=568,mode=700',
+                '--tmpfs', '/tmp:uid=568,gid=568,mode=700',
+                '--tmpfs', '/tmp/.cache/pkg:exec,uid=568,gid=568,mode=700',
+                '--tmpfs', ROOT + ':uid=568,gid=568,mode=700',
                 '-e', 'HOME=/tmp', '-e', 'TUNARR_DATABASE_PATH=' + database_path,
                 '-e', 'MEILI_DUMP_DIR=' + database_path + '/dumps',
                 '-e', 'MEILI_MAX_INDEXING_MEMORY=128MiB', '-e', 'MEILI_MAX_INDEXING_THREADS=1',
@@ -109,8 +115,10 @@ def seed_fixture(name, version):
         diagnostic = BOOT.node(name, "console.log(require('fs').readFileSync('/tmp/fixture-bootstrap.json','utf8'))", check=False)
         raise RuntimeError('synthetic fixture seed failed: ' + json.dumps({
             'version': version, 'exit': result.returncode,
-            'stderr': result.stderr[-8192:], 'bootstrap': diagnostic.stdout[-20000:],
+            'stdout': result.stdout[-8192:], 'stderr': result.stderr[-8192:],
+            'bootstrap': diagnostic.stdout[-20000:],
         }))
+    print(result.stdout.strip())
     # The schema bootstrap can leave its search child behind after HDHR exits.
     BOOT.node(name, r"const fs=require('fs');for(const p of fs.readdirSync('/proc').filter(p=>/^\d+$/.test(p))){try{const a=fs.readFileSync('/proc/'+p+'/cmdline','utf8').split('\0');if(a[0].includes('meilisearch'))process.kill(Number(p),'SIGTERM')}catch{}}")
 

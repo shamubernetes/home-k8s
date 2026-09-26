@@ -76,6 +76,9 @@ def boot(source, version, timeout=120):
                '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--user', '568:568',
                '--memory', '2g', '--cpus', '2', '--pids-limit', '256',
                '--tmpfs', '/tmp:uid=568,gid=568,mode=700',
+               # pkg extracts better_sqlite3.node here; dlopen needs executable pages.
+               # Keep the parent /tmp and restored data on noexec tmpfs mounts.
+               '--tmpfs', '/tmp/.cache/pkg:exec,uid=568,gid=568,mode=700',
                '--tmpfs', ROOT + ':uid=568,gid=568,mode=700',
                '--tmpfs', '/media:uid=568,gid=568,mode=700',
                '-e', 'HOME=/tmp', '-e', 'TUNARR_DATABASE_PATH=' + database_path,

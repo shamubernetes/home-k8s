@@ -57,7 +57,7 @@ spec:
         containers:
           - name: runner
             # home-operations runner plus the MaudeCode CI toolchain and a preloaded Node/Python/Ruby tool cache.
-            image: ghcr.io/shamubernetes/actions-runner:2.337.0@sha256:0a0acd98c7695a666b4c7fb29694c83706dff6647b30c8ed8080106490b698a6
+            image: ghcr.io/shamubernetes/actions-runner:2.337.0@sha256:42088d6262027df4cbcb748af0b8cd24b615b0220be10b8accf4f264da7fe50b
             command: ["/home/runner/run.sh"]
             env:
               - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER

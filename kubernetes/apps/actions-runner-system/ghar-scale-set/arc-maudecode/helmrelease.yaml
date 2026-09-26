@@ -40,8 +40,8 @@ spec:
             requiredDuringSchedulingIgnoredDuringExecution:
               nodeSelectorTerms:
                 - matchExpressions:
-                    - key: node-role.kubernetes.io/control-plane
-                      operator: DoesNotExist
+                    # Control planes are eligible: 8 runners at a 1500m CPU request need
+                    # chronos, coeus, oceanus and tethys (2 per node).
                     # Rhea's degraded SATA link saturates even with one runner.
                     - key: kubernetes.io/hostname
                       operator: NotIn
@@ -66,6 +66,11 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: status.hostIP
+            # CPU weight so busy neighbours can't starve test jobs. No CPU limit:
+            # CFS throttling would bring the stall back.
+            resources:
+              requests:
+                cpu: 1500m
     controllerServiceAccount:
       name: ghar-controller
       namespace: actions-runner-system

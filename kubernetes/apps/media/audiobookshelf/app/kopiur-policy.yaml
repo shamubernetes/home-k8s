@@ -1,0 +1,254 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: audiobookshelf
+spec:
+  repository:
+    kind: Repository
+    name: audiobookshelf-nas-smb
+  identity:
+    username: audiobookshelf
+    hostname: media
+  sources:
+  - pvc:
+      name: audiobookshelf
+    sourcePathOverride: /pvc/audiobookshelf
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: audiobookshelf
+            app.kubernetes.io/controller: audiobookshelf
+        container: app
+        command:
+        - node
+        - -e
+        - |
+          const ROOT = '/config';
+          const DATABASE = 'absdatabase.sqlite';
+          const DEADLINE_MS = 90000;
+          const fs = require('fs');
+          const path = require('path');
+          const crypto = require('crypto');
+          const sqlite3 = require('/app/node_modules/sqlite3');
+          process.umask(0o077);
+          const directory = path.join(ROOT, '.kopiur-consistent');
+          if (fs.existsSync(directory) && fs.lstatSync(directory).isSymbolicLink()) {
+            throw new Error('unsafe consistent-backup directory');
+          }
+          fs.mkdirSync(directory, {recursive: true, mode: 0o700});
+          fs.chmodSync(directory, 0o700);
+          // No portable flock in Node core. A killed process leaves a fail-closed lock.
+          const lock = path.join(directory, 'lock');
+          fs.mkdirSync(lock, {mode: 0o700});
+          process.on('exit', () => { fs.rmdirSync(lock); });
+          const generation = crypto.randomBytes(16).toString('hex');
+          const artifact = path.join(directory, 'database-' + generation + '.sqlite3');
+          function syncFile(filename) {
+            const fd = fs.openSync(filename, 'r');
+            try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+          }
+          function publish(name, value) {
+            const temporary = path.join(directory, name + '-' + generation + '.tmp');
+            try {
+              fs.writeFileSync(temporary, JSON.stringify(value), {flag: 'wx', mode: 0o600});
+              syncFile(temporary);
+              fs.renameSync(temporary, path.join(directory, name));
+              syncFile(directory);
+            } finally {
+              fs.rmSync(temporary, {force: true});
+            }
+          }
+          publish('attempt.json', {generation, state: 'running'});
+          function fail(reason) {
+            // Do not print driver errors: they can include paths or application values.
+            try { publish('attempt.json', {generation, state: 'failed'}); } catch (_) {}
+            console.error(reason);
+            // Terminate outstanding native work too. Unpublished artifacts are never valid.
+            process.exit(1);
+          }
+          const deadline = performance.now() + DEADLINE_MS;
+          function checkDeadline() {
+            if (performance.now() >= deadline) throw new Error('SQLite recovery hook deadline exceeded');
+          }
+          const timer = setTimeout(() => fail('SQLite recovery hook deadline exceeded'), DEADLINE_MS);
+          process.on('SIGTERM', () => fail('SQLite recovery hook interrupted'));
+          process.on('SIGINT', () => fail('SQLite recovery hook interrupted'));
+          process.on('uncaughtException', () => fail('SQLite recovery hook failed'));
+          process.on('unhandledRejection', () => fail('SQLite recovery hook failed'));
+          function open(filename, mode) {
+            return new Promise((resolve, reject) => {
+              const db = new sqlite3.Database(filename, mode, error => error ? reject(error) : resolve(db));
+              db.on('error', () => fail('SQLite database asynchronous error'));
+            });
+          }
+          function close(db) {
+            return new Promise((resolve, reject) => db.close(error => error ? reject(error) : resolve()));
+          }
+          function query(db, sql) {
+            return new Promise((resolve, reject) => db.all(sql, (error, rows) => error ? reject(error) : resolve(rows)));
+          }
+          async function copy(origin) {
+            let backup;
+            // The Database.backup callback reports initialization, NOT copy completion.
+            await new Promise((resolve, reject) => {
+              backup = origin.backup(artifact, error => error ? reject(error) : resolve());
+              backup.on('error', () => fail('SQLite backup asynchronous error'));
+            });
+            try {
+              while (true) {
+                const done = await new Promise((resolve, reject) => {
+                  backup.step(256, (error, complete) => {
+                    if (error && [sqlite3.BUSY, sqlite3.LOCKED].includes(error.errno)) resolve(false);
+                    else if (error) reject(error);
+                    else resolve(complete);
+                  });
+                });
+                if (done) break;
+                await new Promise(resolve => setTimeout(resolve, 25));
+              }
+              if (!backup.completed || backup.failed) throw new Error('incomplete SQLite backup');
+            } finally {
+              await new Promise((resolve, reject) => backup.finish(error => error ? reject(error) : resolve()));
+            }
+          }
+          function sha256(filename) {
+            const hash = crypto.createHash('sha256');
+            const buffer = Buffer.alloc(1024 * 1024);
+            const fd = fs.openSync(filename, 'r');
+            try {
+              let size;
+              while ((size = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+                checkDeadline();
+                hash.update(buffer.subarray(0, size));
+              }
+            } finally { fs.closeSync(fd); }
+            return hash.digest('hex');
+          }
+          async function main() {
+            let previous;
+            const previousManifest = path.join(directory, 'manifest.json');
+            if (fs.existsSync(previousManifest)) {
+              previous = JSON.parse(fs.readFileSync(previousManifest, 'utf8')).artifact;
+              if (!/^database-[0-9a-f]{32}\.sqlite3$/.test(previous)) throw new Error('unsafe previous manifest');
+            }
+            for (const name of fs.readdirSync(directory)) {
+              if (/^database-[0-9a-f]{32}\.sqlite3(-wal|-shm|-journal)?$/.test(name) && name !== previous) {
+                fs.unlinkSync(path.join(directory, name));
+              }
+            }
+            const source = path.join(ROOT, DATABASE);
+            const stat = fs.lstatSync(source);
+            if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0) throw new Error('unsafe database');
+            const metadata = fs.lstatSync(path.join(ROOT, 'metadata'));
+            if (!metadata.isDirectory() || metadata.isSymbolicLink()) throw new Error('unsafe metadata');
+            fs.closeSync(fs.openSync(artifact, 'wx', 0o600));
+            const origin = await open(source, sqlite3.OPEN_READONLY);
+            try { await copy(origin); } finally { await close(origin); }
+            const destination = await open(artifact, sqlite3.OPEN_READWRITE);
+            try {
+              await query(destination, 'PRAGMA journal_mode=DELETE');
+              const rows = await query(destination, 'PRAGMA integrity_check');
+              if (rows.length !== 1 || rows[0].integrity_check !== 'ok') throw new Error('integrity check failed');
+            } finally { await close(destination); }
+            syncFile(artifact);
+            const manifest = {version: 2, generation, database: DATABASE,
+              artifact: path.basename(artifact), size_bytes: fs.statSync(artifact).size,
+              sha256: sha256(artifact),
+              integrity_check: 'ok', completed_at: Date.now() / 1000};
+            checkDeadline();
+            publish('manifest.json', manifest);
+            publish('attempt.json', {generation, state: 'complete'});
+            clearTimeout(timer);
+            console.log('consistent SQLite recovery copy verified');
+          }
+          main().catch(() => fail('SQLite recovery hook failed'));
+        timeout: 2m
+        continueOnFailure: false
+  mover:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+  verification:
+    quick:
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      capacity: 5Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: audiobookshelf-daily
+spec:
+  policyRef:
+    name: audiobookshelf
+  schedule:
+    cron: 0 4 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: audiobookshelf-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: audiobookshelf-nas-smb
+  destinationRef:
+    kind: Repository
+    name: audiobookshelf-r2
+  schedule:
+    cron: 0 8 * * *
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: audiobookshelf
+        hostname: media
+        sourcePath: /pvc/audiobookshelf
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

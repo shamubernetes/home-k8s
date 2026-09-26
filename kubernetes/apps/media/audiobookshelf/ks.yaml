@@ -9,12 +9,44 @@ spec:
   commonMetadata:
     labels:
       app.kubernetes.io/name: *app
+  dependsOn:
+  - name: kopiur
+  - name: snapshot-controller
+  - name: rook-ceph-cluster
+  - name: external-secrets-secret-store
+  - name: volsync
   path: ./kubernetes/apps/media/audiobookshelf/app
   prune: true
   sourceRef:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
+  # Replication is verified separately: its observedGeneration may stay stale.
+  healthChecks:
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: audiobookshelf-kopiur-nas
+    namespace: media
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: audiobookshelf-kopiur-r2
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: audiobookshelf-nas-smb
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: audiobookshelf-r2
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotPolicy
+    name: audiobookshelf
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: SnapshotSchedule
+    name: audiobookshelf-daily
+    namespace: media
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

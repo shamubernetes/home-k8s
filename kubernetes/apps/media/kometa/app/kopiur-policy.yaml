@@ -1,0 +1,225 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: kometa
+spec:
+  repository:
+    kind: Repository
+    name: kometa-nas-smb
+  identity:
+    username: kometa
+    hostname: media
+  sources:
+  - pvc:
+      name: kometa
+    sourcePathOverride: /pvc/kometa
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: kometa
+            app.kubernetes.io/controller: kometa
+        container: app
+        command:
+        - python3
+        - -c
+        - |
+          ROOT = '/config'
+          DATABASE = 'config.cache'
+          REQUIRED_FILES = ['config.yml', 'UUID']
+          DEADLINE_SECONDS = 90
+          import contextlib
+          import fcntl
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          import signal
+          import sqlite3
+          import tempfile
+          import time
+          import uuid
+
+          root = Path(ROOT)
+          backup_dir = root / '.kopiur-consistent'
+          if backup_dir.is_symlink():
+              raise RuntimeError('unsafe consistent-backup directory')
+          backup_dir.mkdir(mode=0o700, exist_ok=True)
+          os.chmod(backup_dir, 0o700)
+          # flock releases on every exit, including SIGKILL. Concurrent hooks fail closed.
+          lock_fd = os.open(backup_dir / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+          fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+          generation = uuid.uuid4().hex
+          artifact = backup_dir / ('database-' + generation + '.sqlite3')
+
+          def sync_dir():
+              fd = os.open(backup_dir, os.O_RDONLY)
+              try:
+                  os.fsync(fd)
+              finally:
+                  os.close(fd)
+
+          def publish(name, value):
+              fd, temporary = tempfile.mkstemp(prefix='json-', suffix='.tmp', dir=backup_dir)
+              try:
+                  with os.fdopen(fd, 'w') as handle:
+                      json.dump(value, handle, sort_keys=True)
+                      handle.flush()
+                      os.fsync(handle.fileno())
+                  os.replace(temporary, backup_dir / name)
+                  sync_dir()
+              finally:
+                  if os.path.exists(temporary):
+                      os.unlink(temporary)
+
+          # Invalidate the old generation before inspecting any source state.
+          publish('attempt.json', {'generation': generation, 'state': 'running'})
+          deadline = time.monotonic() + DEADLINE_SECONDS
+
+          def expired(*_):
+              raise TimeoutError('SQLite recovery hook deadline exceeded')
+
+          def progress(*_):
+              if time.monotonic() >= deadline:
+                  expired()
+
+          signal.signal(signal.SIGALRM, expired)
+          signal.setitimer(signal.ITIMER_REAL, DEADLINE_SECONDS)
+          published = False
+          try:
+              previous = None
+              if (backup_dir / 'manifest.json').exists():
+                  previous = json.loads((backup_dir / 'manifest.json').read_text())['artifact']
+                  if not re.fullmatch(r'database-[0-9a-f]{32}\.sqlite3', previous):
+                      raise RuntimeError('unsafe previous manifest')
+              for old in backup_dir.iterdir():
+                  if re.fullmatch(r'database-[0-9a-f]{32}\.sqlite3(?:-wal|-shm|-journal)?', old.name) and old.name != previous:
+                      old.unlink()
+              for relative in [DATABASE, *REQUIRED_FILES]:
+                  path = root / relative
+                  if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+                      raise RuntimeError('required application state missing or unsafe')
+              fd = os.open(artifact, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+              os.close(fd)
+              with contextlib.closing(sqlite3.connect((root / DATABASE).as_uri() + '?mode=ro', uri=True, timeout=1)) as origin:
+                  with contextlib.closing(sqlite3.connect(artifact)) as destination:
+                      origin.backup(destination, pages=256, progress=progress, sleep=0.1)
+                      destination.set_progress_handler(lambda: int(time.monotonic() >= deadline), 1000)
+                      destination.execute('PRAGMA journal_mode=DELETE')
+                      if destination.execute('PRAGMA integrity_check').fetchall() != [('ok',)]:
+                          raise RuntimeError('consistent SQLite backup failed integrity_check')
+              progress()
+              with artifact.open('rb') as handle:
+                  os.fsync(handle.fileno())
+                  hasher = hashlib.sha256()
+                  for block in iter(lambda: handle.read(1024 * 1024), b''):
+                      progress()
+                      hasher.update(block)
+                  digest = hasher.hexdigest()
+              manifest = {'version': 2, 'generation': generation, 'database': DATABASE,
+                          'artifact': artifact.name, 'size_bytes': artifact.stat().st_size,
+                          'sha256': digest, 'integrity_check': 'ok', 'completed_at': time.time()}
+              publish('manifest.json', manifest)
+              publish('attempt.json', {'generation': generation, 'state': 'complete'})
+              published = True
+          finally:
+              signal.setitimer(signal.ITIMER_REAL, 0)
+              if not published:
+                  # Preserve the old complete copy, but do not let it pass freshness checks.
+                  publish('attempt.json', {'generation': generation, 'state': 'failed'})
+                  for suffix in ['', '-wal', '-shm', '-journal']:
+                      with contextlib.suppress(FileNotFoundError):
+                          Path(str(artifact) + suffix).unlink()
+              os.close(lock_fd)
+          # The next attempt removes older generations, retaining this complete artifact.
+          print('consistent SQLite recovery copy verified')
+        timeout: 2m
+        continueOnFailure: false
+  mover:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+  verification:
+    quick:
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      capacity: 1Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: kometa-daily
+spec:
+  policyRef:
+    name: kometa
+  schedule:
+    cron: 0 3 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: kometa-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: kometa-nas-smb
+  destinationRef:
+    kind: Repository
+    name: kometa-r2
+  schedule:
+    cron: 0 8 * * *
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: kometa
+        hostname: media
+        sourcePath: /pvc/kometa
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

@@ -56,7 +56,7 @@ class MoverDeadlineTests(unittest.TestCase):
                     self.assertEqual(self.mutated_deadline(key, value), 3600)
 
     def test_media_cohort_job_types_are_capped(self):
-        for app in ('kometa', 'audiobookshelf'):
+        for app in ('kometa', 'audiobookshelf', 'tunarr'):
             labels = [('config', app), ('config', app + '-nas-smb'),
                       ('config', app + '-r2'), ('maintenance', app + '-nas-smb'),
                       ('maintenance', app + '-r2'),
@@ -70,13 +70,29 @@ class MoverDeadlineTests(unittest.TestCase):
         for arguments in [('config', 'kometa', 'arrs'),
                           ('config', 'audiobookshelf', 'default'),
                           ('config', 'unrelated', 'media'),
-                          ('config', 'tunarr', 'media'),
-                          ('maintenance', 'tunarr-nas-smb', 'media'),
-                          ('snapshot-replication', 'tunarr-nas-to-r2', 'media'),
-                          ('verify', 'tunarr', 'media'),
+                          ('config', 'unrelated-nas-smb', 'media'),
+                          ('config', 'unrelated-r2', 'media'),
+                          ('maintenance', 'unrelated-nas-smb', 'media'),
+                          ('maintenance', 'unrelated-r2', 'media'),
+                          ('snapshot-replication', 'unrelated-nas-to-r2', 'media'),
+                          ('verify', 'unrelated', 'media'),
                           ('config', 'kometa', 'media', 'other-controller')]:
             with self.subTest(arguments=arguments):
                 self.assertEqual(self.mutated_deadline(*arguments), 172800)
+
+    def test_tunarr_allowlist_is_namespace_and_manager_scoped(self):
+        labels = [('config', 'tunarr'), ('config', 'tunarr-nas-smb'),
+                  ('config', 'tunarr-r2'), ('maintenance', 'tunarr-nas-smb'),
+                  ('maintenance', 'tunarr-r2'),
+                  ('snapshot-replication', 'tunarr-nas-to-r2'), ('verify', 'tunarr')]
+        for key, value in labels:
+            for namespace, manager in [('arrs', 'kopiur'), ('kopiur-canary', 'kopiur'),
+                                       ('observability', 'kopiur'), ('services', 'kopiur'),
+                                       ('default', 'kopiur'), ('media', 'other-controller'),
+                                       ('media', 'volsync')]:
+                with self.subTest(key=key, value=value, namespace=namespace, manager=manager):
+                    self.assertEqual(
+                        self.mutated_deadline(key, value, namespace, manager), 172800)
 
     def test_existing_coverage_is_preserved(self):
         for key, value in [('config', 'seerr'), ('maintenance', 'profilarr-nas-smb'),

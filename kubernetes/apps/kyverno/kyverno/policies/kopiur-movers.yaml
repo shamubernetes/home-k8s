@@ -151,7 +151,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/config
               operator: In
-              values: ["kometa", "kometa-nas-smb", "kometa-r2", "audiobookshelf", "audiobookshelf-nas-smb", "audiobookshelf-r2"]
+              values: ["kometa", "kometa-nas-smb", "kometa-r2", "audiobookshelf", "audiobookshelf-nas-smb", "audiobookshelf-r2", "tunarr", "tunarr-nas-smb", "tunarr-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["media"]
@@ -161,7 +161,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/maintenance
               operator: In
-              values: ["kometa-nas-smb", "kometa-r2", "audiobookshelf-nas-smb", "audiobookshelf-r2"]
+              values: ["kometa-nas-smb", "kometa-r2", "audiobookshelf-nas-smb", "audiobookshelf-r2", "tunarr-nas-smb", "tunarr-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["media"]
@@ -171,7 +171,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/snapshot-replication
               operator: In
-              values: ["kometa-nas-to-r2", "audiobookshelf-nas-to-r2"]
+              values: ["kometa-nas-to-r2", "audiobookshelf-nas-to-r2", "tunarr-nas-to-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["media"]
@@ -181,7 +181,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/verify
               operator: In
-              values: ["kometa", "audiobookshelf"]
+              values: ["kometa", "audiobookshelf", "tunarr"]
     mutate:
       patchStrategicMerge:
         spec:

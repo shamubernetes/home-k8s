@@ -19,6 +19,14 @@ on:
         options:
         - tunarr
         - deadlines
+        # One native fixture per dispatch, never seven sequential apps in 45 minutes.
+        - postgres-bazarr
+        - postgres-radarr
+        - postgres-radarr-3d
+        - postgres-sonarr
+        - postgres-whisparr
+        - mixed-grimmory
+        - mixed-tubearchivist
 
 permissions:
   contents: read
@@ -48,6 +56,8 @@ jobs:
         [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
         case "$SUITE" in
           tunarr|deadlines) ;;
+          postgres-bazarr|postgres-radarr|postgres-radarr-3d|postgres-sonarr|postgres-whisparr) ;;
+          mixed-grimmory|mixed-tubearchivist) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
         esac
         # GitHub can resolve fork objects by SHA. Require an actual branch tip
@@ -82,6 +92,24 @@ jobs:
         python = "3.14.7"
         yq = "4.53.6"
         kyverno = "1.19.1"
+        TOML
+            ;;
+          postgres-*)
+            cat > "$RUNNER_TEMP/recovery-tools/mise.toml" <<'TOML'
+        [tools]
+        python = "3.14.7"
+        yq = "4.53.6"
+        kustomize = "5.8.1"
+        kubectl = "1.37.1"
+        helm = "4.3.0"
+        jq = "1.8.2"
+        flux2 = "2.9.5"
+        TOML
+            ;;
+          mixed-*)
+            cat > "$RUNNER_TEMP/recovery-tools/mise.toml" <<'TOML'
+        [tools]
+        python = "3.14.7"
         TOML
             ;;
         esac
@@ -128,6 +156,8 @@ jobs:
         case "$SUITE" in
           tunarr) tools=(python3 node yq kubectl helm jq flux) ;;
           deadlines) tools=(python3 yq kyverno) ;;
+          postgres-*) tools=(python3 yq kustomize kubectl helm jq flux) ;;
+          mixed-*) tools=(python3) ;;
           *) exit 1 ;;
         esac
         for tool in "${tools[@]}"; do
@@ -174,3 +204,72 @@ jobs:
     - name: Offline mover deadline policy regressions
       if: ${{ inputs.suite == 'deadlines' }}
       run: python3 scripts/tests/test_kopiur_mover_deadlines.py -v
+
+    - name: PostgreSQL manifest and unit regressions
+      if: ${{ startsWith(inputs.suite, 'postgres-') }}
+      run: python3 -m unittest discover -s scripts/tests -p test_kopiur_postgres.py -v
+
+    - name: Offline PostgreSQL application validation
+      if: ${{ startsWith(inputs.suite, 'postgres-') }}
+      env:
+        SUITE: ${{ inputs.suite }}
+      run: scripts/validate-app --offline "arrs/${SUITE#postgres-}"
+
+    - name: Pull selected database fixture images into ARC DinD
+      if: ${{ startsWith(inputs.suite, 'postgres-') || startsWith(inputs.suite, 'mixed-') }}
+      env:
+        SUITE: ${{ inputs.suite }}
+      run: |
+        set -euo pipefail
+        docker info >/dev/null
+        python3 - <<'PY'
+        import ast
+        import os
+        from pathlib import Path
+        import re
+        import runpy
+        import subprocess
+
+        suite = os.environ['SUITE']
+        if suite.startswith('postgres-'):
+            fixture = runpy.run_path('scripts/kopiur-postgres-drill')
+            images = [fixture['PG_IMAGE'], fixture['CONTRACTS'][suite.removeprefix('postgres-')][0]]
+        else:
+            # Read constants without running the mixed fixture's scratch setup.
+            required = {
+                'mixed-grimmory': ('MARIA', 'GRIMM'),
+                'mixed-tubearchivist': ('TA', 'ES', 'REDIS'),
+            }[suite]
+            tree = ast.parse(Path('scripts/k8s92-mixed-db-test.py').read_text())
+            constants = {}
+            for statement in tree.body:
+                if isinstance(statement, ast.Assign):
+                    for target in statement.targets:
+                        if isinstance(target, ast.Name) and target.id in required:
+                            if target.id in constants:
+                                raise ValueError('Duplicate native fixture image constant')
+                            constants[target.id] = ast.literal_eval(statement.value)
+            images = [constants[name] for name in required]
+        for image in images:
+            if not isinstance(image, str) or not re.fullmatch(
+                r'[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}', image
+            ):
+                raise ValueError('Native fixture image must use an immutable digest')
+            subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', image],
+                           check=True, timeout=600)
+        PY
+
+    - name: PostgreSQL native application recovery fixture
+      if: ${{ startsWith(inputs.suite, 'postgres-') }}
+      env:
+        SUITE: ${{ inputs.suite }}
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+      run: python3 scripts/kopiur-postgres-drill --fixture --app "${SUITE#postgres-}"
+
+    - name: Mixed database native application recovery fixture
+      if: ${{ startsWith(inputs.suite, 'mixed-') }}
+      env:
+        SUITE: ${{ inputs.suite }}
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+        K8S92_COLIMA_ROOT_DISK: "0"
+      run: python3 scripts/k8s92-mixed-db-test.py --app "${SUITE#mixed-}"

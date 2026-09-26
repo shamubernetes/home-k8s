@@ -37,6 +37,8 @@ spec:
               TUNARR_BIND_ADDR: 0.0.0.0
               # Talos cgroup namespaces do not expose containerd to autodetection.
               TUNARR_DATABASE_PATH: /config/tunarr/stable-1.3
+              # Bound embedded search indexing concurrency on the shared Ceph volume.
+              TUNARR_SEARCH_MAX_INDEXING_THREADS: "1"
               # ChildProcessHelper drops cwd; keep Meilisearch dumps off the image filesystem.
               MEILI_DUMP_DIR: /config/tunarr/stable-1.3/dumps
               # Trust forwarding headers only from the cluster pod network.

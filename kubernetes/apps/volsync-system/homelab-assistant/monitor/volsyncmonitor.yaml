@@ -2,7 +2,8 @@
 apiVersion: homelab.rafaribe.com/v1alpha1
 kind: VolSyncMonitor
 metadata:
-  name: volsync-monitor
+  # A new identity retries jobs deduplicated by the old false-success template.
+  name: volsync-monitor-safe-unlock
 spec:
   # Enable the monitor
   enabled: true
@@ -22,10 +23,12 @@ spec:
     args:
     - "-c"
     - |
-      echo "Unlocking repository for failed job: $FAILED_JOB_NAME"
-      echo "Lock error detected: $LOCK_ERROR"
-      restic unlock --remove-all
-      echo "Repository unlocked successfully"
+      set -eu
+      echo "Unlocking stale locks for failed job: $FAILED_JOB_NAME"
+      # The inherited cache can be owned by a different UID. Unlock needs no cache.
+      # Keep active locks intact and propagate failures instead of reporting success.
+      restic --no-cache unlock
+      echo "Stale repository locks removed successfully"
     resources:
       requests:
         cpu: 100m

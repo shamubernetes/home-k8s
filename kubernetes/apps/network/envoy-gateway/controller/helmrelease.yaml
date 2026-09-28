@@ -24,7 +24,7 @@ spec:
         image:
           repository: docker.io/envoyproxy/gateway
           # renovate: datasource=docker depName=docker.io/envoyproxy/gateway
-          tag: v1.9.1@sha256:0049bcb384c591c6a6dd043fe5c9929ef6e74f230e12dd678d2d3701df9b301e
+          tag: v1.9.2@sha256:9d67017c442a70e6ae9f1a358e6c80eb653c67c2e40823d9a991e0daf37ba926
     config:
       envoyGateway:
         provider:

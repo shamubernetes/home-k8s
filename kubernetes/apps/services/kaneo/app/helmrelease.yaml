@@ -85,7 +85,7 @@ spec:
           app:
             image:
               repository: ghcr.io/usekaneo/kaneo
-              tag: 2.28.3@sha256:414d153e5f01cc9d5bdeb148e6c43ac2efaf9787bb8295dddcf38e01d3b96d03
+              tag: 2.29.2@sha256:af576bdb2a6dffaa33f67d715f2d83b30afbb052b44cf4b036e76bed9857319a
             envFrom: *envFrom
             env:
               KANEO_CLIENT_URL: https://kaneo.${HOME_DOMAIN}

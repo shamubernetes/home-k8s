@@ -30,7 +30,7 @@ spec:
           app:
             image:
               repository: ghcr.io/dgtlmoon/changedetection.io
-              tag: 0.60.7@sha256:938cded62165fa2db8c2ab23a21bfa397e8bc8079acc4278bbdf32224c04c883
+              tag: 0.60.8@sha256:aa36286677a1ea637bc46e99e0247b5e97faf709214e775e7720d43dcef0d6fc
             env:
               BASE_URL: https://changedetection.${HOME_DOMAIN}
               DISABLE_VERSION_CHECK: "true"

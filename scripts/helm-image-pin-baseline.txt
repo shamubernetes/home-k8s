@@ -1,7 +1,6 @@
 # Explicit legacy exceptions for Helm-rendered workload images that are not yet digest pinned.
 # app-directory<TAB>rendered-image
 # New entries are not accepted by default. Prefer chart values that pin the image digest.
-actions-runner-system/ghar-controller/app	ghcr.io/actions/gha-runner-scale-set-controller:0.14.2
 actions-runner-system/ghar-scale-set/arc-maudecode	docker:dind
 actions-runner-system/ghar-scale-set/arc-zoo	docker:dind
 games/minecraft-stoneblock4/app	itzg/mc-backup:latest

@@ -24,7 +24,7 @@ spec:
     image:
       registry: docker.io
       repository: victoriametrics/vlagent
-      tag: v1.52.0@sha256:5f8bb5cfde9745c02c3301426cad6fab4ef1d382161af577d284cccc9136b99c
+      tag: v1.53.0@sha256:a82f93ffecc153fb068606903e512368b070272739d823abe99fad0eff6e1849
     env:
     - name: KUBE_NODE_NAME
       valueFrom:

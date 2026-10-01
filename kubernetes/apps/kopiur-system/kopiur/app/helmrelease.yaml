@@ -18,7 +18,7 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
-  # Recreate preserves one writer while relocating it off remaining upgrade nodes.
+  # Recreate preserves one writer until upstream election fails closed.
   postRenderers:
   - kustomize:
       patches:
@@ -32,10 +32,6 @@ spec:
             path: /spec/strategy
             value:
               type: Recreate
-          - op: add
-            path: /spec/template/spec/nodeSelector
-            value:
-              kubernetes.io/hostname: k8s-rhea
   values:
     installScope: cluster
     # 0.10.10 continues reconciling without election after a Lease 403.

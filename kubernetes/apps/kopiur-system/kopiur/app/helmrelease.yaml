@@ -18,7 +18,7 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
-  # Recreate preserves one writer even when leader election fails open.
+  # Adopt server-defaulted fields before the separate SSA Recreate handoff.
   postRenderers:
   - kustomize:
       patches:
@@ -31,16 +31,15 @@ spec:
           - op: add
             path: /spec/strategy
             value:
-              type: Recreate
-              rollingUpdate: null
+              type: RollingUpdate
+              rollingUpdate:
+                maxSurge: 25%
+                maxUnavailable: 25%
   values:
     installScope: cluster
     # 0.10.10 continues reconciling without election after a Lease 403.
     # Keep one writer until upstream fails closed; webhook HA is unchanged.
     replicaCount: 1
-    # Temporary until the supervised Talos rollout completes; K8S-63.
-    nodeSelector:
-      kubernetes.io/hostname: k8s-rhea
     priorityClassName: system-cluster-critical
     podDisruptionBudget:
       enabled: true

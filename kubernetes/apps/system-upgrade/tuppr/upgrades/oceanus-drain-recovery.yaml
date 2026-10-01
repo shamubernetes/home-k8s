@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/v1/node.json
+apiVersion: v1
+kind: Node
+metadata:
+  name: k8s-oceanus
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  unschedulable: false

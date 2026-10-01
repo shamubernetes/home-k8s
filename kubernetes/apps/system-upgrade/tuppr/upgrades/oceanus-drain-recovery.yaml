@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: oceanus-drain-recovery
+  name: oceanus-drain-recovery-v2
   namespace: system-upgrade
 spec:
   backoffLimit: 0
@@ -21,23 +21,23 @@ spec:
         - /bin/sh
         - -c
         - |
-          set -eu
+          set -eux
           # Flux typed normalization removes false Node booleans. Use a bounded
           # GitOps-owned recovery, never an agent-side uncordon.
-          test "$(kubectl get talosupgrade talos -o jsonpath="{.metadata.annotations.tuppr\\.home-operations\\.com/suspend}")" = true
-          test "$(kubectl get talosupgrade talos -o jsonpath="{.status.phase}")" = Pending
-          test -z "$(kubectl get talosupgrade talos -o jsonpath="{.status.currentNode}")"
-          for job in $(kubectl -n system-upgrade get jobs -o jsonpath="{range .items[*]}{.metadata.name}:{.status.active}{\"\\n\"}{end}"); do
+          test "$(kubectl get talosupgrade talos -o go-template='{{index .metadata.annotations "tuppr.home-operations.com/suspend"}}')" = true
+          test "$(kubectl get talosupgrade talos -o jsonpath='{.status.phase}')" = Pending
+          test -z "$(kubectl get talosupgrade talos -o jsonpath='{.status.currentNode}')"
+          for job in $(kubectl -n system-upgrade get jobs -o jsonpath='{range .items[*]}{.metadata.name}:{.status.active}{"\n"}{end}'); do
             case "$${job}" in
-              oceanus-drain-recovery:*) ;;
+              oceanus-drain-recovery-v2:*) ;;
               *:|*:0) ;;
               *) exit 1 ;;
             esac
           done
-          test "$(kubectl get node k8s-oceanus -o jsonpath="{.status.conditions[?(@.type==\"Ready\")].status}")" = True
-          if [ "$(kubectl get node k8s-oceanus -o jsonpath="{.spec.unschedulable}")" = true ]; then
-            rv="$(kubectl get node k8s-oceanus -o jsonpath="{.metadata.resourceVersion}")"
+          test "$(kubectl get node k8s-oceanus -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')" = True
+          if [ "$(kubectl get node k8s-oceanus -o jsonpath='{.spec.unschedulable}')" = true ]; then
+            rv="$(kubectl get node k8s-oceanus -o jsonpath='{.metadata.resourceVersion}')"
             kubectl patch node k8s-oceanus --type=json -p "[{\"op\":\"test\",\"path\":\"/metadata/resourceVersion\",\"value\":\"$${rv}\"},{\"op\":\"test\",\"path\":\"/spec/unschedulable\",\"value\":true},{\"op\":\"replace\",\"path\":\"/spec/unschedulable\",\"value\":false}]"
           fi
-          test "$(kubectl get node k8s-oceanus -o jsonpath="{.spec.unschedulable}")" != true
+          test "$(kubectl get node k8s-oceanus -o jsonpath='{.spec.unschedulable}')" != true
           printf "%s\n" "Verified oceanus recovery while Talos remains paused"

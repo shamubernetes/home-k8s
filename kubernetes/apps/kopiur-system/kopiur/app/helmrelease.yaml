@@ -18,7 +18,7 @@ spec:
     remediation:
       strategy: rollback
       retries: 3
-  # Adopt server-defaulted fields before the separate SSA Recreate handoff.
+  # Recreate preserves one writer while relocating it off remaining upgrade nodes.
   postRenderers:
   - kustomize:
       patches:
@@ -31,10 +31,11 @@ spec:
           - op: add
             path: /spec/strategy
             value:
-              type: RollingUpdate
-              rollingUpdate:
-                maxSurge: 25%
-                maxUnavailable: 25%
+              type: Recreate
+          - op: add
+            path: /spec/template/spec/nodeSelector
+            value:
+              kubernetes.io/hostname: k8s-rhea
   values:
     installScope: cluster
     # 0.10.10 continues reconciling without election after a Lease 403.

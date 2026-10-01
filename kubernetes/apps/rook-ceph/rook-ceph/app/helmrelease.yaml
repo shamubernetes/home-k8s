@@ -29,7 +29,7 @@ spec:
         manager:
           image:
             repository: quay.io/cephcsi/ceph-csi-operator
-            tag: v1.1.0@sha256:c42c95c36fa257266571ff7542c3e350bb93b152f8865538c8929eb2e2dbe7c6
+            tag: v1.0.5@sha256:f8f4e990bc9f5a255ba47cdab73909a4a8f9b92086d9743dd8eaed4689228233
     csi:
       cephcsi:
         tag: v3.17.1@sha256:0b62db8afc9b174619186c87084a8952157daa719415c598603be22b63cc1293

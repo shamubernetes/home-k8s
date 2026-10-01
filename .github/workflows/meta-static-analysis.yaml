@@ -136,6 +136,7 @@ jobs:
         python scripts/tests/test-home-assistant-renovate-guard.py
         python scripts/tests/test-renovate-ceph-guard.py
         node scripts/tests/test-renovate-n8n-guard.cjs
+        node scripts/tests/test-renovate-python-artifact-guard.cjs
         python scripts/tests/test-renovate-group-precedence.py
         python scripts/tests/test-renovate-queue-precheck.py
         python scripts/tests/test-renovate-ci-quota-hardening.py

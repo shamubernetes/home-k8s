@@ -11,6 +11,15 @@
   branchConcurrentLimit: 0,
   packageRules: [
     {
+      // Remove once standalone 3.14.8 binaries exist for Linux and macOS.
+      // K8S-63 tracks the missing artifacts and locked-install verification.
+      description: "Python 3.14.8 has no checksum-verified standalone binaries yet",
+      matchManagers: ["mise"],
+      matchFileNames: [".mise.toml"],
+      matchPackageNames: ["python/cpython"],
+      allowedVersions: "!/^3\\.14\\.8$/",
+    },
+    {
       description: "GitHub Actions tool inputs are version-only",
       matchManagers: ["github-actions"],
       matchPackageNames: ["helm/helm", "sigstore/cosign"],

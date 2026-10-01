@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: oceanus-drain-recovery-v2
+  name: oceanus-drain-recovery-v3
   namespace: system-upgrade
 spec:
   backoffLimit: 0
@@ -27,13 +27,27 @@ spec:
           test "$(kubectl get talosupgrade talos -o go-template='{{index .metadata.annotations "tuppr.home-operations.com/suspend"}}')" = true
           test "$(kubectl get talosupgrade talos -o jsonpath='{.status.phase}')" = Pending
           test -z "$(kubectl get talosupgrade talos -o jsonpath='{.status.currentNode}')"
-          for job in $(kubectl -n system-upgrade get jobs -o jsonpath='{range .items[*]}{.metadata.name}:{.status.active}{"\n"}{end}'); do
-            case "$${job}" in
-              oceanus-drain-recovery-v2:*) ;;
-              *:|*:0) ;;
-              *) exit 1 ;;
-            esac
+          # The existing legacy cleanup Job starts alongside this Job. Wait
+          # boundedly for it instead of racing its first active status.
+          attempts=0
+          while :; do
+            busy=false
+            for job in $(kubectl -n system-upgrade get jobs -o jsonpath='{range .items[*]}{.metadata.name}:{.status.active}{"\n"}{end}'); do
+              case "$${job}" in
+                oceanus-drain-recovery-v3:*) ;;
+                *:|*:0) ;;
+                *) busy=true ;;
+              esac
+            done
+            [ "$${busy}" = true ] || break
+            attempts=$((attempts + 1))
+            [ "$${attempts}" -lt 18 ] || exit 1
+            sleep 5
           done
+          # Recheck suspension after the bounded wait and before node mutation.
+          test "$(kubectl get talosupgrade talos -o go-template='{{index .metadata.annotations "tuppr.home-operations.com/suspend"}}')" = true
+          test "$(kubectl get talosupgrade talos -o jsonpath='{.status.phase}')" = Pending
+          test -z "$(kubectl get talosupgrade talos -o jsonpath='{.status.currentNode}')"
           test "$(kubectl get node k8s-oceanus -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')" = True
           if [ "$(kubectl get node k8s-oceanus -o jsonpath='{.spec.unschedulable}')" = true ]; then
             rv="$(kubectl get node k8s-oceanus -o jsonpath='{.metadata.resourceVersion}')"

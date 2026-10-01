@@ -32,6 +32,7 @@ spec:
             path: /spec/strategy
             value:
               type: Recreate
+              rollingUpdate: null
   values:
     installScope: cluster
     # 0.10.10 continues reconciling without election after a Lease 403.

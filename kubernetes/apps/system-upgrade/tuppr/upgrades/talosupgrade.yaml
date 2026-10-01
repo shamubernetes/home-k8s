@@ -3,8 +3,6 @@ apiVersion: tuppr.home-operations.com/v1alpha1
 kind: TalosUpgrade
 metadata:
   name: talos
-  annotations:
-    tuppr.home-operations.com/suspend: "true"
 spec:
   parallelism: 1
   talos:

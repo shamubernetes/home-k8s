@@ -100,8 +100,7 @@ spec:
                     - sh
                     - -c
                     - |
-                      CACHE_PATH="/config/Library/Application Support/Plex Media Server/Cache"
-                      stat "$CACHE_PATH" >/dev/null
+                      # A slow NAS cache is not repaired by restarting a responsive server.
                       curl -fsS --max-time 2 http://127.0.0.1:32400/identity >/dev/null
                   initialDelaySeconds: 0
                   periodSeconds: 10

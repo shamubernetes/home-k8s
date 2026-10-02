@@ -29,6 +29,16 @@
       allowedVersions: "!/^3\\.14\\.8$/",
     },
     {
+      // Rook 1.20.8 bundles operator CRDs below the v1.1 API.
+      // Remove after the chart ships ClientProfileReplication and matching RBAC.
+      // K8S-63 records the failed startup and protected rollback.
+      description: "Ceph CSI operator must match the Rook bundled CRD API",
+      matchDatasources: ["docker"],
+      matchFileNames: ["kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml"],
+      matchPackageNames: ["quay.io/cephcsi/ceph-csi-operator"],
+      allowedVersions: "<1.1.0",
+    },
+    {
       description: "GitHub Actions tool inputs are version-only",
       matchManagers: ["github-actions"],
       matchPackageNames: ["helm/helm", "sigstore/cosign"],

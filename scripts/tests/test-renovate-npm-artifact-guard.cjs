@@ -29,9 +29,9 @@ async function main() {
   assert.equal(rule.enabled, undefined, "supported Renovate upgrades stay enabled");
   const { filterVersions } = await load("workers/repository/process/lookup/filter.js");
   const { api } = await load("modules/versioning/semver/index.js");
-  const releases = ["44.130.0", "44.131.0", "44.131.1", "44.131.2", "44.132.0"].map((version) => ({ version }));
+  const releases = ["44.130.0", "44.131.0", "44.131.1", "44.131.2", "44.131.3", "44.131.4", "44.132.0"].map((version) => ({ version }));
   const filtered = filterVersions({ ...rule, depName: renovate.depName, ignoreUnstable: false, respectLatest: false }, "44.130.0", "44.132.0", releases, api);
-  assert.deepEqual(filtered.map((release) => release.version), ["44.131.0", "44.131.2", "44.132.0"]);
-  console.log("PASS actual Mise extraction and Renovate filter reject only malformed 44.131.1; supported and later releases stay eligible");
+  assert.deepEqual(filtered.map((release) => release.version), ["44.131.0", "44.131.4", "44.132.0"]);
+  console.log("PASS actual Mise extraction and Renovate filter reject only proven malformed 44.131.1 through 44.131.3; 44.131.0 and future releases stay eligible");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

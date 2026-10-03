@@ -1,0 +1,421 @@
+#!/usr/bin/env python3
+"""Offline PostgreSQL + PVC fixtures and verified-bundle recovery.
+
+No Kubernetes commands. Containers share a network-none namespace, publish no
+ports, and receive only disposable credentials. Source backups are read-only.
+"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import secrets
+import subprocess
+import tempfile
+import tarfile
+import io
+import time
+import uuid
+import xml.etree.ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
+PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
+RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
+CONTRACTS = {
+    "radarr": (RADARR_IMAGE, ["radarr_main"], "RADARR", 7878, "/config/config.xml"),
+    "radarr-3d": (RADARR_IMAGE, ["radarr_3d_main"], "RADARR", 7878, "/config/config.xml"),
+    "sonarr": ("ghcr.io/home-operations/sonarr:4.0.20.3012@sha256:1f19eb5e0f421418c1a956bbe01310a0141423afe28bd9a4b1dcb8629ff2bce2", ["sonarr_main"], "SONARR", 7878, "/config/config.xml"),
+    "whisparr": ("ghcr.io/shamubernetes/whisparr-eros:3.3.7-release.979@sha256:9002dd8e29471d65f0b1a03802a3bf48bb58212435a053bbbe8971f2d2253194", ["whisparrv3_main", "whisparrv3_logs"], "WHISPARR", 7878, "/config/config.xml"),
+    "bazarr": ("ghcr.io/home-operations/bazarr:1.6.2@sha256:17dc1cff22e99694ffbfb06555526cb47a66b362b4d6c982f06b557f7caae2bb", ["bazarr"], "BAZARR", 6767, "/config/config/config.yaml"),
+}
+
+
+def run(*args, stdin=None, check=True, timeout=180, env=None):
+    result = subprocess.run(args, input=stdin, capture_output=True, timeout=timeout, env=env)
+    if check and result.returncode:
+        # Commands/env and database output may contain private data. Never echo them.
+        raise RuntimeError(f"{args[0]} operation failed with exit {result.returncode}")
+    return result
+
+
+def verify_bundle(root):
+    root = Path(root)
+    if root.is_symlink() or any((root / name).is_symlink() for name in ("current", "COMPLETE", "current/SHA256SUMS")):
+        raise ValueError("unsafe bundle path")
+    if (root / "COMPLETE").read_text() != "complete\n":
+        raise ValueError("bundle is incomplete")
+    current = root / "current"
+    expected = set()
+    for line in (current / "SHA256SUMS").read_text().splitlines():
+        digest, name = line.split("  ", 1)
+        name = name.removeprefix("./")
+        if Path(name).name != name or name in expected:
+            raise ValueError("unsafe or duplicate artifact")
+        path = current / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("missing or unsafe artifact")
+        with path.open("rb") as handle:
+            actual = hashlib.file_digest(handle, "sha256").hexdigest()
+        if actual != digest:
+            raise ValueError("artifact checksum mismatch")
+        expected.add(name)
+    metadata = (current / "metadata").read_text().splitlines()
+    databases = [line.split()[0].split("=", 1)[1] for line in metadata if line.startswith("database=")]
+    if not databases or len(set(databases)) != len(databases):
+        raise ValueError("missing or duplicate database inventory")
+    required = {"application-config", "metadata"}
+    for database in databases:
+        if not database or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789_" for c in database):
+            raise ValueError("unsafe database name")
+        required.update((database + ".dump", database + ".toc"))
+    if expected != required:
+        raise ValueError("bundle inventory differs from metadata")
+    if "format=1" not in metadata or "consistency=per-database-snapshot-before-pvc" not in metadata:
+        raise ValueError("unsupported recovery contract")
+    return databases
+
+
+class DockerDrill:
+    def __init__(self, app="radarr", diagnostics=False, config_mib=256, database_mib=512):
+        self.app_name = app
+        self.image, self.databases, self.env_prefix, self.port, self.config_file = CONTRACTS[app]
+        self.diagnostics = diagnostics
+        self.config_mib, self.database_mib = config_mib, database_mib
+        self.prefix = "k8s92-pg-" + uuid.uuid4().hex[:10]
+        self.containers = []
+        self.volumes = []
+        self.password = secrets.token_hex(24)
+        self.backup_password = secrets.token_hex(24)
+        self.api_key = secrets.token_hex(16)
+
+    def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None):
+        name = self.prefix + "-" + name
+        args = ["docker", "run", "-d", "--name", name, "--network", network,
+                "--label", "home-k8s.kopiur-postgres-drill=true", "--tmpfs", "/tmp:rw,size=268435456"]
+        if image == PG_IMAGE:
+            # Disposable databases need no Docker VM disk allocation or persistence.
+            args += ["--tmpfs", f"/var/lib/postgresql/data:rw,size={self.database_mib}m"]
+        if image != PG_IMAGE:
+            args += ["--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
+        if image == CONTRACTS["whisparr"][0]:
+            args += ["--platform", "linux/amd64"]
+        if user:
+            args += ["--user", user]
+        process_env = os.environ.copy()
+        for key, value in (env or {}).items():
+            process_env[key] = value
+            args += ["-e", key]
+        for source, target, mode in mounts:
+            if str(source).startswith(self.prefix):
+                args += ["--mount", f"type=volume,src={source},dst={target},volume-nocopy" + (",readonly" if mode == "ro" else "")]
+            else:
+                args += ["-v", f"{source}:{target}:{mode}"]
+        self.containers.append(name)
+        result = run(*args, image, *command, env=process_env, check=False)
+        if result.returncode:
+            # Report actionable daemon capacity failures without echoing commands,
+            # credentials, or application logs from a recovered production PVC.
+            error = result.stderr.decode(errors="replace").lower()
+            reason = next((message for message in ("no space left on device", "cannot allocate memory", "no such image")
+                           if message in error), "daemon rejected container creation")
+            raise RuntimeError(f"isolated container start failed: {reason} (exit {result.returncode})")
+        return name
+
+    def sql(self, container, sql, database="postgres", user="postgres", check=True):
+        return run("docker", "exec", "-i", container, "psql", "-X", "-A", "-t", "-v",
+                   "ON_ERROR_STOP=1", "-U", user, "-d", database, stdin=sql.encode(), check=check).stdout.decode().strip()
+
+    def database(self, name, databases):
+        container = self.start(name, PG_IMAGE, env={"POSTGRES_PASSWORD": self.password, "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"})
+        # The entrypoint's temporary init server is socket-only; wait for final TCP startup.
+        for _ in range(90):
+            if run("docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", check=False).returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            logs = run("docker", "logs", "--tail", "80", container, check=False)
+            text = (logs.stdout + logs.stderr).decode(errors="replace").replace(self.password, "[redacted]")
+            raise RuntimeError("isolated PostgreSQL startup timed out: " + text)
+        self.sql(container, f"CREATE ROLE app LOGIN PASSWORD '{self.password}';\n"
+                 f"CREATE ROLE backup LOGIN PASSWORD '{self.backup_password}';")
+        for database in databases:
+            self.sql(container, f'CREATE DATABASE "{database}" OWNER app;')
+        return container
+
+    def app(self, name, database, config):
+        prefix = self.env_prefix
+        env = {f"{prefix}__POSTGRES__HOST": "127.0.0.1", f"{prefix}__POSTGRES__PORT": "5432",
+               f"{prefix}__POSTGRES__USER": "app", f"{prefix}__POSTGRES__PASSWORD": self.password,
+               f"{prefix}__POSTGRES__MAINDB": self.databases[0], f"{prefix}__LOG__DBENABLED": "False",
+               f"{prefix}__SERVER__PORT": str(self.port), f"{prefix}__AUTH__APIKEY": self.api_key,
+               f"{prefix}__AUTH__METHOD": "External", f"{prefix}__AUTH__REQUIRED": "DisabledForLocalAddresses"}
+        if self.app_name == "whisparr":
+            env = {"WHISPARR__POSTGRES_HOST": "127.0.0.1", "WHISPARR__POSTGRES_PORT": "5432",
+                   "WHISPARR__POSTGRES_USER": "app", "WHISPARR__POSTGRES_PASSWORD": self.password,
+                   "WHISPARR__POSTGRES_MAIN_DB": self.databases[0], "WHISPARR__POSTGRES_LOG_DB": self.databases[1],
+                   "WHISPARR__PORT": str(self.port), "WHISPARR__API_KEY": self.api_key,
+                   "WHISPARR__AUTHENTICATION_METHOD": "External", "WHISPARR__AUTHENTICATION_REQUIRED": "DisabledForLocalAddresses"}
+        elif self.app_name == "bazarr":
+            env = {"POSTGRES_ENABLED": "true", "POSTGRES_DATABASE": self.databases[0],
+                   "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": "5432", "POSTGRES_USERNAME": "app",
+                   "POSTGRES_PASSWORD": self.password, "BAZARR__API_KEY": self.api_key}
+        return self.start(name, self.image, network="container:" + database, user="568:568",
+                          env=env, mounts=[(config, "/config", "rw")])
+
+    def isolated_config(self, data):
+        """Rewrite only a working copy. Never expose source DB/API credentials."""
+        if self.app_name == "bazarr":
+            env = os.environ.copy()
+            env.update(DRILL_DB=self.databases[0], DRILL_PASSWORD=self.password, DRILL_API_KEY=self.api_key)
+            expression = ('.postgresql = {"enabled": true, "host": "127.0.0.1", "port": 5432, '
+                          '"database": strenv(DRILL_DB), "username": "app", '
+                          '"password": strenv(DRILL_PASSWORD), "url": ""} | '
+                          '.auth.apikey = strenv(DRILL_API_KEY)')
+            return run("yq", expression, "-", stdin=data, env=env).stdout
+        text = data.decode("utf-8")
+        # Native ARR config is small UTF-8 XML. Reject DTD/entity declarations
+        # before stdlib parsing rather than allowing archive-controlled expansion.
+        if len(data) > 2 * 1024 * 1024 or any(token in text.upper() for token in ("<!DOCTYPE", "<!ENTITY")):
+            raise ValueError("unsafe native XML config")
+        tree = ET.fromstring(text)
+        if tree.tag != "Config":
+            raise ValueError("unexpected native XML config root")
+        replacements = {"PostgresHost": "127.0.0.1", "PostgresPort": "5432", "PostgresUser": "app",
+                        "PostgresPassword": self.password, "PostgresMainDb": self.databases[0],
+                        "ApiKey": self.api_key, "Port": str(self.port), "AuthenticationMethod": "External",
+                        "AuthenticationRequired": "DisabledForLocalAddresses"}
+        if len(self.databases) > 1:
+            replacements["PostgresLogDb"] = self.databases[1]
+        for key, value in replacements.items():
+            # Drop duplicate nodes rather than leaving an ambiguous source endpoint.
+            for existing in tree.findall(key):
+                tree.remove(existing)
+            ET.SubElement(tree, key).text = value
+        return ET.tostring(tree, encoding="utf-8", xml_declaration=True)
+
+    def healthy(self, container):
+        for _ in range(120):
+            probe = run("docker", "exec", container, "curl", "-fsS", f"http://127.0.0.1:{self.port}/ping", check=False)
+            if probe.returncode == 0:
+                return
+            state = run("docker", "inspect", "-f", "{{.State.Running}}", container).stdout.strip()
+            if state != b"true":
+                if not self.diagnostics:
+                    raise RuntimeError("isolated application exited before readiness; logs withheld")
+                logs = run("docker", "logs", "--tail", "80", container, check=False)
+                text = (logs.stdout + logs.stderr).decode(errors="replace")
+                for secret in (self.password, self.backup_password, self.api_key):
+                    text = text.replace(secret, "[redacted]")
+                raise RuntimeError("isolated fixture app exited before readiness: " + text)
+            time.sleep(1)
+        raise RuntimeError("isolated app startup timed out")
+
+    def config_volume(self, name):
+        name = self.prefix + "-" + name
+        run("docker", "volume", "create", "--label", "home-k8s.kopiur-postgres-drill=true",
+            "--driver", "local", "--opt", "type=tmpfs", "--opt", "device=tmpfs",
+            "--opt", f"o=size={self.config_mib}m,uid=568,gid=568,mode=0700", name)
+        self.volumes.append(name)
+        return name
+
+    def capture(self, database, config, databases, *, password=None, user="backup", check=True):
+        helper = self.start("capture-" + uuid.uuid4().hex[:6], PG_IMAGE,
+                            network="container:" + database, user="568:568",
+                            env={"PGHOST": "127.0.0.1", "PGUSER": user,
+                                 "PGPASSWORD": password or self.backup_password, "PGDATABASES": " ".join(databases),
+                                 "CONFIG_FILE": self.config_file},
+                            mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
+        result = run("docker", "exec", "-i", helper, "timeout", "600", "sh", "-s", stdin=CAPTURE.read_bytes(), check=False, timeout=610)
+        if check and result.returncode:
+            raise RuntimeError("fixture capture failed: " + result.stderr.decode().replace(self.backup_password, "[redacted]"))
+        return result.returncode
+
+    def restore(self, target, bundle, databases):
+        verify_bundle(bundle)
+        for database in databases:
+            # No globals, roles, ACLs, tablespaces or ownership are imported.
+            with (bundle / "current" / (database + ".dump")).open("rb") as archive:
+                proc = subprocess.run(["docker", "exec", "-i", target, "pg_restore", "-U", "app", "-d", database,
+                                       "--no-owner", "--no-privileges", "--no-tablespaces", "--exit-on-error",
+                                       "--single-transaction"], stdin=archive, capture_output=True, timeout=600)
+            if proc.returncode:
+                raise RuntimeError("isolated native database restore failed")
+
+    def counts(self, database, name=None):
+        name = name or self.databases[0]
+        tables = self.sql(database, "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename", name).splitlines()
+        return {table: int(self.sql(database, 'SELECT count(*) FROM public."' + table.replace('"', '""') + '"', name)) for table in tables}
+
+    def fingerprints(self, database, name):
+        """Compare restored table contents without printing application records."""
+        return {table: hashlib.sha256(self.sql(
+            database, 'SELECT row_to_json(t)::text FROM public."' + table.replace('"', '""') +
+            '" t ORDER BY row_to_json(t)::text', name).encode()).hexdigest()
+                for table in self.counts(database, name)}
+
+    def close(self):
+        failures = []
+        for name in reversed(self.containers[:]):
+            if run("docker", "rm", "-fv", name, check=False).returncode:
+                # Failed docker run may not have created a container at all.
+                existing = run("docker", "container", "ls", "-aq", "--filter", "name=^/" + name + "$", check=False)
+                if existing.returncode or existing.stdout.strip():
+                    failures.append(name)
+                    continue
+            self.containers.remove(name)
+        for name in self.volumes:
+            if run("docker", "volume", "rm", name, check=False).returncode:
+                failures.append(name)
+        if failures:
+            raise RuntimeError("disposable resource cleanup failed")
+
+
+def fixture(app_name="radarr"):
+    drill = DockerDrill(app_name, diagnostics=True)
+    scratch = Path.home() / ".hermes/cache/scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="k8s92-pg-", dir=scratch) as temporary:
+        base = Path(temporary)
+        try:
+            config = drill.config_volume("source-config")
+            source = drill.database("source-db", drill.databases)
+            holder = drill.start("source-config-holder", PG_IMAGE, user="568:568", mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
+            run("docker", "exec", "--user", "0", holder, "chown", "568:568", "/config")
+            app = drill.app("source-app", source, config)
+            drill.healthy(app)
+            run("docker", "stop", "-t", "30", app)
+            before = {}
+            for database in drill.databases:
+                # Require actual application migrations before adding synthetic markers.
+                native = drill.counts(source, database)
+                assert native, "application did not create PostgreSQL schema"
+                drill.sql(source, "CREATE TABLE kopiur_fixture (id integer primary key, value text NOT NULL);"
+                          " INSERT INTO kopiur_fixture VALUES (1, 'native-recovery-proof');", database, "app")
+                drill.sql(source, f'GRANT CONNECT ON DATABASE "{database}" TO backup; GRANT USAGE ON SCHEMA public TO backup;'
+                          " GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup;", database)
+                before[database] = drill.counts(source, database)
+            drill.capture(source, config, drill.databases)
+            helper = drill.containers[-1]
+            bundle = base / "bundle"
+            run("docker", "cp", helper + ":/config/.kopiur-postgres", str(bundle))
+            assert verify_bundle(bundle) == drill.databases
+            target = drill.database("restore-db", drill.databases)
+            drill.restore(target, bundle, drill.databases)
+            assert {db: drill.counts(target, db) for db in drill.databases} == before, "table counts differ after restore"
+            restored = drill.config_volume("restored-config")
+            holder = drill.start("config-copy", PG_IMAGE, user="568:568", mounts=[(restored, "/config", "rw")], command=["sleep", "infinity"])
+            copied = base / "source-config"
+            run("docker", "cp", helper + ":/config", str(copied))
+            run("docker", "cp", str(copied) + "/.", holder + ":/config")
+            run("docker", "exec", "--user", "0", holder, "chown", "-R", "568:568", "/config")
+            restored_app = drill.app("restored-app", target, restored)
+            drill.healthy(restored_app)
+            for database in drill.databases:
+                value = drill.sql(target, "SELECT value FROM kopiur_fixture WHERE id=1", database, "app")
+                assert value == "native-recovery-proof"
+            assert drill.capture(source, config, drill.databases, password="wrong-fixture-password", check=False) != 0
+            assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
+            drill.capture(source, config, drill.databases)
+            assert drill.capture(source, config, drill.databases, user="postgres", password=drill.password, check=False) != 0
+            assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
+            # Missing one requested database must reject the entire multi-DB set.
+            assert drill.capture(source, config, drill.databases + ["missing_database"], check=False) != 0
+            assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
+            drill.capture(source, config, drill.databases)
+            drill.sql(source, "REVOKE SELECT ON kopiur_fixture FROM backup", drill.databases[0])
+            assert drill.capture(source, config, drill.databases, check=False) != 0
+            assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
+            drill.sql(source, "GRANT SELECT ON kopiur_fixture TO backup", drill.databases[0])
+            recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
+            assert recovered["native_restore"] and recovered["restored_app_ping"]
+            print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
+                              "tables_equal": sum(len(tables) for tables in before.values()),
+                              "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
+                              "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
+                              "network": "none-shared-namespace", "production_data": False}, sort_keys=True))
+        finally:
+            drill.close()
+
+
+def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
+    """Read a recovered PVC. Write only new, isolated Docker resources."""
+    source = Path(source)
+    if source.is_symlink() or not source.is_dir():
+        raise ValueError("source must be a recovered PVC directory, not a symlink")
+    bundle = source / ".kopiur-postgres"
+    databases = verify_bundle(bundle)
+    drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib)
+    if databases != drill.databases:
+        raise ValueError("archive database set does not match the selected application")
+    # Reject links before streaming. Never follow restored links into host files.
+    for path in source.rglob("*"):
+        if path.is_symlink() or not (path.is_dir() or path.is_file()):
+            raise ValueError("recovered PVC contains links or special files")
+    try:
+        target = drill.database("restore-db", databases)
+        drill.restore(target, bundle, databases)
+        counts = {db: drill.counts(target, db) for db in databases}
+        if any(not tables for tables in counts.values()):
+            raise ValueError("restored database schema is empty")
+        # A valid log database can contain zero rows. Require main-app data only.
+        if not sum(counts[databases[0]].values()):
+            raise ValueError("restored main database is empty")
+        config = drill.config_volume("restored-config")
+        holder = drill.start("config-copy", PG_IMAGE, user="568:568", mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
+        # Do not copy prior dump generations into the running application's volume.
+        process = subprocess.Popen(["docker", "exec", "-i", holder, "tar", "--no-same-owner", "-xf", "-", "-C", "/config"],
+                                   stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            with tarfile.open(fileobj=process.stdin, mode="w|") as archive:
+                for path in sorted(source.iterdir()):
+                    if path.name != ".kopiur-postgres":
+                        archive.add(path, arcname=path.name, recursive=True)
+                # Prefer the config bytes paired with this DB export over later PVC bytes.
+                data = drill.isolated_config((bundle / "current/application-config").read_bytes())
+                member = tarfile.TarInfo(str(Path(drill.config_file).relative_to("/config")))
+                member.size, member.mode, member.uid, member.gid = len(data), 0o600, 568, 568
+                archive.addfile(member, io.BytesIO(data))
+        finally:
+            process.stdin.close()
+            try:
+                result = process.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                raise
+        if result:
+            raise RuntimeError("isolated config import failed; check --config-mib capacity")
+        restored_app = drill.app("restored-app", target, config)
+        drill.healthy(restored_app)
+        return {"app": app_name, "native_restore": True, "restored_app_ping": True,
+                "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
+                "rows": sum(sum(t.values()) for t in counts.values()), "network": "none-shared-namespace"}
+    finally:
+        drill.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fixture", action="store_true")
+    parser.add_argument("--verify-bundle", type=Path)
+    parser.add_argument("--restore-pvc", type=Path)
+    parser.add_argument("--config-mib", type=int, default=1024)
+    parser.add_argument("--database-mib", type=int, default=4096)
+    parser.add_argument("--app", choices=CONTRACTS, default="radarr")
+    args = parser.parse_args()
+    if sum((args.fixture, bool(args.verify_bundle), bool(args.restore_pvc))) != 1:
+        parser.error("choose --fixture, --verify-bundle, or --restore-pvc")
+    if args.config_mib < 64 or args.database_mib < 128:
+        parser.error("config requires at least 64 MiB and database 128 MiB")
+    if args.fixture:
+        fixture(args.app)
+    elif args.restore_pvc:
+        print(json.dumps(restore_pvc(args.restore_pvc, args.app, config_mib=args.config_mib, database_mib=args.database_mib), sort_keys=True))
+    else:
+        databases = verify_bundle(args.verify_bundle)
+        print(json.dumps({"bundle_verified": True, "database_count": len(databases)}))
+
+
+if __name__ == "__main__":
+    main()

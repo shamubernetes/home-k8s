@@ -1,0 +1,108 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: radarr-3d
+spec:
+  # Parent enables only after credentials, grants and mover deadlines exist.
+  suspend: true
+  repository:
+    kind: Repository
+    name: radarr-3d-nas-smb
+  identity:
+    username: radarr-3d
+    hostname: arrs
+  sources:
+  - pvc:
+      name: radarr-3d
+    sourcePathOverride: /pvc/radarr-3d
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  defaultDeletionPolicy: Delete
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: radarr-3d
+            app.kubernetes.io/controller: radarr3d
+        container: kopiur-postgres
+        command: [timeout, "600", sh, /kopiur/capture.sh]
+        timeout: 11m
+        continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: "45 8 * * *"
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: "45 9 * * 0"
+        jitter: 1h
+      capacity: 15Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: "stats.files > 0 && stats.errors == 0"
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: radarr-3d-daily
+spec:
+  policyRef:
+    name: radarr-3d
+  schedule:
+    suspend: true
+    cron: "45 1 * * *"
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: radarr-3d-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: radarr-3d-nas-smb
+  destinationRef:
+    kind: Repository
+    name: radarr-3d-r2
+  schedule:
+    cron: "0 8 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: radarr-3d
+        hostname: arrs
+        sourcePath: /pvc/radarr-3d
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: true

@@ -44,6 +44,10 @@ spec:
       rbd:
         enabled: true
         name: rook-ceph.rbd.csi.ceph.com
+        # The operator does not watch the image-set ConfigMap for updates.
+        # An explicit reference reconciles this Driver with the current image set.
+        imageSet:
+          name: rook-csi-operator-image-set-configmap
         snapshotPolicy: volumeSnapshot
       cephfs:
         enabled: true

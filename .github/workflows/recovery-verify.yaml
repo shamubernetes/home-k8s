@@ -135,7 +135,7 @@ jobs:
     # Keep tooling outside the candidate checkout. Do not load its Mise hooks,
     # credential paths or unrelated tools. Export real bin paths, not Mise shims.
     - name: Setup recovery tools
-      uses: jdx/mise-action@94c60b39bc2d90ab2f9bab27f38d3cc4812c1834 # v5.1.0
+      uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       with:
         version: 2026.9.14
         working_directory: ${{ runner.temp }}/recovery-tools

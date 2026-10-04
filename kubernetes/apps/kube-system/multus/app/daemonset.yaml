@@ -63,7 +63,7 @@ spec:
             - name: tmp
               mountPath: /tmp
         - name: install-multus
-          image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.0@sha256:ec4e5dfe12b675e4dcbf4e9cd14892f7b4c8ac27aa0dc93cf2e9be0bdd7d764a
+          image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.1@sha256:9dc8ca645a78552ed4151cf67c2998d18f260f172cc541580d8acce2ee3495c2
           command:
             - /install_multus
           args:
@@ -84,7 +84,7 @@ spec:
               mountPropagation: Bidirectional
       containers:
         - name: multus
-          image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.0@sha256:ec4e5dfe12b675e4dcbf4e9cd14892f7b4c8ac27aa0dc93cf2e9be0bdd7d764a
+          image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.1@sha256:9dc8ca645a78552ed4151cf67c2998d18f260f172cc541580d8acce2ee3495c2
           command:
             - /thin_entrypoint
           args:

@@ -15,6 +15,19 @@ APPS = ("radarr", "radarr-3d", "sonarr", "bazarr", "whisparr")
 
 
 class ManifestTests(unittest.TestCase):
+    def test_bazarr_uses_dedicated_transport_identities(self):
+        directory = REPO / "kubernetes/apps/arrs/bazarr/app"
+        nas, r2, _ = load_documents(directory / "externalsecret-kopiur.yaml")
+        self.assertEqual(nas["spec"]["target"]["template"]["data"]["KOPIA_RCLONE_CONFIG"],
+                         "{{ .NAS_RCLONE_CONFIG }}")
+        self.assertNotIn("guest", json.dumps(nas))
+        repositories = load_documents(directory / "kopiur-repositories.yaml")
+        self.assertEqual(repositories[0]["spec"]["backend"]["rclone"]["remotePath"],
+                         "mnemosyne:kopiur-bazarr")
+        self.assertEqual(repositories[1]["spec"]["backend"]["s3"]["bucket"], "kopiur-bazarr")
+        self.assertEqual(r2["spec"]["target"]["template"]["data"]["AWS_ACCESS_KEY_ID"],
+                         "{{ .R2_ACCESS_KEY_ID }}")
+
     def test_runtime_shell_survives_flux_substitution(self):
         script = MODULE["CAPTURE"].read_bytes()
         result = subprocess.run(["flux", "envsubst", "--strict"], input=script, capture_output=True, check=True)

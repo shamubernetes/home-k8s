@@ -67,8 +67,7 @@ try:
                         'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-restore',
                         'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es'))
         lane.wait(lambda: lane.esready(es), 300)
-        redis = lane.start('redis', lane.REDIS, net, args=('redis-server', '--save', '', '--appendonly', 'no'), extra=('--network-alias', 'redis'))
-        assert lane.docker('exec', redis, 'redis-cli', '-n', '15', 'DBSIZE').stdout.strip() == '0'
+        redis = lane.start('redis', lane.REDIS, net, args=lane.REDIS_ARGS, extra=('--network-alias', 'redis'))
         env = {'ES_URL': 'http://es:9200', 'REDIS_CON': 'redis://redis:6379/15', 'TA_HOST': 'http://localhost:8000',
                'TA_USERNAME': 'restore-audit', 'TA_PASSWORD': secrets.token_hex(24), 'ELASTIC_PASSWORD': secrets.token_hex(24),
                'TA_PORT': '8000', 'TA_BACKEND_PORT': '8080', 'HOST_UID': '1000', 'HOST_GID': '1000', 'TZ': 'UTC'}
@@ -76,6 +75,8 @@ try:
         lane.docker('cp', str(bundle), tool + ':/bundle')
         lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
         lane.docker('exec', tool, 'python', '/contract.py', 'restore-es', '/bundle', timeout=660)
+        lane.docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
+                    'restore-redis', '/bundle', timeout=660)
         cache = lane.SCRATCH / 'working-cache'
         shutil.copytree(root, cache, symlinks=True)
         shutil.copy2(bundle / 'db.sqlite3', cache / 'db.sqlite3')

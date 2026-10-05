@@ -19,7 +19,11 @@ MARIA = 'mariadb:11.8.8@sha256:24e76fcec8c003a0362d0dd53f4806e7e79458d7fdeaf4743
 GRIMM = 'docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526'
 TA = 'bbilly1/tubearchivist:v0.5.12@sha256:ba1c846ddd0c6fdd0f040727129d2466e03b7a0c26499223839d450c7586ac09'
 ES = 'docker.elastic.co/elasticsearch/elasticsearch:8.19.22@sha256:e98f9c3b09beb2fbb9eaf667d602df3f0e00bd3644138b8458dc17ba1a675595'
-REDIS = 'redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499'
+# Keep the workflow-owned REDIS constant name, but qualify the actual shared
+# Dragonfly engine/digest rather than claiming Redis proves its serialization.
+REDIS = 'ghcr.io/dragonflydb/dragonfly:v2.0.0@sha256:7426fdb31ddcf7bd9499b4205f36ebaa83b26149ba1609a0d5f8f474b3631233'
+REDIS_ARGS = ('--proactor_threads=2', '--maxmemory=256mb', '--cluster_mode=emulated',
+              '--lock_on_hashtags', '--default_lua_flags=allow-undeclared-keys')
 PREFIX = 'k8s92-mixed-' + uuid.uuid4().hex[:10]
 CONTAINERS = []
 NETWORKS = []
@@ -351,13 +355,28 @@ def ta():
     net = network('ta')
     source = start('es-source', ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false', 'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-source', 'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es', '--memory=1600m'))
     wait(lambda: esready(source), 300)
-    redis = start('redis-source', REDIS, net, args=('redis-server', '--save', '', '--appendonly', 'no'), extra=('--network-alias', 'redis'))
+    redis = start('redis-source', REDIS, net, args=REDIS_ARGS, extra=('--network-alias', 'redis'))
     env = {'ES_URL': 'http://es:9200', 'REDIS_CON': 'redis://redis:6379/15', 'TA_HOST': 'http://localhost:8000', 'TA_USERNAME': 'fixture', 'TA_PASSWORD': secrets.token_hex(24), 'ELASTIC_PASSWORD': secrets.token_hex(24), 'TA_PORT': '8000', 'TA_BACKEND_PORT': '8080', 'HOST_UID': '1000', 'HOST_GID': '1000', 'TZ': 'UTC'}
     app = start('ta-source', TA, net, env)
     wait(lambda: docker('exec', app, 'curl', '-fsS', '-H', 'Host: localhost:8000', 'http://localhost:8000/api/health/', ok=False).returncode == 0, 300)
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), app + ':/contract.py')
     EVIDENCE['tubearchivist_phase'] = 'seed-and-check-real-schema'
     docker('exec', '-i', app, 'python', '-', data=ta_fixture_script(seed=True))
+    # Opaque queue/progress/session-like values across native Redis types, not
+    # executable Celery jobs. No key names or payloads enter public evidence.
+    seed_redis = """import sys
+sys.path.insert(0, '/')
+import contract
+r = contract.redis_client()
+r.set(b'fixture:binary', b'\\x00\\xffprivate')
+r.rpush('fixture:jobs', b'first', b'\\x00second')
+r.hset('fixture:progress', mapping={'cursor': b'\\x00\\xff', 'done': '3'})
+r.sadd('fixture:set', b'\\x00', b'member')
+r.zadd('fixture:scores', {b'member': 1.5})
+r.xadd('fixture:stream', {'body': b'\\x00\\xff'})
+r.set('fixture:session', b'private-session', px=3600000)
+"""
+    docker('exec', '-i', app, 'python', '-', data=seed_redis)
     EVIDENCE['tubearchivist_phase'] = 'capture'
     ta_contract(app, 'capture', '/cache/kopiur/current', timeout=660)
     docker('cp', app + ':/cache/kopiur/current', str(SCRATCH / 'tubearchivist'))
@@ -370,13 +389,29 @@ def ta():
     # Brand new server and fresh Redis. No source container or data path is reused.
     restored = start('es-restored', ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false', 'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-restore', 'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es', '--memory=1600m'))
     wait(lambda: esready(restored), 300)
-    freshredis = start('redis-restored', REDIS, net, args=('redis-server', '--save', '', '--appendonly', 'no'), extra=('--network-alias', 'redis'))
-    assert docker('exec', freshredis, 'redis-cli', '-n', '15', 'DBSIZE').stdout.strip() == '0'
+    freshredis = start('redis-restored', REDIS, net, args=REDIS_ARGS, extra=('--network-alias', 'redis'))
     tool = start('ta-restore-tool', TA, net, env, args=('infinity',), extra=('--entrypoint', 'sleep'))
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
     docker('cp', str(SCRATCH / 'tubearchivist'), tool + ':/bundle')
+    assert docker('exec', tool, 'python', '-c',
+                  "import redis; assert redis.Redis.from_url('redis://redis:6379/15').dbsize() == 0").returncode == 0
     EVIDENCE['tubearchivist_phase'] = 'verify-and-restore'
     ta_contract(tool, 'verify', '/bundle')
+    # Restore Redis before the app launches any worker. Repeating must reject
+    # the occupied target, without deleting or replacing a single key.
+    docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
+           'restore-redis', '/bundle')
+    assert docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
+                  'restore-redis', '/bundle', ok=False).returncode != 0
+    check_redis = """import sys,json
+from pathlib import Path
+sys.path.insert(0, '/')
+import contract
+expected = json.loads(Path('/bundle/redis.json').read_text())
+contract.compare_redis_inventory(expected, contract.redis_inventory(contract.redis_client()))
+assert len([key for key in expected if contract.base64.b64decode(key).startswith(b'fixture:')]) == 7
+"""
+    docker('exec', '-i', tool, 'python', '-', data=check_redis)
     result = ta_contract(tool, 'restore-es', '/bundle', timeout=660).stdout.strip()
     assert ta_contract(tool, 'restore-es', '/bundle', ok=False).returncode != 0
     # Boot a working copy. The immutable recovery artifact stays separate.
@@ -398,6 +433,10 @@ def ta():
     manifest = json.loads((SCRATCH / 'tubearchivist/manifest.json').read_text())
     EVIDENCE['tubearchivist'] = {'native_export': 'pass', 'documents': {k: v['count'] for k, v in manifest['documents'].items()}, 'sqlite_tables': manifest['sqlite_tables'], 'source_removed_before_restore': True, 'es_restore': result, 'redis_initial_dbsize': 0, 'restore_rejects_nonempty_target': 'pass', 'restored_app_health': 'pass'}
     EVIDENCE['tubearchivist'].update({'django_user_table': 'user_account', 'fixture_documents_after_normal_startup': 'pass'})
+    EVIDENCE['tubearchivist'].update({'redis_native_types_and_binary_roundtrip': 'pass',
+                                   'redis_engine': REDIS,
+                                   'redis_absolute_expiry_preserved': 'pass',
+                                   'redis_repeat_restore_preserves_target': 'pass'})
     EVIDENCE['tubearchivist_phase'] = 'complete'
     print(json.dumps({'tubearchivist': EVIDENCE['tubearchivist']}), flush=True)
 

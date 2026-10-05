@@ -54,7 +54,7 @@ change the credential service or rotate the live application secrets.
 | App | Captured and restored here | Separate dependency or deliberate exclusion |
 | --- | --- | --- |
 | Grimmory | Full PVC with `grimmory-data/`, a transactional MariaDB 11.8.8 logical dump including views/routines/events/triggers, checksums and manifest under `mariadb-config/kopiur/` | NFS `Books` and `Books/bookdrop` require independent recovery. Raw MariaDB physical files are retained in the full PVC but not qualified for boot. |
-| TubeArchivist | Full `/cache` PVC, validated SQLite auth/schedule state, seven native ES NDJSON indices, mappings/settings, per-index ID/source digests, checksums and manifest in `kopiur/current` | NFS `TubeArchivist` videos require independent recovery. Redis DB 15 is recreated empty; transient jobs/progress/sessions are discarded. Global/security ES state, unrelated indices and historical SLM snapshots are not imported. |
+| TubeArchivist | Full `/cache` PVC, validated SQLite auth/schedule state, seven native ES NDJSON indices, mappings/settings, per-index ID/source digests, Redis DB15 native values and absolute expiries, checksums and manifest in `kopiur/current` | NFS `TubeArchivist` videos require independent recovery. Jobs, progress and sessions are preserved as opaque native Redis values. Global/security ES state, unrelated indices and historical SLM snapshots are not imported. |
 
 The exact ES set is `ta_channel`, `ta_video`, `ta_download`, `ta_playlist`,
 `ta_subtitle`, `ta_comment`, `ta_config`. Capture rejects missing or additional
@@ -71,6 +71,16 @@ uses per-index PITs plus a separate SQLite copy. Same-count updates may still
 span different instants. Avoid schema migrations and record capture start/end
 and CSI timestamps. Strict cross-store point alignment requires approved
 quiescence/reconciliation work; remote CI cannot supply that guarantee.
+
+The v2 recovery bundle requires `redis.json`. Capture scans DB15 only and rejects
+key, native value or expiry mutations across consecutive reads. It does not
+claim that two scans fence all writers. Restore rejects the source Redis server,
+requires an empty DB15 and explicit isolated-restore mode, and never flushes or
+replaces existing keys. Unexpired keys retain their original absolute expiries;
+expired session bytes remain archived but are not resurrected. Native Redis
+roundtrip is a prerequisite, not proof of coherent cross-store capture. The
+all-writer fence and production Dragonfly compatibility gate remain open before
+activation, without permitting data discard or weakening zero-loss acceptance.
 
 ## Required gates before deployment and activation
 

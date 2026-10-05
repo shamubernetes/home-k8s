@@ -10,6 +10,7 @@ https://github.com/tubearchivist/tubearchivist/blob/v0.5.12/backend/user/migrati
 https://github.com/tubearchivist/tubearchivist/blob/v0.5.12/backend/config/management/commands/ta_startup.py
 """
 import ast
+import base64
 import importlib.util
 import json
 import os
@@ -17,6 +18,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -155,6 +157,57 @@ class AppFixtureTests(unittest.TestCase):
             self.assertIn("account._meta.db_table == 'user_account'", script)
             self.assertIn("contract.request(path)['_source'] == document", script)
             self.assertNotIn('TA_MIG_SKIP', script)
+
+
+class RedisRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.key = base64.b64encode(b'\x00queue').decode()
+        self.record = {'dump': base64.b64encode(b'\x00\xffnative').decode(), 'expires_at_ms': -1}
+        self.records = {self.key: self.record}
+
+    def test_binary_inventory_and_persistent_expiry(self):
+        self.assertEqual(BACKUP.check_redis_inventory(self.records), self.records)
+
+    def test_invalid_encoding_and_expiry_rejected(self):
+        for record in ({'dump': '?', 'expires_at_ms': -1},
+                       {'dump': self.record['dump'], 'expires_at_ms': -2},
+                       {'dump': self.record['dump'], 'expires_at_ms': True}):
+            with self.subTest(record=record), self.assertRaises(Exception):
+                BACKUP.check_redis_inventory({self.key: record})
+
+    def test_value_key_and_expiry_mutations_rejected(self):
+        for after in ({}, {self.key: dict(self.record, dump=base64.b64encode(b'changed').decode())},
+                      {self.key: dict(self.record, expires_at_ms=42)}):
+            with self.subTest(after=after), self.assertRaises(RuntimeError):
+                BACKUP.compare_redis_inventory(self.records, after)
+
+    def test_expiry_clock_resolution_tolerance_does_not_allow_persistence_change(self):
+        before = {self.key: dict(self.record, expires_at_ms=100000)}
+        BACKUP.compare_redis_inventory(before, {self.key: dict(self.record, expires_at_ms=100001)})
+        with self.assertRaises(RuntimeError):
+            BACKUP.compare_redis_inventory(before, self.records)
+
+    def test_source_and_nonempty_targets_rejected_without_writes(self):
+        for run_id, dbsize in (('source', 0), ('fresh', 1)):
+            client = Mock()
+            client.info.return_value = {'run_id': run_id}
+            client.dbsize.return_value = dbsize
+            with patch.object(BACKUP, 'verify', return_value={'redis': {'source_run_id': 'source'}}), \
+                 patch.object(BACKUP, 'redis_client', return_value=client), \
+                 patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'YES'}):
+                with self.assertRaises(RuntimeError):
+                    BACKUP.restore_redis(Path('/synthetic-bundle'))
+            client.restore.assert_not_called()
+            client.flushdb.assert_not_called()
+            client.flushall.assert_not_called()
+
+    def test_explicit_isolation_required(self):
+        with patch.object(BACKUP, 'verify', return_value={'redis': {'source_run_id': 'source'}}), \
+             patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'NO'}), \
+             patch.object(BACKUP, 'redis_client') as client:
+            with self.assertRaises(RuntimeError):
+                BACKUP.restore_redis(Path('/synthetic-bundle'))
+            client.assert_not_called()
 
 
 class SyntheticDiagnosticTests(unittest.TestCase):

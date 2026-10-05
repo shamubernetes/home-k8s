@@ -17,6 +17,7 @@ import signal
 import sqlite3
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -95,6 +96,83 @@ def sqlite_inventory(path):
         return {name: db.execute('SELECT count(*) FROM "' + name.replace('"', '""') + '"').fetchone()[0] for name in tables}
 
 
+def redis_client():
+    # redis is shipped by the pinned application. Never inspect another DB.
+    import redis
+    client = redis.Redis.from_url(os.environ['REDIS_CON'], decode_responses=False,
+                                  socket_timeout=30, socket_connect_timeout=30)
+    check(client.connection_pool.connection_kwargs.get('db') == 15, 'Redis DB must be 15')
+    return client
+
+
+def redis_inventory(client):
+    """Preserve opaque native values and absolute expiries, including queues.
+
+    A script reads value and expiry together for each key. A second pass rejects
+    concurrent mutations. This is NOT an all-writer or cross-store fence.
+    """
+    script = """local value = redis.call('DUMP', KEYS[1])
+    if not value then return {} end
+    local ttl = redis.call('PTTL', KEYS[1])
+    local now = redis.call('TIME')
+    local expiry = -1
+    if ttl >= 0 then expiry = now[1] * 1000 + math.floor(now[2] / 1000) + ttl end
+    return {value, expiry}
+    """
+    result = {}
+    for key in client.scan_iter(count=500):
+        record = client.eval(script, 1, key)
+        check(len(record) == 2, 'Redis key changed during capture')
+        encoded = base64.b64encode(key).decode('ascii')
+        result[encoded] = {'dump': base64.b64encode(record[0]).decode('ascii'),
+                           'expires_at_ms': int(record[1])}
+    return result
+
+
+def check_redis_inventory(records):
+    check(isinstance(records, dict), 'invalid Redis inventory')
+    for key, record in records.items():
+        base64.b64decode(key, validate=True)
+        check(set(record) == {'dump', 'expires_at_ms'}, 'invalid Redis record')
+        check(bool(base64.b64decode(record['dump'], validate=True)), 'empty Redis dump')
+        expiry = record['expires_at_ms']
+        check(type(expiry) is int and (expiry == -1 or expiry >= 0), 'invalid Redis expiry')
+    return records
+
+
+def compare_redis_inventory(before, after):
+    check(set(before) == set(after), 'Redis key set changed during capture')
+    for key, record in before.items():
+        current = after[key]
+        check(record['dump'] == current['dump'], 'Redis value changed during capture')
+        left, right = record['expires_at_ms'], current['expires_at_ms']
+        # TIME/PTTL resolution can differ by one millisecond across commands.
+        check(left == right or (left >= 0 and right >= 0 and abs(left - right) <= 1),
+              'Redis expiry changed during capture')
+
+
+def restore_redis(bundle):
+    manifest = verify(bundle)
+    check(os.environ.get('K8S92_ISOLATED_RESTORE') == 'YES', 'isolated Redis restore required')
+    client = redis_client()
+    check(client.info('server')['run_id'] != manifest['redis']['source_run_id'],
+          'refuse source Redis server')
+    check(client.dbsize() == 0, 'Redis restore requires empty DB15')
+    records = check_redis_inventory(json.loads((bundle / 'redis.json').read_text()))
+    expected = {}
+    for encoded, record in records.items():
+        expiry = record['expires_at_ms']
+        # Expired sessions expire naturally. Their original bytes remain archived.
+        if expiry >= 0 and expiry <= time.time_ns() // 1000000:
+            continue
+        key = base64.b64decode(encoded, validate=True)
+        value = base64.b64decode(record['dump'], validate=True)
+        client.restore(key, 0 if expiry == -1 else expiry, value, absttl=expiry != -1)
+        expected[encoded] = record
+    compare_redis_inventory(expected, redis_inventory(client))
+    print('Redis DB15 native values and unexpired TTLs restored without flushing')
+
+
 def capture(output):
     # These imports deliberately use the app's shipped exporter, not a lookalike.
     sys.path.insert(0, '/app')
@@ -123,6 +201,8 @@ def capture(output):
         stage = Path(tempfile.mkdtemp(prefix='.capture-', dir=output.parent))
         try:
             started = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            redis = redis_client()
+            redis_source_id = redis.info('server')['run_id']
             root = request('')
             check(root['version']['number'] == '8.19.22', 'ES version changed; requalify restore')
             settings = request('ta_*?expand_wildcards=all')
@@ -150,12 +230,16 @@ def capture(output):
                 check(documents[index]['count'] == counts[index] == request(index + '/_count')['count'], 'index count changed or incomplete export')
             check(request('ta_*?expand_wildcards=all') == settings, 'index metadata changed during capture')
             (stage / 'indices.json').write_text(json.dumps(settings, sort_keys=True))
-            manifest = {'format': 'ta-native-json-sqlite-v1', 'app_version': '0.5.12', 'es_version': root['version']['number'],
+            redis_state = redis_inventory(redis)
+            compare_redis_inventory(redis_state, redis_inventory(redis))
+            (stage / 'redis.json').write_text(json.dumps(redis_state, sort_keys=True))
+            manifest = {'format': 'ta-native-json-sqlite-redis-v2', 'app_version': '0.5.12', 'es_version': root['version']['number'],
                         'started_utc': started, 'finished_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         'consistency': 'per-index PIT and SQLite online backup; NOT cross-store atomic',
-                        'redis': 'fresh-empty; discard transient jobs, sessions and progress; requeue deliberately',
+                        'redis': {'db': 15, 'source_run_id': redis_source_id, 'keys': len(redis_state),
+                                  'encoding': 'native-DUMP-with-absolute-expiry'},
                         'documents': documents, 'sqlite_tables': sqlite_counts,
-                        'files': {name: digest(stage / name) for name in ('db.sqlite3', 'elasticsearch.zip', 'indices.json')}}
+                        'files': {name: digest(stage / name) for name in ('db.sqlite3', 'elasticsearch.zip', 'indices.json', 'redis.json')}}
             (stage / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
             for path in stage.iterdir():
                 path.chmod(0o640)
@@ -171,18 +255,20 @@ def capture(output):
         finally:
             if stage.exists():
                 shutil.rmtree(stage)
-    print('TubeArchivist native ZIP and SQLite capture validated')
+    print('TubeArchivist native ZIP, SQLite and Redis capture validated')
 
 
 def verify(bundle):
     manifest = json.loads((bundle / 'manifest.json').read_text())
-    check(manifest['format'] == 'ta-native-json-sqlite-v1', 'wrong format')
-    check(set(manifest['files']) == {'db.sqlite3', 'elasticsearch.zip', 'indices.json'}, 'unexpected artifacts')
+    check(manifest['format'] == 'ta-native-json-sqlite-redis-v2', 'wrong format')
+    check(set(manifest['files']) == {'db.sqlite3', 'elasticsearch.zip', 'indices.json', 'redis.json'}, 'unexpected artifacts')
     for name, expected in manifest['files'].items():
         check(digest(bundle / name) == expected, 'artifact checksum mismatch')
     check(sqlite_inventory(bundle / 'db.sqlite3') == manifest['sqlite_tables'], 'SQLite counts differ')
     check(inventory(bundle / 'elasticsearch.zip') == manifest['documents'], 'ES documents differ')
     check(set(json.loads((bundle / 'indices.json').read_text())) == set(INDICES), 'index set differs')
+    records = check_redis_inventory(json.loads((bundle / 'redis.json').read_text()))
+    check(manifest['redis']['db'] == 15 and len(records) == manifest['redis']['keys'], 'Redis coverage differs')
     return manifest
 
 
@@ -236,7 +322,7 @@ def restore(bundle):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('operation', choices=('capture', 'verify', 'restore-es'))
+    parser.add_argument('operation', choices=('capture', 'verify', 'restore-es', 'restore-redis'))
     parser.add_argument('directory', type=Path)
     args = parser.parse_args()
     os.umask(0o027)
@@ -247,6 +333,8 @@ def main():
         capture(directory)
     elif args.operation == 'restore-es':
         restore(directory)
+    elif args.operation == 'restore-redis':
+        restore_redis(directory)
     else:
         verify(directory)
         print('Artifact integrity and inventories verified')

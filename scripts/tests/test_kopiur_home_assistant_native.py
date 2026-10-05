@@ -19,6 +19,19 @@ class HomeAssistantTests(unittest.TestCase):
         self.assertEqual(self.drill.image, ha.IMAGE)
         self.assertEqual(self.drill.port, 8123)
 
+    def test_capture_excludes_only_exact_runtime_stdout_link(self):
+        self.drill.containers.append('fixture-source-config-holder')
+        invoke = Mock()
+        base = type(self.drill).__mro__[1]
+        with patch.dict(self.scope, run=invoke):
+            with patch.object(base, 'capture', return_value='captured') as capture:
+                self.assertEqual(self.drill.capture('database', 'config', ['homeassistant_fixture'], check=False), 'captured')
+        script = invoke.call_args.args[-1]
+        self.assertIn('if test -L /config/home-assistant.log; then', script)
+        self.assertIn('test "$(readlink /config/home-assistant.log)" = /proc/self/fd/1;', script)
+        self.assertIn('unlink /config/home-assistant.log; fi', script)
+        capture.assert_called_once_with('database', 'config', ['homeassistant_fixture'], check=False)
+
     def test_runtime_logs_do_not_enter_recovered_configuration(self):
         identity = json.dumps({'original_fixture_key': 'original-fixture-key'}).encode()
         with patch.dict(self.scope, run=Mock(return_value=SimpleNamespace(stdout=identity))):

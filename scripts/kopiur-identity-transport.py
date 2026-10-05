@@ -19,6 +19,8 @@ import sys
 import time
 import uuid
 
+from kopiur_shared import selected_apps, transport_receipt
+
 IMAGE = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f1f8bb5d00b791654d79429928e95db54f4b22"
 TOOL_IMAGE = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
 TOOLS = ""
@@ -39,7 +41,7 @@ class Drill:
     def __init__(self, app, fields):
         self.app, self.fields = app, fields
         self.nonce = uuid.uuid4().hex
-        self.path = "identity-fixtures/run7-" + self.nonce
+        self.path = "identity-fixtures/shared-" + self.nonce
         self.containers = []
         self.bytes = secrets.token_bytes(4096)
         self.stage = "initial"
@@ -206,8 +208,8 @@ def exercise_payload(payload, deadline=None):
         results = [drill.exercise(kind) for kind in ("nas", "r2")]
     finally:
         drill.cleanup()
-    return {"app": app, "runner": os.environ["RUNNER_NAME"], "mover_image": IMAGE,
-            "results": results, "owned_fixture_repositories_removed": True}
+    return transport_receipt({"app": app, "runner": os.environ["RUNNER_NAME"], "mover_image": IMAGE,
+            "results": results, "owned_fixture_repositories_removed": True}, app)
 
 
 def serve_main():
@@ -227,15 +229,17 @@ def serve_main():
     os.mkdir(directory, 0o700)
     path = directory + "/socket"
     results = {}
+    required = None
     deadline = time.monotonic() + 1800
     with socket.socket(socket.AF_UNIX) as listener:
         listener.bind(path)
         os.chmod(path, 0o600)
         listener.listen(1)
         print(json.dumps({"identity_channel_ready": True, "runner": os.environ["RUNNER_NAME"],
-                          "socket": path, "required_apps": len(APPS)}), flush=True)
+                          "socket": path, "selection_required": True,
+                          "allowed_apps": sorted(APPS)}), flush=True)
         try:
-            while len(results) < len(APPS):
+            while required is None or set(results) != required:
                 listener.settimeout(max(0.01, deadline - time.monotonic()))
                 with listener.accept()[0] as connection:
                     receive_deadline = min(deadline - 90, time.monotonic() + 30)
@@ -251,7 +255,12 @@ def serve_main():
                         if len(data) > 65536:
                             raise RuntimeError("identity request exceeds bound")
                     payload = json.loads(data)
-                    assert payload["app"] in APPS and payload["app"] not in results
+                    if required is None:
+                        required = selected_apps(payload, APPS)
+                        connection.sendall(json.dumps({'selected_apps': sorted(required)}).encode())
+                        continue
+                    if payload.get('app') not in required or payload['app'] in results:
+                        raise ValueError('service was not selected or already qualified')
                     receipt = exercise_payload(payload, deadline)
                     results[payload["app"]] = receipt
                     connection.sendall(json.dumps(receipt).encode())
@@ -259,7 +268,7 @@ def serve_main():
         finally:
             os.unlink(path)
             os.rmdir(directory)
-    assert set(results) == APPS
+    assert set(results) == required
     print(json.dumps({"identity_qualification_count": len(results), "all_passed": True}))
 
 
@@ -267,6 +276,11 @@ def main():
     global TOOLS
     if sys.platform != "linux" or not os.environ.get("RUNNER_NAME"):
         raise RuntimeError("identity drill requires an assigned Linux ARC runner")
+    # The existing trusted-main identities dispatch exercises common host
+    # regressions before real backend qualification, with no local runtime tests.
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_kopiur_shared.py", "-v"], timeout=120, check=True)
+    print(json.dumps({'shared_regressions_passed': True}), flush=True)
     # Production is distroless. Supply credential-free static shell tooling from
     # a pinned image in a separate read-only volume. Kopia/rclone remain exactly
     # the production image binaries; no secret or application bytes enter tools.

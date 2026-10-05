@@ -14,8 +14,11 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import socket
 import sqlite3
+import stat
 import sys
+import tarfile
 import tempfile
 import urllib.error
 import urllib.request
@@ -282,7 +285,7 @@ def restore_redis(bundle):
     print('Redis DB15 restored resumably under execution hold, no replacement or enqueue')
 
 
-def capture(output):
+def capture(output, coherent=False):
     # These imports deliberately use the app's shipped exporter, not a lookalike.
     sys.path.insert(0, '/app')
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -312,6 +315,7 @@ def capture(output):
             started = datetime.datetime.now(datetime.timezone.utc).isoformat()
             redis = redis_client()
             redis_source_id = redis_instance_id(redis)
+            redis_before = redis_inventory(redis) if coherent else None
             root = request('')
             check(root['version']['number'] == '8.19.22', 'ES version changed; requalify restore')
             settings = request('ta_*?expand_wildcards=all')
@@ -342,6 +346,8 @@ def capture(output):
             redis_state = redis_inventory(redis)
             compare_redis_inventory(redis_state, redis_inventory(redis))
             (stage / 'redis.json').write_text(json.dumps(redis_state, sort_keys=True))
+            if coherent:
+                compare_redis_inventory(redis_before, redis_state)
             manifest = {'format': 'ta-native-json-sqlite-redis-v2', 'app_version': '0.5.12', 'es_version': root['version']['number'],
                         'started_utc': started, 'finished_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         'consistency': 'per-index PIT and SQLite online backup; NOT cross-store atomic',
@@ -368,10 +374,148 @@ def capture(output):
     print('TubeArchivist native ZIP, SQLite and Redis capture validated')
 
 
+def file_inventory(root, excluded=()):
+    """Reject special files/symlinks and detect rewrite/restore ABA with ctime."""
+    result = {}
+    for parent, directories, files in os.walk(root, followlinks=False):
+        relative = Path(parent).relative_to(root)
+        directories[:] = sorted(name for name in directories if str(relative / name) not in excluded)
+        for name in sorted([*directories, *files]):
+            path = Path(parent) / name
+            key = str(path.relative_to(root))
+            if key in excluded:
+                continue
+            info = path.lstat()
+            check(not path.is_symlink() and (path.is_dir() or path.is_file()), 'unqualified filesystem object')
+            result[key] = {'inode': info.st_ino, 'device': info.st_dev, 'size': info.st_size,
+                           'mtime_ns': info.st_mtime_ns, 'ctime_ns': info.st_ctime_ns,
+                           'mode': info.st_mode, 'uid': info.st_uid, 'gid': info.st_gid}
+    return result
+
+
+def collect_coherent(output):
+    import coordination as gate
+    import supervisor
+    with gate.lock('state.lock'):
+        state = gate.current()
+    check(state and state['phase'] == 'CAPTURING' and state.get('collector') == gate.identity(),
+          'coherent collector requires owned writer generation')
+    drained = gate.read(gate.ROOT / 'drained.json')
+    check(drained['qualified_sources'] == supervisor.SOURCES, 'unqualified native drain')
+    service = gate.read(gate.ROOT / 'supervisor.json')
+    check(service and service['owner'] == drained['supervisor'] and gate.alive(service['owner']),
+          'native source supervisor differs')
+    permitted = {item['pid'] for item in (service['owner'], state['owner'], state['collector'], state['watchdog'])}
+    managed_groups = {item['pid'] for item in (service['web'], service['nginx'])}
+    for entry in Path('/proc').iterdir():
+        if entry.name.isdigit():
+            try:
+                fields = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
+                check(fields[0] == 'Z' or int(entry.name) in permitted or int(fields[2]) in managed_groups,
+                      'unmanaged process in source writer boundary')
+            except FileNotFoundError:
+                pass
+    client = redis_client()
+    hosts = {item[4][0] for item in socket.getaddrinfo(socket.gethostname(), None)}
+    check(all(item['addr'].rsplit(':', 1)[0].strip('[]') in hosts
+              for item in client.client_list() if int(item.get('db', -1)) == 15),
+          'Redis DB15 has a client outside the source writer boundary')
+    cache = Path(os.environ.get('TA_CACHE_DIR', '/cache')).resolve()
+    media = Path(os.environ.get('TA_MEDIA_DIR', '/youtube')).resolve()
+    check(not media.is_relative_to(cache) and not cache.is_relative_to(media), 'overlapping capture roots')
+    check(output.resolve().is_relative_to(cache / 'kopiur'), 'coherent staging must use excluded cache/kopiur')
+    excluded = ('kopiur', 'kopiur-coordination', 'db.sqlite3', 'db.sqlite3-wal',
+                'db.sqlite3-shm', 'db.sqlite3-journal')
+    before = {'cache': file_inventory(cache, excluded), 'media': file_inventory(media)}
+    def sqlite_state():
+        result = {}
+        for name in excluded[2:]:
+            path = cache / name
+            if path.exists():
+                info = path.stat()
+                result[name] = (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns, digest(path))
+        return result
+    sqlite_before = sqlite_state()
+    def sequence_numbers():
+        result = {}
+        for index, value in request(','.join(INDICES) + '/_stats?level=shards')['indices'].items():
+            result[index] = {shard: [entry['seq_no']['max_seq_no'] for entry in entries
+                                    if entry['routing']['primary']]
+                             for shard, entries in value['shards'].items()}
+        return result
+    es_before = sequence_numbers()
+    # No application requests/tasks/beat or startup are admitted. Refresh makes
+    # all completed native ES operations visible, including recently written docs.
+    tasks = request('_tasks?detailed=true')
+    for node in tasks.get('nodes', {}).values():
+        for task in node.get('tasks', {}).values():
+            check(not task.get('action', '').startswith('indices:data/write'), 'ES write still in flight')
+    check(not request('_recovery?active_only=true'), 'ES restore still in flight')
+    request(','.join(INDICES) + '/_refresh', 'POST')
+    capture(output, coherent=True)
+    for label, root in (('cache', cache), ('media', media)):
+        with tarfile.open(output / (label + '.tar'), 'w') as archive:
+            for name in before[label]:
+                archive.add(root / name, arcname=name, recursive=False)
+    after = {'cache': file_inventory(cache, excluded), 'media': file_inventory(media)}
+    check(before == after, 'filetree changed during coherent capture')
+    check(sqlite_before == sqlite_state(), 'SQLite changed during coherent capture')
+    check(es_before == sequence_numbers(), 'Elasticsearch changed during coherent capture')
+    # Stop before publication if the independent watchdog reopened admission.
+    gate.require_generation(state['generation'], 'CAPTURING')
+    manifest = json.loads((output / 'manifest.json').read_text())
+    manifest['consistency'] = 'qualified-native-idle-writer-generation'
+    manifest['generation'] = state['generation']
+    manifest['filetrees'] = before
+    for label in ('cache', 'media'):
+        manifest['files'][label + '.tar'] = digest(output / (label + '.tar'))
+        with (output / (label + '.tar')).open('rb') as stream:
+            os.fsync(stream.fileno())
+    gate.atomic(output / 'manifest.json', manifest)
+
+
+def restore_files(bundle, cache, media):
+    """New isolated targets only. Raw later CSI/NFS state is not a substitute."""
+    manifest = verify(bundle)
+    check(os.environ.get('K8S92_ISOLATED_RESTORE') == 'YES', 'isolated recovery required')
+    check(request('')['cluster_name'] == 'k8s92-ta-restore', 'refuse source filesystem restore')
+    check(manifest.get('generation'), 'filesystem recovery requires coherent generation')
+    for root in (cache, media):
+        check(not root.exists() or not any(root.iterdir()), 'filesystem target must be new and empty')
+        root.mkdir(parents=True, exist_ok=True)
+    for label, root in (('cache', cache), ('media', media)):
+        with tarfile.open(bundle / (label + '.tar')) as archive:
+            members = archive.getmembers()
+            names = [member.name for member in members]
+            check(len(names) == len(set(names)) and set(names) == set(manifest['filetrees'][label]),
+                  'filesystem archive member set differs')
+            for member in members:
+                path = Path(member.name)
+                check(not path.is_absolute() and '..' not in path.parts and (member.isfile() or member.isdir()),
+                      'unsafe filesystem archive member')
+            archive.extractall(root, members=members, filter='data')
+            for name in sorted(names, key=lambda value: len(Path(value).parts), reverse=True):
+                target = root / name
+                info = manifest['filetrees'][label][name]
+                os.chown(target, info['uid'], info['gid'], follow_symlinks=False)
+                target.chmod(stat.S_IMODE(info['mode']))
+                os.utime(target, ns=(info['mtime_ns'], info['mtime_ns']), follow_symlinks=False)
+                check(target.stat().st_uid == info['uid'] and target.stat().st_gid == info['gid'],
+                      'restored filesystem ownership differs')
+    shutil.copy2(bundle / 'db.sqlite3', cache / 'db.sqlite3')
+
+
 def verify(bundle):
     manifest = json.loads((bundle / 'manifest.json').read_text())
     check(manifest['format'] == 'ta-native-json-sqlite-redis-v2', 'wrong format')
-    check(set(manifest['files']) == {'db.sqlite3', 'elasticsearch.zip', 'indices.json', 'redis.json'}, 'unexpected artifacts')
+    expected = {'db.sqlite3', 'elasticsearch.zip', 'indices.json', 'redis.json'}
+    if manifest.get('generation'):
+        import coordination
+        commit = coordination.verify_generation(bundle)
+        check(commit['generation'] == manifest['generation'], 'generation differs')
+        check(manifest['consistency'] == 'qualified-native-idle-writer-generation', 'unqualified coherence')
+        expected |= {'cache.tar', 'media.tar'}
+    check(set(manifest['files']) == expected, 'unexpected artifacts')
     for name, expected in manifest['files'].items():
         check(digest(bundle / name) == expected, 'artifact checksum mismatch')
     check(sqlite_inventory(bundle / 'db.sqlite3') == manifest['sqlite_tables'], 'SQLite counts differ')
@@ -434,7 +578,7 @@ def restore(bundle):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('operation', choices=('capture', 'verify', 'restore-es', 'restore-redis'))
+    parser.add_argument('operation', choices=('capture', 'collect-coherent', 'verify', 'restore-es', 'restore-redis', 'restore-files'))
     parser.add_argument('directory', type=Path)
     args = parser.parse_args()
     os.umask(0o027)
@@ -443,6 +587,11 @@ def main():
     directory = args.directory.resolve()
     if args.operation == 'capture':
         capture(directory)
+    elif args.operation == 'collect-coherent':
+        collect_coherent(directory)
+    elif args.operation == 'restore-files':
+        restore_files(directory, Path(os.environ.get('TA_CACHE_DIR', '/cache')),
+                      Path(os.environ.get('TA_MEDIA_DIR', '/youtube')))
     elif args.operation == 'restore-es':
         restore(directory)
     elif args.operation == 'restore-redis':

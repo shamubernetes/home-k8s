@@ -16,6 +16,11 @@ configMapGenerator:
   files:
   - backup.py
   - recovery.py
+  - coordination.py
+  - supervisor.py
+  - coordinated_asgi.py
+  - coordinated_beat.py
+  - policy_capture.py
   options:
     disableNameSuffixHash: true
     annotations:

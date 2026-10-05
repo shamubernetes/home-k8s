@@ -5,9 +5,10 @@ Does not download a backup, connect to Kubernetes, mount NFS or contact live DBs
 """
 import argparse
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
 import secrets
-import shutil
 
 spec = importlib.util.spec_from_file_location('lane', Path(__file__).with_name('k8s92-mixed-db-test.py'))
 lane = importlib.util.module_from_spec(spec)
@@ -61,7 +62,16 @@ try:
         app = created_app('grimmory', lane.GRIMM, 'container:' + db, appenv, root / 'grimmory-data', '/app/data')
         lane.wait(lambda: lane.docker('exec', app, 'wget', '-qO-', 'http://localhost:6060/api/v1/healthcheck', ok=False).returncode == 0, 300)
     else:
-        bundle = root / 'kopiur/current'
+        pointer = json.loads((root / 'kopiur/LATEST.json').read_text())
+        relative = Path(pointer['relative_path'])
+        if relative.is_absolute() or '..' in relative.parts or relative.parts[:1] != ('generations',):
+            raise ValueError('unsafe coherent generation pointer')
+        bundle = root / 'kopiur' / relative
+        commit = json.loads((bundle / 'generation.json').read_text())
+        if (pointer['format'] != 'coherent-generation-pointer-v1' or
+                pointer['generation'] != commit['generation'] or
+                pointer['manifest_sha256'] != hashlib.sha256((bundle / 'manifest.json').read_bytes()).hexdigest()):
+            raise ValueError('restored snapshot is not bound to a coherent generation')
         es = lane.start('es', lane.ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false',
                         'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-restore',
                         'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es'))
@@ -75,15 +85,14 @@ try:
         lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
         lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/backup.py')
         lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/recovery.py'), tool + ':/recovery.py')
+        lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/coordination.py'), tool + ':/coordination.py')
         lane.docker('exec', tool, 'python', '/contract.py', 'restore-es', '/bundle', timeout=660)
         lane.docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
                     'restore-redis', '/bundle', timeout=660)
-        cache = lane.SCRATCH / 'working-cache'
-        shutil.copytree(root, cache, symlinks=True)
-        shutil.copy2(bundle / 'db.sqlite3', cache / 'db.sqlite3')
-        for suffix in ('-wal', '-shm', '-journal'):
-            (cache / ('db.sqlite3' + suffix)).unlink(missing_ok=True)
-        lane.docker('cp', str(cache) + '/.', tool + ':/cache')
+        # The raw PVC/NFS copy may be later than the closed generation. Recover
+        # SQLite, cache/partial media and NFS bytes only from its bound archives.
+        lane.docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
+                    'restore-files', '/bundle', timeout=660)
         lane.docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/recovery.py',
                     '/bundle', '/cache/recovery-hold.json', timeout=660)
     if a.app == 'tubearchivist':

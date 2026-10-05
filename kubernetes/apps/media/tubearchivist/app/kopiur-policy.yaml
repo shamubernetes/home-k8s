@@ -34,8 +34,10 @@ spec:
             app.kubernetes.io/name: tubearchivist
             app.kubernetes.io/controller: tubearchivist
         container: app
-        command: [python, /backup-contract/backup.py, capture, /cache/kopiur/current]
-        timeout: 11m
+        # Closed generation is immutable before admission reopens. CSI staging
+        # and upload never extend the hold. Raw later state is not the checkpoint.
+        command: [python, /backup-contract/policy_capture.py]
+        timeout: 70s
         continueOnFailure: false
   mover:
     # Parent must qualify the namespace gate before enabling this root reader.

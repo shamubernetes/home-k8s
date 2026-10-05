@@ -95,7 +95,7 @@ def cleanup_fixture_dirs():
         run('colima', 'ssh', '--', 'sudo', '-n', 'rmdir', '--', str(SCRATCH.resolve()))
 
 
-def start(label, image, net, variables=None, args=(), extra=()):
+def start(label, image, net, variables=None, args=(), extra=(), setup=None):
     name = PREFIX + '-' + label
     CONTAINERS.append(name)
     env = os.environ.copy()
@@ -104,7 +104,12 @@ def start(label, image, net, variables=None, args=(), extra=()):
         env[key] = str(value)
         options += ['-e', key]
     options += fixture_mounts(label, image)
-    docker('run', '-d', '--name', name, '--network', net, *extra, *options, image, *args, env=env)
+    if setup:
+        docker('create', '--name', name, '--network', net, *extra, *options, image, *args, env=env)
+        setup(name)
+        docker('start', name)
+    else:
+        docker('run', '-d', '--name', name, '--network', net, *extra, *options, image, *args, env=env)
     return name
 
 
@@ -684,6 +689,11 @@ def main():
             subprocess.run([sys.executable, '-m', 'unittest', 'discover',
                             '-s', str(ROOT / 'scripts/tests'),
                             '-p', 'test_k8s92_tubearchivist.py', '-v'], check=True)
+            subprocess.run([sys.executable, '-m', 'unittest', 'discover',
+                            '-s', str(ROOT / 'scripts/tests'),
+                            '-p', 'test_k8s92_coordination.py', '-v'], check=True)
+            import runpy
+            runpy.run_path(str(ROOT / 'scripts/k8s92-coordination-fixture.py'))['native'](globals())
             try:
                 ta()
             except Exception:

@@ -169,7 +169,8 @@ class AppFixtureTests(unittest.TestCase):
 class RedisRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.key = base64.b64encode(b'\x00queue').decode()
-        self.record = {'dump': base64.b64encode(b'\x00\xffnative').decode(), 'expires_at_ms': -1}
+        self.record = {'dump': base64.b64encode(b'\x00\xffnative').decode(),
+                       'logical': base64.b64encode(b'6:string3:raw').decode(), 'expires_at_ms': -1}
         self.records = {self.key: self.record}
 
     def test_binary_inventory_and_persistent_expiry(self):
@@ -183,7 +184,7 @@ class RedisRecoveryTests(unittest.TestCase):
                 BACKUP.check_redis_inventory({self.key: record})
 
     def test_value_key_and_expiry_mutations_rejected(self):
-        for after in ({}, {self.key: dict(self.record, dump=base64.b64encode(b'changed').decode())},
+        for after in ({}, {self.key: dict(self.record, logical=base64.b64encode(b'changed').decode())},
                       {self.key: dict(self.record, expires_at_ms=42)}):
             with self.subTest(after=after), self.assertRaises(RuntimeError):
                 BACKUP.compare_redis_inventory(self.records, after)
@@ -193,6 +194,10 @@ class RedisRecoveryTests(unittest.TestCase):
         BACKUP.compare_redis_inventory(before, {self.key: dict(self.record, expires_at_ms=100001)})
         with self.assertRaises(RuntimeError):
             BACKUP.compare_redis_inventory(before, self.records)
+
+    def test_native_serialization_order_can_change_without_value_change(self):
+        after = {self.key: dict(self.record, dump=base64.b64encode(b'different-order').decode())}
+        BACKUP.compare_redis_inventory(self.records, after)
 
     def test_source_and_nonempty_targets_rejected_without_writes(self):
         for run_id, dbsize in (('source', 0), ('fresh', 1)):

@@ -104,19 +104,48 @@ def redis_client():
     return client
 
 
+REDIS_LOGICAL_LUA = """local function packed(v) return string.len(v) .. ':' .. v end
+local function logical(key)
+    local kind = redis.call('TYPE', key)
+    if type(kind) == 'table' then kind = kind.ok end
+    if kind == 'none' then return false end
+    local parts = {packed(kind)}
+    local values
+    if kind == 'string' then values = {redis.call('GET', key)}
+    elseif kind == 'list' then values = redis.call('LRANGE', key, 0, -1)
+    elseif kind == 'set' then
+        values = redis.call('SMEMBERS', key); table.sort(values)
+    elseif kind == 'zset' then values = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+    elseif kind == 'hash' then
+        local raw = redis.call('HGETALL', key)
+        local fields, mapping = {}, {}
+        for i = 1, #raw, 2 do
+            table.insert(fields, raw[i]); mapping[raw[i]] = raw[i + 1]
+        end
+        table.sort(fields); values = {}
+        for _, field in ipairs(fields) do
+            table.insert(values, field); table.insert(values, mapping[field])
+        end
+    else values = {redis.call('DUMP', key)} end
+    for _, value in ipairs(values) do table.insert(parts, packed(value)) end
+    return table.concat(parts)
+end
+"""
+
+
 def redis_inventory(client, expiry_records=None):
     """Preserve opaque native values and absolute expiries, including queues.
 
     A script reads value and expiry together for each key. A second pass rejects
     concurrent mutations. This is NOT an all-writer or cross-store fence.
     """
-    script = """local value = redis.call('DUMP', KEYS[1])
+    script = REDIS_LOGICAL_LUA + """local value = redis.call('DUMP', KEYS[1])
     if not value then return {} end
     local ttl = redis.call('PTTL', KEYS[1])
     local now = redis.call('TIME')
     local expiry = -1
     if ttl >= 0 then expiry = now[1] * 1000 + math.floor(now[2] / 1000) + ttl end
-    return {value, expiry}
+    return {value, expiry, logical(KEYS[1])}
     """
     result = {}
     for key in client.scan_iter(count=500):
@@ -127,8 +156,9 @@ def redis_inventory(client, expiry_records=None):
             seconds, micros = client.time()
             if expiry >= 0 and expiry <= seconds * 1000 + micros // 1000:
                 continue
-        check(len(record) == 2, 'Redis key changed during capture')
+        check(len(record) == 3 and record[2], 'Redis key changed during capture')
         result[encoded] = {'dump': base64.b64encode(record[0]).decode('ascii'),
+                           'logical': base64.b64encode(record[2]).decode('ascii'),
                            'expires_at_ms': int(record[1])}
     return result
 
@@ -137,8 +167,9 @@ def check_redis_inventory(records):
     check(isinstance(records, dict), 'invalid Redis inventory')
     for key, record in records.items():
         base64.b64decode(key, validate=True)
-        check(set(record) == {'dump', 'expires_at_ms'}, 'invalid Redis record')
+        check(set(record) == {'dump', 'logical', 'expires_at_ms'}, 'invalid Redis record')
         check(bool(base64.b64decode(record['dump'], validate=True)), 'empty Redis dump')
+        check(bool(base64.b64decode(record['logical'], validate=True)), 'empty Redis logical value')
         expiry = record['expires_at_ms']
         check(type(expiry) is int and (expiry == -1 or expiry >= 0), 'invalid Redis expiry')
     return records
@@ -162,7 +193,7 @@ def compare_redis_inventory(before, after):
     check(set(before) == set(after), 'Redis key set changed during capture')
     for key, record in before.items():
         current = after[key]
-        check(record['dump'] == current['dump'], 'Redis value changed during capture')
+        check(record['logical'] == current['logical'], 'Redis value changed during capture')
         left, right = record['expires_at_ms'], current['expires_at_ms']
         # TIME/PTTL resolution can differ by one millisecond across commands.
         check(left == right or (left >= 0 and right >= 0 and abs(left - right) <= 1),
@@ -222,7 +253,7 @@ def restore_redis(bundle):
     redis.call('SET', KEYS[1], ARGV[1]); return 1
     """
     check(client.eval(claim, 1, RECOVERY_KEY, owner) == 1, 'unowned or conflicting Redis target')
-    script = """if redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end
+    script = REDIS_LOGICAL_LUA + """if redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end
     local expiry = tonumber(ARGV[3])
     local now = redis.call('TIME')
     local ms = now[1] * 1000 + math.floor(now[2] / 1000)
@@ -232,7 +263,7 @@ def restore_redis(bundle):
         return 0
     end
     if current then
-        if current ~= ARGV[2] then return -2 end
+        if logical(KEYS[2]) ~= ARGV[4] then return -2 end
         local ttl = redis.call('PTTL', KEYS[2])
         if expiry == -1 then return ttl == -1 and 2 or -2 end
         return ttl >= 0 and math.abs(ms + ttl - expiry) <= 1 and 2 or -2
@@ -245,7 +276,8 @@ def restore_redis(bundle):
         key = base64.b64decode(encoded, validate=True)
         value = base64.b64decode(record['dump'], validate=True)
         check(client.eval(script, 2, RECOVERY_KEY, key, owner, value,
-                          record['expires_at_ms']) >= 0, 'Redis recovery record conflict')
+                          record['expires_at_ms'], base64.b64decode(record['logical'], validate=True)) >= 0,
+              'Redis recovery record conflict')
     verify_restored_redis(client, records, owner)
     print('Redis DB15 restored resumably under execution hold, no replacement or enqueue')
 

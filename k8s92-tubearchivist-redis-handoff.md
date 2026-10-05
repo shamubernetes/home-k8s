@@ -62,6 +62,14 @@ Different values, expiries, extra keys or ownership fail closed. No FLUSH, blank
 merge, rewritten task status, replay or queue enqueue is performed. Expiry uses
 Redis TIME, not the restore host's clock. The marker remains an execution hold.
 
+Native Dragonfly hash DUMP field order can change after RESTORE. Captures also
+record atomic binary-safe logical values with length-prefixed type/value fields.
+Hash fields and set members are sorted; lists and scored sets retain order.
+Restore compares these exact logical bytes and absolute expiry, not internal
+hash traversal order. Original DUMP bytes remain intact for native import.
+Streams and unknown types use strict native serialization and fail closed on
+drift. Bundles without logical records require requalification, not a fallback.
+
 `recovery.py` verifies the complete target and checks exact pinned source hashes
 and disposable Elasticsearch name/version before any native mutation.
 It runs the real `ta_startup.Command.handle()`. Only destructive cleanup,

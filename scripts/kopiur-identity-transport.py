@@ -29,6 +29,7 @@ CREDENTIAL_FREE_FIXTURES = {
     'native-atuin-fixture': 'kopiur_atuin_native',
     'native-grafana-fixture': 'kopiur_grafana_native',
     'native-gatus-fixture': 'kopiur_gatus_native',
+    'native-pocket-id-fixture': 'kopiur_pocket_id_native',
 }
 ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
 APPS = {"canary", "kometa", "listenarr", "tautulli", "sabnzbd", "wizarr", "homarr",

@@ -31,9 +31,14 @@ def contract():
 
         def app(self, name, database, config):
             if name == 'source-app':
+                # Pinned upstream rejects external-only configurations. Keep a
+                # disabled localhost endpoint, which never produces monitoring writes.
                 holder = next(value for value in self.containers if value.endswith('-source-config-holder'))
                 template = ('web:\n  port: 8080\nstorage:\n  type: postgres\n'
                             '  path: "${KOPIUR_DB_URI}"\n  caching: false\n'
+                            'endpoints:\n  - name: disabled-fixture\n    enabled: false\n'
+                            '    url: http://127.0.0.1:8080/health\n    interval: 1h\n'
+                            '    conditions: ["[STATUS] == 200"]\n'
                             'external-endpoints:\n  - name: fixture\n    group: recovery\n'
                             '    token: "' + self.api_key + '"\n')
                 scope['run']('docker', 'exec', '-i', holder, 'sh', '-c',

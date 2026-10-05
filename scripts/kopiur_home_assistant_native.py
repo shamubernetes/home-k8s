@@ -72,6 +72,7 @@ def contract():
                     'grant_type': 'authorization_code', 'code': response['auth_code'],
                     'client_id': CLIENT}, form=True).stdout)
                 self.api_key = response['access_token']
+                self.wait_for_helper(container)
                 self.request(container, '/api/services/input_boolean/turn_on',
                     {'entity_id': 'input_boolean.restore_fixture'}, authenticated=True)
                 identity = json.dumps({'original_fixture_key': self.api_key}).encode()
@@ -87,6 +88,19 @@ def contract():
                     time.sleep(1)
                 else:
                     raise RuntimeError('original fixture session was not persisted before capture')
+            self.wait_for_helper(container)
+
+        def wait_for_helper(self, container):
+            # Onboarding responds before all configured entities have loaded.
+            # Wait for the helper using the unchanged original bearer token.
+            for _ in range(120):
+                response = self.request(container, '/api/states/input_boolean.restore_fixture',
+                    authenticated=True, check=False)
+                if response.returncode == 0:
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError('original fixture session could not read configured helper')
 
         def application_state(self, container):
             value = json.loads(self.request(container, '/api/states/input_boolean.restore_fixture',

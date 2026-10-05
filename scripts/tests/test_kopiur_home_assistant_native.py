@@ -19,6 +19,17 @@ class HomeAssistantTests(unittest.TestCase):
         self.assertEqual(self.drill.image, ha.IMAGE)
         self.assertEqual(self.drill.port, 8123)
 
+    def test_helper_readiness_retries_without_replacing_identity(self):
+        identity = self.drill.api_key
+        responses = [SimpleNamespace(returncode=22), SimpleNamespace(returncode=0)]
+        with patch.object(self.drill, 'request', side_effect=responses) as request:
+            with patch.object(ha.time, 'sleep'):
+                self.drill.wait_for_helper('restored')
+        self.assertEqual(self.drill.api_key, identity)
+        self.assertEqual(request.call_count, 2)
+        request.assert_called_with('restored', '/api/states/input_boolean.restore_fixture',
+                                   authenticated=True, check=False)
+
     def test_capture_excludes_only_exact_runtime_stdout_link(self):
         self.drill.containers.append('fixture-source-config-holder')
         invoke = Mock()

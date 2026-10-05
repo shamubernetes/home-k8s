@@ -55,6 +55,21 @@ unowned/elevated-role rejection, future-table reads, write denial with the
 read-only default disabled, and denial of another database's application data.
 These are synthetic prerequisite checks, not production migration acceptance.
 
+The Bazarr candidate also enables `single-db-stable-filetree` capture. A single
+MVCC database dump is paired with a complete file archive only when the file
+tree's inode, ctime, mtime, size, mode and owner inventory remains unchanged
+across the entire capture interval. Rewriting and restoring identical bytes
+does not excuse a changed ctime. A busy tree fails closed instead of accepting
+skew or stopping production writers. Recovery uses this checksummed file
+generation, not later raw PVC contents. Links, special objects and submounts
+cannot be silently omitted. The native fixture forces a rewrite/restore race
+with an actual PG table-lock barrier and checks the restored file bytes.
+
+This mode addresses one database plus its `/config` tree. It does not establish
+NAS media recovery, multi-database coherence, TubeArchivist coordination,
+production CSI generation binding or real NAS/R2 acceptance. Other candidates
+retain the explicitly non-atomic legacy capture contract and remain suspended.
+
 The parent must provision and test the database grants. For each app database and its actual schema owner, the grant shape is:
 
 ```sql

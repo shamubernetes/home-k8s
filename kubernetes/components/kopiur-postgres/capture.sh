@@ -24,7 +24,39 @@ trap 'rm -rf "$root/pending"' EXIT
 trap 'exit 1' HUP INT TERM
 export PGCONNECT_TIMEOUT=10 PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=540000'
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-printf 'format=1\nstarted_at=%s\nconsistency=per-database-snapshot-before-pvc\n' "$started" >"$root/pending/metadata"
+# A single PG transaction can be paired without stopping the application when
+# the entire required file tree is unchanged throughout its capture interval.
+# Metadata includes inode/ctime, so rewriting then restoring bytes is rejected.
+coherent=false
+capture_mode=$(printenv CAPTURE_MODE || printf legacy)
+case "$capture_mode" in
+  single-db-stable-filetree)
+    set -- $PGDATABASES
+    [ "$#" -eq 1 ] || { printf 'coherent mode requires one database\n' >&2; exit 1; }
+    coherent=true
+    printf 'format=2\nstarted_at=%s\nconsistency=single-db-stable-filetree\n' "$started" >"$root/pending/metadata"
+    ;;
+  legacy)
+    printf 'format=1\nstarted_at=%s\nconsistency=per-database-snapshot-before-pvc\n' "$started" >"$root/pending/metadata"
+    ;;
+  *) printf 'unknown capture contract\n' >&2; exit 1 ;;
+esac
+filetree_inventory() {
+  # NUL field boundaries preserve paths with whitespace. Never follow links.
+  find /config -path "$root" -prune -o -printf '%P\0%y\0%D\0%i\0%n\0%m\0%U\0%G\0%s\0%T@\0%C@\0'
+}
+filetree_qualify() {
+  # Submounts and special objects cannot be silently skipped by an archive.
+  find /config -path "$root" -prune -o -printf '%D\n' >"$root/pending/devices"
+  [ "$(sort -u "$root/pending/devices")" = "$(stat -c %d /config)" ]
+  find /config -path "$root" -prune -o \( ! -type f ! -type d -o -type f -links +1 \) -print -quit >"$root/pending/unsupported"
+  [ ! -s "$root/pending/unsupported" ]
+  rm "$root/pending/devices" "$root/pending/unsupported"
+}
+if "$coherent"; then
+  filetree_qualify
+  filetree_inventory >"$root/pending/filetree.before"
+fi
 # Refuse connection-string syntax and unsafe artifact names in database arguments.
 for database in $PGDATABASES; do
   case "$database" in ''|*[!a-z0-9_]*) exit 1 ;; esac
@@ -43,8 +75,28 @@ for database in $PGDATABASES; do
   printf 'database=%s server_version=%s tables=%s\n' "$database" "$version" "$tables" >>"$root/pending/metadata"
 done
 cp "$config" "$root/pending/application-config"
+if "$coherent"; then
+  tar --create --one-file-system --numeric-owner --file="$root/pending/application-state.tar" \
+    --exclude='./.kopiur-postgres' --directory=/config . 2>"$root/pending/archive.stderr" || {
+    printf 'application file archive failed\n' >&2; exit 1;
+  }
+  rm "$root/pending/archive.stderr"
+  filetree_inventory >"$root/pending/filetree.after"
+  cmp -s "$root/pending/filetree.before" "$root/pending/filetree.after" || {
+    printf 'application file state changed during database capture\n' >&2; exit 1;
+  }
+  filetree_qualify
+  sha256sum "$root/pending/filetree.before" >"$root/pending/inventory.checksum"
+  cut -d ' ' -f 1 "$root/pending/inventory.checksum" >"$root/pending/filetree.sha256"
+  rm "$root/pending/inventory.checksum"
+  rm "$root/pending/filetree.before" "$root/pending/filetree.after"
+fi
 printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$root/pending/metadata"
-(cd "$root/pending" && sha256sum ./*.dump ./*.toc application-config metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
+if "$coherent"; then
+  (cd "$root/pending" && sha256sum ./*.dump ./*.toc application-config application-state.tar filetree.sha256 metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
+else
+  (cd "$root/pending" && sha256sum ./*.dump ./*.toc application-config metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
+fi
 sync -f "$root/pending"
 if [ -d "$root/current" ]; then mv "$root/current" "$root/previous"; fi
 mv "$root/pending" "$root/current"

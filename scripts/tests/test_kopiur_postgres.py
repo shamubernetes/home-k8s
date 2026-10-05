@@ -1,9 +1,11 @@
 """Offline contract regression tests. Native image drills are separate CLI commands."""
 import hashlib
+import io
 import json
 from pathlib import Path
 import runpy
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from unittest import mock
@@ -89,6 +91,8 @@ class ManifestTests(unittest.TestCase):
                 self.assertEqual(app_image["repository"] + ":" + app_image["tag"], image)
                 self.assertEqual(sidecar["env"]["PGDATABASES"].split(), databases)
                 self.assertEqual(sidecar["env"]["CONFIG_FILE"], config)
+                if app == "bazarr":
+                    self.assertEqual(sidecar["env"]["CAPTURE_MODE"], "single-db-stable-filetree")
                 self.assertEqual(sidecar["envFrom"], [{"secretRef": {"name": app + "-kopiur-postgres"}}])
                 self.assertEqual(sidecar["env"]["PGHOST"], "postgres17-rw.database.svc.cluster.local")
                 self.assertTrue(sidecar["securityContext"]["readOnlyRootFilesystem"])
@@ -190,6 +194,26 @@ class BundleTests(unittest.TestCase):
 
     def test_valid_inventory(self):
         self.assertEqual(MODULE["verify_bundle"](self.root), ["radarr_main"])
+
+    def test_archive_paths_types_duplicates_and_capacity_are_checked(self):
+        for names, kind, capacity in ((["../escape"], tarfile.REGTYPE, None),
+                                      (["/absolute"], tarfile.REGTYPE, None),
+                                      ([".kopiur-postgres/current"], tarfile.REGTYPE, None),
+                                      (["link"], tarfile.SYMTYPE, None),
+                                      (["same", "./same"], tarfile.REGTYPE, None),
+                                      (["bounded"], tarfile.REGTYPE, 0)):
+            with self.subTest(names=names, kind=kind, capacity=capacity):
+                data = io.BytesIO()
+                with tarfile.open(fileobj=data, mode="w") as archive:
+                    for name in names:
+                        member = tarfile.TarInfo(name)
+                        member.type = kind
+                        member.size = 1 if kind == tarfile.REGTYPE else 0
+                        archive.addfile(member, io.BytesIO(b"x") if member.size else None)
+                data.seek(0)
+                with tarfile.open(fileobj=data, mode="r:") as archive:
+                    with self.assertRaises(ValueError):
+                        MODULE["validate_tree_members"](archive, capacity)
 
     def test_corrupt_dump_rejected(self):
         (self.root / "current/radarr_main.dump").write_bytes(b"changed")

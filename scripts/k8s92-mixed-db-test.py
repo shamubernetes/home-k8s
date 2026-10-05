@@ -316,6 +316,11 @@ def ta_failure_markers(text):
         'assertion-error': 'AssertionError',
         'permission-error': 'PermissionError',
         'connection-error': 'ConnectionError',
+        'dragonfly-invalid-flags': 'Unknown command line flag',
+        'dragonfly-flag-validation': 'Illegal value',
+        'dragonfly-io-uring-permission': 'Operation not permitted',
+        'dragonfly-io-uring-init': 'io_uring',
+        'dragonfly-locked-memory': 'Cannot lock memory',
     }
     return [label for label, marker in markers.items() if marker in text] or ['unclassified']
 
@@ -329,7 +334,8 @@ def ta_failure_diagnostics():
             stream.seek(max(0, failure.stat().st_size - 65536))
             sources.append(('command', stream.read(65536).decode(errors='replace')))
     # Exact names registered by this disposable run, never a production target.
-    for label in ('ta-source', 'ta-restore-tool', 'es-source', 'es-restored'):
+    for label in ('ta-source', 'ta-restore-tool', 'es-source', 'es-restored',
+                  'redis-source', 'redis-restored'):
         container = PREFIX + '-' + label
         if container not in CONTAINERS:
             continue

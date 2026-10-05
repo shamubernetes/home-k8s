@@ -115,29 +115,11 @@ def fixture(app):
     if app not in CONTRACTS:
         raise ValueError("unsupported extended ARR fixture")
     native = contract()
-    native["run"]("docker", "pull", "--platform", "linux/amd64", native["PG_IMAGE"], timeout=600)
-    native["run"]("docker", "pull", "--platform", "linux/amd64", CONTRACTS[app][0], timeout=600)
+    from kopiur_native_fixture import exercise
+    images = [CONTRACTS[app][0]]
     if app == 'chaptarr':
-        native['run']('docker', 'pull', '--platform', 'linux/amd64', CONTRACTS['prowlarr'][0], timeout=600)
-    results = []
-
-    def exported(source, expected, original_key, visible):
-        from kopiur_stateful_native import artifact_manifest
-        manifest = artifact_manifest(source)
-        proof = native["restore_pvc"](source, app, config_mib=256, database_mib=512,
-                                       expected_fingerprints=expected, original_api_key=original_key,
-                                       expected_application_state=visible)
-        if not all(proof[key] for key in ("native_table_contents_equal", "original_fixture_identity_used",
-                                          "application_visible_state_equal", "restored_app_ping")):
-            raise ValueError("missing extended ARR recovery assertion")
-        results.append(dict(proof, artifact_entries=len(manifest["entries"]),
-                            producer_removed_before_restore=True, encrypted_transport_qualified=False,
-                            production_recovery_accepted=False))
-
-    native["fixture"](app, export=exported)
-    if len(results) != 1:
-        raise ValueError("native ARR fixture did not return one recovery proof")
-    return results[0]
+        images.append(CONTRACTS['prowlarr'][0])
+    return exercise(native, app, images)
 
 
 if __name__ == "__main__":

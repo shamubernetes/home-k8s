@@ -332,6 +332,12 @@ def ta_failure_markers(text):
         'redis-value-mutated': 'Redis value changed during capture',
         'redis-expiry-mutated': 'Redis expiry changed during capture',
         'redis-native-response-error': 'ResponseError',
+        'native-task-registration': "KeyError: 'download_pending'",
+        'native-api-type-error': 'TypeError:',
+        'native-api-attribute-error': 'AttributeError:',
+        'native-startup-source-drift': 'unqualified native recovery startup source',
+        'native-recovery-conflict': 'Redis recovery record conflict',
+        'native-held-startup-failure': 'held startup failed:',
     }
     return [label for label, marker in markers.items() if marker in text] or ['unclassified']
 
@@ -362,6 +368,11 @@ def ta_failure_diagnostics():
     for label, text in sources:
         (SCRATCH / ('ta-diagnostic-' + label + '.log')).write_text(text)
         summary[label] = ta_failure_markers(text)
+        # Frame numbers are safe, unlike traceback source/value text. They map
+        # precisely to the synthetic inline script on this reviewed candidate.
+        if label == 'command':
+            import re
+            summary['inline-python-lines'] = [int(line) for line in re.findall(r'File "<stdin>", line (\d+)', text)]
     EVIDENCE['tubearchivist_failure'] = summary
     print(json.dumps({'synthetic_ta_failure': summary,
                       'phase': EVIDENCE.get('tubearchivist_phase', 'unknown')}), flush=True)
@@ -407,6 +418,9 @@ django.setup()
 from common.src.ta_redis import RedisQueue,TaskRedis
 from task.src.task_manager import TaskManager
 from task.celery import app as celery_app
+# Celery autodiscovery is deferred in a producer-only Python process. Import
+# the actual shipped task module, as worker initialization does, before lookup.
+from task.tasks import download_pending
 from django.contrib.sessions.backends.db import SessionStore
 RedisQueue('download:video').add_list(['dlfixture01','dlfixture02'])
 RedisQueue('reindex:ta_video').add_list(['vidfixture1','vidfixture2'])

@@ -1,6 +1,8 @@
 """Run only on authorized Linux ARC with the candidate checkout."""
 import os
 import io
+import json
+from types import SimpleNamespace
 import tarfile
 from pathlib import Path
 import runpy
@@ -10,6 +12,7 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import kopiur_stateful_native as native
+import kopiur_grimmory_native as grimmory
 from kopiur_shared import InvalidEvidence, validate_artifact
 
 
@@ -68,6 +71,17 @@ class NativeExportTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     native.extract_export(data.getvalue(), destination)
                 self.assertFalse(destination.exists())
+
+    def test_grimmory_request_timestamps_only_are_volatile(self):
+        payload = {'status': 200, 'message': 'Pong', 'timestamp': 'request-1',
+                   'data': {'status': 'UP', 'message': 'healthy', 'version': '3.5.0', 'timestamp': 'request-1'}}
+        def docker(*args):
+            return SimpleNamespace(stdout=json.dumps(payload))
+        original = grimmory.visible_state('fixture', docker)
+        payload['timestamp'] = payload['data']['timestamp'] = 'request-2'
+        self.assertEqual(original, grimmory.visible_state('fixture', docker))
+        payload['data']['version'] = 'different'
+        self.assertNotEqual(original, grimmory.visible_state('fixture', docker))
 
 
 if __name__ == "__main__":

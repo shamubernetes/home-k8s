@@ -42,6 +42,7 @@ class Drill:
         self.path = "identity-fixtures/run7-" + self.nonce
         self.containers = []
         self.bytes = secrets.token_bytes(4096)
+        self.stage = "initial"
         self.deadline = time.monotonic() + 180
 
     def run(self, args, *, stdin=None, check=True, timeout=180):
@@ -80,8 +81,18 @@ class Drill:
         prefix += "\nmkdir -p /work/tmp\n"
         prefix += "\nprintf '%s' " + shlex.quote(config) + " > /work/rclone.conf\n"
         prefix += "k() { kopia \"$@\"; }\n"
-        return self.run(["docker", "exec", "-i", container, "/tools/busybox", "sh", "-s"],
-                   stdin=(prefix + body).encode(), check=check)
+        result = self.run(["docker", "exec", "-i", container, "/tools/busybox", "sh", "-s"],
+                          stdin=(prefix + body).encode(), check=False)
+        if check and result.returncode:
+            message = result.stderr.decode(errors="replace").lower()
+            codes = [code for code in ("unknown long flag", "required flag", "accessdenied",
+                     "access_denied", "logon_failure", "invalid repository password",
+                     "no such file or directory", "connection refused", "unable to decrypt")
+                     if code in message]
+            flags = sorted(set(re.findall(r"--[a-z][a-z0-9-]{0,60}", message)))
+            raise RuntimeError("identity stage " + self.stage + " failed: " +
+                               json.dumps({"exit": result.returncode, "categories": codes, "flags": flags}))
+        return result
 
     def remove(self, name):
         owner = self.run(["docker", "inspect", "--format", '{{ index .Config.Labels "k8s92.identity" }}', name]).stdout.decode().strip()
@@ -95,12 +106,13 @@ class Drill:
         return "s3 --bucket=kopiur-" + self.app + " --prefix=" + self.path + "/ --endpoint=" + ACCOUNT + ".r2.cloudflarestorage.com --region=auto"
 
     def exercise(self, kind):
+        self.stage = kind + "-capture"
         password = self.fields["NAS_KOPIA_PASSWORD" if kind == "nas" else "R2_KOPIA_PASSWORD"]
         producer = self.start()
         octal = "".join("\\%03o" % b for b in self.bytes)
         body = "mkdir -p /work/source\nprintf '%b' " + shlex.quote(octal) + " > /work/source/fixture.bin\n"
-        body += "k repository create " + self.backend(kind) + " >/dev/null 2>/dev/null\n"
-        body += "k snapshot create /work/source --json 2>/dev/null\n"
+        body += "k repository create " + self.backend(kind) + " >/dev/null\n"
+        body += "k snapshot create /work/source --json\n"
         result = self.exec(producer, body, password=password)
         snapshot = json.loads(result.stdout)
         assert isinstance(snapshot, dict)
@@ -108,19 +120,28 @@ class Drill:
         assert re.fullmatch(r"[A-Za-z0-9]+", object_id), "unexpected snapshot object ID"
         if kind == "nas":
             guest_config = "[mnemosyne]\ntype = smb\nhost = 10.100.47.100\nuser = guest\npass =\ndomain = WORKGROUP\n"
+            self.stage = "nas-guest"
             body = "printf '%s' " + shlex.quote(guest_config) + " > /work/guest.conf\n"
             body += "rclone --config=/work/guest.conf lsf mnemosyne:kopiur-" + self.app + " --max-depth=1\n"
             guest = self.exec(producer, body, check=False)
-            assert guest.returncode and b"access_denied" in guest.stderr.lower(), "guest share denial not proven"
+            message = guest.stderr.lower()
+            guest_denials = [code for code in (b"status_access_denied", b"status_logon_failure",
+                            b"0xc0000022", b"0xc000006d", b"access denied", b"permission denied")
+                            if code in message]
+            assert guest.returncode and guest_denials, ("guest auth denial not proven", guest.returncode, guest_denials)
         self.remove(producer)
+        self.stage = kind + "-wrong-password"
         wrong = self.start()
         denied = self.exec(wrong, "k repository connect " + self.backend(kind) + " >/dev/null\n",
                            password=secrets.token_hex(32), check=False)
-        assert denied.returncode and b"invalid repository password" in denied.stderr.lower(), "password denial was not proven"
+        message = denied.stderr.lower()
+        assert denied.returncode and any(code in message for code in
+            (b"invalid repository password", b"unable to decrypt")), "password denial was not proven"
         self.remove(wrong)
         restorer = self.start()
-        body = "k repository connect " + self.backend(kind) + " >/dev/null 2>/dev/null\n"
-        body += "k snapshot restore " + object_id + " /work/restored >/dev/null 2>/dev/null\nsha256sum /work/restored/fixture.bin\n"
+        self.stage = kind + "-restore"
+        body = "k repository connect " + self.backend(kind) + " >/dev/null\n"
+        body += "k snapshot restore " + object_id + " /work/restored >/dev/null\nsha256sum /work/restored/fixture.bin\n"
         result = self.exec(restorer, body, password=password)
         assert result.stdout.decode().split()[0] == hashlib.sha256(self.bytes).hexdigest(), "restored bytes differ"
         self.remove(restorer)

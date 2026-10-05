@@ -17,7 +17,6 @@ import signal
 import sqlite3
 import sys
 import tempfile
-import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -158,26 +157,83 @@ def compare_redis_inventory(before, after):
               'Redis expiry changed during capture')
 
 
+RECOVERY_KEY = b'k8s92:recovery:hold:v1'
+
+
+def recovery_owner(bundle, manifest, client):
+    return json.dumps({'format': 'ta-redis-recovery-hold-v1', 'db': 15,
+                       'bundle_sha256': digest(bundle / 'manifest.json'),
+                       'source_instance_id': manifest['redis']['source_instance_id'],
+                       'target_instance_id': redis_instance_id(client)}, sort_keys=True).encode()
+
+
+def restored_inventory(client):
+    records = redis_inventory(client)
+    records.pop(base64.b64encode(RECOVERY_KEY).decode(), None)
+    return records
+
+
+def unexpired_records(client, records):
+    seconds, micros = client.time()
+    now = seconds * 1000 + micros // 1000
+    return {key: value for key, value in records.items()
+            if value['expires_at_ms'] == -1 or value['expires_at_ms'] > now}
+
+
+def verify_restored_redis(client, records, owner):
+    check(client.get(RECOVERY_KEY) == owner, 'Redis recovery ownership changed')
+    # Expiry may cross during SCAN. Use Redis time on both sides of the scan,
+    # retaining expired source bytes only in the immutable archive.
+    before = unexpired_records(client, records)
+    actual = restored_inventory(client)
+    after = unexpired_records(client, records)
+    check(set(after) <= set(actual) <= set(before), 'Redis recovery target key set differs')
+    compare_redis_inventory({key: before[key] for key in actual}, actual)
+
+
 def restore_redis(bundle):
     manifest = verify(bundle)
     check(os.environ.get('K8S92_ISOLATED_RESTORE') == 'YES', 'isolated Redis restore required')
     client = redis_client()
     check(redis_instance_id(client) != manifest['redis']['source_instance_id'],
           'refuse source Redis server')
-    check(client.dbsize() == 0, 'Redis restore requires empty DB15')
     records = check_redis_inventory(json.loads((bundle / 'redis.json').read_text()))
-    expected = {}
+    check(base64.b64encode(RECOVERY_KEY).decode() not in records, 'reserved Redis recovery key in source')
+    owner = recovery_owner(bundle, manifest, client)
+    # Atomically claim a NEW empty disposable target or resume the same owned
+    # bundle. A nonempty production/unowned DB can never be merged or reset.
+    claim = """local owner = redis.call('GET', KEYS[1])
+    if owner then return owner == ARGV[1] and 1 or 0 end
+    if redis.call('DBSIZE') ~= 0 then return 0 end
+    redis.call('SET', KEYS[1], ARGV[1]); return 1
+    """
+    check(client.eval(claim, 1, RECOVERY_KEY, owner) == 1, 'unowned or conflicting Redis target')
+    script = """if redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end
+    local expiry = tonumber(ARGV[3])
+    local now = redis.call('TIME')
+    local ms = now[1] * 1000 + math.floor(now[2] / 1000)
+    local current = redis.call('DUMP', KEYS[2])
+    if expiry >= 0 and expiry <= ms then
+        if current then return -2 end
+        return 0
+    end
+    if current then
+        if current ~= ARGV[2] then return -2 end
+        local ttl = redis.call('PTTL', KEYS[2])
+        if expiry == -1 then return ttl == -1 and 2 or -2 end
+        return ttl >= 0 and math.abs(ms + ttl - expiry) <= 1 and 2 or -2
+    end
+    if expiry == -1 then redis.call('RESTORE', KEYS[2], 0, ARGV[2])
+    else redis.call('RESTORE', KEYS[2], expiry, ARGV[2], 'ABSTTL') end
+    return 1
+    """
     for encoded, record in records.items():
-        expiry = record['expires_at_ms']
-        # Expired sessions expire naturally. Their original bytes remain archived.
-        if expiry >= 0 and expiry <= time.time_ns() // 1000000:
-            continue
         key = base64.b64decode(encoded, validate=True)
         value = base64.b64decode(record['dump'], validate=True)
-        client.restore(key, 0 if expiry == -1 else expiry, value, absttl=expiry != -1)
-        expected[encoded] = record
-    compare_redis_inventory(expected, redis_inventory(client))
-    print('Redis DB15 native values and unexpired TTLs restored without flushing')
+        check(client.eval(script, 2, RECOVERY_KEY, key, owner, value,
+                          record['expires_at_ms']) >= 0, 'Redis recovery record conflict')
+    verify_restored_redis(client, records, owner)
+    print('Redis DB15 restored resumably under execution hold, no replacement or enqueue')
 
 
 def capture(output):

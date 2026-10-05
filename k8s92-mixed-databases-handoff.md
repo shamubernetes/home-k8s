@@ -75,14 +75,22 @@ quiescence/reconciliation work; remote CI cannot supply that guarantee.
 The v2 recovery bundle requires `redis.json`. Capture scans DB15 only and rejects
 key, native value or expiry mutations across consecutive reads. It does not
 claim that two scans fence all writers. Restore rejects the source Redis server,
-requires an empty DB15 and explicit isolated-restore mode, and never flushes or
-replaces existing keys. Unexpired keys retain their original absolute expiries;
+requires a new empty DB15 or its own resumable recovery claim and explicit
+isolated-restore mode, and never flushes or replaces existing keys.
+Unexpired keys retain their original absolute expiries;
 expired session bytes remain archived but are not resurrected. Native Redis
 roundtrip is a prerequisite, not proof of coherent cross-store capture. The
 all-writer fence and independent production NAS/R2 recovery gates remain open
 before activation, without permitting data discard or weakening zero-loss
 acceptance. Native compatibility passed against the deployed Dragonfly v2
 digest in the isolated ARC fixture, including binary types and absolute expiry.
+
+The current Redis semantic repair is detailed in
+`k8s92-tubearchivist-redis-handoff.md`. Ordinary TubeArchivist startup deletes
+required native queues/progress and cannot be used as recovery acceptance.
+The current native fixture and restored-PVC helper use pinned startup under
+execution hold. Real worker/API release is a separate cross-store qualification
+gate, not inferred from a health endpoint or automatic replay.
 
 TubeArchivist now uses its own `kopiur-tubearchivist` R2 bucket. Its new identity
 has only bucket-item read/write permission for that bucket, not bucket

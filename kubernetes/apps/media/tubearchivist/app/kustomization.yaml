@@ -15,6 +15,7 @@ configMapGenerator:
 - name: tubearchivist-backup-contract
   files:
   - backup.py
+  - recovery.py
   options:
     disableNameSuffixHash: true
     annotations:

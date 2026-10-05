@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, call, patch
@@ -25,6 +26,12 @@ SPEC = importlib.util.spec_from_file_location(
     'ta_backup', ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py')
 BACKUP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BACKUP)
+RECOVERY_SPEC = importlib.util.spec_from_file_location(
+    'ta_recovery', ROOT / 'kubernetes/apps/media/tubearchivist/app/recovery.py')
+assert RECOVERY_SPEC is not None and RECOVERY_SPEC.loader is not None
+RECOVERY = importlib.util.module_from_spec(RECOVERY_SPEC)
+with patch.dict(sys.modules, {'backup': BACKUP}):
+    RECOVERY_SPEC.loader.exec_module(RECOVERY)
 
 # Load only pure helpers. Importing the Docker runner would create scratch and
 # change umask, neither of which is needed by these focused regressions.
@@ -193,6 +200,8 @@ class RedisRecoveryTests(unittest.TestCase):
             client.info.return_value = {'run_id': run_id}
             client.dbsize.return_value = dbsize
             with patch.object(BACKUP, 'verify', return_value={'redis': {'source_instance_id': 'source'}}), \
+                 patch.object(Path, 'read_text', return_value=json.dumps(self.records)), \
+                 patch.object(BACKUP, 'digest', return_value='synthetic-digest'), \
                  patch.object(BACKUP, 'redis_client', return_value=client), \
                  patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'YES'}):
                 with self.assertRaises(RuntimeError):
@@ -215,6 +224,41 @@ class RedisRecoveryTests(unittest.TestCase):
         client.info.side_effect = [{}, {'master_replid': 'fixture-lineage'}]
         self.assertEqual(BACKUP.redis_instance_id(client), 'fixture-lineage')
         self.assertEqual(client.info.call_args_list, [call('server'), call('replication')])
+
+    def test_expiry_eligibility_uses_redis_clock_not_restore_host_clock(self):
+        client = Mock()
+        client.time.return_value = (100, 500000)
+        records = {'expired': dict(self.record, expires_at_ms=100500),
+                   'live': dict(self.record, expires_at_ms=100501),
+                   'persistent': self.record}
+        self.assertEqual(set(BACKUP.unexpired_records(client, records)), {'live', 'persistent'})
+
+    def test_recovery_marker_only_is_excluded_from_content_comparison(self):
+        marker = base64.b64encode(BACKUP.RECOVERY_KEY).decode()
+        with patch.object(BACKUP, 'redis_inventory', return_value=dict(self.records, **{marker: self.record})):
+            self.assertEqual(BACKUP.restored_inventory(Mock()), self.records)
+
+    def test_terminal_ambiguous_and_invalid_native_records_are_not_replayed(self):
+        client = Mock()
+        for status in ('SUCCESS', 'FAILURE', 'FAILED', 'REVOKED'):
+            client.get.return_value = json.dumps({'status': status}).encode()
+            self.assertEqual(RECOVERY.disposition(b'celery-task-meta-id', client), 'terminal-no-replay')
+        for status in ('PENDING', 'STARTED', 'RETRY'):
+            client.get.return_value = json.dumps({'status': status, 'command': 'STOP'}).encode()
+            self.assertEqual(RECOVERY.disposition(b'celery-task-meta-id', client), 'interrupted-requires-reconciliation')
+        for data in (b'not-json', b'[]', b'null', b'{}'):
+            client.get.return_value = data
+            self.assertEqual(RECOVERY.disposition(b'celery-task-meta-id', client), 'invalid-or-unknown-no-replay')
+        client.set.assert_not_called()
+        client.delete.assert_not_called()
+
+    def test_progress_native_queues_and_unknown_broker_keys_are_preserved(self):
+        client = Mock()
+        self.assertEqual(RECOVERY.disposition(b'ta:message:download:id', client), 'progress-preserved')
+        self.assertEqual(RECOVERY.disposition(b'ta:reindex:ta_video', client), 'application-intent-preserved')
+        self.assertEqual(RECOVERY.disposition(b'unacked', client), 'opaque-or-broker-no-replay')
+        self.assertEqual(RECOVERY.disposition(b'\x00unknown', client), 'opaque-or-broker-no-replay')
+        client.assert_not_called()
 
 
 class SyntheticDiagnosticTests(unittest.TestCase):

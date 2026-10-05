@@ -8,7 +8,6 @@ import importlib.util
 from pathlib import Path
 import secrets
 import shutil
-import sqlite3
 
 spec = importlib.util.spec_from_file_location('lane', Path(__file__).with_name('k8s92-mixed-db-test.py'))
 lane = importlib.util.module_from_spec(spec)
@@ -74,6 +73,8 @@ try:
         tool = lane.start('tool', lane.TA, net, env, args=('infinity',), extra=('--entrypoint', 'sleep'))
         lane.docker('cp', str(bundle), tool + ':/bundle')
         lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
+        lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/backup.py')
+        lane.docker('cp', str(lane.ROOT / 'kubernetes/apps/media/tubearchivist/app/recovery.py'), tool + ':/recovery.py')
         lane.docker('exec', tool, 'python', '/contract.py', 'restore-es', '/bundle', timeout=660)
         lane.docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
                     'restore-redis', '/bundle', timeout=660)
@@ -82,11 +83,13 @@ try:
         shutil.copy2(bundle / 'db.sqlite3', cache / 'db.sqlite3')
         for suffix in ('-wal', '-shm', '-journal'):
             (cache / ('db.sqlite3' + suffix)).unlink(missing_ok=True)
-        with sqlite3.connect(cache / 'db.sqlite3') as db:
-            db.execute('UPDATE django_celery_beat_periodictask SET enabled=0')
-        app = created_app('ta', lane.TA, net, env, cache, '/cache')
-        lane.wait(lambda: lane.docker('exec', app, 'curl', '-fsS', '-H', 'Host: localhost:8000', 'http://localhost:8000/api/health/', ok=False).returncode == 0, 300)
-    print(a.app + ': restored native database and application health passed on an isolated working copy')
+        lane.docker('cp', str(cache) + '/.', tool + ':/cache')
+        lane.docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/recovery.py',
+                    '/bundle', '/cache/recovery-hold.json', timeout=660)
+    if a.app == 'tubearchivist':
+        print('tubearchivist: native restored startup passed under execution hold, release not qualified')
+    else:
+        print(a.app + ': restored native database and application health passed on an isolated working copy')
 finally:
     for container in reversed(lane.CONTAINERS):
         logs = lane.docker('logs', container, ok=False)

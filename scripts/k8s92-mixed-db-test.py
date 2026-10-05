@@ -379,12 +379,61 @@ def ta():
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), app + ':/contract.py')
     EVIDENCE['tubearchivist_phase'] = 'seed-and-check-real-schema'
     docker('exec', '-i', app, 'python', '-', data=ta_fixture_script(seed=True))
-    # Opaque queue/progress/session-like values across native Redis types, not
-    # executable Celery jobs. No key names or payloads enter public evidence.
+    # Freeze ONLY this disposable source's native worker/beat processes before
+    # producing executable broker payloads. The production writer-fence gate
+    # belongs to the downstream coherence lane, not this synthetic fixture.
+    freeze = """import os,signal
+from pathlib import Path
+found = 0
+for entry in Path('/proc').iterdir():
+    if not entry.name.isdigit(): continue
+    try: args = (entry / 'cmdline').read_bytes().split(b'\\x00')
+    except (FileNotFoundError, PermissionError): continue
+    if args[0].startswith(b'celery') or any(Path(a.decode(errors='replace')).name == 'celery' for a in args[:2]):
+        os.kill(int(entry.name), signal.SIGSTOP)
+        found += 1
+assert found >= 1
+"""
+    docker('exec', '-i', app, 'python', '-', data=freeze)
+    # Exercise shipped native writers and actual Kombu serialization, including
+    # a reserved message left by a producer-process crash. Nothing is executed.
     seed_redis = """import sys
 sys.path.insert(0, '/')
 import contract
+sys.path.insert(0, '/app')
+import os,json,django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings')
+django.setup()
+from common.src.ta_redis import RedisQueue,TaskRedis
+from task.src.task_manager import TaskManager
+from task.celery import app as celery_app
+from django.contrib.sessions.backends.db import SessionStore
+RedisQueue('download:video').add_list(['dlfixture01','dlfixture02'])
+RedisQueue('reindex:ta_video').add_list(['vidfixture1','vidfixture2'])
+task = celery_app.tasks['download_pending']
+task.push_request(id='11111111-1111-4111-8111-111111111111')
+TaskManager().init(task)
+TaskRedis().set_command(task.request.id, 'STOP')
+task.send_progress(['Recovery fixture interrupted'],progress=0.5)
+task.pop_request()
+TaskRedis().set_key('22222222-2222-4222-8222-222222222222',
+    {'task_id':'22222222-2222-4222-8222-222222222222','name':'download_pending','status':'SUCCESS'},expire=True)
+celery_app.send_task('download_pending',task_id='33333333-3333-4333-8333-333333333333',kwargs={'auto_only':False})
+celery_app.send_task('download_pending',task_id='22222222-2222-4222-8222-222222222222',kwargs={'auto_only':False})
+connection = celery_app.connection_for_read()
+channel = connection.channel()
+message = channel.basic_get(queue='celery',no_ack=False)
+assert message is not None
+session = SessionStore()
+session['recovery_fixture'] = 'native-db-session'
+session.set_expiry(3600)
+session.save()
+from pathlib import Path
+Path('/cache/native-session-id').write_text(session.session_key)
 r = contract.redis_client()
+assert r.hlen('unacked') >= 1
+r.set('celery-task-meta-invalid',b'not-json')
+r.set('fixture:expired',b'original-retained',px=60000)
 r.set(b'fixture:binary', b'\\x00\\xffprivate')
 r.rpush('fixture:jobs', b'first', b'\\x00second')
 r.hset('fixture:progress', mapping={'cursor': b'\\x00\\xff', 'done': '3'})
@@ -392,6 +441,10 @@ r.sadd('fixture:set', b'\\x00', b'member')
 r.zadd('fixture:scores', {b'member': 1.5})
 r.xadd('fixture:stream', {'body': b'\\x00\\xff'})
 r.set('fixture:session', b'private-session', px=3600000)
+sys.stdout.flush()
+# Do not let Kombu channel.close() requeue the reserved message. Qualify its
+# real native unacked records after an abrupt process exit instead.
+os._exit(0)
 """
     docker('exec', '-i', app, 'python', '-', data=seed_redis)
     EVIDENCE['tubearchivist_phase'] = 'capture'
@@ -409,24 +462,62 @@ r.set('fixture:session', b'private-session', px=3600000)
     freshredis = start('redis-restored', REDIS, net, args=REDIS_ARGS, extra=('--network-alias', 'redis'))
     tool = start('ta-restore-tool', TA, net, env, args=('infinity',), extra=('--entrypoint', 'sleep'))
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
+    docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/backup.py')
+    docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/recovery.py'), tool + ':/recovery.py')
     docker('cp', str(SCRATCH / 'tubearchivist'), tool + ':/bundle')
     assert docker('exec', tool, 'python', '-c',
                   "import redis; assert redis.Redis.from_url('redis://redis:6379/15').dbsize() == 0").returncode == 0
     EVIDENCE['tubearchivist_phase'] = 'verify-and-restore'
     ta_contract(tool, 'verify', '/bundle')
-    # Restore Redis before the app launches any worker. Repeating must reject
-    # the occupied target, without deleting or replacing a single key.
+    # Unowned populated target is rejected unchanged. Only a target atomically
+    # claimed for this exact bundle may resume after a killed restore process.
+    unowned = """import sys
+sys.path.insert(0,'/')
+import contract
+from pathlib import Path
+r=contract.redis_client()
+r.set('unowned',b'preserve')
+before=contract.redis_inventory(r)
+try: contract.restore_redis(Path('/bundle'))
+except RuntimeError: pass
+else: raise AssertionError('unowned target accepted')
+assert contract.redis_inventory(r) == before
+# Fixture-only owned sentinel cleanup, no database reset.
+assert r.delete('unowned') == 1
+"""
+    docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '-', data=unowned)
+    crash_restore = """import sys,os
+sys.path.insert(0,'/')
+import contract
+from pathlib import Path
+r=contract.redis_client()
+original=r.eval
+count=0
+def interrupted(*args,**kwargs):
+    global count
+    result=original(*args,**kwargs)
+    count+=1
+    if count == 4: os._exit(73)
+    return result
+r.eval=interrupted
+contract.redis_client=lambda:r
+contract.restore_redis(Path('/bundle'))
+"""
+    assert docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '-',
+                  data=crash_restore, ok=False).returncode == 73
     docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
            'restore-redis', '/bundle')
-    assert docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
-                  'restore-redis', '/bundle', ok=False).returncode != 0
+    docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
+           'restore-redis', '/bundle')
     check_redis = """import sys,json
 from pathlib import Path
 sys.path.insert(0, '/')
 import contract
 expected = json.loads(Path('/bundle/redis.json').read_text())
-contract.compare_redis_inventory(expected, contract.redis_inventory(contract.redis_client()))
-assert len([key for key in expected if contract.base64.b64decode(key).startswith(b'fixture:')]) == 7
+client=contract.redis_client()
+owner=contract.recovery_owner(Path('/bundle'),contract.verify(Path('/bundle')),client)
+contract.verify_restored_redis(client,expected,owner)
+assert len([key for key in expected if contract.base64.b64decode(key).startswith(b'fixture:')]) == 8
 """
     docker('exec', '-i', tool, 'python', '-', data=check_redis)
     result = ta_contract(tool, 'restore-es', '/bundle', timeout=660).stdout.strip()
@@ -436,24 +527,72 @@ assert len([key for key in expected if contract.base64.b64decode(key).startswith
     shutil.copy2(SCRATCH / 'tubearchivist/db.sqlite3', cache / 'db.sqlite3')
     for suffix in ('-wal', '-shm', '-journal'):
         (cache / ('db.sqlite3' + suffix)).unlink(missing_ok=True)
-    # Disable restored schedules on the working copy, never mutate the artifact.
-    import sqlite3
-    with sqlite3.connect(cache / 'db.sqlite3') as db:
-        db.execute('UPDATE django_celery_beat_periodictask SET enabled=0')
     docker('cp', str(cache) + '/.', tool + ':/cache')
-    EVIDENCE['tubearchivist_phase'] = 'restored-normal-startup'
-    # Use the actual normal entrypoint after the restore, not a fake health server.
-    docker('exec', '-d', tool, 'bash', '-c', 'exec /app/run.sh >/cache/lane-boot.log 2>&1')
-    wait(lambda: docker('exec', tool, 'curl', '-fsS', '-H', 'Host: localhost:8000', 'http://localhost:8000/api/health/', ok=False).returncode == 0, 300)
+    EVIDENCE['tubearchivist_phase'] = 'restored-held-native-startup'
+    # Ordinary run.sh destroys required state and launches invalid work before
+    # reconciliation. Run pinned native migrations/startup with no execution.
+    docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/recovery.py',
+           '/bundle', '/cache/recovery-hold.json', timeout=660)
+    # Crash/restart the app process container while keeping the restored engine.
+    docker('restart', tool)
+    docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/recovery.py',
+           '/bundle', '/cache/recovery-hold.json', timeout=660)
     EVIDENCE['tubearchivist_phase'] = 'post-startup-fixture-verification'
     docker('exec', '-i', tool, 'python', '-', data=ta_fixture_script())
+    docker('exec', '-i', tool, 'python', '-', data=check_redis)
+    native_check = """import sys,os,json,hashlib
+from pathlib import Path
+sys.path.insert(0,'/app')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings')
+import django
+django.setup()
+from common.src.ta_redis import RedisQueue,TaskRedis,RedisArchivist
+from django.contrib.sessions.backends.db import SessionStore
+assert RedisQueue('download:video').get_all() == ['dlfixture01','dlfixture02']
+assert RedisQueue('reindex:ta_video').get_all() == ['vidfixture1','vidfixture2']
+task=TaskRedis().get_single('11111111-1111-4111-8111-111111111111')
+assert task['status']=='PENDING' and task['command']=='STOP'
+progress=RedisArchivist().get_message_dict('message:download:11111111')
+assert progress['progress']==0.5 and progress['command']=='STOP'
+session=SessionStore(session_key=Path('/cache/native-session-id').read_text())
+assert session['recovery_fixture']=='native-db-session'
+report=json.loads(Path('/cache/recovery-hold.json').read_text())
+assert report['execution']=='HELD' and report['automatic_replay'] is False
+values=set(report['records'].values())
+assert {'interrupted-requires-reconciliation','terminal-no-replay',
+        'invalid-or-unknown-no-replay','progress-preserved','opaque-or-broker-no-replay'} <= values
+"""
+    docker('exec', '-i', tool, 'python', '-', data=native_check)
+    # Let a captured TTL elapse on the Redis clock, then retry. No resurrection.
+    expiry_check = """import sys,time,json
+from pathlib import Path
+sys.path.insert(0,'/')
+import contract
+r=contract.redis_client()
+ttl=r.pttl('fixture:expired')
+assert ttl < 60001
+if ttl > 0: time.sleep((ttl+20)/1000)
+assert not r.exists('fixture:expired')
+contract.restore_redis(Path('/bundle'))
+assert not r.exists('fixture:expired')
+assert any(contract.base64.b64decode(k)==b'fixture:expired'
+           for k in json.loads(Path('/bundle/redis.json').read_text()))
+"""
+    docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '-', data=expiry_check)
     manifest = json.loads((SCRATCH / 'tubearchivist/manifest.json').read_text())
-    EVIDENCE['tubearchivist'] = {'native_export': 'pass', 'documents': {k: v['count'] for k, v in manifest['documents'].items()}, 'sqlite_tables': manifest['sqlite_tables'], 'source_removed_before_restore': True, 'es_restore': result, 'redis_initial_dbsize': 0, 'restore_rejects_nonempty_target': 'pass', 'restored_app_health': 'pass'}
-    EVIDENCE['tubearchivist'].update({'django_user_table': 'user_account', 'fixture_documents_after_normal_startup': 'pass'})
+    EVIDENCE['tubearchivist'] = {'native_export': 'pass', 'documents': {k: v['count'] for k, v in manifest['documents'].items()}, 'sqlite_tables': manifest['sqlite_tables'], 'source_removed_before_restore': True, 'es_restore': result, 'redis_initial_dbsize': 0, 'restore_rejects_unowned_nonempty_target': 'pass', 'restored_native_startup_under_hold': 'pass'}
+    EVIDENCE['tubearchivist'].update({'django_user_table': 'user_account', 'fixture_documents_after_held_startup': 'pass'})
     EVIDENCE['tubearchivist'].update({'redis_native_types_and_binary_roundtrip': 'pass',
                                    'redis_engine': REDIS,
                                    'redis_absolute_expiry_preserved': 'pass',
                                    'redis_repeat_restore_preserves_target': 'pass'})
+    EVIDENCE['tubearchivist'].update({'killed_partial_restore_resumes': 'pass',
+                                   'native_queues_tasks_commands_progress_and_db_session': 'pass',
+                                   'native_kombu_queued_and_reserved_payloads_preserved': 'pass',
+                                   'app_crash_repeated_startup_preserves_state': 'pass',
+                                   'invalid_terminal_and_ambiguous_work_not_replayed': 'pass',
+                                   'expired_state_archived_not_resurrected': 'pass',
+                                   'automatic_release': False})
     EVIDENCE['tubearchivist_phase'] = 'complete'
     print(json.dumps({'tubearchivist': EVIDENCE['tubearchivist']}), flush=True)
 

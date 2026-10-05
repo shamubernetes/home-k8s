@@ -33,6 +33,7 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("ALTER DEFAULT PRIVILEGES", sql)
         self.assertNotIn("pg_read_all_data", sql)
         self.assertIn("default_transaction_read_only = on", sql)
+        self.assertIn("CASE WHEN c.relkind='S' THEN has_sequence_privilege", sql)
 
     def test_bazarr_uses_dedicated_transport_identities(self):
         directory = REPO / "kubernetes/apps/arrs/bazarr/app"

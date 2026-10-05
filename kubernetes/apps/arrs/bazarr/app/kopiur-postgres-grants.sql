@@ -64,11 +64,15 @@ BEGIN
   IF has_database_privilege(backup_role, current_database(), 'CREATE') OR
      has_schema_privilege(backup_role, 'public', 'CREATE') OR
      EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f')
-             AND has_table_privilege(backup_role,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) OR
+             WHERE n.nspname='public'
+             AND CASE WHEN c.relkind IN ('r','p','v','m','f') THEN
+               has_table_privilege(backup_role,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+               ELSE false END) OR
      EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public' AND c.relkind='S'
-             AND has_sequence_privilege(backup_role,c.oid,'UPDATE')) THEN
+             WHERE n.nspname='public'
+             -- PostgreSQL may reorder WHERE predicates. CASE guards object types.
+             AND CASE WHEN c.relkind='S' THEN has_sequence_privilege(backup_role,c.oid,'UPDATE')
+               ELSE false END) THEN
     RAISE EXCEPTION 'backup identity has unexpected write authority';
   END IF;
 END

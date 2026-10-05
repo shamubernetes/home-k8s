@@ -194,7 +194,7 @@ g.atomic=fail_resume
     def test_restart_recovers_revoked_journal_left_closed_mid_resume(self):
         state = {'format':'writer-generation-v1', 'generation':'unit-revoked',
                  'owner': GATE.identity(), 'admission':'CLOSED', 'phase':'REVOKED',
-                 'deadline':time.monotonic()-1}
+                 'started_at':time.monotonic(), 'deadline':time.monotonic()-1}
         GATE.atomic(GATE.ROOT / 'current.json', state)
         GATE.recover()
         self.assertEqual(self.state()['admission'], 'OPEN')

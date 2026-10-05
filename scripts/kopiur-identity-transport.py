@@ -6,6 +6,7 @@ producer containers, restore in fresh containers, then delete only the UUID-owne
 synthetic repositories. No production captures, policies or retained points change.
 """
 import hashlib
+import importlib
 import configparser
 import json
 import os
@@ -24,6 +25,11 @@ from kopiur_shared import generation_lineage, selected_apps, transport_receipt
 IMAGE = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f1f8bb5d00b791654d79429928e95db54f4b22"
 TOOL_IMAGE = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
 TOOLS = ""
+CREDENTIAL_FREE_FIXTURES = {
+    'native-atuin-fixture': 'kopiur_atuin_native',
+    'native-grafana-fixture': 'kopiur_grafana_native',
+    'native-gatus-fixture': 'kopiur_gatus_native',
+}
 ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
 APPS = {"canary", "kometa", "listenarr", "tautulli", "sabnzbd", "wizarr", "homarr",
         "profilarr", "audiobookshelf", "seerr", "cwa-bdl", "changedetection",
@@ -266,19 +272,12 @@ def serve_main():
                         if len(data) > 65536:
                             raise RuntimeError("identity request exceeds bound")
                     payload = json.loads(data)
-                    if payload.get('operation') == 'native-grafana-fixture':
-                        if payload != {'operation': 'native-grafana-fixture'}:
-                            raise ValueError('Grafana fixture accepts no identity fields')
-                        from kopiur_grafana_native import fixture
-                        receipt = fixture()
-                        connection.sendall(json.dumps(receipt).encode())
-                        print(json.dumps(receipt), flush=True)
-                        continue
-                    if payload.get('operation') == 'native-atuin-fixture':
-                        if payload != {'operation': 'native-atuin-fixture'}:
-                            raise ValueError('Atuin fixture accepts no identity fields')
-                        from kopiur_atuin_native import fixture
-                        receipt = fixture()
+                    operation = payload.get('operation')
+                    if operation in CREDENTIAL_FREE_FIXTURES:
+                        if payload != {'operation': operation}:
+                            raise ValueError('native fixture accepts no identity fields')
+                        adapter = importlib.import_module(CREDENTIAL_FREE_FIXTURES[operation])
+                        receipt = adapter.fixture()
                         connection.sendall(json.dumps(receipt).encode())
                         print(json.dumps(receipt), flush=True)
                         continue

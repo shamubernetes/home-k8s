@@ -31,12 +31,13 @@ BEGIN
     WHEN 'prowlarr' THEN allowed_databases := ARRAY['prowlarr_main']; expected_role := 'kopiur_prowlarr';
     WHEN 'atuin' THEN allowed_databases := ARRAY['atuin']; expected_role := 'kopiur_atuin';
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
+    WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
     WHEN 'chaptarr' THEN allowed_databases := ARRAY['chaptarr_main','chaptarr_log','chaptarr_cache']; expected_role := 'kopiur_chaptarr';
     ELSE RAISE EXCEPTION 'unqualified application';
   END CASE;
   ownership_marker := 'K8S-92 readonly backup for ' ||
     CASE WHEN application_name = 'atuin' THEN 'services/'
-         WHEN application_name = 'grafana' THEN 'observability/' ELSE 'arrs/' END || application_name;
+         WHEN application_name IN ('grafana','gatus') THEN 'observability/' ELSE 'arrs/' END || application_name;
   IF NOT current_database() = ANY(allowed_databases) OR backup_role <> expected_role OR
      application_owner !~ '^[a-z][a-z0-9_]{0,62}$' OR
      backup_password !~ '^[a-f0-9]{64}$' OR application_owner = backup_role THEN

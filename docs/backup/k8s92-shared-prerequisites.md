@@ -25,6 +25,29 @@ closed. The export must be quiescent. Native database/catalog/blob/key verificat
 and coordinated writer fencing remain mandatory; this helper does not implement
 a production fence or validate application semantics.
 
+`scripts/kopiur_shared.py lineage --receipt <receipt.json>` validates the same
+generation across every required source and binds the NAS snapshot ID, the R2
+destination snapshot ID and the original manifest hash. Input has `application`,
+`required_sources` and `points`. Each point has `application`, `source`,
+`generation` and `nas`/`r2` records with `snapshot_id` and `manifest_sha256`.
+The R2 record also has `source_nas_id`. Missing sources, mixed generations,
+wrong applications, floating point aliases and hash/mapping mismatches fail.
+This is original capture lineage, not a production fence or native recovery proof.
+The real transport drill uses this validator for its independently encrypted
+NAS/R2 captures of the same random source generation.
+
+`scripts/kopiur_shared.py retention --metadata <policy.json>` normalizes explicit
+positive integer `rpo_seconds`, `rto_seconds`, `history_seconds`, `minimum_copies`
+and `rollback_seconds`, plus an `approval_reference`. Missing values remain
+unresolved. The inventory report reads an optional `retention_requirements` entry
+named `approved_policy`; it never infers these numbers from legacy free text.
+Supplying numbers or an unverified approval reference cannot authorize retirement.
+Original points, sources and keys are always preserved by this interface.
+
+Reports also identify native backing services that must be restored before
+application boot. An unresolved dependency stays attached to its own application,
+not converted into an accepted physical capture or a global lane blocker.
+
 ## Independent remote transport qualification
 
 The reviewed existing `kopiur-identity-transport.py` harness is now a shared

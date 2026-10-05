@@ -17,6 +17,37 @@ APPS = ("radarr", "radarr-3d", "sonarr", "bazarr", "whisparr")
 
 
 class ManifestTests(unittest.TestCase):
+    def test_all_postgres_transports_use_dedicated_identities(self):
+        for app in APPS:
+            with self.subTest(app=app):
+                directory = REPO / "kubernetes/apps/arrs" / app / "app"
+                nas, r2, pg = load_documents(directory / "externalsecret-kopiur.yaml")
+                self.assertEqual(nas["spec"]["target"]["template"]["data"]["KOPIA_RCLONE_CONFIG"],
+                                 "{{ .NAS_RCLONE_CONFIG }}")
+                self.assertNotIn("guest", json.dumps(nas))
+                self.assertEqual(r2["spec"]["target"]["template"]["data"]["AWS_ACCESS_KEY_ID"],
+                                 "{{ .R2_ACCESS_KEY_ID }}")
+                for secret in (nas, r2, pg):
+                    self.assertEqual(secret["spec"]["dataFrom"], [{"extract": {"key": "kopiur-" + app}}])
+                repositories = load_documents(directory / "kopiur-repositories.yaml")
+                self.assertEqual(repositories[0]["spec"]["backend"]["rclone"]["remotePath"],
+                                 "mnemosyne:kopiur-" + app)
+                self.assertEqual(repositories[1]["spec"]["backend"]["s3"]["bucket"], "kopiur-" + app)
+
+    def test_scoped_sql_has_an_explicit_database_and_role_allowlist(self):
+        sql = (REPO / "kubernetes/components/kopiur-postgres/provision.sql").read_text()
+        for app in APPS:
+            if app == "bazarr":
+                continue
+            self.assertIn("WHEN '" + app + "'", sql)
+            role = "kopiur_" + app.replace("-", "_")
+            self.assertIn("expected_role := '" + role + "'", sql)
+            self.assertEqual(MODULE["DockerDrill"](app).capture_user, role)
+        self.assertIn("NOT current_database() = ANY(allowed_databases)", sql)
+        self.assertIn("shobj_description(role_oid, 'pg_authid')", sql)
+        self.assertIn("unexpected write authority", sql)
+        self.assertNotIn("pg_read_all_data", sql)
+
     def test_bazarr_grants_are_scoped_and_do_not_leak_admin_auth_to_mover(self):
         directory = REPO / "kubernetes/apps/arrs/bazarr/app"
         job, = load_documents(directory / "kopiur-postgres-grants.yaml")

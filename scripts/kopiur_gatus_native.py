@@ -13,6 +13,7 @@ HTTP_IMAGE = 'ghcr.io/home-operations/prowlarr:2.6.5.5623@sha256:6152751c3ea2e77
 def contract():
     scope = runpy.run_path(str(ROOT / 'scripts/kopiur-postgres-drill'))
     native = scope['fixture'].__globals__
+    scope = native
     native['CONTRACTS']['gatus'] = (IMAGE, ['gatus'], 'GATUS', 8080, '/config/gatus.yaml')
     base = native['DockerDrill']
 

@@ -32,6 +32,15 @@ class PocketTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.scope['restore_pvc'](root, 'pocket-id', original_api_key='changed-key')
 
+    def test_http_failure_reports_only_status(self):
+        from types import SimpleNamespace
+        result = SimpleNamespace(returncode=22, stdout=b'private response',
+                                 stderr=b'curl: (22) The requested URL returned error: 403')
+        with patch.dict(self.scope, run=Mock(return_value=result)):
+            with self.assertRaisesRegex(RuntimeError, '^isolated fixture HTTP failure, status=403$'):
+                self.drill.request('fixture', '/api/users', authenticated=True)
+            self.assertIs(self.drill.request('fixture', '/api/users', check=False), result)
+
     def test_identity_in_stdin_only(self):
         from types import SimpleNamespace
         invoke = Mock(return_value=SimpleNamespace(stdout=b'{}'))

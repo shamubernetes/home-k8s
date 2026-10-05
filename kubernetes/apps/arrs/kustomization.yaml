@@ -18,3 +18,4 @@ resources:
 - ./cwa-bdl/ks.yaml
 - ./listenarr/ks.yaml
 - ./chaptarr/ks.yaml
+- ./kopiur-backup-identities/ks.yaml

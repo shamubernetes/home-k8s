@@ -1,0 +1,565 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-batch-v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bazarr-kopiur-scoped-grants-v1
+  labels:
+    k8s92.phase: backup-identities
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bazarr-kopiur-scoped-grants
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: grants
+        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        command:
+        - sh
+        - -ec
+        args:
+        - |
+          # Credentials stay in environment/stdin. Never print SQL diagnostics.
+          admin_password=$PGPASSWORD
+          for PGDATABASE in $PGDATABASES; do
+            export PGDATABASE PGUSER=postgres PGPASSWORD="$admin_password"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c "SET log_min_error_statement = panic" -f /grants/bazarr.sql >/dev/null 2>/dev/null; then
+              printf 'scoped backup grant provisioning failed; diagnostics withheld\n' >&2
+              exit 1
+            fi
+            export PGUSER="$BACKUP_USER" PGPASSWORD="$BACKUP_PASSWORD"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c 'SELECT current_user;' >/dev/null 2>/dev/null; then
+              printf 'backup identity connection readback failed\n' >&2
+              exit 1
+            fi
+          done
+          printf 'scoped backup roles and TLS connections verified\n'
+        env:
+        - name: PGHOST
+          value: postgres17-rw.database.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASES
+          value: bazarr
+        - name: PGSSLMODE
+          value: require
+        - name: PGCONNECT_TIMEOUT
+          value: '10'
+        - name: PGUSER
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bazarr-secret
+              key: INIT_POSTGRES_SUPER_PASS
+        - name: APPLICATION_OWNER
+          valueFrom:
+            secretKeyRef:
+              name: bazarr-secret
+              key: INIT_POSTGRES_USER
+        - name: BACKUP_USER
+          valueFrom:
+            secretKeyRef:
+              name: bazarr-kopiur-grant-identity
+              key: PGUSER
+        - name: BACKUP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bazarr-kopiur-grant-identity
+              key: PGPASSWORD
+        - name: APPLICATION_NAME
+          value: bazarr
+        - name: HOME
+          value: /tmp
+        - name: TMPDIR
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: grants
+          mountPath: /grants
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: grants
+        configMap:
+          name: kopiur-backup-identity-grants
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radarr-kopiur-scoped-grants-v1
+  labels:
+    k8s92.phase: backup-identities
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: radarr-kopiur-scoped-grants
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: grants
+        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        command:
+        - sh
+        - -ec
+        args:
+        - |
+          # Credentials stay in environment/stdin. Never print SQL diagnostics.
+          admin_password=$PGPASSWORD
+          for PGDATABASE in $PGDATABASES; do
+            export PGDATABASE PGUSER=postgres PGPASSWORD="$admin_password"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c "SET log_min_error_statement = panic" -f /grants/provision.sql >/dev/null 2>/dev/null; then
+              printf 'scoped backup grant provisioning failed; diagnostics withheld\n' >&2
+              exit 1
+            fi
+            export PGUSER="$BACKUP_USER" PGPASSWORD="$BACKUP_PASSWORD"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c 'SELECT current_user;' >/dev/null 2>/dev/null; then
+              printf 'backup identity connection readback failed\n' >&2
+              exit 1
+            fi
+          done
+          printf 'scoped backup roles and TLS connections verified\n'
+        env:
+        - name: PGHOST
+          value: postgres17-rw.database.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASES
+          value: radarr_main
+        - name: PGSSLMODE
+          value: require
+        - name: PGCONNECT_TIMEOUT
+          value: '10'
+        - name: PGUSER
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: radarr-secret
+              key: INIT_POSTGRES_SUPER_PASS
+        - name: APPLICATION_OWNER
+          valueFrom:
+            secretKeyRef:
+              name: radarr-secret
+              key: INIT_POSTGRES_USER
+        - name: BACKUP_USER
+          valueFrom:
+            secretKeyRef:
+              name: radarr-kopiur-grant-identity
+              key: PGUSER
+        - name: BACKUP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: radarr-kopiur-grant-identity
+              key: PGPASSWORD
+        - name: APPLICATION_NAME
+          value: radarr
+        - name: HOME
+          value: /tmp
+        - name: TMPDIR
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: grants
+          mountPath: /grants
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: grants
+        configMap:
+          name: kopiur-backup-identity-grants
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radarr-3d-kopiur-scoped-grants-v1
+  labels:
+    k8s92.phase: backup-identities
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: radarr-3d-kopiur-scoped-grants
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: grants
+        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        command:
+        - sh
+        - -ec
+        args:
+        - |
+          # Credentials stay in environment/stdin. Never print SQL diagnostics.
+          admin_password=$PGPASSWORD
+          for PGDATABASE in $PGDATABASES; do
+            export PGDATABASE PGUSER=postgres PGPASSWORD="$admin_password"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c "SET log_min_error_statement = panic" -f /grants/provision.sql >/dev/null 2>/dev/null; then
+              printf 'scoped backup grant provisioning failed; diagnostics withheld\n' >&2
+              exit 1
+            fi
+            export PGUSER="$BACKUP_USER" PGPASSWORD="$BACKUP_PASSWORD"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c 'SELECT current_user;' >/dev/null 2>/dev/null; then
+              printf 'backup identity connection readback failed\n' >&2
+              exit 1
+            fi
+          done
+          printf 'scoped backup roles and TLS connections verified\n'
+        env:
+        - name: PGHOST
+          value: postgres17-rw.database.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASES
+          value: radarr_3d_main
+        - name: PGSSLMODE
+          value: require
+        - name: PGCONNECT_TIMEOUT
+          value: '10'
+        - name: PGUSER
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: radarr-3d-secret
+              key: INIT_POSTGRES_SUPER_PASS
+        - name: APPLICATION_OWNER
+          valueFrom:
+            secretKeyRef:
+              name: radarr-3d-secret
+              key: INIT_POSTGRES_USER
+        - name: BACKUP_USER
+          valueFrom:
+            secretKeyRef:
+              name: radarr-3d-kopiur-grant-identity
+              key: PGUSER
+        - name: BACKUP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: radarr-3d-kopiur-grant-identity
+              key: PGPASSWORD
+        - name: APPLICATION_NAME
+          value: radarr-3d
+        - name: HOME
+          value: /tmp
+        - name: TMPDIR
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: grants
+          mountPath: /grants
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: grants
+        configMap:
+          name: kopiur-backup-identity-grants
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sonarr-kopiur-scoped-grants-v1
+  labels:
+    k8s92.phase: backup-identities
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sonarr-kopiur-scoped-grants
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: grants
+        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        command:
+        - sh
+        - -ec
+        args:
+        - |
+          # Credentials stay in environment/stdin. Never print SQL diagnostics.
+          admin_password=$PGPASSWORD
+          for PGDATABASE in $PGDATABASES; do
+            export PGDATABASE PGUSER=postgres PGPASSWORD="$admin_password"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c "SET log_min_error_statement = panic" -f /grants/provision.sql >/dev/null 2>/dev/null; then
+              printf 'scoped backup grant provisioning failed; diagnostics withheld\n' >&2
+              exit 1
+            fi
+            export PGUSER="$BACKUP_USER" PGPASSWORD="$BACKUP_PASSWORD"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c 'SELECT current_user;' >/dev/null 2>/dev/null; then
+              printf 'backup identity connection readback failed\n' >&2
+              exit 1
+            fi
+          done
+          printf 'scoped backup roles and TLS connections verified\n'
+        env:
+        - name: PGHOST
+          value: postgres17-rw.database.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASES
+          value: sonarr_main
+        - name: PGSSLMODE
+          value: require
+        - name: PGCONNECT_TIMEOUT
+          value: '10'
+        - name: PGUSER
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sonarr-secret
+              key: INIT_POSTGRES_SUPER_PASS
+        - name: APPLICATION_OWNER
+          valueFrom:
+            secretKeyRef:
+              name: sonarr-secret
+              key: INIT_POSTGRES_USER
+        - name: BACKUP_USER
+          valueFrom:
+            secretKeyRef:
+              name: sonarr-kopiur-grant-identity
+              key: PGUSER
+        - name: BACKUP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sonarr-kopiur-grant-identity
+              key: PGPASSWORD
+        - name: APPLICATION_NAME
+          value: sonarr
+        - name: HOME
+          value: /tmp
+        - name: TMPDIR
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: grants
+          mountPath: /grants
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: grants
+        configMap:
+          name: kopiur-backup-identity-grants
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: whisparr-kopiur-scoped-grants-v1
+  labels:
+    k8s92.phase: backup-identities
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: whisparr-kopiur-scoped-grants
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: grants
+        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        command:
+        - sh
+        - -ec
+        args:
+        - |
+          # Credentials stay in environment/stdin. Never print SQL diagnostics.
+          admin_password=$PGPASSWORD
+          for PGDATABASE in $PGDATABASES; do
+            export PGDATABASE PGUSER=postgres PGPASSWORD="$admin_password"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c "SET log_min_error_statement = panic" -f /grants/provision.sql >/dev/null 2>/dev/null; then
+              printf 'scoped backup grant provisioning failed; diagnostics withheld\n' >&2
+              exit 1
+            fi
+            export PGUSER="$BACKUP_USER" PGPASSWORD="$BACKUP_PASSWORD"
+            if ! psql -X -w -q -v ON_ERROR_STOP=1 -c 'SELECT current_user;' >/dev/null 2>/dev/null; then
+              printf 'backup identity connection readback failed\n' >&2
+              exit 1
+            fi
+          done
+          printf 'scoped backup roles and TLS connections verified\n'
+        env:
+        - name: PGHOST
+          value: postgres17-rw.database.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASES
+          value: whisparrv3_main whisparrv3_logs
+        - name: PGSSLMODE
+          value: require
+        - name: PGCONNECT_TIMEOUT
+          value: '10'
+        - name: PGUSER
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: whisparr-secret
+              key: INIT_POSTGRES_SUPER_PASS
+        - name: APPLICATION_OWNER
+          valueFrom:
+            secretKeyRef:
+              name: whisparr-secret
+              key: INIT_POSTGRES_USER
+        - name: BACKUP_USER
+          valueFrom:
+            secretKeyRef:
+              name: whisparr-kopiur-grant-identity
+              key: PGUSER
+        - name: BACKUP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: whisparr-kopiur-grant-identity
+              key: PGPASSWORD
+        - name: APPLICATION_NAME
+          value: whisparr
+        - name: HOME
+          value: /tmp
+        - name: TMPDIR
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: grants
+          mountPath: /grants
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: grants
+        configMap:
+          name: kopiur-backup-identity-grants
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Mi

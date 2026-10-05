@@ -235,7 +235,13 @@ class DockerDrill:
         self.sql(database, "DROP ROLE kopiur_bazarr")
         # A second application must be idempotent and preserve the owned role.
         for _ in range(2):
-            result = run(*command, stdin=script.read_bytes(), env=env)
+            result = run(*command, stdin=script.read_bytes(), env=env, check=False)
+            if result.returncode:
+                # This path runs only with generated fixture credentials and data.
+                error = result.stderr.decode(errors="replace")
+                for secret in (self.password, self.backup_password, self.api_key):
+                    error = error.replace(secret, "[redacted]")
+                raise RuntimeError("synthetic scoped grant SQL failed: " + error[:2000])
             assert not result.stdout.strip(), "provisioner printed credential-bearing settings"
         for acquire, revoke in (
                 ("ALTER ROLE kopiur_bazarr CREATEDB", "ALTER ROLE kopiur_bazarr NOCREATEDB"),

@@ -24,7 +24,9 @@ ES = 'docker.elastic.co/elasticsearch/elasticsearch:8.19.22@sha256:e98f9c3b09beb
 REDIS = 'ghcr.io/dragonflydb/dragonfly:v2.0.0@sha256:7426fdb31ddcf7bd9499b4205f36ebaa83b26149ba1609a0d5f8f474b3631233'
 # ARC DinD blocks io_uring. Use the engine's supported epoll mode for the
 # disposable fixture without granting privileges or changing production args.
-REDIS_ARGS = ('--force_epoll', '--proactor_threads=2', '--maxmemory=256mb', '--cluster_mode=emulated',
+# Dragonfly v2 requires 256 MiB per proactor. Match production's two-thread
+# 512 MiB setting rather than a fixture value that the engine refuses to boot.
+REDIS_ARGS = ('--force_epoll', '--proactor_threads=2', '--maxmemory=512Mi', '--cluster_mode=emulated',
               '--lock_on_hashtags', '--default_lua_flags=allow-undeclared-keys')
 PREFIX = 'k8s92-mixed-' + uuid.uuid4().hex[:10]
 CONTAINERS = []
@@ -323,6 +325,7 @@ def ta_failure_markers(text):
         'dragonfly-io-uring-permission': 'Operation not permitted',
         'dragonfly-io-uring-init': 'io_uring',
         'dragonfly-locked-memory': 'Cannot lock memory',
+        'dragonfly-minimum-thread-memory': 'are required. Exiting...',
     }
     return [label for label, marker in markers.items() if marker in text] or ['unclassified']
 

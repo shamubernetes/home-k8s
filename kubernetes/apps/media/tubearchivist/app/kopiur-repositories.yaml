@@ -5,7 +5,7 @@ metadata:
 spec:
   backend:
     rclone:
-      remotePath: mnemosyne:Backups/kopiur/tubearchivist-smb
+      remotePath: mnemosyne:kopiur-tubearchivist
       configSecretRef:
         name: tubearchivist-kopiur-nas
       startupTimeout: 2m

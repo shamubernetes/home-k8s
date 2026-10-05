@@ -79,14 +79,24 @@ requires an empty DB15 and explicit isolated-restore mode, and never flushes or
 replaces existing keys. Unexpired keys retain their original absolute expiries;
 expired session bytes remain archived but are not resurrected. Native Redis
 roundtrip is a prerequisite, not proof of coherent cross-store capture. The
-all-writer fence and production Dragonfly compatibility gate remain open before
-activation, without permitting data discard or weakening zero-loss acceptance.
+all-writer fence and independent production NAS/R2 recovery gates remain open
+before activation, without permitting data discard or weakening zero-loss
+acceptance. Native compatibility passed against the deployed Dragonfly v2
+digest in the isolated ARC fixture, including binary types and absolute expiry.
 
 TubeArchivist now uses its own `kopiur-tubearchivist` R2 bucket. Its new identity
 has only bucket-item read/write permission for that bucket, not bucket
 administration or access to the shared `storage-backup` bucket. Credential and
 repository-password fields live in the dedicated 1Password item consumed by
-the existing ExternalSecret. NAS identity provisioning remains separate.
+the existing ExternalSecret. The dedicated NAS identity uses the private
+`kopiur-tubearchivist` SMB share rather than guest access through `Backups`.
+Its new Unix account cannot log into a shell, and only that account can access
+the 0700 backing directory. The NAS keeps its account rows and share definition
+on persistent storage. Existing accounts and share access remain unchanged.
+The identity was tested with byte-equal SMB upload/download and rejection by
+the unrelated `Backups` and `Media` shares. R2 upload/download, owned-object
+cleanup and denial of the shared bucket also passed. These transport primitive
+checks are not a Kopiur backup or independent NAS/R2 restore acceptance.
 
 ## Required gates before deployment and activation
 

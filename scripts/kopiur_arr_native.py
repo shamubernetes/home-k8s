@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import runpy
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = {
@@ -28,9 +29,33 @@ def contract():
     base = native["DockerDrill"]
 
     class ArrDrill(base):
+        def request(self, container, path, check=True, authenticated=False):
+            config = f'url = "http://127.0.0.1:{self.port}{path}"\n'
+            if authenticated:
+                config += 'header = "X-Api-Key: ' + self.api_key + '"\n'
+            if self.app_name == 'chaptarr':
+                # HTTP tooling is separate from the pinned application image.
+                # Sharing its network-none namespace cannot reach an incumbent.
+                return scope['run']('docker', 'run', '--rm', '-i', '--read-only',
+                                    '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+                                    '--network', 'container:' + container,
+                                    '--entrypoint', 'curl', CONTRACTS['prowlarr'][0],
+                                    '-fsS', '--max-time', '5', '--config', '-',
+                                    stdin=config.encode(), check=check)
+            return scope['run']('docker', 'exec', '-i', container, 'curl', '-fsS',
+                                '--max-time', '5', '--config', '-', stdin=config.encode(), check=check)
+
         def healthy(self, container):
             try:
-                return super().healthy(container)
+                for _ in range(120):
+                    probe = self.request(container, '/ping', check=False)
+                    if probe.returncode == 0:
+                        return
+                    state = scope['run']('docker', 'inspect', '-f', '{{.State.Running}}', container).stdout.strip()
+                    if state != b'true':
+                        raise RuntimeError('isolated ARR application exited before readiness')
+                    time.sleep(1)
+                raise RuntimeError('isolated ARR startup timed out')
             except RuntimeError:
                 # Only this disposable fixture's logs. Never production logs.
                 result = scope["run"]("docker", "logs", "--tail", "80", container, check=False)
@@ -75,10 +100,7 @@ def contract():
 
         def application_state(self, container):
             endpoint = ENDPOINTS[self.app_name]
-            config = ('url = "http://127.0.0.1:' + str(self.port) + endpoint + '"\n'
-                      'header = "X-Api-Key: ' + self.api_key + '"\n')
-            response = scope["run"]("docker", "exec", "-i", container, "curl", "-fsS",
-                                    "--config", "-", stdin=config.encode()).stdout
+            response = self.request(container, endpoint, authenticated=True).stdout
             value = json.loads(response)
             if not isinstance(value, list) or not value:
                 raise ValueError("native ARR profile catalog is empty or malformed")
@@ -95,6 +117,8 @@ def fixture(app):
     native = contract()
     native["run"]("docker", "pull", "--platform", "linux/amd64", native["PG_IMAGE"], timeout=600)
     native["run"]("docker", "pull", "--platform", "linux/amd64", CONTRACTS[app][0], timeout=600)
+    if app == 'chaptarr':
+        native['run']('docker', 'pull', '--platform', 'linux/amd64', CONTRACTS['prowlarr'][0], timeout=600)
     results = []
 
     def exported(source, expected, original_key, visible):

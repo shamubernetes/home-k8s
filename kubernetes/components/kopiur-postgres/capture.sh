@@ -31,8 +31,9 @@ coherent=false
 capture_mode=$(printenv CAPTURE_MODE || printf legacy)
 case "$capture_mode" in
   single-db-stable-filetree)
-    set -- $PGDATABASES
-    [ "$#" -eq 1 ] || { printf 'coherent mode requires one database\n' >&2; exit 1; }
+    case "$PGDATABASES" in
+      ''|*[!a-z0-9_]*) printf 'coherent mode requires one database\n' >&2; exit 1 ;;
+    esac
     coherent=true
     printf 'format=2\nstarted_at=%s\nconsistency=single-db-stable-filetree\n' "$started" >"$root/pending/metadata"
     ;;

@@ -38,7 +38,8 @@ def contract():
             env = {'HASS_POSTGRES_URL': 'postgresql://app:' + self.password + '@127.0.0.1:5432/homeassistant_fixture',
                 'TZ': 'UTC', 'VENV_FOLDER': '/tmp/fixture-venv'}
             return self.start(name, self.image, network='container:' + database, env=env,
-                mounts=[(config, '/config', 'rw')], user='568:568')
+                mounts=[(config, '/config', 'rw')], user='568:568',
+                command=['--log-file', '/tmp/fixture.log'])
 
         def healthy(self, container):
             from kopiur_native_fixture import startup_failure

@@ -71,6 +71,7 @@ def contract():
                 raise startup_failure(scope, self, container, 'isolated Pocket ID readiness deadline')
             if container.endswith('-source-app'):
                 self.request(container, '/api/users', {'username': 'recovery-fixture',
+                    'email': 'recovery-fixture@example.invalid',
                     'displayName': 'Recovery fixture', 'isAdmin': False}, authenticated=True)
 
         def isolated_config(self, raw):

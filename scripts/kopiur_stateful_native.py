@@ -5,6 +5,7 @@ remain in memory. Repositories and resources are UUID-scoped nonproduction data.
 This does not accept production CSI, shared media or original production key escrow.
 """
 import hashlib
+import io
 import json
 from pathlib import Path
 import re
@@ -13,6 +14,7 @@ import secrets
 import stat
 import shutil
 import tempfile
+import tarfile
 import time
 
 from kopiur_shared import validate_artifact, generation_lineage, retention_contract
@@ -55,7 +57,14 @@ def exercise(payload, transport, deadline):
             transport.stage = kind + "-native-capture"
             password = transport.fields["NAS_KOPIA_PASSWORD" if kind == "nas" else "R2_KOPIA_PASSWORD"]
             producer = transport.start()
-            transport.run(["docker", "cp", str(source), producer + ":/work/source"])
+            # Docker cp attempts daemon-owned writes into the read-only root.
+            # Extract through the actual unprivileged writer into its tmpfs.
+            archive = io.BytesIO()
+            with tarfile.open(fileobj=archive, mode="w") as stream:
+                stream.add(source, arcname=".")
+            transport.run(["docker", "exec", producer, "/tools/busybox", "mkdir", "/work/source"])
+            transport.run(["docker", "exec", "-i", producer, "/tools/busybox", "tar",
+                           "-xof", "-", "-C", "/work/source"], stdin=archive.getvalue())
             result = transport.exec(producer, "k repository create " + transport.backend(kind) +
                                     " >/dev/null\nk snapshot create /work/source --json\n", password=password)
             snapshot = json.loads(result.stdout)

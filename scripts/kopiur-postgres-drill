@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import tarfile
 import io
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
@@ -65,15 +66,44 @@ def verify_bundle(root):
     if not databases or len(set(databases)) != len(databases):
         raise ValueError("missing or duplicate database inventory")
     required = {"application-config", "metadata"}
+    coherent = "format=2" in metadata and "consistency=single-db-stable-filetree" in metadata
+    if coherent:
+        if len(databases) != 1:
+            raise ValueError("coherent bundle contains multiple databases")
+        required.update(("application-state.tar", "filetree.sha256"))
     for database in databases:
         if not database or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789_" for c in database):
             raise ValueError("unsafe database name")
         required.update((database + ".dump", database + ".toc"))
     if expected != required:
         raise ValueError("bundle inventory differs from metadata")
-    if "format=1" not in metadata or "consistency=per-database-snapshot-before-pvc" not in metadata:
+    if not coherent and ("format=1" not in metadata or "consistency=per-database-snapshot-before-pvc" not in metadata):
         raise ValueError("unsupported recovery contract")
+    if coherent:
+        fingerprint = (current / "filetree.sha256").read_text()
+        if len(fingerprint) != 65 or fingerprint[-1] != "\n" or any(c not in "0123456789abcdef" for c in fingerprint[:-1]):
+            raise ValueError("invalid filetree fingerprint")
+        with tarfile.open(current / "application-state.tar", mode="r:") as archive:
+            validate_tree_members(archive)
     return databases
+
+
+def validate_tree_members(archive, capacity=None):
+    names = set()
+    total = 0
+    for member in archive:
+        path = Path(member.name)
+        name = str(path)
+        if path.is_absolute() or ".." in path.parts or name in names or \
+                (path.parts and path.parts[0] == ".kopiur-postgres") or \
+                not (member.isfile() or member.isdir()) or member.size < 0:
+            raise ValueError("unsafe filetree archive member")
+        names.add(name)
+        total += member.size
+        if capacity is not None and total > capacity:
+            raise ValueError("filetree exceeds isolated restore capacity")
+    if not names:
+        raise ValueError("empty filetree archive")
 
 
 class DockerDrill:
@@ -278,6 +308,7 @@ class DockerDrill:
                             network="container:" + database, user="568:568",
                             env={"PGHOST": "127.0.0.1", "PGUSER": user,
                                  "PGPASSWORD": password or self.backup_password, "PGDATABASES": " ".join(databases),
+                                 "CAPTURE_MODE": "single-db-stable-filetree" if self.app_name == "bazarr" else "legacy",
                                  "CONFIG_FILE": self.config_file},
                             mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
         result = run("docker", "exec", "-i", helper, "timeout", "600", "sh", "-s", stdin=CAPTURE.read_bytes(), check=False, timeout=610)
@@ -295,6 +326,53 @@ class DockerDrill:
                                        "--single-transaction"], stdin=archive, capture_output=True, timeout=600)
             if proc.returncode:
                 raise RuntimeError("isolated native database restore failed")
+
+    def reject_filetree_race(self, source, config, holder):
+        """Use a real PG table-lock barrier, not a guessed sleep, to force ABA."""
+        lock = subprocess.Popen(["docker", "exec", "-i", source, "psql", "-X", "-q", "-U",
+                                 "postgres", "-d", "bazarr", "-v", "ON_ERROR_STOP=1"],
+                                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        lock.stdin.write(b"SET idle_in_transaction_session_timeout='30s'; BEGIN; LOCK TABLE kopiur_fixture IN ACCESS EXCLUSIVE MODE;\n")
+        lock.stdin.flush()
+        errors = []
+        def mutate_and_release():
+            try:
+                for _ in range(200):
+                    present = run("docker", "exec", holder, "test", "-s",
+                                  "/config/.kopiur-postgres/pending/filetree.before", check=False)
+                    if not present.returncode:
+                        break
+                    time.sleep(0.05)
+                else:
+                    raise RuntimeError("capture never reached the stable-tree checkpoint")
+                run("docker", "exec", holder, "sh", "-ec",
+                    "printf changed > /config/k8s92-private-fixture.bin; printf native-private-proof > /config/k8s92-private-fixture.bin")
+            except Exception as error:
+                errors.append(error)
+            finally:
+                lock.stdin.write(b"COMMIT;\n")
+                lock.stdin.close()
+        try:
+            for _ in range(200):
+                held = self.sql(source, "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE relation='kopiur_fixture'::regclass"
+                                " AND mode='AccessExclusiveLock' AND granted)", "bazarr")
+                if held == "t":
+                    break
+                time.sleep(0.05)
+            else:
+                raise RuntimeError("native lock barrier was not established")
+            writer = threading.Thread(target=mutate_and_release)
+            writer.start()
+            result = self.capture(source, config, self.databases, check=False)
+            writer.join(timeout=15)
+            assert not writer.is_alive() and not errors
+            assert lock.wait(timeout=15) == 0
+            assert result != 0, "file rewrite/restore race was accepted as a coherent capture"
+            assert run("docker", "exec", holder, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
+        finally:
+            if lock.poll() is None:
+                lock.kill()
+                lock.wait()
 
     def counts(self, database, name=None):
         name = name or self.databases[0]
@@ -339,6 +417,9 @@ def fixture(app_name="radarr"):
             app = drill.app("source-app", source, config)
             drill.healthy(app)
             run("docker", "stop", "-t", "30", app)
+            if app_name == "bazarr":
+                run("docker", "exec", holder, "sh", "-ec",
+                    "umask 077; printf native-private-proof > /config/k8s92-private-fixture.bin")
             before = {}
             for database in drill.databases:
                 # Require actual application migrations before adding synthetic markers.
@@ -371,6 +452,9 @@ def fixture(app_name="radarr"):
             for database in drill.databases:
                 value = drill.sql(target, "SELECT value FROM kopiur_fixture WHERE id=1", database, "app")
                 assert value == "native-recovery-proof"
+            if app_name == "bazarr":
+                drill.reject_filetree_race(source, config, helper)
+                drill.capture(source, config, drill.databases)
             assert drill.capture(source, config, drill.databases, password="wrong-fixture-password", check=False) != 0
             assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
             drill.capture(source, config, drill.databases)
@@ -384,6 +468,9 @@ def fixture(app_name="radarr"):
             assert drill.capture(source, config, drill.databases, check=False) != 0
             assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
             drill.sql(source, f"GRANT SELECT ON kopiur_fixture TO {drill.capture_user}", drill.databases[0])
+            if app_name == "bazarr":
+                # The later CSI view must not replace the paired state generation.
+                (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
             assert recovered["native_restore"] and recovered["restored_app_ping"]
             print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
@@ -392,6 +479,8 @@ def fixture(app_name="radarr"):
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
                               "dedicated_grant_sql_exercised": app_name == "bazarr",
                               "future_table_read_and_unrelated_data_write_denial": app_name == "bazarr",
+                              "filetree_aba_rejected": app_name == "bazarr",
+                              "paired_filetree_bytes_equal": recovered.get("paired_filetree_bytes_equal", 0),
                               "network": "none-shared-namespace", "production_data": False}, sort_keys=True))
         finally:
             drill.close()
@@ -427,9 +516,22 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
                                    stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             with tarfile.open(fileobj=process.stdin, mode="w|") as archive:
-                for path in sorted(source.iterdir()):
-                    if path.name != ".kopiur-postgres":
-                        archive.add(path, arcname=path.name, recursive=True)
+                paired = bundle / "current/application-state.tar"
+                if paired.is_file():
+                    with tarfile.open(paired, mode="r:") as original:
+                        validate_tree_members(original, config_mib * 1024 * 1024)
+                    with tarfile.open(paired, mode="r:") as original:
+                        for member in original:
+                            data_file = original.extractfile(member) if member.isfile() else None
+                            try:
+                                archive.addfile(member, data_file)
+                            finally:
+                                if data_file is not None:
+                                    data_file.close()
+                else:
+                    for path in sorted(source.iterdir()):
+                        if path.name != ".kopiur-postgres":
+                            archive.add(path, arcname=path.name, recursive=True)
                 # Prefer the config bytes paired with this DB export over later PVC bytes.
                 data = drill.isolated_config((bundle / "current/application-config").read_bytes())
                 member = tarfile.TarInfo(str(Path(drill.config_file).relative_to("/config")))
@@ -445,11 +547,30 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
                 raise
         if result:
             raise RuntimeError("isolated config import failed; check --config-mib capacity")
+        paired_count = 0
+        if paired.is_file():
+            expected_files = {}
+            with tarfile.open(paired, mode="r:") as original:
+                for member in original:
+                    if member.isfile():
+                        with original.extractfile(member) as data_file:
+                            expected_files[str(Path(member.name))] = hashlib.file_digest(data_file, "sha256").hexdigest()
+            expected_files[str(Path(drill.config_file).relative_to("/config"))] = hashlib.sha256(data).hexdigest()
+            observed = run("docker", "exec", holder, "find", "/config", "-type", "f", "-exec", "sha256sum", "-z", "{}", "+")
+            observed_files = {}
+            for record in observed.stdout.split(b"\0"):
+                if record:
+                    digest, name = record.split(b"  ", 1)
+                    observed_files[str(Path(os.fsdecode(name)).relative_to("/config"))] = digest.decode("ascii")
+            if observed_files != expected_files:
+                raise ValueError("paired application file bytes differ after isolated restore")
+            paired_count = len(expected_files)
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
-                "rows": sum(sum(t.values()) for t in counts.values()), "network": "none-shared-namespace"}
+                "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,
+                "network": "none-shared-namespace"}
     finally:
         drill.close()
 

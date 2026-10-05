@@ -18,6 +18,7 @@ spec:
               PGHOST: postgres17-rw.database.svc.cluster.local
               PGPORT: "5432"
               PGDATABASES: bazarr
+              CAPTURE_MODE: single-db-stable-filetree
               PGSSLMODE: require
               CONFIG_FILE: /config/config/config.yaml
             envFrom:

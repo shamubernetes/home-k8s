@@ -61,8 +61,11 @@ def extract_export(data, destination):
 
 
 def exercise(payload, transport, deadline):
-    native = runpy.run_path(str(ROOT / "scripts/kopiur-postgres-drill"))
     app = payload["app"]
+    native = runpy.run_path(str(ROOT / "scripts/kopiur-postgres-drill"))
+    if app == "grimmory":
+        from kopiur_grimmory_native import contract
+        native = contract()
     if app not in native["CONTRACTS"]:
         raise ValueError("native PostgreSQL application is not allowlisted")
     # Reuse the exact initialized tooling volume, not another credential receiver.
@@ -120,7 +123,7 @@ def exercise(payload, transport, deadline):
                 transport.remove(restorer)
                 proof = native["restore_pvc"](restored, app, config_mib=256, database_mib=512,
                     expected_fingerprints=expected, original_api_key=api_key, expected_application_state=visible)
-                if not all(proof[x] for x in ("native_table_contents_equal", "original_fixture_api_key_used",
+                if not all(proof[x] for x in ("native_table_contents_equal", "original_fixture_identity_used",
                                              "application_visible_state_equal", "restored_app_ping")):
                     raise ValueError("native acceptance assertions missing")
             results.append(dict(proof, backend=kind, snapshot_id=snapshot["id"], object_id=object_id,

@@ -44,6 +44,61 @@ def transport_receipt(receipt, app):
     return receipt
 
 
+def generation_lineage(app, points, required_sources):
+    """Bind complete source generations to independent NAS/R2 point identities.
+
+    Native writers must supply the original generation fingerprint after their
+    own bounded capture fence. This helper does not stop production writers.
+    """
+    if (not isinstance(points, list) or not required_sources
+            or len(points) != len(required_sources)
+            or len(set(required_sources)) != len(required_sources)
+            or {point.get('source') for point in points} != set(required_sources)):
+        raise InvalidEvidence('all source generations must appear exactly once')
+    generations = set()
+    for point in points:
+        generation = point.get('generation')
+        if (point.get('application') != app or not isinstance(generation, str)
+                or not re.fullmatch('[0-9a-f]{32}', generation)):
+            raise InvalidEvidence('source generation belongs to another application')
+        generations.add(generation)
+        nas, r2 = point.get('nas', {}), point.get('r2', {})
+        for tier in (nas, r2):
+            if (not isinstance(tier.get('snapshot_id'), str)
+                    or not re.fullmatch('[0-9a-f]{32}', tier['snapshot_id'])
+                    or not isinstance(tier.get('manifest_sha256'), str)
+                    or not re.fullmatch('[0-9a-f]{64}', tier['manifest_sha256'])):
+                raise InvalidEvidence('exact point ID and original generation hash are required')
+        if (r2.get('source_nas_id') != nas['snapshot_id']
+                or nas['manifest_sha256'] != r2['manifest_sha256']):
+            raise InvalidEvidence('R2 destination is not bound to the original NAS generation')
+    if len(generations) != 1:
+        raise InvalidEvidence('mixed capture generations are not a whole-state recovery point')
+    return {'generation': generations.pop(), 'source_count': len(points),
+            'lineage_validated': True, 'native_recovery_accepted': False}
+
+
+def retention_contract(metadata):
+    """Normalize unresolved policy without fabricating approval or pruning copies."""
+    numeric = ('rpo_seconds', 'rto_seconds', 'history_seconds', 'minimum_copies',
+               'rollback_seconds')
+    unresolved = []
+    for key in numeric:
+        value = metadata.get(key)
+        if value is None:
+            unresolved.append(key)
+        elif type(value) is not int or value <= 0:
+            raise InvalidEvidence('retention policy must use positive integer units')
+    # Neither a supplied number nor a passing synthetic restore authorizes
+    # production deletion. Approval provenance must be checked in Kaneo by the
+    # integration owner, and original keys/native independent drills retained.
+    return {'numeric_policy': {key: metadata.get(key) for key in numeric},
+            'unresolved_approval_fields': unresolved,
+            'approval_reference': metadata.get('approval_reference'),
+            'preserve_incumbent_points_sources_and_original_keys': True,
+            'retirement_authorized': False}
+
+
 def inventory_report(ledger, apps=None):
     rows = ledger['applications']
     stores = ledger['physical_stores']
@@ -87,9 +142,16 @@ def inventory_report(ledger, apps=None):
             'unresolved_dependencies': [dependency for dependency in row['state_dependencies']
                        if dependency not in by_store
                        or app not in by_store[dependency]['consumer_contracts']],
+            'native_backends_before_application_boot': sorted({
+                by_store[dependency]['backend_contract']
+                for dependency in row['state_dependencies'] if dependency in by_store
+                and app in by_store[dependency]['consumer_contracts']
+                and by_store[dependency].get('backend_contract')}),
             'shared_prerequisites': [p['name'] for p in ledger['shared_prerequisites']
                                      if app in p['consumers']],
             'retention': row['retention_requirements'],
+            'retention_convention': retention_contract(
+                row['retention_requirements'].get('approved_policy', {})),
             'escrow_references': row['credentials_environment_dependencies']['references'],
             'remaining_gates': row['required_next_gates'],
             'application_recovery_accepted': False,
@@ -177,11 +239,20 @@ def main():
     artifact = commands.add_parser('artifact')
     artifact.add_argument('--root', required=True, type=Path)
     artifact.add_argument('--manifest', required=True, type=Path)
+    lineage = commands.add_parser('lineage')
+    lineage.add_argument('--receipt', required=True, type=Path)
+    retention = commands.add_parser('retention')
+    retention.add_argument('--metadata', required=True, type=Path)
     args = parser.parse_args()
     if args.command == 'report':
         result = inventory_report(json.loads(args.ledger.read_text()), args.app)
-    else:
+    elif args.command == 'artifact':
         result = validate_artifact(args.root, json.loads(args.manifest.read_text()))
+    elif args.command == 'lineage':
+        receipt = json.loads(args.receipt.read_text())
+        result = generation_lineage(receipt['application'], receipt['points'], receipt['required_sources'])
+    else:
+        result = retention_contract(json.loads(args.metadata.read_text()))
     print(json.dumps(result, indent=2))
 
 

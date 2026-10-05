@@ -85,6 +85,56 @@ class ReceiptTests(unittest.TestCase):
                 shared.transport_receipt(candidate, 'bazarr')
 
 
+class LineageTests(unittest.TestCase):
+    def point(self):
+        return {'application': 'bazarr', 'source': 'database', 'generation': 'c' * 32,
+                'nas': {'snapshot_id': 'a' * 32, 'manifest_sha256': 'd' * 64},
+                'r2': {'snapshot_id': 'b' * 32, 'manifest_sha256': 'd' * 64,
+                       'source_nas_id': 'a' * 32}}
+
+    def test_complete_generation_bound_to_both_tiers(self):
+        result = shared.generation_lineage('bazarr', [self.point()], ['database'])
+        self.assertTrue(result['lineage_validated'])
+        self.assertFalse(result['native_recovery_accepted'])
+
+    def test_missing_duplicate_or_mixed_generation_denied(self):
+        points = [self.point(), dict(self.point(), source='files', generation='e' * 32)]
+        for candidate, required in [([], ['database']), ([self.point()] * 2, ['database']),
+                                    (points, ['database', 'files'])]:
+            with self.assertRaises(shared.InvalidEvidence):
+                shared.generation_lineage('bazarr', candidate, required)
+
+    def test_wrong_service_generation_hash_or_destination_mapping_denied(self):
+        for key, value in [('snapshot_id', 'latest'), ('manifest_sha256', 'e' * 64),
+                           ('source_nas_id', 'f' * 32)]:
+            candidate = self.point()
+            candidate['r2'][key] = value
+            with self.subTest(key=key), self.assertRaises(shared.InvalidEvidence):
+                shared.generation_lineage('bazarr', [candidate], ['database'])
+        with self.assertRaises(shared.InvalidEvidence):
+            shared.generation_lineage('plex', [self.point()], ['database'])
+
+
+class RetentionTests(unittest.TestCase):
+    def test_unknown_policy_preserves_incumbents_and_original_keys(self):
+        result = shared.retention_contract({})
+        self.assertEqual(len(result['unresolved_approval_fields']), 5)
+        self.assertTrue(result['preserve_incumbent_points_sources_and_original_keys'])
+        self.assertFalse(result['retirement_authorized'])
+
+    def test_numbers_or_prose_do_not_authorize_retirement(self):
+        result = shared.retention_contract({'rpo_seconds': 3600, 'rto_seconds': 7200,
+            'history_seconds': 86400, 'minimum_copies': 2, 'rollback_seconds': 86400,
+            'approval_reference': 'not independently verified'})
+        self.assertEqual(result['unresolved_approval_fields'], [])
+        self.assertFalse(result['retirement_authorized'])
+
+    def test_nonpositive_fractional_boolean_or_string_policy_denied(self):
+        for value in (0, -1, 0.5, True, 'daily'):
+            with self.subTest(value=value), self.assertRaises(shared.InvalidEvidence):
+                shared.retention_contract({'rpo_seconds': value})
+
+
 class InventoryTests(unittest.TestCase):
     def test_shared_physical_store_captured_once(self):
         result = shared.inventory_report(ledger())

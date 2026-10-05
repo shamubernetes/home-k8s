@@ -41,6 +41,17 @@ def contract():
                 mounts=[(config, '/config', 'rw')], user='568:568',
                 command=['--log-file', '/tmp/fixture.log'])
 
+        def capture(self, database, config, databases, **kwargs):
+            # The pinned entrypoint installs a /proc stdout link even with an
+            # explicit log file. It is runtime wiring, not persistent state.
+            # Remove only that exact link after the producer has stopped.
+            holder = next(item for item in self.containers if item.endswith('-source-config-holder'))
+            scope['run']('docker', 'exec', holder, 'sh', '-ec',
+                'if test -L /config/home-assistant.log; then '
+                'test "$(readlink /config/home-assistant.log)" = /proc/self/fd/1; '
+                'unlink /config/home-assistant.log; fi')
+            return super().capture(database, config, databases, **kwargs)
+
         def healthy(self, container):
             from kopiur_native_fixture import startup_failure
             for _ in range(180):
@@ -84,5 +95,6 @@ def fixture():
     from kopiur_native_fixture import exercise
     result = exercise(contract(), APP, [IMAGE, pocket.HTTP_IMAGE], {
         'production_database_binding_qualified': False,
+        'runtime_log_stream_recovery_qualified': False,
         'production_devices_hacs_git_qualified': False})
     return result | {'fixture_app_name': APP, 'app': 'home-assistant'}

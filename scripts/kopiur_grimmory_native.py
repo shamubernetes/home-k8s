@@ -24,7 +24,7 @@ def fingerprint(database, sql, docker):
     data = docker('exec', database, 'bash', '-c',
         'MYSQL_PWD="$MYSQL_PASSWORD" mariadb-dump --protocol=tcp -h127.0.0.1 -u"$MYSQL_USER" '
         '--skip-comments --compact --no-create-info --skip-add-locks --skip-disable-keys '
-        '--skip-extended-insert --order-by-primary grimmory').stdout
+        '--skip-extended-insert --order-by-primary --hex-blob grimmory').stdout
     return {'records_sha256': hashlib.sha256(data.encode()).hexdigest(),
             'tables': int(sql(database, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='grimmory' AND table_type='BASE TABLE';").stdout.strip())}
 

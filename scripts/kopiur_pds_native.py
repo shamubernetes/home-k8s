@@ -334,7 +334,9 @@ def exercise(identity,app,fields,deadline):
                  'all_native_validation_egress':'none','owned_fixture_repositories_removed':True}
     finally:
         try:
-            native.clean()
-        finally:
+            # A failed mover may still mount a restored native volume.
+            # Stop owned transport containers before native volume cleanup.
             transport.cleanup()
+        finally:
+            native.clean()
     return receipt

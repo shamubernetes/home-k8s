@@ -85,7 +85,13 @@ class Drill:
             message = result.stderr.decode(errors="replace").lower()
             codes = [code for code in ("unknown long flag", "required flag", "accessdenied",
                      "access_denied", "logon_failure", "invalid repository password",
-                     "no such file or directory", "connection refused", "unable to decrypt")
+                     "no such file or directory", "connection refused", "unable to decrypt",
+                     "operation not permitted", "permission denied", "read-only file system",
+                     "device or resource busy", "already exists", "not empty",
+                     "error creating directory", "error creating file", "error setting attributes",
+                     "could not change owner", "could not change permissions", "could not change mod time",
+                     "unable to get snapshot root", "unable to open snapshot", "unable to create output",
+                     "invalid object", "invalid snapshot", "context deadline exceeded", "out of memory")
                      if code in message]
             flags = sorted(set(re.findall(r"--[a-z][a-z0-9-]{0,60}", message)))
             raise RuntimeError("identity stage " + self.stage + " failed: " +

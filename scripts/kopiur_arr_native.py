@@ -28,9 +28,9 @@ def contract():
     base = native["DockerDrill"]
 
     class ArrDrill(base):
-        def app_ready(self, container):
+        def healthy(self, container):
             try:
-                return super().app_ready(container)
+                return super().healthy(container)
             except RuntimeError:
                 # Only this disposable fixture's logs. Never production logs.
                 result = scope["run"]("docker", "logs", "--tail", "80", container, check=False)

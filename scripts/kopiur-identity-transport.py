@@ -19,7 +19,7 @@ import sys
 import time
 import uuid
 
-from kopiur_shared import selected_apps, transport_receipt
+from kopiur_shared import generation_lineage, selected_apps, transport_receipt
 
 IMAGE = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f1f8bb5d00b791654d79429928e95db54f4b22"
 TOOL_IMAGE = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
@@ -148,6 +148,7 @@ class Drill:
         assert result.stdout.decode().split()[0] == hashlib.sha256(self.bytes).hexdigest(), "restored bytes differ"
         self.remove(restorer)
         return {"backend": kind, "snapshot_id": snapshot["id"], "object_id": object_id,
+                "manifest_sha256": hashlib.sha256(self.bytes).hexdigest(),
                 "producer_removed_before_restore": True, "wrong_encryption_password_denied": True,
                 "fresh_container_direct_restore": True, "bytes_equal": 4096,
                 "guest_access_denied": True if kind == "nas" else None}
@@ -208,8 +209,13 @@ def exercise_payload(payload, deadline=None):
         results = [drill.exercise(kind) for kind in ("nas", "r2")]
     finally:
         drill.cleanup()
+    nas, r2 = results
+    lineage = generation_lineage(app, [{'application': app, 'source': 'fixture.bin',
+        'generation': drill.nonce, 'nas': nas,
+        'r2': dict(r2, source_nas_id=nas['snapshot_id'])}], ['fixture.bin'])
     return transport_receipt({"app": app, "runner": os.environ["RUNNER_NAME"], "mover_image": IMAGE,
-            "results": results, "owned_fixture_repositories_removed": True}, app)
+            "results": results, "lineage": lineage,
+            "owned_fixture_repositories_removed": True}, app)
 
 
 def serve_main():

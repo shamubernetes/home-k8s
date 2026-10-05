@@ -30,10 +30,16 @@ def contract():
                 body = urlencode(payload) if form else json.dumps(payload)
                 config += 'header = "Content-Type: ' + content_type + '"\nrequest = "POST"\n'
                 config += 'data = ' + json.dumps(body) + '\n'
-            return scope['run']('docker', 'run', '--rm', '-i', '--read-only',
+            result = scope['run']('docker', 'run', '--rm', '-i', '--read-only',
                 '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
                 '--network', 'container:' + container, '--entrypoint', 'curl', HTTP_IMAGE,
-                '-fsS', '--max-time', '5', '--config', '-', stdin=config.encode(), check=check)
+                '-fsS', '--max-time', '5', '--config', '-', stdin=config.encode(), check=False)
+            if check and getattr(result, 'returncode', 0):
+                import re
+                status = re.search(rb'returned error: (\d{3})', result.stderr)
+                code = status.group(1).decode() if status else 'unavailable'
+                raise RuntimeError('isolated fixture HTTP failure, status=' + code)
+            return result
 
         def app(self, name, database, config):
             if name == 'source-app':

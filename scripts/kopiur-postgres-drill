@@ -550,7 +550,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096,
     # Reject links before streaming. Never follow restored links into host files.
     for path in source.rglob("*"):
         if path.is_symlink() or not (path.is_dir() or path.is_file()):
-            raise ValueError("recovered PVC contains links or special files")
+            raise ValueError("recovered PVC contains links or special files: " + str(path.relative_to(source)))
     try:
         target = drill.database("restore-db", databases)
         drill.restore(target, bundle, databases)

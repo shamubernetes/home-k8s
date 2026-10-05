@@ -82,6 +82,12 @@ roundtrip is a prerequisite, not proof of coherent cross-store capture. The
 all-writer fence and production Dragonfly compatibility gate remain open before
 activation, without permitting data discard or weakening zero-loss acceptance.
 
+TubeArchivist now uses its own `kopiur-tubearchivist` R2 bucket. Its new identity
+has only bucket-item read/write permission for that bucket, not bucket
+administration or access to the shared `storage-backup` bucket. Credential and
+repository-password fields live in the dedicated 1Password item consumed by
+the existing ExternalSecret. NAS identity provisioning remains separate.
+
 ## Required gates before deployment and activation
 
 1. Green protected checks on the exact candidate head. They cover static analysis,

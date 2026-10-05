@@ -22,7 +22,9 @@ ES = 'docker.elastic.co/elasticsearch/elasticsearch:8.19.22@sha256:e98f9c3b09beb
 # Keep the workflow-owned REDIS constant name, but qualify the actual shared
 # Dragonfly engine/digest rather than claiming Redis proves its serialization.
 REDIS = 'ghcr.io/dragonflydb/dragonfly:v2.0.0@sha256:7426fdb31ddcf7bd9499b4205f36ebaa83b26149ba1609a0d5f8f474b3631233'
-REDIS_ARGS = ('--proactor_threads=2', '--maxmemory=256mb', '--cluster_mode=emulated',
+# ARC DinD blocks io_uring. Use the engine's supported epoll mode for the
+# disposable fixture without granting privileges or changing production args.
+REDIS_ARGS = ('--force_epoll', '--proactor_threads=2', '--maxmemory=256mb', '--cluster_mode=emulated',
               '--lock_on_hashtags', '--default_lua_flags=allow-undeclared-keys')
 PREFIX = 'k8s92-mixed-' + uuid.uuid4().hex[:10]
 CONTAINERS = []

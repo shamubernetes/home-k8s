@@ -1,0 +1,258 @@
+{
+  "kaneo_task_id": "i894pxqe3jf5oc43vgh6y616",
+  "execution_card": "t_9b1e7179",
+  "whole_application_recovery_accepted": false,
+  "encrypted_provider_transport_qualified_by_these_receipts": false,
+  "native_fixture_passed_count": 8,
+  "native_fixture_proofs": {
+    "prowlarr": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37380690362",
+      "candidate": "423a66d637ce58cd783d050ab7ec0635e7ad4c74",
+      "job": 112001607071,
+      "runner": "ghar-set-zoo-runner-k95tz",
+      "pod_uid": "8d97a0d2-e64f-4684-9b1f-225d6552462e",
+      "request": {
+        "operation": "native-arr-fixture",
+        "app": "prowlarr"
+      },
+      "receipt": {
+        "app": "prowlarr",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 22,
+        "rows": 53,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 28,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false
+      }
+    },
+    "chaptarr": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37380690362",
+      "candidate": "423a66d637ce58cd783d050ab7ec0635e7ad4c74",
+      "job": 112001607071,
+      "runner": "ghar-set-zoo-runner-k95tz",
+      "pod_uid": "8d97a0d2-e64f-4684-9b1f-225d6552462e",
+      "request": {
+        "operation": "native-arr-fixture",
+        "app": "chaptarr"
+      },
+      "receipt": {
+        "app": "chaptarr",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 3,
+        "tables": 78,
+        "rows": 362,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 30,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false
+      }
+    },
+    "grafana": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37382118031",
+      "candidate": "246160de87ce54e05691233aff32082f9e65ea4f",
+      "job": 112006438039,
+      "runner": "ghar-set-zoo-runner-ssmc7",
+      "pod_uid": "ebf25dc3-ca5f-4cee-92bb-3d7e7e7fc515",
+      "request": {
+        "operation": "native-grafana-fixture"
+      },
+      "receipt": {
+        "app": "grafana",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 86,
+        "rows": 774,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 21,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_jwt_identity_qualified": false,
+        "datasource_secret_decryption_qualified": false
+      }
+    },
+    "atuin": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37382118031",
+      "candidate": "246160de87ce54e05691233aff32082f9e65ea4f",
+      "job": 112006438039,
+      "runner": "ghar-set-zoo-runner-ssmc7",
+      "pod_uid": "ebf25dc3-ca5f-4cee-92bb-3d7e7e7fc515",
+      "request": {
+        "operation": "native-atuin-fixture"
+      },
+      "receipt": {
+        "app": "atuin",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 8,
+        "rows": 26,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 17,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "client_history_decryption_qualified": false
+      }
+    },
+    "gatus": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37383718712",
+      "candidate": "8b8c2de8194b27993bc657fbd7fe63b4961090ce",
+      "job": 112011747736,
+      "runner": "ghar-set-zoo-runner-w79pj",
+      "pod_uid": "c8ba6ce8-6b4e-42d5-9ef8-ee8ad41dea24",
+      "request": {
+        "operation": "native-gatus-fixture"
+      },
+      "receipt": {
+        "app": "gatus",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 10,
+        "rows": 9,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 16,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "post_restore_original_token_write_probe": true,
+        "records_compared_before_deliberate_write_probe": true
+      }
+    },
+    "pocket-id": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37388454777",
+      "candidate": "56ad2d7e2aedde491318b7e12f8893ce3c594653",
+      "job": 112027539563,
+      "runner": "ghar-set-zoo-runner-blhsf",
+      "pod_uid": "74d62a53-4e7c-4d27-ad77-629a279c267d",
+      "request": {
+        "operation": "native-pocket-id-fixture"
+      },
+      "receipt": {
+        "app": "pocket-id",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 34,
+        "rows": 39,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 21,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_passkey_login_qualified": false,
+        "production_rgw_uploads_qualified": false,
+        "original_key_denial_qualified": false
+      }
+    },
+    "n8n": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37389732545",
+      "candidate": "6c43f688a1ef32ffbde42fe986f185f9aa1e6042",
+      "job": 112031703401,
+      "runner": "ghar-set-zoo-runner-p9kgz",
+      "pod_uid": "55bdc1d2-657f-40a5-9e49-5faf87555974",
+      "request": {
+        "operation": "native-n8n-fixture"
+      },
+      "receipt": {
+        "app": "n8n",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 133,
+        "rows": 1077,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 1584,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_workflow_executions_qualified": false,
+        "production_community_nodes_license_qualified": false,
+        "original_fixture_encryption_key_used": true,
+        "native_cli_workflow_and_decrypted_credential_equal": true
+      }
+    },
+    "home-assistant": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37389917851",
+      "candidate": "5b28b89c6dd5766900bd6bdf6e44e7990b23705c",
+      "job": 112032302417,
+      "runner": "ghar-set-zoo-runner-vxfjr",
+      "pod_uid": "f5aa7195-4fb2-4498-a0f0-fce91ac0f58b",
+      "request": {
+        "operation": "native-home-assistant-fixture"
+      },
+      "receipt": {
+        "app": "home-assistant",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 15,
+        "rows": 757,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 54,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_database_binding_qualified": false,
+        "runtime_log_stream_recovery_qualified": false,
+        "production_devices_hacs_git_qualified": false,
+        "fixture_app_name": "home-assistant-fixture"
+      }
+    }
+  },
+  "limitations": [
+    "Disposable native fixtures only, not production or whole-app multi-store recovery.",
+    "No NAS/R2 qualification for these applications, no incumbent recovery point retirement.",
+    "Each run used trusted-main recovery-verify.yaml with suite=identities and explicit candidate SHA.",
+    "Home Assistant excludes only the pinned entrypoint stdout symlink, not persistent files. Log-stream recovery is unqualified.",
+    "n8n proof includes inactive workflow and native CLI decryption with the original fixture encryption key."
+  ]
+}

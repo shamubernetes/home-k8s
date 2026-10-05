@@ -16,6 +16,15 @@ def contract():
         def auth_header(self):
             return 'Authorization: Bearer ' + self.api_key
 
+        def provision_scoped_backup(self, container, database):
+            try:
+                return super().provision_scoped_backup(container, database)
+            except RuntimeError:
+                schemas = self.sql(container,
+                    "SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' "
+                    "AND nspname <> 'information_schema' ORDER BY nspname", database)
+                raise RuntimeError('isolated Kaneo grant rejected; observed schemas=' + json.dumps(schemas.splitlines())) from None
+
         def isolated_config(self, raw):
             if len(raw) > 65536:
                 raise ValueError('fixture identity exceeds bound')

@@ -117,7 +117,7 @@ class DockerDrill:
         self.volumes = []
         self.password = secrets.token_hex(24)
         self.backup_password = secrets.token_hex(32)
-        self.capture_user = "kopiur_bazarr" if app == "bazarr" else "backup"
+        self.capture_user = "kopiur_" + app.replace("-", "_")
         self.api_key = secrets.token_hex(16)
 
     def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None):
@@ -251,56 +251,70 @@ class DockerDrill:
         return name
 
     def provision_bazarr_backup(self, database):
-        """Exercise the exact GitOps grants, not a fixture-only approximation."""
-        script = ROOT / "kubernetes/apps/arrs/bazarr/app/kopiur-postgres-grants.sql"
+        """Keep the Bazarr entrypoint, exercising the same shared denial proof."""
+        self.provision_scoped_backup(database, "bazarr")
+
+    def provision_scoped_backup(self, container, database):
+        """Exercise the shipped SQL with native schemas and deny probes."""
+        script = ROOT / ("kubernetes/apps/arrs/bazarr/app/kopiur-postgres-grants.sql"
+                         if self.app_name == "bazarr"
+                         else "kubernetes/components/kopiur-postgres/provision.sql")
+        role = self.capture_user
         env = os.environ.copy()
-        env.update(BACKUP_USER=self.capture_user, BACKUP_PASSWORD=self.backup_password,
-                   APPLICATION_OWNER="app")
+        env.update(BACKUP_USER=role, BACKUP_PASSWORD=self.backup_password,
+                   APPLICATION_OWNER="app", APPLICATION_NAME=self.app_name)
         command = ("docker", "exec", "-i", "-e", "BACKUP_USER", "-e", "BACKUP_PASSWORD",
-                   "-e", "APPLICATION_OWNER", database, "psql", "-X", "-q", "-U",
-                   "postgres", "-d", "bazarr", "-v", "ON_ERROR_STOP=1")
-        self.sql(database, "CREATE ROLE kopiur_bazarr LOGIN")
-        collision = run(*command, stdin=script.read_bytes(), env=env, check=False)
-        assert collision.returncode, "provisioner claimed an unowned identity"
-        self.sql(database, "DROP ROLE kopiur_bazarr")
-        # A second application must be idempotent and preserve the owned role.
+                   "-e", "APPLICATION_OWNER", "-e", "APPLICATION_NAME", container,
+                   "psql", "-X", "-q", "-U", "postgres", "-d", database,
+                   "-v", "ON_ERROR_STOP=1")
+        if database == self.databases[0]:
+            self.sql(container, f"CREATE ROLE {role} LOGIN")
+            collision = run(*command, stdin=script.read_bytes(), env=env, check=False)
+            assert collision.returncode, "provisioner claimed an unowned identity"
+            self.sql(container, f"DROP ROLE {role}")
         for _ in range(2):
             result = run(*command, stdin=script.read_bytes(), env=env, check=False)
             if result.returncode:
-                # This path runs only with generated fixture credentials and data.
                 error = result.stderr.decode(errors="replace")
                 for secret in (self.password, self.backup_password, self.api_key):
                     error = error.replace(secret, "[redacted]")
                 raise RuntimeError("synthetic scoped grant SQL failed: " + error[:2000])
             assert not result.stdout.strip(), "provisioner printed credential-bearing settings"
+        self.sql(container, "CREATE SEQUENCE kopiur_permission_sequence", database, "app")
         for acquire, revoke in (
-                ("ALTER ROLE kopiur_bazarr CREATEDB", "ALTER ROLE kopiur_bazarr NOCREATEDB"),
-                ("GRANT app TO kopiur_bazarr", "REVOKE app FROM kopiur_bazarr"),
-                ("GRANT INSERT ON kopiur_fixture TO kopiur_bazarr",
-                 "REVOKE INSERT ON kopiur_fixture FROM kopiur_bazarr")):
-            self.sql(database, acquire, "bazarr")
+                (f"ALTER ROLE {role} CREATEDB", f"ALTER ROLE {role} NOCREATEDB"),
+                (f"GRANT app TO {role}", f"REVOKE app FROM {role}"),
+                (f"GRANT INSERT ON kopiur_fixture TO {role}",
+                 f"REVOKE INSERT ON kopiur_fixture FROM {role}"),
+                (f"GRANT UPDATE(value) ON kopiur_fixture TO {role}", f"REVOKE UPDATE(value) ON kopiur_fixture FROM {role}"),
+                (f"GRANT MAINTAIN ON kopiur_fixture TO {role}", f"REVOKE MAINTAIN ON kopiur_fixture FROM {role}"),
+                (f"GRANT USAGE ON SEQUENCE kopiur_permission_sequence TO {role}", f"REVOKE USAGE ON SEQUENCE kopiur_permission_sequence FROM {role}"),
+                (f"ALTER DEFAULT PRIVILEGES FOR ROLE app GRANT INSERT ON TABLES TO {role}", f"ALTER DEFAULT PRIVILEGES FOR ROLE app REVOKE INSERT ON TABLES FROM {role}"),
+                ("ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA public GRANT UPDATE ON TABLES TO PUBLIC", "ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA public REVOKE UPDATE ON TABLES FROM PUBLIC")):
+            self.sql(container, acquire, database)
             unsafe = run(*command, stdin=script.read_bytes(), env=env, check=False)
             assert unsafe.returncode, "provisioner accepted an elevated identity"
-            self.sql(database, revoke, "bazarr")
+            self.sql(container, revoke, database)
         run(*command, stdin=script.read_bytes(), env=env)
-        self.sql(database, "CREATE TABLE kopiur_future_fixture (id integer PRIMARY KEY);"
-                 " INSERT INTO kopiur_future_fixture VALUES (1);", "bazarr", "app")
-        assert self.sql(database, "SELECT count(*) FROM kopiur_future_fixture", "bazarr",
-                        self.capture_user) == "1", "future tables lack backup read grants"
+        self.sql(container, "CREATE TABLE kopiur_future_fixture (id integer PRIMARY KEY);"
+                 " INSERT INTO kopiur_future_fixture VALUES (1);", database, "app")
+        assert self.sql(container, "SELECT count(*) FROM kopiur_future_fixture", database,
+                        role) == "1", "future tables lack backup read grants"
         for sql in ("INSERT INTO kopiur_future_fixture VALUES (2)",
                     "UPDATE kopiur_future_fixture SET id=2", "DELETE FROM kopiur_future_fixture",
                     "CREATE TABLE unexpected_write (id integer)"):
             denied = run("docker", "exec", "-i", "-e", "PGOPTIONS=-c default_transaction_read_only=off",
-                         database, "psql", "-X", "-U", self.capture_user, "-d", "bazarr",
+                         container, "psql", "-X", "-U", role, "-d", database,
                          "-v", "ON_ERROR_STOP=1", stdin=sql.encode(), check=False)
             assert denied.returncode and b"permission denied" in denied.stderr, "backup acquired write authority"
-        self.sql(database, "CREATE DATABASE unrelated_fixture OWNER app")
-        self.sql(database, "CREATE TABLE isolated_data (id integer); INSERT INTO isolated_data VALUES (1);",
-                 "unrelated_fixture", "app")
-        denied = run("docker", "exec", "-i", database, "psql", "-X", "-U", self.capture_user,
-                     "-d", "unrelated_fixture", "-v", "ON_ERROR_STOP=1",
+        unrelated = "unrelated_fixture_" + database
+        self.sql(container, f"CREATE DATABASE {unrelated} OWNER app")
+        self.sql(container, "CREATE TABLE isolated_data (id integer); INSERT INTO isolated_data VALUES (1);",
+                 unrelated, "app")
+        denied = run("docker", "exec", "-i", container, "psql", "-X", "-U", role,
+                     "-d", unrelated, "-v", "ON_ERROR_STOP=1",
                      stdin=b"SELECT * FROM isolated_data", check=False)
-        assert denied.returncode and b"permission denied" in denied.stderr, "backup read another application's data"
+        assert denied.returncode and b"permission denied" in denied.stderr, "backup read unrelated data"
 
     def capture(self, database, config, databases, *, password=None, user=None, check=True):
         user = user or self.capture_user
@@ -428,8 +442,7 @@ def fixture(app_name="radarr"):
                 drill.sql(source, "CREATE TABLE kopiur_fixture (id integer primary key, value text NOT NULL);"
                           " INSERT INTO kopiur_fixture VALUES (1, 'native-recovery-proof');", database, "app")
                 if app_name != "bazarr":
-                    drill.sql(source, f'GRANT CONNECT ON DATABASE "{database}" TO backup; GRANT USAGE ON SCHEMA public TO backup;'
-                              " GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup;", database)
+                    drill.provision_scoped_backup(source, database)
                 else:
                     drill.provision_bazarr_backup(source)
                 before[database] = drill.counts(source, database)
@@ -477,8 +490,8 @@ def fixture(app_name="radarr"):
                               "tables_equal": sum(len(tables) for tables in before.values()),
                               "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
-                              "dedicated_grant_sql_exercised": app_name == "bazarr",
-                              "future_table_read_and_unrelated_data_write_denial": app_name == "bazarr",
+                              "dedicated_grant_sql_exercised": True,
+                              "future_table_read_and_unrelated_data_write_denial": True,
                               "filetree_aba_rejected": app_name == "bazarr",
                               "paired_filetree_bytes_equal": recovered.get("paired_filetree_bytes_equal", 0),
                               "network": "none-shared-namespace", "production_data": False}, sort_keys=True))

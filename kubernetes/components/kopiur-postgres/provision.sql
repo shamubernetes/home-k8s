@@ -1,24 +1,37 @@
--- Dedicated Bazarr recovery identity. Run only against the owned application DB.
+-- K8S-92 application-scoped recovery identity. Reject databases outside the explicit contract.
 -- Credentials come from stdin/environment, never shell arguments or public files.
 \set ON_ERROR_STOP on
 \getenv backup_role BACKUP_USER
 \getenv backup_password BACKUP_PASSWORD
 \getenv application_owner APPLICATION_OWNER
+\getenv application_name APPLICATION_NAME
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
 SELECT set_config('kopiur.backup_role', :'backup_role', true) AS backup_role_setting \gset
 SELECT set_config('kopiur.backup_password', :'backup_password', true) AS backup_password_setting \gset
 SELECT set_config('kopiur.application_owner', :'application_owner', true) AS application_owner_setting \gset
+SELECT set_config('kopiur.application_name', :'application_name', true) AS application_name_setting \gset
 DO $provision$
 DECLARE
   backup_role text := current_setting('kopiur.backup_role');
   backup_password text := current_setting('kopiur.backup_password');
   application_owner text := current_setting('kopiur.application_owner');
   role_oid oid;
-  ownership_marker constant text := 'K8S-92 readonly backup for arrs/bazarr';
+  application_name text := current_setting('kopiur.application_name');
+  allowed_databases text[];
+  expected_role text;
+  ownership_marker text;
 BEGIN
-  IF current_database() <> 'bazarr' OR backup_role <> 'kopiur_bazarr' OR
+  CASE application_name
+    WHEN 'radarr' THEN allowed_databases := ARRAY['radarr_main']; expected_role := 'kopiur_radarr';
+    WHEN 'radarr-3d' THEN allowed_databases := ARRAY['radarr_3d_main']; expected_role := 'kopiur_radarr_3d';
+    WHEN 'sonarr' THEN allowed_databases := ARRAY['sonarr_main']; expected_role := 'kopiur_sonarr';
+    WHEN 'whisparr' THEN allowed_databases := ARRAY['whisparrv3_main','whisparrv3_logs']; expected_role := 'kopiur_whisparr';
+    ELSE RAISE EXCEPTION 'unqualified application';
+  END CASE;
+  ownership_marker := 'K8S-92 readonly backup for arrs/' || application_name;
+  IF NOT current_database() = ANY(allowed_databases) OR backup_role <> expected_role OR
      application_owner !~ '^[a-z][a-z0-9_]{0,62}$' OR
      backup_password !~ '^[a-f0-9]{64}$' OR application_owner = backup_role THEN
     RAISE EXCEPTION 'unexpected provisioning contract';

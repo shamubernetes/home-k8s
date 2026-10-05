@@ -18,6 +18,7 @@ def native(r):
     esenv = {'discovery.type':'single-node', 'xpack.security.enabled':'false',
              'ES_JAVA_OPTS':'-Xms256m -Xmx256m -XX:ActiveProcessorCount=2',
              'xpack.ml.enabled':'false', 'ingest.geoip.downloader.enabled':'false'}
+    esenv['path.repo']='/usr/share/elasticsearch/data/snapshot'
     es = start('coherent-es-source', r['ES'], net, dict(esenv, **{'cluster.name':'k8s92-ta-source'}),
                extra=('--network-alias','source-es','--memory=1600m'))
     wait(lambda: r['esready'](es), 300)
@@ -40,6 +41,7 @@ def native(r):
                       'http://localhost:8000/api/health/', ok=False).returncode == 0
 
     try:
+        evidence['coordination_phase']='native-startup'
         wait(lambda: health(app), 300)
         docker('exec', '-i', app, 'python', '-', data=r['ta_fixture_script'](seed=True))
         # Real Celery task with shipped native exporter, fully completed before
@@ -66,6 +68,7 @@ while client.hlen('unacked')==0:
     assert time.monotonic()<until
     time.sleep(.1)
 """
+        evidence['coordination_phase']='native-task-and-reserved-eta'
         docker('exec', '-i', app, 'python', '-', data=real_task, timeout=90)
         # The representative writer is admitted before closing, then commits
         # cross-store intent in stages. Capture must wait, never freeze midway.
@@ -109,6 +112,7 @@ with g.writer():
         wait(lambda: docker('exec', app, 'test', '-f', '/cache/kopiur-coordination/slow-completed', ok=False).returncode == 0, 10)
         # Admission closed by the real coordinator, worker/beat warm-drained,
         # collection complete under one exclusive lease, native web resumed.
+        evidence['coordination_phase']='closed-generation-capture'
         result = docker('exec', app, 'python', '/backup-contract/coordination.py', 'capture',
                         '/cache/kopiur/generations/qualified', '--drain', '20', '--hold', '30', timeout=65)
         timing = json.loads(result.stdout.strip().splitlines()[-1])
@@ -144,6 +148,7 @@ assert manifest['filetrees']['media']['checkpoint-marker']
         contracts(tool)
         docker('cp', str(scratch / 'coherent-generation'), tool + ':/bundle')
         for operation in ('restore-es', 'restore-redis', 'restore-files'):
+            evidence['coordination_phase']='isolated-'+operation
             docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python',
                    '/backup-contract/backup.py', operation, '/bundle', timeout=90)
         check = """import sys,sqlite3,json
@@ -190,6 +195,9 @@ assert any(json.loads(message)['headers']['id']==queued
                 text = logs.stdout + logs.stderr
                 (scratch / (name + '-private.log')).write_text(text)
                 summary[name.rsplit('coherent-',1)[-1]] = r['ta_failure_markers'](text)
+                for marker in ('path.repo env var not found', 'unqualified native', 'ConnectionError', 'CommandError'):
+                    if marker in text:
+                        summary[name.rsplit('coherent-',1)[-1]].append(marker)
         evidence['coordination_failure'] = summary
-        print(json.dumps({'coordination_failure':summary}), flush=True)
+        print(json.dumps({'coordination_failure':summary,'phase':evidence.get('coordination_phase')}), flush=True)
         raise

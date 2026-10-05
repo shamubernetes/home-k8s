@@ -128,6 +128,7 @@ def revoke(generation):
         state = current()
         if state and state['generation'] == generation:
             state['admission'] = 'OPEN'
+            state['resumed_at'] = time.monotonic()
             atomic(ROOT / 'current.json', state)
             atomic(ROOT / 'history' / (generation + '.json'), state)
 

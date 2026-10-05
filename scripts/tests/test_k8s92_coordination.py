@@ -69,6 +69,16 @@ class KernelCoordinationTests(unittest.TestCase):
             time.sleep(.01)
         self.fail('unit fixture readiness deadline')
 
+    def tearDown(self):
+        timings = []
+        for path in sorted((self.root / 'journal/history').glob('*.json')):
+            state = json.loads(path.read_text())
+            if 'resumed_at' in state:
+                timings.append({'phase':state['phase'],
+                                'closed_seconds':state['resumed_at']-state['started_at'],
+                                'exclusive_seconds':state['resumed_at']-state.get('frozen_at',state['resumed_at'])})
+        print(json.dumps({'kernel_fixture_timing':self._testMethodName,'attempts':timings}), flush=True)
+
     def state(self):
         path = self.root / 'journal/current.json'
         return json.loads(path.read_text()) if path.exists() else {}

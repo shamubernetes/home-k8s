@@ -6,4 +6,5 @@ resources:
 - ../../../../templates/volsync
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./service-nas-dns.yaml
 - ../../../../templates/gatus/guarded

@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/v1/service.json
+apiVersion: v1
+kind: Service
+metadata:
+  name: tunarr-nas-dns
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: tunarr.${HOME_DOMAIN}
+    external-dns.alpha.kubernetes.io/target: mnemosyne.${HOME_DOMAIN}
+spec:
+  type: ExternalName
+  externalName: mnemosyne.${HOME_DOMAIN}

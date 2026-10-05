@@ -31,8 +31,8 @@ def contract():
                    'ATUIN_HOST': '127.0.0.1', 'ATUIN_PORT': '8888',
                    'ATUIN_OPEN_REGISTRATION': 'true', 'ATUIN_METRICS__ENABLE': 'false',
                    'ATUIN_TLS__ENABLE': 'false', 'ATUIN_CONFIG_DIR': '/config', 'RUST_LOG': 'error'}
-            return self.start(name, IMAGE, network='container:' + database, env=env,
-                              mounts=[(config, '/config', 'rw')], command=['start'])
+            return self.start(name, self.image, network='container:' + database, env=env,
+                              mounts=[(config, '/config', 'rw')], command=['start'], user='568:568')
 
         def healthy(self, container):
             from kopiur_native_fixture import startup_failure

@@ -21,6 +21,12 @@ class GrafanaTests(unittest.TestCase):
         self.assertEqual(self.drill.image, grafana.IMAGE)
         self.assertEqual(self.drill.config_file, '/config/grafana.ini')
 
+    def test_fixture_user_matches_owned_config_volume(self):
+        with patch.object(self.drill, 'start', return_value='fixture') as start:
+            self.drill.app('restore-fixture', 'fixture-db', 'fixture-config')
+        self.assertEqual(start.call_args.kwargs['user'], '568:568')
+        self.assertEqual(start.call_args.kwargs['network'], 'container:fixture-db')
+
     def test_reconciliation_preserves_original_key_bytes(self):
         ini = b'[analytics]\nreporting_enabled=false\n[security]\nsecret_key=original\n'
         self.assertEqual(self.drill.isolated_config(ini), ini)

@@ -19,6 +19,12 @@ class AtuinTests(unittest.TestCase):
         self.assertEqual(self.drill.image, atuin.IMAGE)
         self.assertIn('@sha256:', self.drill.image)
 
+    def test_fixture_user_matches_owned_config_volume(self):
+        with patch.object(self.drill, 'start', return_value='fixture') as start:
+            self.drill.app('restore-fixture', 'fixture-db', 'fixture-config')
+        self.assertEqual(start.call_args.kwargs['user'], '568:568')
+        self.assertEqual(start.call_args.kwargs['network'], 'container:fixture-db')
+
     def test_original_session_is_not_rewritten(self):
         raw = json.dumps({'username': 'recovery-fixture', 'session': 'original-session'}).encode()
         self.assertEqual(self.drill.isolated_config(raw), raw)

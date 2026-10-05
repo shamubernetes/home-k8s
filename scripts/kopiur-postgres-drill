@@ -393,6 +393,18 @@ class DockerDrill:
         tables = self.sql(database, "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename", name).splitlines()
         return {table: int(self.sql(database, 'SELECT count(*) FROM public."' + table.replace('"', '""') + '"', name)) for table in tables}
 
+    def application_state(self, container):
+        endpoint = "/api/languages" if self.app_name == "bazarr" else "/api/v3/qualityprofile"
+        # Send the original fixture key through stdin, never the command line.
+        config = ('url = "http://127.0.0.1:' + str(self.port) + endpoint + '"\n'
+                  'header = "X-Api-Key: ' + self.api_key + '"\n')
+        response = run("docker", "exec", "-i", container, "curl", "-fsS", "--config", "-",
+                       stdin=config.encode()).stdout
+        value = json.loads(response)
+        if not value:
+            raise ValueError("application-visible native fixture is empty")
+        return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
     def fingerprints(self, database, name):
         """Compare restored table contents without printing application records."""
         return {table: hashlib.sha256(self.sql(
@@ -410,14 +422,16 @@ class DockerDrill:
                     failures.append(name)
                     continue
             self.containers.remove(name)
-        for name in self.volumes:
+        for name in self.volumes[:]:
             if run("docker", "volume", "rm", name, check=False).returncode:
                 failures.append(name)
+            else:
+                self.volumes.remove(name)
         if failures:
             raise RuntimeError("disposable resource cleanup failed")
 
 
-def fixture(app_name="radarr"):
+def fixture(app_name="radarr", export=None):
     drill = DockerDrill(app_name, diagnostics=True)
     scratch = Path.home() / ".hermes/cache/scratch"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -486,6 +500,18 @@ def fixture(app_name="radarr"):
                 (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
             assert recovered["native_restore"] and recovered["restored_app_ping"]
+            if export is not None:
+                visible_app = drill.app("export-app", source, config)
+                drill.healthy(visible_app)
+                visible = drill.application_state(visible_app)
+                run("docker", "stop", "-t", "30", visible_app)
+                expected = {db: drill.fingerprints(source, db) for db in drill.databases}
+                drill.capture(source, config, drill.databases)
+                export_source = base / "encrypted-source"
+                run("docker", "cp", drill.containers[-1] + ":/config", str(export_source))
+                api_key = drill.api_key
+                drill.close()
+                export(export_source, expected, api_key, visible)
             print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
                               "tables_equal": sum(len(tables) for tables in before.values()),
                               "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
@@ -499,7 +525,8 @@ def fixture(app_name="radarr"):
             drill.close()
 
 
-def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
+def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096,
+                expected_fingerprints=None, original_api_key=None, expected_application_state=None):
     """Read a recovered PVC. Write only new, isolated Docker resources."""
     source = Path(source)
     if source.is_symlink() or not source.is_dir():
@@ -507,6 +534,8 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
     bundle = source / ".kopiur-postgres"
     databases = verify_bundle(bundle)
     drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib)
+    if original_api_key is not None:
+        drill.api_key = original_api_key
     if databases != drill.databases:
         raise ValueError("archive database set does not match the selected application")
     # Reject links before streaming. Never follow restored links into host files.
@@ -516,6 +545,9 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
     try:
         target = drill.database("restore-db", databases)
         drill.restore(target, bundle, databases)
+        if expected_fingerprints is not None:
+            if {db: drill.fingerprints(target, db) for db in databases} != expected_fingerprints:
+                raise ValueError("restored native table contents differ from captured generation")
         counts = {db: drill.counts(target, db) for db in databases}
         if any(not tables for tables in counts.values()):
             raise ValueError("restored database schema is empty")
@@ -580,10 +612,16 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
             paired_count = len(expected_files)
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
+        if expected_application_state is not None:
+            if drill.application_state(restored_app) != expected_application_state:
+                raise ValueError("restored application-visible state differs")
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
                 "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,
-                "network": "none-shared-namespace"}
+                "network": "none-shared-namespace",
+                "native_table_contents_equal": expected_fingerprints is not None,
+                "original_fixture_api_key_used": original_api_key is not None,
+                "application_visible_state_equal": expected_application_state is not None}
     finally:
         drill.close()
 

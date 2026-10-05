@@ -5,6 +5,7 @@ binary/Unicode records, routines, events, views, and triggers. Exported /app/dat
 /books and /bookdrop fixtures are not production NFS capture acceptance.
 """
 import hashlib
+import json
 from pathlib import Path
 import runpy
 import shutil
@@ -15,9 +16,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def visible_state(app, docker):
     response = docker('exec', app, 'sh', '-c',
                       'wget -qO- http://127.0.0.1:6060/api/v1/healthcheck').stdout
-    if not response.strip():
-        raise ValueError('empty native Grimmory health response')
-    return hashlib.sha256(response.encode()).hexdigest()
+    value = json.loads(response)
+    if (set(value) != {'status', 'message', 'data', 'timestamp'} or value['status'] != 200
+            or set(value['data']) != {'status', 'message', 'version', 'timestamp'}
+            or value['data']['status'] != 'UP'):
+        raise ValueError('unexpected native Grimmory health schema')
+    # v3.5.0 HealthcheckController and SuccessResponse add request timestamps.
+    # These are not stored records. Compare every other response field exactly.
+    del value['timestamp']
+    del value['data']['timestamp']
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
 def fingerprint(database, sql, docker):

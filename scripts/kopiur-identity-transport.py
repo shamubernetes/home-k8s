@@ -266,6 +266,14 @@ def serve_main():
                         if len(data) > 65536:
                             raise RuntimeError("identity request exceeds bound")
                     payload = json.loads(data)
+                    if payload.get('operation') == 'native-atuin-fixture':
+                        if payload != {'operation': 'native-atuin-fixture'}:
+                            raise ValueError('Atuin fixture accepts no identity fields')
+                        from kopiur_atuin_native import fixture
+                        receipt = fixture()
+                        connection.sendall(json.dumps(receipt).encode())
+                        print(json.dumps(receipt), flush=True)
+                        continue
                     if payload.get('operation') == 'native-arr-fixture':
                         # Independent native adapters need no provider identity.
                         # Keep provider APPS, selection and credential scope unchanged.

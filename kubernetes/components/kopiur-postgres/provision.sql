@@ -30,6 +30,7 @@ BEGIN
     WHEN 'whisparr' THEN allowed_databases := ARRAY['whisparrv3_main','whisparrv3_logs']; expected_role := 'kopiur_whisparr';
     WHEN 'prowlarr' THEN allowed_databases := ARRAY['prowlarr_main']; expected_role := 'kopiur_prowlarr';
     WHEN 'atuin' THEN allowed_databases := ARRAY['atuin']; expected_role := 'kopiur_atuin';
+    WHEN 'n8n' THEN allowed_databases := ARRAY['n8n']; expected_role := 'kopiur_n8n';
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
     WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
     WHEN 'pocket-id' THEN allowed_databases := ARRAY['pocket_id']; expected_role := 'kopiur_pocket_id';
@@ -40,7 +41,7 @@ BEGIN
     ELSE RAISE EXCEPTION 'unqualified application';
   END CASE;
   ownership_marker := 'K8S-92 readonly backup for ' ||
-    CASE WHEN application_name = 'atuin' THEN 'services/'
+    CASE WHEN application_name IN ('atuin','n8n') THEN 'services/'
          WHEN application_name = 'pocket-id' THEN 'security/'
          WHEN application_name = 'home-assistant-fixture' THEN 'home-assistant/'
          WHEN application_name IN ('grafana','gatus') THEN 'observability/' ELSE 'arrs/' END || application_name;

@@ -35,15 +35,16 @@ def contract():
                               mounts=[(config, '/config', 'rw')], command=['start'])
 
         def healthy(self, container):
+            from kopiur_native_fixture import startup_failure
             for _ in range(120):
                 if self.request(container, '/healthz', check=False).returncode == 0:
                     break
                 state = scope['run']('docker', 'inspect', '-f', '{{.State.Running}}', container).stdout.strip()
                 if state != b'true':
-                    raise RuntimeError('isolated Atuin fixture exited')
+                    raise startup_failure(scope, self, container, 'isolated Atuin fixture exited')
                 time.sleep(1)
             else:
-                raise RuntimeError('isolated Atuin readiness deadline')
+                raise startup_failure(scope, self, container, 'isolated Atuin readiness deadline')
             if container.endswith('-source-app'):
                 result = json.loads(self.request(container, '/register', {
                     'username': 'recovery-fixture', 'email': 'fixture@example.invalid',
@@ -76,24 +77,5 @@ def contract():
 
 
 def fixture():
-    native = contract()
-    for image in (native['PG_IMAGE'], IMAGE):
-        native['run']('docker', 'pull', '--platform', 'linux/amd64', image, timeout=600)
-    results = []
-
-    def exported(source, expected, identity, visible):
-        proof = native['restore_pvc'](source, 'atuin', config_mib=256, database_mib=512,
-                                     expected_fingerprints=expected, original_api_key=identity,
-                                     expected_application_state=visible)
-        if not all(proof[key] for key in ('native_table_contents_equal', 'original_fixture_identity_used',
-                                         'application_visible_state_equal')):
-            raise RuntimeError('Atuin native fixture mismatch')
-        results.append(proof | {'producer_removed_before_restore': True,
-                                'encrypted_transport_qualified': False,
-                                'client_history_decryption_qualified': False,
-                                'production_recovery_accepted': False})
-
-    native['fixture']('atuin', export=exported)
-    if len(results) != 1:
-        raise RuntimeError('Atuin fixture receipt count differs')
-    return results[0]
+    from kopiur_native_fixture import exercise
+    return exercise(contract(), 'atuin', [IMAGE], {'client_history_decryption_qualified': False})

@@ -266,6 +266,16 @@ def serve_main():
                         if len(data) > 65536:
                             raise RuntimeError("identity request exceeds bound")
                     payload = json.loads(data)
+                    if payload.get('operation') == 'native-arr-fixture':
+                        # Independent native adapters need no provider identity.
+                        # Keep provider APPS, selection and credential scope unchanged.
+                        if set(payload) != {'operation', 'app'}:
+                            raise ValueError('native ARR fixture accepts no credential fields')
+                        from kopiur_arr_native import fixture
+                        receipt = fixture(payload['app'])
+                        connection.sendall(json.dumps(receipt).encode())
+                        print(json.dumps(receipt), flush=True)
+                        continue
                     if required is None:
                         required = selected_apps(payload, APPS)
                         connection.sendall(json.dumps({'selected_apps': sorted(required)}).encode())

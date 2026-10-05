@@ -28,6 +28,8 @@ BEGIN
     WHEN 'radarr-3d' THEN allowed_databases := ARRAY['radarr_3d_main']; expected_role := 'kopiur_radarr_3d';
     WHEN 'sonarr' THEN allowed_databases := ARRAY['sonarr_main']; expected_role := 'kopiur_sonarr';
     WHEN 'whisparr' THEN allowed_databases := ARRAY['whisparrv3_main','whisparrv3_logs']; expected_role := 'kopiur_whisparr';
+    WHEN 'prowlarr' THEN allowed_databases := ARRAY['prowlarr_main']; expected_role := 'kopiur_prowlarr';
+    WHEN 'chaptarr' THEN allowed_databases := ARRAY['chaptarr_main','chaptarr_log','chaptarr_cache']; expected_role := 'kopiur_chaptarr';
     ELSE RAISE EXCEPTION 'unqualified application';
   END CASE;
   ownership_marker := 'K8S-92 readonly backup for arrs/' || application_name;

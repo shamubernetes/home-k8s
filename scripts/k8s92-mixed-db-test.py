@@ -615,12 +615,14 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings')
 import django
 django.setup()
 from common.src.ta_redis import RedisQueue,TaskRedis,RedisArchivist
+from task.src.task_config import TASK_CONFIG
 from django.contrib.sessions.backends.db import SessionStore
 assert RedisQueue('download:video').get_all() == ['dlfixture01','dlfixture02']
 assert RedisQueue('reindex:ta_video').get_all() == ['vidfixture1','vidfixture2']
 task=TaskRedis().get_single('11111111-1111-4111-8111-111111111111')
 assert task['status']=='PENDING' and task['command']=='STOP'
-progress=RedisArchivist().get_message_dict('message:download:11111111')
+progress_key='message:'+TASK_CONFIG['download_pending']['group']+':11111111'
+progress=RedisArchivist().get_message_dict(progress_key)
 assert progress['progress']==0.5 and progress['command']=='STOP'
 session=SessionStore(session_key=Path('/cache/native-session-id').read_text())
 assert session['recovery_fixture']=='native-db-session'

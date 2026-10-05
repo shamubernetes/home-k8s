@@ -341,6 +341,7 @@ def ta_failure_markers(text):
         'native-held-startup-failure': 'held startup failed:',
         'native-recovery-unowned': 'unowned or conflicting Redis target',
         'native-recovery-key-set': 'Redis recovery target key set differs',
+        'native-contract-import': 'ModuleNotFoundError:',
     }
     return [label for label, marker in markers.items() if marker in text] or ['unclassified']
 
@@ -492,7 +493,9 @@ os._exit(0)
     ta_contract(tool, 'verify', '/bundle')
     restarted_source = start('redis-source-restarted', REDIS, net, args=REDIS_ARGS,
                              extra=('--network-alias', 'source-redis'))
-    reject_restart = """import contract
+    reject_restart = """import sys
+sys.path.insert(0,'/')
+import contract
 from pathlib import Path
 r=contract.redis_client()
 assert r.dbsize()==0
@@ -558,7 +561,9 @@ assert len([key for key in expected if contract.base64.b64decode(key).startswith
     docker('exec', '-i', tool, 'python', '-', data=check_redis)
     result = ta_contract(tool, 'restore-es', '/bundle', timeout=660).stdout.strip()
     EVIDENCE['tubearchivist_phase'] = 'reject-owned-target-conflicts'
-    conflicts = """import contract
+    conflicts = """import sys
+sys.path.insert(0,'/')
+import contract
 from pathlib import Path
 r=contract.redis_client()
 owner=r.get(contract.RECOVERY_KEY)

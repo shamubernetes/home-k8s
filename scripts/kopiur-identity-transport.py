@@ -206,6 +206,11 @@ def exercise_payload(payload, deadline=None):
     if deadline is not None:
         drill.deadline = min(drill.deadline, deadline - 90)
     try:
+        if payload.get("operation") == "native-postgres":
+            from kopiur_stateful_native import exercise
+            receipt = exercise(payload, drill, deadline or time.monotonic() + 1800)
+            receipt["owned_fixture_repositories_removed"] = True
+            return receipt
         results = [drill.exercise(kind) for kind in ("nas", "r2")]
     finally:
         drill.cleanup()

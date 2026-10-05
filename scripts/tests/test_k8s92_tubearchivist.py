@@ -18,7 +18,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -192,7 +192,7 @@ class RedisRecoveryTests(unittest.TestCase):
             client = Mock()
             client.info.return_value = {'run_id': run_id}
             client.dbsize.return_value = dbsize
-            with patch.object(BACKUP, 'verify', return_value={'redis': {'source_run_id': 'source'}}), \
+            with patch.object(BACKUP, 'verify', return_value={'redis': {'source_instance_id': 'source'}}), \
                  patch.object(BACKUP, 'redis_client', return_value=client), \
                  patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'YES'}):
                 with self.assertRaises(RuntimeError):
@@ -202,12 +202,19 @@ class RedisRecoveryTests(unittest.TestCase):
             client.flushall.assert_not_called()
 
     def test_explicit_isolation_required(self):
-        with patch.object(BACKUP, 'verify', return_value={'redis': {'source_run_id': 'source'}}), \
+        with patch.object(BACKUP, 'verify', return_value={'redis': {'source_instance_id': 'source'}}), \
              patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'NO'}), \
              patch.object(BACKUP, 'redis_client') as client:
             with self.assertRaises(RuntimeError):
                 BACKUP.restore_redis(Path('/synthetic-bundle'))
             client.assert_not_called()
+
+
+    def test_dragonfly_instance_identity_uses_supported_replication_field(self):
+        client = Mock()
+        client.info.side_effect = [{}, {'master_replid': 'fixture-lineage'}]
+        self.assertEqual(BACKUP.redis_instance_id(client), 'fixture-lineage')
+        self.assertEqual(client.info.call_args_list, [call('server'), call('replication')])
 
 
 class SyntheticDiagnosticTests(unittest.TestCase):

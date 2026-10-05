@@ -326,6 +326,12 @@ def ta_failure_markers(text):
         'dragonfly-io-uring-init': 'io_uring',
         'dragonfly-locked-memory': 'Cannot lock memory',
         'dragonfly-minimum-thread-memory': 'are required. Exiting...',
+        'redis-instance-identity': 'Redis server has no supported instance identity',
+        'redis-key-mutated': 'Redis key changed during capture',
+        'redis-key-set-mutated': 'Redis key set changed during capture',
+        'redis-value-mutated': 'Redis value changed during capture',
+        'redis-expiry-mutated': 'Redis expiry changed during capture',
+        'redis-native-response-error': 'ResponseError',
     }
     return [label for label, marker in markers.items() if marker in text] or ['unclassified']
 

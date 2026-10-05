@@ -140,6 +140,13 @@ def check_redis_inventory(records):
     return records
 
 
+def redis_instance_id(client):
+    # Dragonfly v2 omits Redis INFO server.run_id, but exposes master_replid.
+    identity = client.info('server').get('run_id') or client.info('replication').get('master_replid')
+    check(bool(identity), 'Redis server has no supported instance identity')
+    return identity
+
+
 def compare_redis_inventory(before, after):
     check(set(before) == set(after), 'Redis key set changed during capture')
     for key, record in before.items():
@@ -155,7 +162,7 @@ def restore_redis(bundle):
     manifest = verify(bundle)
     check(os.environ.get('K8S92_ISOLATED_RESTORE') == 'YES', 'isolated Redis restore required')
     client = redis_client()
-    check(client.info('server')['run_id'] != manifest['redis']['source_run_id'],
+    check(redis_instance_id(client) != manifest['redis']['source_instance_id'],
           'refuse source Redis server')
     check(client.dbsize() == 0, 'Redis restore requires empty DB15')
     records = check_redis_inventory(json.loads((bundle / 'redis.json').read_text()))
@@ -202,7 +209,7 @@ def capture(output):
         try:
             started = datetime.datetime.now(datetime.timezone.utc).isoformat()
             redis = redis_client()
-            redis_source_id = redis.info('server')['run_id']
+            redis_source_id = redis_instance_id(redis)
             root = request('')
             check(root['version']['number'] == '8.19.22', 'ES version changed; requalify restore')
             settings = request('ta_*?expand_wildcards=all')
@@ -236,7 +243,7 @@ def capture(output):
             manifest = {'format': 'ta-native-json-sqlite-redis-v2', 'app_version': '0.5.12', 'es_version': root['version']['number'],
                         'started_utc': started, 'finished_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         'consistency': 'per-index PIT and SQLite online backup; NOT cross-store atomic',
-                        'redis': {'db': 15, 'source_run_id': redis_source_id, 'keys': len(redis_state),
+                        'redis': {'db': 15, 'source_instance_id': redis_source_id, 'keys': len(redis_state),
                                   'encoding': 'native-DUMP-with-absolute-expiry'},
                         'documents': documents, 'sqlite_tables': sqlite_counts,
                         'files': {name: digest(stage / name) for name in ('db.sqlite3', 'elasticsearch.zip', 'indices.json', 'redis.json')}}

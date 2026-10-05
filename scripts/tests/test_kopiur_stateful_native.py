@@ -1,5 +1,7 @@
 """Run only on authorized Linux ARC with the candidate checkout."""
 import os
+import io
+import tarfile
 from pathlib import Path
 import runpy
 import sys
@@ -53,6 +55,19 @@ class NativeExportTests(unittest.TestCase):
     def test_native_allowlist_before_provider_write(self):
         with self.assertRaises(ValueError):
             native.exercise({"app": "not-a-native-app"}, None, 0)
+
+    def test_bounded_regular_export_only(self):
+        for name, kind in (("../escape", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)):
+            data = io.BytesIO()
+            with tarfile.open(fileobj=data, mode="w") as archive:
+                member = tarfile.TarInfo(name)
+                member.type = kind
+                archive.addfile(member)
+            with tempfile.TemporaryDirectory() as temporary:
+                destination = Path(temporary) / "restore"
+                with self.assertRaises(ValueError):
+                    native.extract_export(data.getvalue(), destination)
+                self.assertFalse(destination.exists())
 
 
 if __name__ == "__main__":

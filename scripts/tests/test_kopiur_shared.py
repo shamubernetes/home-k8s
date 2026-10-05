@@ -111,17 +111,24 @@ class InventoryTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(shared.InvalidEvidence):
                 shared.inventory_report(candidate)
 
-    def test_unknown_store_consumer_or_duplicate_dependency_denied(self):
-        for kind in ('dependency', 'consumer', 'duplicate'):
+    def test_unknown_consumer_or_duplicate_dependency_denied(self):
+        for kind in ('consumer', 'duplicate'):
             candidate = ledger()
-            if kind == 'dependency':
-                candidate['applications'][0]['state_dependencies'] = ['unknown']
-            elif kind == 'consumer':
+            if kind == 'consumer':
                 candidate['physical_stores'][0]['consumer_contracts'] = ['unknown']
             else:
                 candidate['applications'][0]['state_dependencies'] *= 2
             with self.subTest(kind=kind), self.assertRaises(shared.InvalidEvidence):
                 shared.inventory_report(candidate)
+
+    def test_missing_dependency_lineage_blocks_only_affected_application(self):
+        candidate = ledger()
+        candidate['applications'][0]['state_dependencies'].append('unknown')
+        result = shared.inventory_report(candidate)
+        self.assertEqual(result['applications'][0]['unresolved_dependencies'], ['unknown'])
+        self.assertEqual(result['applications'][1]['unresolved_dependencies'], [])
+        self.assertEqual(result['physical_capture_count'], 1)
+        self.assertEqual(result['physical_store_inventory_count'], 1)
 
     def test_unknown_or_duplicate_requested_apps_denied(self):
         for apps in (['unknown'], ['arrs/bazarr', 'arrs/bazarr']):

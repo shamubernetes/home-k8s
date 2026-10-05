@@ -83,8 +83,8 @@ class KernelCoordinationTests(unittest.TestCase):
         path = self.root / 'journal/current.json'
         return json.loads(path.read_text()) if path.exists() else {}
 
-    def attempt(self, name='bundle', delay=0, hold=1.5, drain=1, injection=''):
-        command = [sys.executable, '-c', COLLECTOR, str(delay)]
+    def attempt(self, name='bundle', delay=0, hold=1.5, drain=1, injection='', collector_code=COLLECTOR):
+        command = [sys.executable, '-c', collector_code, str(delay)]
         code = ("from pathlib import Path\nimport coordination as g\n" + injection +
                 f"g.coordinate(Path({str(self.root / name)!r}), {command!r}, {drain}, {hold})\n")
         return self.process(code)
@@ -139,6 +139,102 @@ class KernelCoordinationTests(unittest.TestCase):
         self.assertFalse((self.root / 'bundle').exists())
         self.finished(self.attempt('retry'))
 
+    def test_sigkill_before_collector_registration_never_runs_untracked_code(self):
+        injection = """original=g.subprocess.Popen
+def pause_before_registration(*args,**kwargs):
+    child=original(*args,**kwargs)
+    if 'collector' in args[0]:
+        g.atomic(g.ROOT/'before-registration.json',g.identity(child.pid))
+        g.time.sleep(10)
+    return child
+g.subprocess.Popen=pause_before_registration
+"""
+        process = self.attempt(delay=10, injection=injection)
+        marker = self.root / 'journal/before-registration.json'
+        self.wait(marker.exists)
+        collector = json.loads(marker.read_text())
+        self.assertEqual(self.state()['phase'], 'DRAINING')
+        self.assertNotIn('collector', self.state())
+        process.kill()
+        process.communicate(timeout=5)
+        self.wait(lambda: not GATE.alive(collector), 2)
+        self.wait(lambda: self.state().get('admission') == 'OPEN', 2)
+        self.assertFalse(any(self.root.glob('.generation-*')))
+        self.finished(self.attempt('retry'))
+
+    def test_sigkill_kills_collector_descendants_and_closes_inherited_pipes(self):
+        code = """import subprocess,sys,time,coordination as g
+from pathlib import Path
+p=Path(sys.argv[-1]);p.mkdir(parents=True)
+child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'])
+g.atomic(g.ROOT/'descendant.json',g.identity(child.pid))
+time.sleep(10)
+"""
+        process = self.attempt(collector_code=code)
+        marker = self.root / 'journal/descendant.json'
+        self.wait(marker.exists)
+        child = json.loads(marker.read_text())
+        collector = self.state()['collector']
+        process.kill()
+        process.communicate(timeout=5)
+        self.wait(lambda: self.state().get('admission') == 'OPEN', 2)
+        self.assertFalse(GATE.alive(child))
+        self.assertFalse(GATE.alive(collector))
+        self.assertFalse((self.root / 'bundle').exists())
+        self.finished(self.attempt('retry'))
+
+    def test_collector_leader_crash_cleans_descendants_before_reaping(self):
+        code = """import subprocess,sys,time,coordination as g
+from pathlib import Path
+p=Path(sys.argv[-1]);p.mkdir(parents=True)
+child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'])
+g.atomic(g.ROOT/'descendant.json',g.identity(child.pid))
+time.sleep(10)
+"""
+        process = self.attempt(collector_code=code)
+        marker = self.root / 'journal/descendant.json'
+        self.wait(marker.exists)
+        child = json.loads(marker.read_text())
+        GATE.terminate(self.state()['collector'])
+        self.finished(process, success=False)
+        self.assertFalse(GATE.alive(child))
+        self.finished(self.attempt('retry'))
+
+    def test_registered_collector_identity_is_preserved_through_exec(self):
+        code = """import sys,json,coordination as g
+from pathlib import Path
+assert g.current()['collector']==g.identity()
+p=Path(sys.argv[-1]);p.mkdir(parents=True)
+(p/'manifest.json').write_text(json.dumps({'fixture':True,'complete':True}))
+"""
+        self.finished(self.attempt(collector_code=code))
+        GATE.verify_generation(self.root / 'bundle')
+
+    def test_returned_collector_cannot_leave_descendants_holding_output(self):
+        code = """import subprocess,sys,json,coordination as g
+from pathlib import Path
+p=Path(sys.argv[-1]);p.mkdir(parents=True)
+child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'])
+g.atomic(g.ROOT/'descendant.json',g.identity(child.pid))
+(p/'manifest.json').write_text(json.dumps({'fixture':True,'complete':True}))
+"""
+        self.finished(self.attempt(collector_code=code))
+        child = json.loads((self.root / 'journal/descendant.json').read_text())
+        self.assertFalse(GATE.alive(child))
+        GATE.verify_generation(self.root / 'bundle')
+
+    def test_terminal_journal_waits_for_actual_attempt_lock_cleanup(self):
+        holder = self.process("""import time,coordination as g
+with g.lock('attempt.lock'):
+    g.atomic(g.ROOT/'current.json',{'generation':'terminal-unit','phase':'REVOKED','admission':'OPEN'})
+    (g.ROOT/'holder-ready').touch()
+    time.sleep(.25)
+""")
+        self.wait(lambda: (self.root / 'journal/holder-ready').exists())
+        self.finished(self.attempt())
+        holder.communicate(timeout=5)
+        self.assertEqual(holder.returncode, 0)
+
     def test_failed_resume_publication_recovered_without_invalidating_closed_bytes(self):
         injection = """original=g.atomic
 def fail_resume(path,value):
@@ -190,6 +286,36 @@ g.atomic=fail_resume
         self.assertNotEqual(process.returncode, 0)
         self.assertFalse((self.root / 'bundle').exists())
         self.finished(self.attempt('retry'))
+
+    def test_stale_boot_or_reused_collector_pid_recovers_without_signalling_heir(self):
+        for stale in (dict(GATE.identity(), boot='previous-boot'),
+                      dict(GATE.identity(), start='0')):
+            state = {'format':'writer-generation-v1', 'generation':'unit-stale',
+                     'owner':GATE.identity(), 'collector':stale,
+                     'phase':'REVOKED', 'admission':'CLOSED',
+                     'started_at':time.monotonic(), 'deadline':time.monotonic()-1}
+            GATE.atomic(GATE.ROOT / 'current.json', state)
+            GATE.recover()
+            self.assertEqual(self.state()['admission'], 'OPEN')
+            self.assertTrue(GATE.alive(GATE.identity()))
+
+    def test_watchdog_cleanup_waits_until_controller_has_reaped_owned_leader(self):
+        injection = """original=g._terminate_collector
+def paused_cleanup(owner):
+    original(owner)
+    (g.ROOT/'cleanup-before-reap').touch()
+    g.time.sleep(.25)
+g._terminate_collector=paused_cleanup
+"""
+        process = self.attempt(injection=injection)
+        self.wait(lambda: (self.root / 'journal/cleanup-before-reap').exists())
+        owner = self.state()['collector']
+        observer = self.process("import coordination as g\n"
+                                f"with g.lock('collector-cleanup.lock'):\n"
+                                f"    assert g.identity({owner['pid']},include_zombie=True) is None\n")
+        self.finished(process)
+        _, error = observer.communicate(timeout=5)
+        self.assertEqual(observer.returncode, 0, error)
 
     def test_restart_recovers_revoked_journal_left_closed_mid_resume(self):
         state = {'format':'writer-generation-v1', 'generation':'unit-revoked',

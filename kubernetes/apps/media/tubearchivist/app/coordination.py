@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import sys
@@ -31,12 +32,12 @@ def check(condition, message):
         raise RuntimeError(message)
 
 
-def identity(pid=None):
+def identity(pid=None, include_zombie=False):
     pid = pid or os.getpid()
     try:
         # comm can contain spaces and parentheses. starttime is field 22.
         fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
-        if fields[0] == 'Z':
+        if fields[0] == 'Z' and not include_zombie:
             return None
         return {'pid': pid, 'start': fields[19],
                 'boot': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
@@ -104,8 +105,121 @@ def terminate(owner):
         try:
             if identity(owner['pid']) == owner:
                 signal.pidfd_send_signal(fd, signal.SIGKILL)
+                poller = select.poll()
+                poller.register(fd, select.POLLIN)
+                check(poller.poll(1000), 'terminated process did not exit')
+        except ProcessLookupError:
+            pass
         finally:
             os.close(fd)
+
+
+@contextmanager
+def attempt_lock():
+    """Reject active overlap; let a terminal attempt finish detached cleanup.
+
+    OPEN records application resume, not watchdog FD closure. A controller killed
+    by that watchdog cannot wait/reap it, so an immediate retry must acquire the
+    actual kernel lock rather than treating the journal as a release receipt.
+    This bounded cleanup wait never extends the writer capture deadline.
+    """
+    ROOT.mkdir(parents=True, exist_ok=True)
+    fd = os.open(ROOT / 'attempt.lock', os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+    until = time.monotonic() + 2
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                state = current()
+                if (not state or state['phase'] not in TERMINAL
+                        or state.get('admission') != 'OPEN' or time.monotonic() >= until):
+                    raise
+                time.sleep(0.01)
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def collect_when_registered(fd, command):
+    """EOF on controller death exits without running unjournalled collector code.
+
+    Exec preserves the registered PID/starttime and native collector allowlist.
+    """
+    try:
+        if os.read(fd, 1) != b'1':
+            return 1
+    finally:
+        os.close(fd)
+    os.execvp(command[0], command)
+
+
+def collector_members(pid):
+    """Read only. No signal is chosen from a racy /proc PID enumeration."""
+    members = []
+    for path in Path('/proc').iterdir():
+        if not path.name.isdigit():
+            continue
+        try:
+            fields = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+            if fields[0] != 'Z' and int(fields[2]) == pid:
+                members.append(int(path.name))
+        except FileNotFoundError:
+            continue
+    return members
+
+
+def terminate_collector(owner, process=None):
+    # Controller reaping and independent watchdog signals share one permanent
+    # kernel lock. No helper may validate a leader, then race its PID reuse.
+    with lock('collector-cleanup.lock'):
+        _terminate_collector(owner)
+        if process is not None:
+            process.wait(timeout=5)
+
+
+def _terminate_collector(owner):
+    if not owner:
+        return
+    if owner['boot'] != identity()['boot']:
+        return
+    pid = owner['pid']
+    # The controller MUST keep its completed child unreaped until this function
+    # returns. A matching zombie still reserves the group leader PID, permitting
+    # whole-group cleanup after leader crash without signalling a reused PID.
+    actual = identity(pid, include_zombie=True)
+    if actual is None:
+        check(not collector_members(pid), 'collector leader vanished with live descendants')
+        return
+    if actual != owner:
+        # A restarted PID namespace can reuse the numeric PID in a retained
+        # journal. The old collector no longer owns it; never signal its heir.
+        return
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        check(not collector_members(pid), 'collector reaped before descendant cleanup')
+        return
+    try:
+        actual = identity(pid, include_zombie=True)
+        if actual is None:
+            check(not collector_members(pid), 'collector reaped before descendant cleanup')
+            return
+        check(actual == owner and os.getsid(pid) == pid and os.getpgid(pid) == pid,
+              'collector is not the owned isolated process group')
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        until = time.monotonic() + 1
+        while collector_members(pid):
+            check(time.monotonic() < until, 'collector descendants did not exit')
+            time.sleep(0.01)
+    except ProcessLookupError:
+        check(not collector_members(pid), 'collector reaped before descendant cleanup')
+    finally:
+        os.close(fd)
 
 
 def revoke(generation):
@@ -121,7 +235,7 @@ def revoke(generation):
         # Marking REVOKED first makes any staged collector output inadmissible.
         collector = state.get('collector')
     if collector:
-        terminate(collector)
+        terminate_collector(collector)
     if state['owner'] != identity():
         terminate(state['owner'])
     with lock('state.lock'):
@@ -240,7 +354,7 @@ def coordinate(destination, collect, drain_seconds=20.0, hold_seconds=30.0):
     destination = destination.resolve()
     check(not destination.exists(), 'generation destination already exists')
     recover()
-    with lock('attempt.lock', blocking=False) as attempt_fd:
+    with attempt_lock() as attempt_fd:
         generation = uuid.uuid4().hex
         state = {'format': 'writer-generation-v1', 'generation': generation,
                  'owner': identity(), 'admission': 'CLOSED', 'phase': 'DRAINING',
@@ -261,6 +375,8 @@ def coordinate(destination, collect, drain_seconds=20.0, hold_seconds=30.0):
         exclusive = os.open(ROOT / 'writers.lock', os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
         stage = destination.parent / ('.generation-' + generation)
         collector = None
+        collector_exit_fd = None
+        release_fd = None
         success = False
         try:
             drain_deadline = time.monotonic() + drain_seconds
@@ -279,16 +395,31 @@ def coordinate(destination, collect, drain_seconds=20.0, hold_seconds=30.0):
                 time.sleep(0.025)
             with lock('state.lock'):
                 state = require_generation(generation, 'DRAINING')
-                state.update(phase='CAPTURING', frozen_at=time.monotonic(),
+                state.update(frozen_at=time.monotonic(),
                              deadline=min(state['deadline'], time.monotonic() + hold_seconds))
-                atomic(ROOT / 'current.json', state)
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                collector = subprocess.Popen([*collect, str(stage)], start_new_session=True)
+                gate_fd, release_fd = os.pipe2(os.O_CLOEXEC)
+                try:
+                    collector = subprocess.Popen(
+                        [sys.executable, str(Path(__file__).resolve()), 'collector', str(gate_fd),
+                         *collect, str(stage)], pass_fds=(gate_fd,), start_new_session=True)
+                finally:
+                    os.close(gate_fd)
                 state['collector'] = identity(collector.pid)
+                collector_exit_fd = os.pidfd_open(collector.pid)
+                state['phase'] = 'CAPTURING'
                 atomic(ROOT / 'current.json', state)
-            while collector.poll() is None:
+                os.write(release_fd, b'1')
+                os.close(release_fd)
+                release_fd = None
+            poller = select.poll()
+            poller.register(collector_exit_fd, select.POLLIN)
+            while not poller.poll(0):
                 require_generation(generation, 'CAPTURING')
                 time.sleep(0.025)
+            # Reap only AFTER group cleanup, even on a successful leader exit.
+            # Descendants cannot retain output pipes or mutate staged bytes.
+            terminate_collector(state['collector'], collector)
             check(collector.returncode == 0, 'collector failed')
             with lock('state.lock'):
                 state = require_generation(generation, 'CAPTURING')
@@ -319,9 +450,12 @@ def coordinate(destination, collect, drain_seconds=20.0, hold_seconds=30.0):
                 success = True
             return state
         finally:
-            if collector and collector.poll() is None:
-                terminate(state.get('collector'))
-                collector.wait(timeout=5)
+            if release_fd is not None:
+                os.close(release_fd)
+            if collector and collector.returncode is None:
+                terminate_collector(state.get('collector'), collector)
+            if collector_exit_fd is not None:
+                os.close(collector_exit_fd)
             if exclusive is not None:
                 os.close(exclusive)
             if not success:
@@ -346,6 +480,9 @@ if __name__ == '__main__':
     w = sub.add_parser('watchdog')
     w.add_argument('generation')
     w.add_argument('fd', type=int)
+    worker = sub.add_parser('collector')
+    worker.add_argument('fd', type=int)
+    worker.add_argument('command', nargs=argparse.REMAINDER)
     c = sub.add_parser('capture')
     c.add_argument('destination', type=Path)
     c.add_argument('--drain', type=float, default=20)
@@ -353,6 +490,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.operation == 'watchdog':
         watchdog(args.generation, args.fd)
+    elif args.operation == 'collector':
+        raise SystemExit(collect_when_registered(args.fd, args.command))
     else:
         result = coordinate(args.destination, [sys.executable, str(Path(__file__).with_name('backup.py')),
                                               'collect-coherent'], args.drain, args.hold)

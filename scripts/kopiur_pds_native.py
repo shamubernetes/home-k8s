@@ -236,9 +236,13 @@ p.PDS.run({onStarted:async server=>{
         self.quiesce_copy_resume(app, [(source, restored)])
         for number,restored in enumerate(self.restore_volumes):
             # Verify every nested actor database and key, not just a sample CAR.
-            check = docker('run', '--rm', '--network=none', '-v', restored + ':/data:ro', PYTHON, 'python3', '-c', '''import json,sqlite3
+            check = docker('run', '--rm', '--network=none', '-v', restored + ':/data:ro',
+                           '--tmpfs','/scratch:rw,nosuid,size=192m', PYTHON, 'python3', '-c', '''import json,sqlite3,subprocess
 from pathlib import Path
-p=Path('/data/point'); dbs=list(p.rglob('*.sqlite')); keys=list(p.rglob('key'))
+# WAL readers may create shared-memory indexes. Materialize only a disposable
+# verifier copy, never mutate the canonical point or ignore its WAL bytes.
+subprocess.run(['cp','-a','/data/point','/scratch/point'],check=True)
+p=Path('/scratch/point'); dbs=list(p.rglob('*.sqlite')); keys=list(p.rglob('key'))
 assert len(dbs)>=5 and len(keys)==2
 for db in dbs:
  c=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True); assert c.execute('pragma integrity_check').fetchone()[0]=='ok'; c.close()

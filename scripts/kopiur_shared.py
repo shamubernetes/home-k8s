@@ -60,9 +60,7 @@ def inventory_report(ledger, apps=None):
         dependencies = row['state_dependencies']
         if len(dependencies) != len(set(dependencies)) or not row.get('execution_owner'):
             raise InvalidEvidence('application dependencies or owner are incomplete')
-        for dependency in dependencies:
-            if dependency not in by_store or row['id'] not in by_store[dependency]['consumer_contracts']:
-                raise InvalidEvidence('application/store dependency graph is inconsistent')
+
     if apps is None:
         apps = sorted(by_app)
     if len(apps) != len(set(apps)) or not set(apps) <= set(by_app):
@@ -82,7 +80,13 @@ def inventory_report(ledger, apps=None):
                 'selection': by_store[dependency].get('selection'),
                 'consumers': by_store[dependency]['consumer_contracts'],
                 'evidence': by_store[dependency].get('evidence'),
-            } for dependency in row['state_dependencies']],
+            } for dependency in row['state_dependencies'] if dependency in by_store
+                       and app in by_store[dependency]['consumer_contracts']],
+            # Undeclared hostPaths and missing consumer lineage remain explicit
+            # unresolved gates, not invented captures or global lane blockers.
+            'unresolved_dependencies': [dependency for dependency in row['state_dependencies']
+                       if dependency not in by_store
+                       or app not in by_store[dependency]['consumer_contracts']],
             'shared_prerequisites': [p['name'] for p in ledger['shared_prerequisites']
                                      if app in p['consumers']],
             'retention': row['retention_requirements'],
@@ -91,10 +95,12 @@ def inventory_report(ledger, apps=None):
             'application_recovery_accepted': False,
         })
     # Each physical store appears once, even when several selected apps consume it.
-    chosen = {dependency for app in apps for dependency in by_app[app]['state_dependencies']}
+    chosen = {dependency for app in apps for dependency in by_app[app]['state_dependencies']
+              if dependency in by_store and app in by_store[dependency]['consumer_contracts']}
     return {'schema': 'k8s92-shared-report/v1', 'applications': selected,
             'physical_capture_plan': [by_store[store] for store in sorted(chosen)],
             'application_count': len(selected), 'physical_capture_count': len(chosen),
+            'physical_store_inventory_count': len(by_store),
             'retirement_authorized': False, 'production_mutation_performed': False}
 
 

@@ -32,7 +32,7 @@ spec:
       image:
         registry: docker.io
         repository: victoriametrics/victoria-metrics
-        tag: v1.152.0@sha256:86ca5fdb6d87d56ba047b044039019ba2bd9042b36e35f6ea34e437b6c825cef
+        tag: v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
       retentionPeriod: 10y
       extraArgs:
         dedup.minScrapeInterval: 1ms

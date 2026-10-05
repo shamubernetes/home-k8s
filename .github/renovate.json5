@@ -11,6 +11,34 @@
   branchConcurrentLimit: 0,
   packageRules: [
     {
+      // Remove when the Renovate npm artifact no longer depends on the
+      // unpublished Yarn got patch. K8S-63 records exact install failures.
+      description: "Renovate 44.131.1 through 44.132.1 have an unresolvable published npm dependency",
+      matchManagers: ["mise"],
+      matchFileNames: [".mise.toml"],
+      matchPackageNames: ["renovate"],
+      allowedVersions: "!/^44\\.(131\\.[1-4]|132\\.[01])$/",
+    },
+    {
+      // Remove once standalone 3.14.8 binaries exist for Linux and macOS.
+      // K8S-63 tracks the missing artifacts and locked-install verification.
+      description: "Python 3.14.8 has no checksum-verified standalone binaries yet",
+      matchManagers: ["mise"],
+      matchFileNames: [".mise.toml"],
+      matchPackageNames: ["python/cpython"],
+      allowedVersions: "!/^3\\.14\\.8$/",
+    },
+    {
+      // Rook 1.20.8 bundles operator CRDs below the v1.1 API.
+      // Remove after the chart ships ClientProfileReplication and matching RBAC.
+      // K8S-63 records the failed startup and protected rollback.
+      description: "Ceph CSI operator must match the Rook bundled CRD API",
+      matchDatasources: ["docker"],
+      matchFileNames: ["kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml"],
+      matchPackageNames: ["quay.io/cephcsi/ceph-csi-operator"],
+      allowedVersions: "<1.1.0",
+    },
+    {
       description: "GitHub Actions tool inputs are version-only",
       matchManagers: ["github-actions"],
       matchPackageNames: ["helm/helm", "sigstore/cosign"],

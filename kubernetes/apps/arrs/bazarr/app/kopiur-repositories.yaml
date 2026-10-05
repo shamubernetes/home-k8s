@@ -5,7 +5,7 @@ metadata:
 spec:
   backend:
     rclone:
-      remotePath: mnemosyne:Backups/kopiur/bazarr-smb
+      remotePath: mnemosyne:kopiur-bazarr
       configSecretRef:
         name: bazarr-kopiur-nas
       startupTimeout: 2m
@@ -54,7 +54,7 @@ metadata:
 spec:
   backend:
     s3:
-      bucket: storage-backup
+      bucket: kopiur-bazarr
       prefix: kopiur/bazarr/r2/
       endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
       region: auto

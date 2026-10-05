@@ -48,7 +48,10 @@ ambiguous media/index side effects from task names.
 ## Restore and reconciliation contract
 
 The immutable v2 bundle remains complete. Expired bytes remain archived.
-`restore-redis` rejects the source engine, wrong DB and non-isolated mode. It
+`restore-redis` rejects the source engine, original transport endpoint, wrong DB
+and non-isolated mode. Source exclusion survives an empty engine restart.
+New captures bind a hash of source host/port/DB/socket, never credentials. Older
+unqualified v2 captures missing that identity fail closed. It
 atomically claims a NEW empty target with a marker bound to exact manifest hash,
 source identity, target identity and DB15. Empty is a target creation rule, never
 an empty-source exception. A source may contain all supported native types.
@@ -60,12 +63,13 @@ merge, rewritten task status, replay or queue enqueue is performed. Expiry uses
 Redis TIME, not the restore host's clock. The marker remains an execution hold.
 
 `recovery.py` verifies the complete target and checks exact pinned source hashes
-before running the real `ta_startup.Command.handle()`. Only destructive cleanup,
+and disposable Elasticsearch name/version before any native mutation.
+It runs the real `ta_startup.Command.handle()`. Only destructive cleanup,
 startup task publication and timestamp replacement are intercepted. Index setup,
 application configuration and normal native migrations still run. It starts no
 worker, beat or write-capable API. Every repeated held startup verifies the same
 records and writes an atomic/fsynced private reconciliation report outside the
-bundle. Terminal, invalid, opaque and interrupted state is retained without
+bundle. Terminal, invalid, wrong-type, opaque and interrupted state is retained without
 execution. There is deliberately no generic release or blind replay command.
 
 The standalone restored-PVC helper now uses this held path too. Its success

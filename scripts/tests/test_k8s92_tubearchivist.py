@@ -198,8 +198,9 @@ class RedisRecoveryTests(unittest.TestCase):
         for run_id, dbsize in (('source', 0), ('fresh', 1)):
             client = Mock()
             client.info.return_value = {'run_id': run_id}
-            client.dbsize.return_value = dbsize
-            with patch.object(BACKUP, 'verify', return_value={'redis': {'source_instance_id': 'source'}}), \
+            client.connection_pool.connection_kwargs = {'host': 'fresh', 'port': 6379, 'db': 15}
+            client.eval.return_value = 0
+            with patch.object(BACKUP, 'verify', return_value={'redis': {'source_instance_id': 'source', 'source_endpoint_sha256': 'old-source'}}), \
                  patch.object(Path, 'read_text', return_value=json.dumps(self.records)), \
                  patch.object(BACKUP, 'digest', return_value='synthetic-digest'), \
                  patch.object(BACKUP, 'redis_client', return_value=client), \
@@ -209,6 +210,12 @@ class RedisRecoveryTests(unittest.TestCase):
             client.restore.assert_not_called()
             client.flushdb.assert_not_called()
             client.flushall.assert_not_called()
+            if run_id == 'source':
+                client.eval.assert_not_called()
+            else:
+                self.assertEqual(client.eval.call_count, 1)
+                self.assertIn("redis.call('DBSIZE')", client.eval.call_args.args[0])
+                self.assertEqual(client.eval.call_args.args[1:3], (1, BACKUP.RECOVERY_KEY))
 
     def test_explicit_isolation_required(self):
         with patch.object(BACKUP, 'verify', return_value={'redis': {'source_instance_id': 'source'}}), \
@@ -233,6 +240,53 @@ class RedisRecoveryTests(unittest.TestCase):
                    'persistent': self.record}
         self.assertEqual(set(BACKUP.unexpired_records(client, records)), {'live', 'persistent'})
 
+    def test_restore_scan_permits_only_proven_natural_expiration(self):
+        client = Mock()
+        client.scan_iter.return_value = [b'\x00queue']
+        client.eval.return_value = []
+        client.time.return_value = (100, 0)
+        expired = {self.key: dict(self.record, expires_at_ms=100000)}
+        self.assertEqual(BACKUP.redis_inventory(client, expiry_records=expired), {})
+        for records in (None, self.records, {}):
+            with self.assertRaises(RuntimeError):
+                BACKUP.redis_inventory(client, expiry_records=records)
+
+    def test_restarted_empty_source_endpoint_is_rejected_before_claim(self):
+        client = Mock()
+        client.info.return_value = {'run_id': 'restarted-source'}
+        client.connection_pool.connection_kwargs = {'host': 'source', 'port': 6379, 'db': 15}
+        manifest = {'redis': {'source_instance_id': 'old-source',
+                             'source_endpoint_sha256': BACKUP.redis_endpoint_id(client)}}
+        with patch.object(BACKUP, 'verify', return_value=manifest), \
+             patch.object(BACKUP, 'redis_client', return_value=client), \
+             patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'YES'}):
+            with self.assertRaisesRegex(RuntimeError, 'refuse source Redis endpoint'):
+                BACKUP.restore_redis(Path('/synthetic'))
+        client.eval.assert_not_called()
+
+    def test_wrongtype_task_metadata_is_held_without_get_or_rewrite(self):
+        client = Mock()
+        client.type.return_value = b'hash'
+        self.assertEqual(RECOVERY.disposition(b'celery-task-meta-id', client),
+                         'invalid-or-unknown-no-replay')
+        client.get.assert_not_called()
+
+    def test_native_held_startup_refuses_production_es_before_native_mutation(self):
+        client = Mock()
+        client.info.return_value = {'run_id': 'target'}
+        manifest = {'redis': {'source_instance_id': 'source'}, 'es_version': '8.19.22'}
+        with patch.object(BACKUP, 'verify', return_value=manifest), \
+             patch.object(BACKUP, 'redis_client', return_value=client), \
+             patch.object(BACKUP, 'recovery_owner', return_value=b'owner'), \
+             patch.object(Path, 'read_text', return_value='{}'), \
+             patch.object(BACKUP, 'verify_restored_redis'), \
+             patch.object(BACKUP, 'request', return_value={'cluster_name': 'production'}), \
+             patch.object(BACKUP, 'digest') as digest, \
+             patch.dict(os.environ, {'K8S92_ISOLATED_RESTORE': 'YES'}):
+            with self.assertRaisesRegex(RuntimeError, 'refuse non-disposable Elasticsearch'):
+                RECOVERY.hold_startup(Path('/bundle'), Path('/ledger.json'))
+        digest.assert_not_called()
+
     def test_recovery_marker_only_is_excluded_from_content_comparison(self):
         marker = base64.b64encode(BACKUP.RECOVERY_KEY).decode()
         with patch.object(BACKUP, 'redis_inventory', return_value=dict(self.records, **{marker: self.record})):
@@ -240,6 +294,7 @@ class RedisRecoveryTests(unittest.TestCase):
 
     def test_terminal_ambiguous_and_invalid_native_records_are_not_replayed(self):
         client = Mock()
+        client.type.return_value = b'string'
         for status in ('SUCCESS', 'FAILURE', 'FAILED', 'REVOKED'):
             client.get.return_value = json.dumps({'status': status}).encode()
             self.assertEqual(RECOVERY.disposition(b'celery-task-meta-id', client), 'terminal-no-replay')

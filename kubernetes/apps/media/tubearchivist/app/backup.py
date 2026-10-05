@@ -104,7 +104,7 @@ def redis_client():
     return client
 
 
-def redis_inventory(client):
+def redis_inventory(client, expiry_records=None):
     """Preserve opaque native values and absolute expiries, including queues.
 
     A script reads value and expiry together for each key. A second pass rejects
@@ -121,8 +121,13 @@ def redis_inventory(client):
     result = {}
     for key in client.scan_iter(count=500):
         record = client.eval(script, 1, key)
-        check(len(record) == 2, 'Redis key changed during capture')
         encoded = base64.b64encode(key).decode('ascii')
+        if not record and expiry_records is not None and encoded in expiry_records:
+            expiry = expiry_records[encoded]['expires_at_ms']
+            seconds, micros = client.time()
+            if expiry >= 0 and expiry <= seconds * 1000 + micros // 1000:
+                continue
+        check(len(record) == 2, 'Redis key changed during capture')
         result[encoded] = {'dump': base64.b64encode(record[0]).decode('ascii'),
                            'expires_at_ms': int(record[1])}
     return result
@@ -146,6 +151,13 @@ def redis_instance_id(client):
     return identity
 
 
+def redis_endpoint_id(client):
+    # Transport identity excludes secrets and survives an empty source restart.
+    settings = client.connection_pool.connection_kwargs
+    identity = {name: settings.get(name) for name in ('host', 'port', 'db', 'path')}
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
 def compare_redis_inventory(before, after):
     check(set(before) == set(after), 'Redis key set changed during capture')
     for key, record in before.items():
@@ -167,8 +179,8 @@ def recovery_owner(bundle, manifest, client):
                        'target_instance_id': redis_instance_id(client)}, sort_keys=True).encode()
 
 
-def restored_inventory(client):
-    records = redis_inventory(client)
+def restored_inventory(client, expiry_records=None):
+    records = redis_inventory(client, expiry_records=expiry_records)
     records.pop(base64.b64encode(RECOVERY_KEY).decode(), None)
     return records
 
@@ -185,7 +197,7 @@ def verify_restored_redis(client, records, owner):
     # Expiry may cross during SCAN. Use Redis time on both sides of the scan,
     # retaining expired source bytes only in the immutable archive.
     before = unexpired_records(client, records)
-    actual = restored_inventory(client)
+    actual = restored_inventory(client, records)
     after = unexpired_records(client, records)
     check(set(after) <= set(actual) <= set(before), 'Redis recovery target key set differs')
     compare_redis_inventory({key: before[key] for key in actual}, actual)
@@ -197,6 +209,8 @@ def restore_redis(bundle):
     client = redis_client()
     check(redis_instance_id(client) != manifest['redis']['source_instance_id'],
           'refuse source Redis server')
+    check(redis_endpoint_id(client) != manifest['redis']['source_endpoint_sha256'],
+          'refuse source Redis endpoint even after restart')
     records = check_redis_inventory(json.loads((bundle / 'redis.json').read_text()))
     check(base64.b64encode(RECOVERY_KEY).decode() not in records, 'reserved Redis recovery key in source')
     owner = recovery_owner(bundle, manifest, client)
@@ -299,7 +313,8 @@ def capture(output):
             manifest = {'format': 'ta-native-json-sqlite-redis-v2', 'app_version': '0.5.12', 'es_version': root['version']['number'],
                         'started_utc': started, 'finished_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         'consistency': 'per-index PIT and SQLite online backup; NOT cross-store atomic',
-                        'redis': {'db': 15, 'source_instance_id': redis_source_id, 'keys': len(redis_state),
+                        'redis': {'db': 15, 'source_instance_id': redis_source_id,
+                                  'source_endpoint_sha256': redis_endpoint_id(redis), 'keys': len(redis_state),
                                   'encoding': 'native-DUMP-with-absolute-expiry'},
                         'documents': documents, 'sqlite_tables': sqlite_counts,
                         'files': {name: digest(stage / name) for name in ('db.sqlite3', 'elasticsearch.zip', 'indices.json', 'redis.json')}}
@@ -332,6 +347,8 @@ def verify(bundle):
     check(set(json.loads((bundle / 'indices.json').read_text())) == set(INDICES), 'index set differs')
     records = check_redis_inventory(json.loads((bundle / 'redis.json').read_text()))
     check(manifest['redis']['db'] == 15 and len(records) == manifest['redis']['keys'], 'Redis coverage differs')
+    check(isinstance(manifest['redis'].get('source_endpoint_sha256'), str) and
+          len(manifest['redis']['source_endpoint_sha256']) == 64, 'Redis source endpoint identity missing')
     return manifest
 
 

@@ -27,6 +27,8 @@ SOURCES = {
 def disposition(key, client):
     """Classify without rewriting native values, or guessing replay arguments."""
     if key.startswith(b'celery-task-meta-'):
+        if client.type(key) != b'string':
+            return 'invalid-or-unknown-no-replay'
         try:
             value = json.loads(client.get(key))
             status = value.get('status')
@@ -54,6 +56,11 @@ def hold_startup(bundle, ledger):
     owner = contract.recovery_owner(bundle, manifest, client)
     records = json.loads((bundle / 'redis.json').read_text())
     contract.verify_restored_redis(client, records, owner)
+    root = contract.request('')
+    contract.check(root['cluster_name'] == 'k8s92-ta-restore', 'refuse non-disposable Elasticsearch startup')
+    contract.check(root['version']['number'] == manifest['es_version'], 'Elasticsearch startup version differs')
+    contract.check(contract.redis_endpoint_id(client) != manifest['redis']['source_endpoint_sha256'],
+                   'refuse source Redis endpoint even after restart')
     for relative, expected in SOURCES.items():
         contract.check(contract.digest(Path('/app') / relative) == expected,
                        'unqualified native recovery startup source')

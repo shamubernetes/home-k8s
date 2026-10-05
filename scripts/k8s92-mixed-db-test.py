@@ -292,11 +292,12 @@ assert contract.request('ta_config/_doc/appsettings')['found']
 """ % (json.dumps(ta_fixture_documents()), seed)
 
 
-def ta_contract(container, operation, directory, **kwargs):
+def ta_contract(container, operation, directory, isolated=False, **kwargs):
     # Call the same entrypoint, but retain a traceback in the runner's PRIVATE
     # failure.log. Production /contract.py still suppresses exception details.
     code = "import sys; sys.path.insert(0, '/'); import contract; contract.main()"
-    return docker('exec', container, 'python', '-c', code, operation, directory, **kwargs)
+    flags = ('-e', 'K8S92_ISOLATED_RESTORE=YES') if isolated else ()
+    return docker('exec', *flags, container, 'python', '-c', code, operation, directory, **kwargs)
 
 
 def ta_failure_markers(text):
@@ -338,6 +339,8 @@ def ta_failure_markers(text):
         'native-startup-source-drift': 'unqualified native recovery startup source',
         'native-recovery-conflict': 'Redis recovery record conflict',
         'native-held-startup-failure': 'held startup failed:',
+        'native-recovery-unowned': 'unowned or conflicting Redis target',
+        'native-recovery-key-set': 'Redis recovery target key set differs',
     }
     return [label for label, marker in markers.items() if marker in text] or ['unclassified']
 
@@ -372,7 +375,7 @@ def ta_failure_diagnostics():
         # precisely to the synthetic inline script on this reviewed candidate.
         if label == 'command':
             import re
-            summary['inline-python-lines'] = [int(line) for line in re.findall(r'File "<stdin>", line (\d+)', text)]
+            summary['inline-python-lines'] = [int(line) for line in re.findall(r'File "<(?:stdin|string)>", line (\d+)', text)]
     EVIDENCE['tubearchivist_failure'] = summary
     print(json.dumps({'synthetic_ta_failure': summary,
                       'phase': EVIDENCE.get('tubearchivist_phase', 'unknown')}), flush=True)
@@ -383,8 +386,10 @@ def ta():
     net = network('ta')
     source = start('es-source', ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false', 'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-source', 'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es', '--memory=1600m'))
     wait(lambda: esready(source), 300)
-    redis = start('redis-source', REDIS, net, args=REDIS_ARGS, extra=('--network-alias', 'redis'))
+    redis = start('redis-source', REDIS, net, args=REDIS_ARGS, extra=('--network-alias', 'source-redis'))
+    env_redis_source = 'redis://source-redis:6379/15'
     env = {'ES_URL': 'http://es:9200', 'REDIS_CON': 'redis://redis:6379/15', 'TA_HOST': 'http://localhost:8000', 'TA_USERNAME': 'fixture', 'TA_PASSWORD': secrets.token_hex(24), 'ELASTIC_PASSWORD': secrets.token_hex(24), 'TA_PORT': '8000', 'TA_BACKEND_PORT': '8080', 'HOST_UID': '1000', 'HOST_GID': '1000', 'TZ': 'UTC'}
+    env['REDIS_CON'] = env_redis_source
     app = start('ta-source', TA, net, env)
     wait(lambda: docker('exec', app, 'curl', '-fsS', '-H', 'Host: localhost:8000', 'http://localhost:8000/api/health/', ok=False).returncode == 0, 300)
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), app + ':/contract.py')
@@ -446,7 +451,8 @@ from pathlib import Path
 Path('/cache/native-session-id').write_text(session.session_key)
 r = contract.redis_client()
 assert r.hlen('unacked') >= 1
-r.set('celery-task-meta-invalid',b'not-json')
+r.set('celery-task-meta-invalid', b'not-json')
+r.hset('celery-task-meta-wrongtype', mapping={'opaque': 'preserved'})
 r.set('fixture:expired',b'original-retained',px=60000)
 r.set(b'fixture:binary', b'\\x00\\xffprivate')
 r.rpush('fixture:jobs', b'first', b'\\x00second')
@@ -474,6 +480,7 @@ os._exit(0)
     restored = start('es-restored', ES, net, {'discovery.type': 'single-node', 'xpack.security.enabled': 'false', 'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2', 'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false', 'cluster.name': 'k8s92-ta-restore', 'path.repo': '/usr/share/elasticsearch/data/snapshot'}, extra=('--network-alias', 'es', '--memory=1600m'))
     wait(lambda: esready(restored), 300)
     freshredis = start('redis-restored', REDIS, net, args=REDIS_ARGS, extra=('--network-alias', 'redis'))
+    env = dict(env, REDIS_CON='redis://redis:6379/15')
     tool = start('ta-restore-tool', TA, net, env, args=('infinity',), extra=('--entrypoint', 'sleep'))
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/contract.py')
     docker('cp', str(ROOT / 'kubernetes/apps/media/tubearchivist/app/backup.py'), tool + ':/backup.py')
@@ -481,8 +488,23 @@ os._exit(0)
     docker('cp', str(SCRATCH / 'tubearchivist'), tool + ':/bundle')
     assert docker('exec', tool, 'python', '-c',
                   "import redis; assert redis.Redis.from_url('redis://redis:6379/15').dbsize() == 0").returncode == 0
-    EVIDENCE['tubearchivist_phase'] = 'verify-and-restore'
+    EVIDENCE['tubearchivist_phase'] = 'reject-unowned-target'
     ta_contract(tool, 'verify', '/bundle')
+    restarted_source = start('redis-source-restarted', REDIS, net, args=REDIS_ARGS,
+                             extra=('--network-alias', 'source-redis'))
+    reject_restart = """import contract
+from pathlib import Path
+r=contract.redis_client()
+assert r.dbsize()==0
+assert contract.redis_instance_id(r) != contract.verify(Path('/bundle'))['redis']['source_instance_id']
+try: contract.restore_redis(Path('/bundle'))
+except RuntimeError as exc: assert str(exc)=='refuse source Redis endpoint even after restart'
+else: raise AssertionError('restarted source accepted')
+assert r.dbsize()==0
+"""
+    docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', '-e', 'REDIS_CON=redis://source-redis:6379/15',
+           tool, 'python', '-', data=reject_restart)
+    remove(restarted_source)
     # Unowned populated target is rejected unchanged. Only a target atomically
     # claimed for this exact bundle may resume after a killed restore process.
     unowned = """import sys
@@ -500,6 +522,7 @@ assert contract.redis_inventory(r) == before
 assert r.delete('unowned') == 1
 """
     docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '-', data=unowned)
+    EVIDENCE['tubearchivist_phase'] = 'crash-partial-owned-restore'
     crash_restore = """import sys,os
 sys.path.insert(0,'/')
 import contract
@@ -519,10 +542,9 @@ contract.restore_redis(Path('/bundle'))
 """
     assert docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '-',
                   data=crash_restore, ok=False).returncode == 73
-    docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
-           'restore-redis', '/bundle')
-    docker('exec', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '/contract.py',
-           'restore-redis', '/bundle')
+    EVIDENCE['tubearchivist_phase'] = 'resume-owned-restore'
+    ta_contract(tool, 'restore-redis', '/bundle', isolated=True)
+    ta_contract(tool, 'restore-redis', '/bundle', isolated=True)
     check_redis = """import sys,json
 from pathlib import Path
 sys.path.insert(0, '/')
@@ -535,6 +557,33 @@ assert len([key for key in expected if contract.base64.b64decode(key).startswith
 """
     docker('exec', '-i', tool, 'python', '-', data=check_redis)
     result = ta_contract(tool, 'restore-es', '/bundle', timeout=660).stdout.strip()
+    EVIDENCE['tubearchivist_phase'] = 'reject-owned-target-conflicts'
+    conflicts = """import contract
+from pathlib import Path
+r=contract.redis_client()
+owner=r.get(contract.RECOVERY_KEY)
+original=r.get('fixture:binary')
+def rejected():
+    before=contract.redis_inventory(r)
+    try: contract.restore_redis(Path('/bundle'))
+    except RuntimeError: pass
+    else: raise AssertionError('conflict accepted')
+    contract.compare_redis_inventory(before,contract.redis_inventory(r))
+r.set(contract.RECOVERY_KEY,b'wrong-bundle')
+rejected()
+r.set(contract.RECOVERY_KEY,owner)
+r.set('fixture:binary',b'wrong-value')
+rejected()
+r.set('fixture:binary',original)
+r.pexpire('fixture:binary',3600000)
+rejected()
+r.persist('fixture:binary')
+r.set('unexpected-owned-key',b'preserve')
+rejected()
+assert r.delete('unexpected-owned-key')==1
+contract.restore_redis(Path('/bundle'))
+"""
+    docker('exec', '-i', '-e', 'K8S92_ISOLATED_RESTORE=YES', tool, 'python', '-', data=conflicts)
     assert ta_contract(tool, 'restore-es', '/bundle', ok=False).returncode != 0
     # Boot a working copy. The immutable recovery artifact stays separate.
     cache = SCRATCH / 'ta-cache'
@@ -601,6 +650,8 @@ assert any(contract.base64.b64decode(k)==b'fixture:expired'
                                    'redis_absolute_expiry_preserved': 'pass',
                                    'redis_repeat_restore_preserves_target': 'pass'})
     EVIDENCE['tubearchivist'].update({'killed_partial_restore_resumes': 'pass',
+                                   'restarted_source_rejected_without_writes': 'pass',
+                                   'owned_bundle_value_expiry_extra_key_conflicts_rejected': 'pass',
                                    'native_queues_tasks_commands_progress_and_db_session': 'pass',
                                    'native_kombu_queued_and_reserved_payloads_preserved': 'pass',
                                    'app_crash_repeated_startup_preserves_state': 'pass',

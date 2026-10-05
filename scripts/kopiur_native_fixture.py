@@ -7,8 +7,9 @@ def startup_failure(scope, drill, container, reason):
     # Called only for disposable native fixtures. Never read production logs.
     result = scope['run']('docker', 'logs', '--tail', '80', container, check=False)
     text = (result.stdout + result.stderr).decode('utf-8', errors='replace')
-    for secret in (drill.password, drill.backup_password, drill.api_key):
-        text = text.replace(secret, '[fixture-credential]')
+    for secret in (drill.password, drill.backup_password, drill.api_key, getattr(drill, 'auth_secret', None)):
+        if secret:
+            text = text.replace(secret, '[fixture-credential]')
     return RuntimeError(reason + ': ' + text)
 
 

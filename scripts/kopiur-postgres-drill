@@ -121,7 +121,7 @@ class DockerDrill:
         self.capture_user = "kopiur_" + app.replace("-", "_")
         self.api_key = secrets.token_hex(16)
 
-    def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None):
+    def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None, entrypoint=None):
         name = self.prefix + "-" + name
         args = ["docker", "run", "-d", "--name", name, "--network", network,
                 "--label", "home-k8s.kopiur-postgres-drill=true", "--tmpfs", "/tmp:rw,size=268435456"]
@@ -134,6 +134,8 @@ class DockerDrill:
             args += ["--platform", "linux/amd64"]
         if user:
             args += ["--user", user]
+        if entrypoint:
+            args += ["--entrypoint", entrypoint]
         process_env = os.environ.copy()
         for key, value in (env or {}).items():
             process_env[key] = value

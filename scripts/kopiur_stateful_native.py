@@ -7,6 +7,7 @@ This does not accept production CSI, shared media or original production key esc
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
 import runpy
@@ -37,6 +38,26 @@ def artifact_manifest(root):
     manifest = {"schema": "k8s92-artifact/v1", "entries": entries}
     validate_artifact(root, manifest)
     return manifest
+
+
+def extract_export(data, destination):
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+        members = archive.getmembers()
+        names = set()
+        total = 0
+        for member in members:
+            path = Path(member.name)
+            if (path.is_absolute() or ".." in path.parts or str(path) in names
+                    or not (member.isfile() or member.isdir()) or member.size < 0):
+                raise ValueError("unsafe native restored archive")
+            names.add(str(path))
+            total += member.size
+        if not members or total > 192 * 1024 * 1024:
+            raise ValueError("native restored archive exceeds bounded capacity")
+        destination.mkdir(mode=0o700)
+        # Keep fixture file permissions, never chown the ARC host or follow links.
+        archive.extractall(destination, members=members, filter=lambda item, _: item.replace(
+            uid=os.getuid(), gid=os.getgid(), uname="", gname=""))
 
 
 def exercise(payload, transport, deadline):
@@ -92,7 +113,9 @@ def exercise(payload, transport, deadline):
                            password=password)
             with tempfile.TemporaryDirectory(prefix="native-restored-", dir=Path.home() / ".hermes/cache/scratch") as scratch:
                 restored = Path(scratch) / "generation"
-                transport.run(["docker", "cp", restorer + ":/work/restored", str(restored)])
+                restored_tar = transport.run(["docker", "exec", restorer, "/tools/busybox", "tar",
+                                              "-cf", "-", "-C", "/work/restored", "."]).stdout
+                extract_export(restored_tar, restored)
                 comparison = validate_artifact(restored, manifest)
                 transport.remove(restorer)
                 proof = native["restore_pvc"](restored, app, config_mib=256, database_mib=512,

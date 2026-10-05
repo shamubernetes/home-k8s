@@ -28,6 +28,17 @@ def contract():
     base = native["DockerDrill"]
 
     class ArrDrill(base):
+        def app_ready(self, container):
+            try:
+                return super().app_ready(container)
+            except RuntimeError:
+                # Only this disposable fixture's logs. Never production logs.
+                result = scope["run"]("docker", "logs", "--tail", "80", container, check=False)
+                text = (result.stdout + result.stderr).decode("utf-8", errors="replace")
+                text = text.replace(self.password, "[fixture-password]").replace(self.api_key, "[fixture-api-key]")
+                print(text, flush=True)
+                raise
+
         def app(self, name, database, config):
             prefix = self.env_prefix
             env = {

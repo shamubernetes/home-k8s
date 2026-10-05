@@ -1,4 +1,5 @@
 """Home Assistant PG/helper/auth fixture, not production device or HACS recovery."""
+import base64
 import hashlib
 import json
 import time
@@ -76,6 +77,16 @@ def contract():
                 identity = json.dumps({'original_fixture_key': self.api_key}).encode()
                 scope['run']('docker', 'exec', '-i', container, 'sh', '-c',
                     'umask 077; cat > /config/fixture-identity.json', stdin=identity)
+                claims = json.loads(base64.urlsafe_b64decode(self.api_key.split('.')[1] + '==='))
+                for _ in range(30):
+                    stored = scope['run']('docker', 'exec', container, 'cat', '/config/.storage/auth', check=False)
+                    if stored.returncode == 0:
+                        tokens = json.loads(stored.stdout).get('data', {}).get('refresh_tokens', [])
+                        if any(token.get('id') == claims.get('iss') for token in tokens):
+                            break
+                    time.sleep(1)
+                else:
+                    raise RuntimeError('original fixture session was not persisted before capture')
 
         def application_state(self, container):
             value = json.loads(self.request(container, '/api/states/input_boolean.restore_fixture',

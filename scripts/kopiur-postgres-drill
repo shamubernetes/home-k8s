@@ -86,7 +86,8 @@ class DockerDrill:
         self.containers = []
         self.volumes = []
         self.password = secrets.token_hex(24)
-        self.backup_password = secrets.token_hex(24)
+        self.backup_password = secrets.token_hex(32)
+        self.capture_user = "kopiur_bazarr" if app == "bazarr" else "backup"
         self.api_key = secrets.token_hex(16)
 
     def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None):
@@ -219,7 +220,54 @@ class DockerDrill:
         self.volumes.append(name)
         return name
 
-    def capture(self, database, config, databases, *, password=None, user="backup", check=True):
+    def provision_bazarr_backup(self, database):
+        """Exercise the exact GitOps grants, not a fixture-only approximation."""
+        script = ROOT / "kubernetes/apps/arrs/bazarr/app/kopiur-postgres-grants.sql"
+        env = os.environ.copy()
+        env.update(BACKUP_USER=self.capture_user, BACKUP_PASSWORD=self.backup_password,
+                   APPLICATION_OWNER="app")
+        command = ("docker", "exec", "-i", "-e", "BACKUP_USER", "-e", "BACKUP_PASSWORD",
+                   "-e", "APPLICATION_OWNER", database, "psql", "-X", "-q", "-U",
+                   "postgres", "-d", "bazarr", "-v", "ON_ERROR_STOP=1")
+        self.sql(database, "CREATE ROLE kopiur_bazarr LOGIN")
+        collision = run(*command, stdin=script.read_bytes(), env=env, check=False)
+        assert collision.returncode, "provisioner claimed an unowned identity"
+        self.sql(database, "DROP ROLE kopiur_bazarr")
+        # A second application must be idempotent and preserve the owned role.
+        for _ in range(2):
+            result = run(*command, stdin=script.read_bytes(), env=env)
+            assert not result.stdout.strip(), "provisioner printed credential-bearing settings"
+        for acquire, revoke in (
+                ("ALTER ROLE kopiur_bazarr CREATEDB", "ALTER ROLE kopiur_bazarr NOCREATEDB"),
+                ("GRANT app TO kopiur_bazarr", "REVOKE app FROM kopiur_bazarr"),
+                ("GRANT INSERT ON kopiur_fixture TO kopiur_bazarr",
+                 "REVOKE INSERT ON kopiur_fixture FROM kopiur_bazarr")):
+            self.sql(database, acquire, "bazarr")
+            unsafe = run(*command, stdin=script.read_bytes(), env=env, check=False)
+            assert unsafe.returncode, "provisioner accepted an elevated identity"
+            self.sql(database, revoke, "bazarr")
+        run(*command, stdin=script.read_bytes(), env=env)
+        self.sql(database, "CREATE TABLE kopiur_future_fixture (id integer PRIMARY KEY);"
+                 " INSERT INTO kopiur_future_fixture VALUES (1);", "bazarr", "app")
+        assert self.sql(database, "SELECT count(*) FROM kopiur_future_fixture", "bazarr",
+                        self.capture_user) == "1", "future tables lack backup read grants"
+        for sql in ("INSERT INTO kopiur_future_fixture VALUES (2)",
+                    "UPDATE kopiur_future_fixture SET id=2", "DELETE FROM kopiur_future_fixture",
+                    "CREATE TABLE unexpected_write (id integer)"):
+            denied = run("docker", "exec", "-i", "-e", "PGOPTIONS=-c default_transaction_read_only=off",
+                         database, "psql", "-X", "-U", self.capture_user, "-d", "bazarr",
+                         "-v", "ON_ERROR_STOP=1", stdin=sql.encode(), check=False)
+            assert denied.returncode and b"permission denied" in denied.stderr, "backup acquired write authority"
+        self.sql(database, "CREATE DATABASE unrelated_fixture OWNER app")
+        self.sql(database, "CREATE TABLE isolated_data (id integer); INSERT INTO isolated_data VALUES (1);",
+                 "unrelated_fixture", "app")
+        denied = run("docker", "exec", "-i", database, "psql", "-X", "-U", self.capture_user,
+                     "-d", "unrelated_fixture", "-v", "ON_ERROR_STOP=1",
+                     stdin=b"SELECT * FROM isolated_data", check=False)
+        assert denied.returncode and b"permission denied" in denied.stderr, "backup read another application's data"
+
+    def capture(self, database, config, databases, *, password=None, user=None, check=True):
+        user = user or self.capture_user
         helper = self.start("capture-" + uuid.uuid4().hex[:6], PG_IMAGE,
                             network="container:" + database, user="568:568",
                             env={"PGHOST": "127.0.0.1", "PGUSER": user,
@@ -292,8 +340,11 @@ def fixture(app_name="radarr"):
                 assert native, "application did not create PostgreSQL schema"
                 drill.sql(source, "CREATE TABLE kopiur_fixture (id integer primary key, value text NOT NULL);"
                           " INSERT INTO kopiur_fixture VALUES (1, 'native-recovery-proof');", database, "app")
-                drill.sql(source, f'GRANT CONNECT ON DATABASE "{database}" TO backup; GRANT USAGE ON SCHEMA public TO backup;'
-                          " GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup;", database)
+                if app_name != "bazarr":
+                    drill.sql(source, f'GRANT CONNECT ON DATABASE "{database}" TO backup; GRANT USAGE ON SCHEMA public TO backup;'
+                              " GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup;", database)
+                else:
+                    drill.provision_bazarr_backup(source)
                 before[database] = drill.counts(source, database)
             drill.capture(source, config, drill.databases)
             helper = drill.containers[-1]
@@ -323,16 +374,18 @@ def fixture(app_name="radarr"):
             assert drill.capture(source, config, drill.databases + ["missing_database"], check=False) != 0
             assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
             drill.capture(source, config, drill.databases)
-            drill.sql(source, "REVOKE SELECT ON kopiur_fixture FROM backup", drill.databases[0])
+            drill.sql(source, f"REVOKE SELECT ON kopiur_fixture FROM {drill.capture_user}", drill.databases[0])
             assert drill.capture(source, config, drill.databases, check=False) != 0
             assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
-            drill.sql(source, "GRANT SELECT ON kopiur_fixture TO backup", drill.databases[0])
+            drill.sql(source, f"GRANT SELECT ON kopiur_fixture TO {drill.capture_user}", drill.databases[0])
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
             assert recovered["native_restore"] and recovered["restored_app_ping"]
             print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
                               "tables_equal": sum(len(tables) for tables in before.values()),
                               "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
+                              "dedicated_grant_sql_exercised": app_name == "bazarr",
+                              "future_table_read_and_unrelated_data_write_denial": app_name == "bazarr",
                               "network": "none-shared-namespace", "production_data": False}, sort_keys=True))
         finally:
             drill.close()

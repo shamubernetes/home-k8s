@@ -36,6 +36,25 @@ For each of the five apps, populate its separate `kopiur-<app>` vault item with:
 - `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, newly provisioned backup credentials with the narrowest provider-supported access. The manifest does not reuse `volsync-template` credentials.
 - `PG_BACKUP_USER` and `PG_BACKUP_PASSWORD`, a new app-specific read-only login. Never copy the application's existing login or the CNPG superuser password into this item.
 
+The published Bazarr candidate uses its own `kopiur-bazarr` R2 bucket and private SMB share. Its
+`NAS_RCLONE_CONFIG` contains the shell-disabled SMB account, not guest access.
+Transport credentials and the new `kopiur_bazarr` PostgreSQL password are escrowed
+separately from application and CNPG administration credentials.
+
+`bazarr-kopiur-grants-v1` applies the app-local `kopiur-postgres-grants.sql` through
+GitOps. It reads the existing database initialization authority only in that
+bounded Job, never in the capture sidecar or mover. The transaction rejects an
+unowned existing role, memberships, elevated flags, unexpected schema ownership,
+RLS, large objects, and existing write authority. It grants SELECT on current and
+future objects owned by the app in `public`, without `pg_read_all_data`.
+Rename the Job for any future input or PodTemplate change. Keep snapshot and
+replication policies suspended until live grants and full-state recovery pass.
+
+The Bazarr native ARC fixture executes this exact SQL, including idempotence,
+unowned/elevated-role rejection, future-table reads, write denial with the
+read-only default disabled, and denial of another database's application data.
+These are synthetic prerequisite checks, not production migration acceptance.
+
 The parent must provision and test the database grants. For each app database and its actual schema owner, the grant shape is:
 
 ```sql

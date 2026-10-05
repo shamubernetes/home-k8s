@@ -15,6 +15,25 @@ APPS = ("radarr", "radarr-3d", "sonarr", "bazarr", "whisparr")
 
 
 class ManifestTests(unittest.TestCase):
+    def test_bazarr_grants_are_scoped_and_do_not_leak_admin_auth_to_mover(self):
+        directory = REPO / "kubernetes/apps/arrs/bazarr/app"
+        job, = load_documents(directory / "kopiur-postgres-grants.yaml")
+        pod = job["spec"]["template"]["spec"]
+        container, = pod["containers"]
+        env = {value["name"]: value for value in container["env"]}
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertEqual(job["spec"]["activeDeadlineSeconds"], 180)
+        self.assertEqual(env["PGDATABASE"]["value"], "bazarr")
+        self.assertEqual(env["PGPASSWORD"]["valueFrom"]["secretKeyRef"],
+                         {"name": "bazarr-secret", "key": "INIT_POSTGRES_SUPER_PASS"})
+        self.assertEqual(env["BACKUP_PASSWORD"]["valueFrom"]["secretKeyRef"],
+                         {"name": "bazarr-kopiur-postgres", "key": "PGPASSWORD"})
+        sql = (directory / "kopiur-postgres-grants.sql").read_text()
+        self.assertIn("shobj_description(role_oid, 'pg_authid')", sql)
+        self.assertIn("ALTER DEFAULT PRIVILEGES", sql)
+        self.assertNotIn("pg_read_all_data", sql)
+        self.assertIn("default_transaction_read_only = on", sql)
+
     def test_bazarr_uses_dedicated_transport_identities(self):
         directory = REPO / "kubernetes/apps/arrs/bazarr/app"
         nas, r2, _ = load_documents(directory / "externalsecret-kopiur.yaml")

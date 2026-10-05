@@ -58,6 +58,19 @@ class ExtendedArrTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 arr.fixture(invalid)
 
+    def test_chaptarr_http_tool_cannot_leave_isolated_namespace(self):
+        drill = self.native['DockerDrill']('chaptarr')
+        from unittest.mock import Mock
+        invoke = Mock(return_value=SimpleNamespace(stdout=b'[]', returncode=0))
+        with patch.dict(self.scope, run=invoke):
+            drill.request('owned-fixture', '/api/v1/qualityprofile', authenticated=True)
+        args = invoke.call_args.args
+        self.assertIn('container:owned-fixture', args)
+        self.assertIn('--read-only', args)
+        self.assertIn('--max-time', args)
+        self.assertNotIn(drill.api_key, args)
+        self.assertIn(drill.api_key.encode(), invoke.call_args.kwargs['stdin'])
+
 
 if __name__ == '__main__':
     unittest.main()

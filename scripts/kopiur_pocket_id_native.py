@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import runpy
 import time
+from urllib.parse import urlencode
 from kopiur_grafana_native import HTTP_IMAGE
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,13 +18,18 @@ def contract():
     base = scope['DockerDrill']
 
     class PocketDrill(base):
-        def request(self, container, path, payload=None, authenticated=False, check=True):
-            config = 'url = "http://127.0.0.1:1411' + path + '"\n'
+        def auth_header(self):
+            return 'X-API-Key: ' + self.api_key
+
+        def request(self, container, path, payload=None, authenticated=False, check=True, form=False):
+            config = 'url = "http://127.0.0.1:' + str(self.port) + path + '"\n'
             if authenticated:
-                config += 'header = "X-API-Key: ' + self.api_key + '"\n'
+                config += 'header = ' + json.dumps(self.auth_header()) + '\n'
             if payload is not None:
-                config += 'header = "Content-Type: application/json"\nrequest = "POST"\n'
-                config += 'data = ' + json.dumps(json.dumps(payload)) + '\n'
+                content_type = 'application/x-www-form-urlencoded' if form else 'application/json'
+                body = urlencode(payload) if form else json.dumps(payload)
+                config += 'header = "Content-Type: ' + content_type + '"\nrequest = "POST"\n'
+                config += 'data = ' + json.dumps(body) + '\n'
             return scope['run']('docker', 'run', '--rm', '-i', '--read-only',
                 '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
                 '--network', 'container:' + container, '--entrypoint', 'curl', HTTP_IMAGE,
@@ -41,7 +47,7 @@ def contract():
             self.api_key = json.loads(self.isolated_config(raw))['original_fixture_key']
             env = {'DB_CONNECTION_STRING': 'postgresql://app:' + self.password + '@127.0.0.1:5432/pocket_id?sslmode=disable',
                 'ENCRYPTION_KEY': self.api_key, 'STATIC_API_KEY': self.api_key,
-                'APP_URL': 'http://127.0.0.1:1411', 'PORT': '1411', 'FILE_BACKEND': 'filesystem',
+                'APP_URL': 'http://localhost:1411', 'PORT': '1411', 'FILE_BACKEND': 'filesystem',
                 'UPLOAD_PATH': '/config/uploads', 'ANALYTICS_DISABLED': 'true', 'VERSION_CHECK_DISABLED': 'true'}
             return self.start(name, self.image, network='container:' + database, env=env,
                 mounts=[(config, '/config', 'rw')], user='568:568')

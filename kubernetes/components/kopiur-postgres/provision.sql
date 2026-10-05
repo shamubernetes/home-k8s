@@ -33,12 +33,16 @@ BEGIN
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
     WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
     WHEN 'pocket-id' THEN allowed_databases := ARRAY['pocket_id']; expected_role := 'kopiur_pocket_id';
+    -- Deliberately fixture-only. The production HASS database is an opaque vault
+    -- binding and cannot be inferred or provisioned through this test contract.
+    WHEN 'home-assistant-fixture' THEN allowed_databases := ARRAY['homeassistant_fixture']; expected_role := 'kopiur_home_assistant_fixture';
     WHEN 'chaptarr' THEN allowed_databases := ARRAY['chaptarr_main','chaptarr_log','chaptarr_cache']; expected_role := 'kopiur_chaptarr';
     ELSE RAISE EXCEPTION 'unqualified application';
   END CASE;
   ownership_marker := 'K8S-92 readonly backup for ' ||
     CASE WHEN application_name = 'atuin' THEN 'services/'
          WHEN application_name = 'pocket-id' THEN 'security/'
+         WHEN application_name = 'home-assistant-fixture' THEN 'home-assistant/'
          WHEN application_name IN ('grafana','gatus') THEN 'observability/' ELSE 'arrs/' END || application_name;
   IF NOT current_database() = ANY(allowed_databases) OR backup_role <> expected_role OR
      application_owner !~ '^[a-z][a-z0-9_]{0,62}$' OR

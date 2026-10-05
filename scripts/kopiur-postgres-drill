@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import subprocess
@@ -501,6 +502,14 @@ def fixture(app_name="radarr", export=None):
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
             assert recovered["native_restore"] and recovered["restored_app_ping"]
             if export is not None:
+                if app_name == "bazarr":
+                    # Bazarr generates its native key in YAML. Its entrypoint
+                    # does not consume the ARR-style fixture API-key variable.
+                    original_config = run("docker", "exec", drill.containers[-1], "cat", drill.config_path).stdout
+                    original_key = run("yq", ".auth.apikey", "-", stdin=original_config).stdout.decode().strip()
+                    if not re.fullmatch(r"[A-Za-z0-9]{16,128}", original_key):
+                        raise ValueError("invalid original Bazarr fixture API key")
+                    drill.api_key = original_key
                 visible_app = drill.app("export-app", source, config)
                 drill.healthy(visible_app)
                 visible = drill.application_state(visible_app)

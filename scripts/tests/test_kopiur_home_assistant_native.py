@@ -19,6 +19,13 @@ class HomeAssistantTests(unittest.TestCase):
         self.assertEqual(self.drill.image, ha.IMAGE)
         self.assertEqual(self.drill.port, 8123)
 
+    def test_runtime_logs_do_not_enter_recovered_configuration(self):
+        identity = json.dumps({'original_fixture_key': 'original-fixture-key'}).encode()
+        with patch.dict(self.scope, run=Mock(return_value=SimpleNamespace(stdout=identity))):
+            with patch.object(self.drill, 'start', return_value='restored') as start:
+                self.assertEqual(self.drill.app('restored-app', 'database', 'config'), 'restored')
+        self.assertEqual(start.call_args.kwargs['command'], ['--log-file', '/tmp/fixture.log'])
+
     def test_original_bearer_token_in_stdin_only(self):
         invoke = Mock(return_value=SimpleNamespace(stdout=b'{}'))
         with patch.dict(self.scope, run=invoke):

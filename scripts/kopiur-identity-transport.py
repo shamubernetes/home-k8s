@@ -264,8 +264,8 @@ def main():
     if sys.platform != "linux" or not os.environ.get("RUNNER_NAME"):
         raise RuntimeError("identity drill requires an assigned Linux ARC runner")
     run([sys.executable, "scripts/k8s92_generate_infrastructure.py", "--check"], timeout=30)
-    run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
-         "-p", "test_k8s92_capture_receipts.py", "-v"], timeout=60)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_k8s92_*receipts.py", "-v"], check=True, timeout=60)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_k8s92_infrastructure_capture.py", "-v"],
                    env=os.environ | {"K8S92_DOCKER_TESTS": "1"}, check=True, timeout=900)

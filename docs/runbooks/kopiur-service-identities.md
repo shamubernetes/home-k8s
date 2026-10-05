@@ -82,6 +82,10 @@ role is shared only by its explicitly allowlisted main/log database pair.
 
 The trusted-main recovery workflow's identities suite runs
 scripts/kopiur-identity-transport.py --serve on the existing ghar-set-zoo ARC.
+The production mover is distroless. A pinned credential-free BusyBox helper
+supplies static shell tooling through a separate read-only volume. Kopia and
+rclone still execute directly from the exact production mover image. Failed
+qualification runs remain failed evidence and never count as backend denial.
 The operator first verifies the exact candidate commit, GitHub run, allocated
 runner pod UID and owned socket. It resolves one approved vault item at a time
 and sends only that item's fields through stdin to that runner's private socket.

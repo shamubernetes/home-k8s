@@ -20,6 +20,8 @@ import time
 import uuid
 
 IMAGE = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f1f8bb5d00b791654d79429928e95db54f4b22"
+TOOL_IMAGE = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
+TOOLS = ""
 ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
 APPS = {"canary", "kometa", "listenarr", "tautulli", "sabnzbd", "wizarr", "homarr",
         "profilarr", "audiobookshelf", "seerr", "cwa-bdl", "changedetection",
@@ -50,13 +52,14 @@ class Drill:
 
     def start(self):
         name = "k8s92-identity-" + self.nonce + "-" + str(len(self.containers))
+        self.containers.append(name)
         self.run(["docker", "run", "-d", "--name", name, "--label", "k8s92.identity=" + self.nonce,
              "--user", "568:568", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
              "--read-only", "--memory", "256m", "--cpus", "0.5", "--tmpfs",
              "/tmp:rw,nosuid,size=16m,mode=1777", "--tmpfs",
-             "/work:rw,nosuid,size=192m,uid=568,gid=568,mode=0700", "--entrypoint", "/bin/sh",
-             IMAGE, "-c", "sleep 900"])
-        self.containers.append(name)
+             "/work:rw,nosuid,size=192m,uid=568,gid=568,mode=0700",
+             "--mount", "type=volume,src=" + TOOLS + ",dst=/tools,readonly,volume-nocopy",
+             "--entrypoint", "/tools/busybox", IMAGE, "sh", "-c", "/tools/sleep 900"])
         return name
 
     def exec(self, container, body, *, password=None, check=True):
@@ -68,11 +71,16 @@ class Drill:
                   "AWS_ACCESS_KEY_ID": f["R2_ACCESS_KEY_ID"], "AWS_SECRET_ACCESS_KEY": f["R2_SECRET_ACCESS_KEY"],
                   "RCLONE_CONFIG": "/work/rclone.conf"}
         values["TMPDIR"] = "/work/tmp"
+        values["KOPIA_CONFIG_PATH"] = "/work/repository.config"
+        values["KOPIA_LOG_DIR"] = "/work/log"
+        values["KOPIA_CACHE_DIRECTORY"] = "/work/cache"
+        values["KOPIA_CHECK_FOR_UPDATES"] = "false"
+        values["PATH"] = "/tools:/usr/local/bin:/usr/bin:/bin"
         prefix = "set -eu\numask 077\n" + "\n".join("export " + k + "=" + shlex.quote(v) for k, v in values.items())
         prefix += "\nmkdir -p /work/tmp\n"
         prefix += "\nprintf '%s' " + shlex.quote(config) + " > /work/rclone.conf\n"
-        prefix += "k() { kopia --config-file=/work/repository.config --log-dir=/work/log --no-check-for-updates \"$@\"; }\n"
-        return self.run(["docker", "exec", "-i", container, "/bin/sh", "-s"],
+        prefix += "k() { kopia \"$@\"; }\n"
+        return self.run(["docker", "exec", "-i", container, "/tools/busybox", "sh", "-s"],
                    stdin=(prefix + body).encode(), check=check)
 
     def remove(self, name):
@@ -181,7 +189,7 @@ def exercise_payload(payload, deadline=None):
             "results": results, "owned_fixture_repositories_removed": True}
 
 
-def main():
+def serve_main():
     if sys.platform != "linux" or not os.environ.get("RUNNER_NAME"):
         raise RuntimeError("identity drill is restricted to an assigned Linux ARC runner")
     def interrupted(signum, frame):
@@ -232,6 +240,30 @@ def main():
             os.rmdir(directory)
     assert set(results) == APPS
     print(json.dumps({"identity_qualification_count": len(results), "all_passed": True}))
+
+
+def main():
+    global TOOLS
+    if sys.platform != "linux" or not os.environ.get("RUNNER_NAME"):
+        raise RuntimeError("identity drill requires an assigned Linux ARC runner")
+    # Production is distroless. Supply credential-free static shell tooling from
+    # a pinned image in a separate read-only volume. Kopia/rclone remain exactly
+    # the production image binaries; no secret or application bytes enter tools.
+    nonce = uuid.uuid4().hex
+    TOOLS = "k8s92-identity-tools-" + nonce
+    run(["docker", "pull", TOOL_IMAGE], timeout=600)
+    run(["docker", "volume", "create", "--label", "k8s92.identity.tools=" + nonce, TOOLS])
+    try:
+        run(["docker", "run", "--rm", "--read-only", "--network", "none",
+             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+             "--mount", "type=volume,src=" + TOOLS + ",dst=/tools,volume-nocopy",
+             TOOL_IMAGE, "sh", "-c", "cp /bin/busybox /tools/busybox && /tools/busybox --install -s /tools"])
+        serve_main()
+    finally:
+        label = run(["docker", "volume", "inspect", "--format",
+                     '{{ index .Labels "k8s92.identity.tools" }}', TOOLS]).stdout.decode().strip()
+        assert label == nonce, "tool volume ownership changed"
+        run(["docker", "volume", "rm", TOOLS])
 
 
 if __name__ == "__main__":

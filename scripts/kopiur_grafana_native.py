@@ -45,8 +45,8 @@ def contract():
                    'GF_SECURITY_ADMIN_PASSWORD': self.api_key, 'GF_SECURITY_SECRET_KEY': self.api_key,
                    'GF_ANALYTICS_REPORTING_ENABLED': 'false', 'GF_ANALYTICS_CHECK_FOR_UPDATES': 'false',
                    'GF_PLUGINS_PREINSTALL_DISABLED': 'true', 'GF_LOG_LEVEL': 'error'}
-            return self.start(name, IMAGE, network='container:' + database, env=env,
-                              mounts=[(config, '/config', 'rw')])
+            return self.start(name, self.image, network='container:' + database, env=env,
+                              mounts=[(config, '/config', 'rw')], user='568:568')
 
         def healthy(self, container):
             from kopiur_native_fixture import startup_failure

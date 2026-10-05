@@ -9,7 +9,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/1password/connect
   ref:
-    tag: 2.4.1
+    tag: 2.4.2
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

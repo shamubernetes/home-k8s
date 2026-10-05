@@ -44,12 +44,18 @@ class Drill:
                'python3','-c','import os;os.chown("/data",1000,1000)')
         return name
 
-    def start(self, suffix, image, mounts, env=None, command=None, network='none', entrypoint=None):
+    def start(self, suffix, image, mounts, env=None, command=None, network='none', entrypoint=None,
+              volume_subpaths=None):
         name = self.prefix + '-' + suffix
+        subpaths = volume_subpaths or {}
         args = ['run', '-d', '--name', name, '--network', network, '--user','1000:1000',
                 '--label','k8s92.pds='+self.prefix,'--read-only','--cap-drop','ALL',
                 '--security-opt','no-new-privileges','--tmpfs','/tmp:rw,nosuid,uid=1000,gid=1000']
-        for vol, path in mounts.items(): args += ['-v', vol + ':' + path]
+        for vol, path in mounts.items():
+            if vol in subpaths:
+                args += ['--mount','type=volume,src='+vol+',dst='+path+',volume-nocopy,volume-subpath='+subpaths[vol]]
+            else:
+                args += ['-v',vol+':'+path]
         for key, value in (env or {}).items(): args += ['-e', key + '=' + value]
         if entrypoint: args += ['--entrypoint', entrypoint]
         args += [image] + (command or [])
@@ -144,24 +150,24 @@ print(json.dumps({'entries':len(before),'manifestSHA256':hashlib.sha256(json.dum
         self.receipts=[]
         for capture,volume in zip(captures,self.restore_volumes):
             receipt=self.transport.restore(capture,volume)
-            restored_manifest=self.manifest(volume)
+            restored_manifest=self.manifest(volume, 'point')
             assert restored_manifest==self.point_manifest,'native bytes, owners or modes differ'
             receipt['manifest_sha256']=hashlib.sha256(json.dumps(restored_manifest).encode()).hexdigest()
             receipt['equal_entries']=len(restored_manifest)
             receipt['producer_and_source_volumes_removed_before_restore']=True
             self.receipts.append(receipt)
 
-    def manifest(self, volume):
+    def manifest(self, volume, subdirectory=''):
         return json.loads(docker('run','--rm','--network=none','-v',volume+':/data:ro',
-                                PYTHON,'python3','-c','''import hashlib,json,os
+                                PYTHON,'python3','-c','''import hashlib,json,os,sys
 from pathlib import Path
-root=Path('/data');result=[]
+root=Path('/data')/sys.argv[1];result=[]
 for path in [root,*sorted(root.rglob('*'))]:
     info=path.lstat();assert not path.is_symlink()
     assert path.is_file() or path.is_dir()
     digest=hashlib.file_digest(path.open('rb'),'sha256').hexdigest() if path.is_file() else None
     result.append([str(path.relative_to(root)),info.st_mode,info.st_uid,info.st_gid,digest])
-print(json.dumps(result))'''))
+print(json.dumps(result))''',subdirectory))
     def clean(self):
         failures=[]
         for kind,names in (('container',self.containers),('volume',self.volumes)):
@@ -230,18 +236,19 @@ p.PDS.run({onStarted:async server=>{
         self.quiesce_copy_resume(app, [(source, restored)])
         for number,restored in enumerate(self.restore_volumes):
             # Verify every nested actor database and key, not just a sample CAR.
-            check = docker('run', '--rm', '--network=none', '-v', restored + ':/data', PYTHON, 'python3', '-c', '''import json,sqlite3
+            check = docker('run', '--rm', '--network=none', '-v', restored + ':/data:ro', PYTHON, 'python3', '-c', '''import json,sqlite3
 from pathlib import Path
-p=Path('/data'); dbs=list(p.rglob('*.sqlite')); keys=list(p.rglob('key'))
+p=Path('/data/point'); dbs=list(p.rglob('*.sqlite')); keys=list(p.rglob('key'))
 assert len(dbs)>=5 and len(keys)==2
 for db in dbs:
- c=sqlite3.connect(str(db)); assert c.execute('pragma integrity_check').fetchone()[0]=='ok'; c.close()
+ c=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True); assert c.execute('pragma integrity_check').fetchone()[0]=='ok'; c.close()
 for key in keys: assert key.stat().st_size==32
 assert len(list((p/'blocks').rglob('*')))>2
 print(json.dumps({'sqliteDatabases':len(dbs),'actorKeys':len(keys)}))''')
             # Restore uses the unmodified production image entrypoint. No seed
             # callback is mounted or run against recovered state.
-            target = self.start('pds-restore-'+str(number), PDS, {restored: '/pds'}, env)
+            target = self.start('pds-restore-'+str(number), PDS, {restored: '/pds'}, env,
+                                volume_subpaths={restored:'point'})
             self.ready(target, '/xrpc/_health')
             recovered_actors = json.loads(docker('exec', target, 'node', '-e', "console.log(require('fs').readFileSync('/pds/drill.json','utf8'))"))
             assert actors == recovered_actors
@@ -315,11 +322,14 @@ def exercise(identity,app,fields,deadline):
             self.remove(wrong)
             self.stage=kind+'-native-restore'
             container=self.start(volume,'/restored')
+            # Keep Kopia's sibling placeholders on the owned writable volume,
+            # never on the intentionally read-only container root filesystem.
             self.exec(container,'k repository connect '+self.backend(kind)+' >/dev/null\n'
-                      +'k snapshot restore '+capture['object_id']+' /restored >/dev/null\n',
+                      +'k snapshot restore '+capture['object_id']+' /restored/point >/dev/null\n',
                       password=fields['NAS_KOPIA_PASSWORD' if kind=='nas' else 'R2_KOPIA_PASSWORD'])
             self.remove(container)
-            return capture|{'wrong_encryption_password_denied':True,'fresh_container_direct_restore':True}
+            return capture|{'restored_volume_subdirectory':'point',
+                            'wrong_encryption_password_denied':True,'fresh_container_direct_restore':True}
 
     for image in (PDS,PYTHON,identity.IMAGE):
         docker('pull','--platform','linux/amd64',image,timeout=600)

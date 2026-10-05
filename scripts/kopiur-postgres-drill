@@ -394,7 +394,7 @@ class DockerDrill:
         return {table: int(self.sql(database, 'SELECT count(*) FROM public."' + table.replace('"', '""') + '"', name)) for table in tables}
 
     def application_state(self, container):
-        endpoint = "/api/languages" if self.app_name == "bazarr" else "/api/v3/qualityprofile"
+        endpoint = "/api/system/languages" if self.app_name == "bazarr" else "/api/v3/qualityprofile"
         # Send the original fixture key through stdin, never the command line.
         config = ('url = "http://127.0.0.1:' + str(self.port) + endpoint + '"\n'
                   'header = "X-Api-Key: ' + self.api_key + '"\n')
@@ -621,6 +621,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096,
                 "network": "none-shared-namespace",
                 "native_table_contents_equal": expected_fingerprints is not None,
                 "original_fixture_api_key_used": original_api_key is not None,
+                "original_fixture_identity_used": original_api_key is not None,
                 "application_visible_state_equal": expected_application_state is not None}
     finally:
         drill.close()

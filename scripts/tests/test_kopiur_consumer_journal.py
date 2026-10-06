@@ -1,5 +1,6 @@
 """Real isolated SQLite writer processes, not production app acceptance."""
 import copy
+from contextlib import closing, contextmanager
 import json
 from pathlib import Path
 import sqlite3
@@ -16,13 +17,21 @@ from kopiur_shared import InvalidEvidence
 from test_kopiur_consumer_generation import fixture
 
 
+@contextmanager
+def database(path):
+    # sqlite's transaction context commits/rolls back but does not close its FD.
+    with closing(sqlite3.connect(path, timeout=5)) as connection:
+        with connection:
+            yield connection
+
+
 class SQLiteConsumer:
     """Test-only native transaction admission. No production resource adapter."""
     def __init__(self, path):
         self.path = str(path)
 
     def observe(self):
-        with sqlite3.connect(self.path, timeout=5) as connection:
+        with database(self.path) as connection:
             # Serializes with every admitted write. Once admission is closed,
             # acquiring this native lock proves all older transactions drained.
             connection.execute('BEGIN IMMEDIATE')
@@ -31,7 +40,7 @@ class SQLiteConsumer:
                 'generation': row[3], 'writes': row[4], 'active': 0}
 
     def hold(self, identity, epoch, generation):
-        with sqlite3.connect(self.path, timeout=5) as connection:
+        with database(self.path) as connection:
             connection.execute('BEGIN IMMEDIATE')
             row = connection.execute('SELECT identity FROM state').fetchone()
             if row[0] != identity:
@@ -39,21 +48,23 @@ class SQLiteConsumer:
             connection.execute('UPDATE state SET admission=0, epoch=?, generation=?', (epoch, generation))
 
     def resume(self, identity, epoch, generation, prior):
-        with sqlite3.connect(self.path, timeout=5) as connection:
+        with database(self.path) as connection:
             connection.execute('BEGIN IMMEDIATE')
             row = connection.execute('SELECT identity, epoch, generation FROM state').fetchone()
             if row[0] != identity or (row[1] is not None and row[1:] != (epoch, generation)):
                 raise InvalidEvidence('fixture hold ownership changed')
-            connection.execute('UPDATE state SET admission=?', (int(prior),))
+            # Clearing the completed hold permits next-generation intent
+            # recovery before this consumer receives its next hold.
+            connection.execute('UPDATE state SET admission=?, epoch=NULL, generation=NULL', (int(prior),))
 
 
 def writer(path):
-    with sqlite3.connect(path, timeout=5) as connection:
+    with database(path) as connection:
         connection.execute('BEGIN IMMEDIATE')
         connection.execute('UPDATE state SET writes=writes+1 WHERE admission=1')
     print('ready', flush=True)
     while True:
-        with sqlite3.connect(path, timeout=5) as connection:
+        with database(path) as connection:
             connection.execute('BEGIN IMMEDIATE')
             connection.execute('UPDATE state SET writes=writes+1 WHERE admission=1')
         time.sleep(0.01)
@@ -70,7 +81,7 @@ class JournalTests(unittest.TestCase):
         ledger, _ = fixture()
         for index, item in enumerate(ledger['applications']):
             path = self.root / ('consumer' + str(index) + '.db')
-            with sqlite3.connect(path) as connection:
+            with database(path) as connection:
                 connection.execute('CREATE TABLE state(identity TEXT, admission INTEGER, epoch TEXT, generation TEXT, writes INTEGER)')
                 connection.execute('INSERT INTO state VALUES(?,1,NULL,NULL,0)', (uuid.uuid4().hex,))
             process = subprocess.Popen([sys.executable, __file__, 'writer', str(path)],
@@ -126,7 +137,7 @@ class JournalTests(unittest.TestCase):
     def test_receipt_assertion_cannot_override_native_admission(self):
         epoch, ledger, receipt = self.begin()
         adapter = next(iter(self.adapters.values()))
-        with sqlite3.connect(adapter.path) as connection:
+        with database(adapter.path) as connection:
             connection.execute('UPDATE state SET admission=1')
         with ConsumerJournal(self.path, self.source) as journal:
             with self.assertRaises(InvalidEvidence):
@@ -141,7 +152,7 @@ class JournalTests(unittest.TestCase):
             with self.assertRaises(InvalidEvidence):
                 journal.admit(epoch, ledger, changed, self.adapters)
             adapter = next(iter(self.adapters.values()))
-            with sqlite3.connect(adapter.path) as connection:
+            with database(adapter.path) as connection:
                 connection.execute('UPDATE state SET epoch=?', ('f' * 32,))
             with self.assertRaises(InvalidEvidence):
                 journal.admit(epoch, ledger, receipt, self.adapters)
@@ -201,12 +212,53 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(self.watchdog().returncode, 0)
         self.assertTrue(all(item.observe()['admission'] for item in self.adapters.values()))
 
+    def test_failed_or_timed_out_drain_cannot_publish_and_recovers(self):
+        for timeout in (False, True):
+            with self.subTest(timeout=timeout):
+                with ConsumerJournal(self.path, self.source) as journal:
+                    epoch, _ = journal.begin(self.adapters, 1 if timeout else 60)
+                    adapter = list(self.adapters.values())[-1]
+                    original = adapter.hold
+                    def incomplete(identity, epoch, generation):
+                        if timeout:
+                            time.sleep(1.1)
+                            original(identity, epoch, generation)
+                        else:
+                            raise InvalidEvidence('injected native drain failure')
+                    adapter.hold = incomplete
+                    try:
+                        with self.assertRaises(InvalidEvidence):
+                            journal.hold(epoch, self.adapters)
+                        _, receipt = fixture()
+                        with self.assertRaises(InvalidEvidence):
+                            journal.publish(epoch, fixture()[0], receipt, self.adapters)
+                    finally:
+                        adapter.hold = original
+                self.expire()
+                result = self.watchdog()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(all(item.observe()['admission'] for item in self.adapters.values()))
+
+    def test_all_resumed_but_released_journal_ack_lost(self):
+        self.begin()
+        self.expire()
+        command = [sys.executable, __file__, 'crash-released', str(self.path), self.source,
+                   json.dumps({app: adapter.path for app, adapter in self.adapters.items()})]
+        result = subprocess.run(command, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 23)
+        self.assertTrue(all(item.observe()['admission'] for item in self.adapters.values()))
+        with ConsumerJournal(self.path, self.source) as journal:
+            state = journal.read()
+            assert state is not None
+            self.assertEqual(state['phase'], 'revoked')
+        self.assertEqual(self.watchdog().returncode, 0)
+
     def test_watchdog_restart_after_failed_resume_retains_revocation(self):
         self.begin()
         self.expire()
         adapter = next(iter(self.adapters.values()))
         original = adapter.observe()['identity']
-        with sqlite3.connect(adapter.path) as connection:
+        with database(adapter.path) as connection:
             connection.execute('UPDATE state SET identity=?', ('changed',))
         result = self.watchdog()
         self.assertNotEqual(result.returncode, 0)
@@ -215,7 +267,7 @@ class JournalTests(unittest.TestCase):
             assert state is not None
             self.assertEqual(state['phase'], 'revoked')
         self.assertTrue(all(not item.observe()['admission'] for item in self.adapters.values()))
-        with sqlite3.connect(adapter.path) as connection:
+        with database(adapter.path) as connection:
             connection.execute('UPDATE state SET identity=?', (original,))
         result = self.watchdog()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -245,9 +297,25 @@ class JournalTests(unittest.TestCase):
             with self.assertRaises(InvalidEvidence):
                 journal.publish(epoch, ledger, receipt, self.adapters)
 
+    def test_second_generation_unheld_and_partial_hold_recovery(self):
+        self.begin()
+        self.expire()
+        self.assertEqual(self.watchdog().returncode, 0)
+        for partial in (False, True):
+            with self.subTest(partial=partial):
+                with ConsumerJournal(self.path, self.source) as journal:
+                    epoch, generation = journal.begin(self.adapters, 60)
+                if partial:
+                    adapter = next(iter(self.adapters.values()))
+                    adapter.hold(adapter.observe()['identity'], epoch, generation)
+                self.expire()
+                result = self.watchdog()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(all(item.observe()['admission'] for item in self.adapters.values()))
+
     def test_prior_closed_admission_is_not_opened(self):
         adapter = next(iter(self.adapters.values()))
-        with sqlite3.connect(adapter.path) as connection:
+        with database(adapter.path) as connection:
             connection.execute('UPDATE state SET admission=0')
         self.begin()
         self.expire()
@@ -266,7 +334,7 @@ class JournalTests(unittest.TestCase):
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'writer':
         writer(sys.argv[2])
-    elif len(sys.argv) > 1 and sys.argv[1] in ('watchdog', 'crash-resume', 'crash-hold'):
+    elif len(sys.argv) > 1 and sys.argv[1] in ('watchdog', 'crash-resume', 'crash-hold', 'crash-released'):
         adapters = {app: SQLiteConsumer(path) for app, path in json.loads(sys.argv[4]).items()}
         if sys.argv[1] in ('crash-resume', 'crash-hold'):
             import os
@@ -283,6 +351,14 @@ if __name__ == '__main__':
             else:
                 adapter.hold = crash_hold
         with ConsumerJournal(sys.argv[2], sys.argv[3]) as journal:
+            if sys.argv[1] == 'crash-released':
+                import os
+                save = journal.save
+                def crash_save(state):
+                    if state['phase'] == 'released':
+                        os._exit(23)
+                    save(state)
+                journal.save = crash_save
             if sys.argv[1] == 'crash-hold':
                 state = journal.read()
                 assert state is not None

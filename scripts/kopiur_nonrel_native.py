@@ -154,6 +154,7 @@ class Fixture:
         self.deadline = time.monotonic() + 1200
         self.auth = None
         self.client = None
+        self.client_started = False
         self.host = None
 
     def run(self, *args, data=None, timeout=180):
@@ -193,8 +194,8 @@ class Fixture:
             raise RuntimeError('native fixture container identity changed during create')
         if archive is not None:
             validate_archive(archive)
-            self.run('cp', '-a', '-', name + ':' + path, data=archive)
-        self.run('start', name)
+            self.run('cp', '-a', '-', container_id + ':' + path, data=archive)
+        self.run('start', container_id)
         self.host = name
         return name, port
 
@@ -246,10 +247,16 @@ class Fixture:
             # Never expose subprocess output, which can contain fixture secrets.
             raise RuntimeError('native cleanup unresolved: ' + '; '.join(failures))
 
+    def registered_id(self, name):
+        container_id = self.container_ids.get(name)
+        if name not in self.containers or container_id is None:
+            raise RuntimeError('native container lacks registered immutable identity')
+        return container_id
+
     def ready(self, name, check):
         deadline = min(self.deadline, time.monotonic() + 240)
         while time.monotonic() < deadline:
-            state = json.loads(self.run('inspect', '--format', '{{json .State}}', name))
+            state = json.loads(self.run('inspect', '--format', '{{json .State}}', self.registered_id(name)))
             if state['Status'] in ('exited', 'dead'):
                 raise RuntimeError('native fixture exited before readiness')
             try:
@@ -266,12 +273,18 @@ class Fixture:
         if self.client is None:
             self.client = self.prefix + '-client'
             self.containers.append(self.client)
-            container_id = self.run('run', '-d', '--name', self.client, '--network', self.network,
+            container_id = self.run('create', '--name', self.client, '--network', self.network,
                                     '--memory=128m', CLIENT_IMAGE, 'python', '-c',
                                     'import time;time.sleep(1200)').decode().strip()
             if len(container_id) != 64 or any(c not in '0123456789abcdef' for c in container_id):
                 raise RuntimeError('native client container identity was not established')
             self.container_ids[self.client] = container_id
+            if self.run('inspect', '--format', '{{.Id}}', self.client).decode().strip() != container_id:
+                raise RuntimeError('native client container identity changed during create')
+            self.run('start', container_id)
+            self.client_started = True
+        if not self.client_started:
+            raise RuntimeError('native client startup remains unresolved')
         code = ('import sys,json,base64,socket,urllib.request,urllib.error\nfrom typing import Any\n'
                 + inspect.getsource(resp_read) + '''
 p=json.load(sys.stdin)
@@ -307,7 +320,7 @@ else:
 print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decode()}))
 ''')
         wire = json.dumps(payload | {'host': self.host}).encode()
-        result = self.run('exec', '-i', self.client, 'python', '-c', code, data=wire, timeout=90)
+        result = self.run('exec', '-i', self.registered_id(self.client), 'python', '-c', code, data=wire, timeout=90)
         return json.loads(result, object_hook=lambda item: base64.b64decode(item['__binary__'])
                           if set(item) == {'__binary__'} else item)
 
@@ -530,7 +543,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         if not any(state.get('feature_name') == 'security' and state.get('indices')
                    for state in result.get('feature_states', [])):
             raise RuntimeError('Elasticsearch security feature state is absent')
-        archive = self.run('cp', source + ':/usr/share/elasticsearch/data/snapshot/.', '-')
+        archive = self.run('cp', self.registered_id(source) + ':/usr/share/elasticsearch/data/snapshot/.', '-')
         digest = validate_archive(archive)
         source_retirement = self.remove(source)
         transport_receipt = None

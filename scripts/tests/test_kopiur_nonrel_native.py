@@ -31,6 +31,144 @@ class AdmissionTests(unittest.TestCase):
             self.assertRegex(image, r'@sha256:[0-9a-f]{64}$')
 
 
+class ServerStartupTests(unittest.TestCase):
+    def fixture(self):
+        fixture = native.Fixture.__new__(native.Fixture)
+        fixture.service = 'elasticsearch'
+        fixture.prefix = 'owned'
+        fixture.network = 'owned-network'
+        fixture.containers = []
+        fixture.container_ids = {}
+        fixture.deadline = native.time.monotonic() + 60
+        fixture.client = None
+        fixture.client_started = False
+        fixture.host = 'owned-source'
+        return fixture
+
+    def test_source_archive_and_start_use_registered_id(self):
+        fixture = self.fixture()
+        created = native.subprocess.CompletedProcess([], 0, stdout=b'a' * 64 + b'\n')
+        with patch.object(native.subprocess, 'run', return_value=created), \
+                patch.object(native, 'validate_archive'), \
+                patch.object(fixture, 'run', side_effect=[b'a' * 64, b'', b'']) as run:
+            self.assertEqual(fixture.create('source', 9200, archive=b'archive', path='/data'),
+                             ('owned-source', 9200))
+        self.assertEqual([call.args for call in run.call_args_list], [
+            ('inspect', '--format', '{{.Id}}', 'owned-source'),
+            ('cp', '-a', '-', 'a' * 64 + ':/data'), ('start', 'a' * 64)])
+        self.assertEqual(fixture.container_ids['owned-source'], 'a' * 64)
+
+    def test_source_missing_or_replaced_identity_never_starts(self):
+        for created_id, observed in ((b'invalid', b'a' * 64), (b'a' * 64, b'b' * 64)):
+            fixture = self.fixture()
+            created = native.subprocess.CompletedProcess([], 0, stdout=created_id)
+            with patch.object(native.subprocess, 'run', return_value=created), \
+                    patch.object(fixture, 'run', return_value=observed) as run:
+                with self.assertRaises(RuntimeError):
+                    fixture.create('source', 9200)
+            self.assertTrue(all(call.args[0] == 'inspect' for call in run.call_args_list))
+
+    def test_client_registered_stopped_before_exact_start_and_exec(self):
+        fixture = self.fixture()
+        def response(*args, **kwargs):
+            if args[0] in ('create', 'inspect'):
+                self.assertFalse(fixture.client_started)
+                return b'a' * 64
+            self.assertEqual(fixture.container_ids, {'owned-client': 'a' * 64})
+            self.assertEqual(fixture.containers, ['owned-client'])
+            self.assertEqual(fixture.client_started, args[0] == 'exec')
+            return b'{}' if args[0] == 'exec' else b''
+        with patch.object(fixture, 'run', side_effect=response) as run:
+            self.assertEqual(fixture.client_request({'operation': 'http'}), {})
+        calls = [call.args for call in run.call_args_list]
+        self.assertEqual(calls[0][0], 'create')
+        self.assertNotIn('-d', calls[0])
+        self.assertEqual(calls[1], ('inspect', '--format', '{{.Id}}', 'owned-client'))
+        self.assertEqual(calls[2], ('start', 'a' * 64))
+        self.assertEqual(calls[3][:3], ('exec', '-i', 'a' * 64))
+        self.assertTrue(fixture.client_started)
+
+    def test_client_bad_or_replaced_identity_never_starts_or_executes(self):
+        for responses in ([b'invalid'], [b'a' * 64, b'b' * 64]):
+            fixture = self.fixture()
+            with patch.object(fixture, 'run', side_effect=responses) as run:
+                with self.assertRaises(RuntimeError):
+                    fixture.client_request({})
+            self.assertTrue(all(call.args[0] in ('create', 'inspect') for call in run.call_args_list))
+            with patch.object(fixture, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'startup remains unresolved'):
+                    fixture.client_request({})
+                run.assert_not_called()
+
+    def test_client_lost_start_acknowledgement_denies_retry_exec(self):
+        fixture = self.fixture()
+        with patch.object(fixture, 'run', side_effect=[b'a' * 64, b'a' * 64,
+                                                     RuntimeError('start acknowledgement lost')]):
+            with self.assertRaisesRegex(RuntimeError, 'acknowledgement lost'):
+                fixture.client_request({})
+        self.assertEqual(fixture.container_ids, {'owned-client': 'a' * 64})
+        with patch.object(fixture, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'startup remains unresolved'):
+                fixture.client_request({})
+            run.assert_not_called()
+
+    def test_client_create_or_inspect_failure_denies_retry(self):
+        for responses in ([RuntimeError('create failed')],
+                          [b'a' * 64, RuntimeError('inspect failed')]):
+            fixture = self.fixture()
+            with patch.object(fixture, 'run', side_effect=responses) as run:
+                with self.assertRaises(RuntimeError):
+                    fixture.client_request({})
+            self.assertTrue(all(call.args[0] in ('create', 'inspect') for call in run.call_args_list))
+            with patch.object(fixture, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'startup remains unresolved'):
+                    fixture.client_request({})
+                run.assert_not_called()
+
+    def test_source_disappearing_after_identity_check_never_falls_back(self):
+        created = native.subprocess.CompletedProcess([], 0, stdout=b'a' * 64)
+        for responses in ([b'a' * 64, RuntimeError('copy target absent')],
+                          [b'a' * 64, b'', RuntimeError('start target absent')]):
+            fixture = self.fixture()
+            with patch.object(native.subprocess, 'run', return_value=created), \
+                    patch.object(native, 'validate_archive'), \
+                    patch.object(fixture, 'run', side_effect=responses) as run:
+                with self.assertRaisesRegex(RuntimeError, 'target absent'):
+                    fixture.create('source', 9200, archive=b'archive', path='/data')
+            self.assertEqual(run.call_args_list[1].args, ('cp', '-a', '-', 'a' * 64 + ':/data'))
+            if len(responses) == 3:
+                self.assertEqual(run.call_args_list[2].args, ('start', 'a' * 64))
+            self.assertEqual(fixture.container_ids, {'owned-source': 'a' * 64})
+
+    def test_existing_client_exec_uses_original_id(self):
+        fixture = self.fixture()
+        fixture.client = 'owned-client'
+        fixture.client_started = True
+        fixture.containers = ['owned-client']
+        fixture.container_ids = {'owned-client': 'a' * 64}
+        with patch.object(fixture, 'run', return_value=b'{}') as run:
+            fixture.client_request({})
+        self.assertEqual(run.call_args.args[:3], ('exec', '-i', 'a' * 64))
+        fixture.container_ids.clear()
+        with patch.object(fixture, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'lacks registered'):
+                fixture.client_request({})
+            run.assert_not_called()
+
+    def test_readiness_inspects_original_id_not_reused_name(self):
+        fixture = self.fixture()
+        fixture.containers = ['owned-source']
+        fixture.container_ids = {'owned-source': 'a' * 64}
+        with patch.object(fixture, 'run', return_value=b'{"Status":"running"}') as run:
+            fixture.ready('owned-source', lambda: True)
+        run.assert_called_once_with('inspect', '--format', '{{json .State}}', 'a' * 64)
+        fixture.container_ids.clear()
+        with patch.object(fixture, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'lacks registered'):
+                fixture.ready('owned-source', lambda: True)
+            run.assert_not_called()
+
+
 class ServerRetirementTests(unittest.TestCase):
     def fixture(self):
         fixture = native.Fixture.__new__(native.Fixture)

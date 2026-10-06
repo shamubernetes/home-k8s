@@ -360,6 +360,46 @@ class ManifestTests(unittest.TestCase):
                 fixture.run('exec', 'b' * 64, 'true')
         run.assert_not_called()
 
+    def test_native_source_binding_persists_exact_identity_and_prior_admission(self):
+        fixture = self.fixture()
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        self.manifest.register(name, operation, 'b' * 64)
+        self.manifest.start_intent(name, operation, 'b' * 64)
+        self.manifest.started(name, operation, 'b' * 64)
+        fixture.container_ids[name] = 'b' * 64
+        saved = {'index_uuid': 'a' * 22, 'write_block': None}
+        fixture.bind_source_admission(name, saved)
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        self.assertEqual(restarted.read()['admissions'][name],
+                         dict(saved, container_id='b' * 64, index_name='fixture'))
+        fixture.require_source_admission(name, saved)
+        with self.assertRaises(RuntimeError):
+            fixture.bind_source_admission(name, dict(saved, write_block='true'))
+        fixture.container_ids[name] = 'c' * 64
+        with self.assertRaises(RuntimeError):
+            fixture.require_source_admission(name, saved)
+        fixture.container_ids[name] = 'b' * 64
+        restarted.revoke()
+        with self.assertRaises(RuntimeError):
+            fixture.require_source_admission(name, saved)
+        with patch.object(fixture, 'http') as http:
+            with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
+                fixture.restore_source_admission(9200, saved, self.path, name)
+            http.assert_not_called()
+
+    def test_source_binding_failure_denies_authority(self):
+        fixture = self.fixture()
+        name = self.generation + '-source'
+        saved = {'index_uuid': 'a' * 22, 'write_block': None}
+        with self.assertRaises(KeyError):
+            fixture.bind_source_admission(name, saved)
+        fixture.container_ids[name] = 'b' * 64
+        with self.assertRaises(RuntimeError):
+            fixture.bind_source_admission(name, saved)
+        with self.assertRaises(RuntimeError):
+            fixture.require_source_admission(name, saved)
+
     def test_manifest_admission_recovery_denies_before_journal_or_native_io(self):
         fixture = self.fixture()
         for revoked in (False, True):

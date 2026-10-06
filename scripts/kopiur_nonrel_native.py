@@ -186,6 +186,17 @@ class Fixture:
             if state['version'] != 2 or state['revoked']:
                 raise RuntimeError('fixture generation dispatch revoked')
 
+    def bind_source_admission(self, source, admission):
+        """Durably bind the exact source before any native writer mutation."""
+        if self.generation_manifest is not None:
+            self.generation_manifest.bind_admission(
+                source, self.container_ids[source], admission)
+
+    def require_source_admission(self, source, admission):
+        if self.generation_manifest is not None:
+            self.generation_manifest.require_admission(
+                source, self.container_ids[source], admission)
+
     def restore_source_admission(self, port, saved, journal, source):
         """Legacy journal recovery only; manifested generations remain closed.
 
@@ -511,6 +522,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         expected = inventory(port)
         prior_admission = elasticsearch_admission(
             self.http(port, '/fixture/_settings?flat_settings=true'))
+        self.bind_source_admission(source, prior_admission)
 
         def observed_admission():
             actual = elasticsearch_admission(
@@ -522,6 +534,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         # The add-block API waits for in-flight writes before acknowledging the
         # block. Test the actual writer boundary, not merely a settings flag.
         def block():
+            self.require_source_admission(source, prior_admission)
             observed_admission()
             fence = self.http(port, '/fixture/_block/write', 'PUT')
             if (fence.get('acknowledged') is not True

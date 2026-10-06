@@ -13,6 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import kopiur_fixture_supervisor as supervisor
 import kopiur_fixture_controller as controller_module
+import kopiur_fixture_admission as admission_module
 from kopiur_fixture_supervisor import BoundaryError, FixtureSupervisor
 from kopiur_fixture_controller import FixtureController
 from fixture_admission_cases import NativeAdmissionCases
@@ -863,6 +864,81 @@ while True:
             with self.assertRaisesRegex(BoundaryError, 'revoked controller publication'):
                 controller.commit(state)
         self.assertEqual(controller.recover()['phase'], 'ceased')
+
+
+    def test_native_watchdog_denies_forward_coordinator_before_any_new_sql(self):
+        with self.admission_case() as (admission, state):
+            self.independent_watchdog()
+            before = admission.database.read_bytes()
+            with self.assertRaisesRegex(BoundaryError, 'revoked admission coordinator'):
+                admission.apply(state, 'hold')
+            self.assertEqual(admission.database.read_bytes(), before)
+            self.assertTrue(admission.recover()['consumer_admission_restored'])
+
+    def test_native_watchdog_during_ack_persistence_cannot_publish_success(self):
+        with self.admission_case() as (admission, state):
+            original = admission_module._persist
+            def revoke_after_persist(path, candidate):
+                original(path, candidate)
+                if candidate.get('observed') and candidate['intent'] is None:
+                    self.independent_watchdog()
+            with patch.object(admission_module, '_persist', side_effect=revoke_after_persist):
+                with self.assertRaisesRegex(BoundaryError, 'revoked native admission publication'):
+                    admission.apply(state, 'hold')
+            self.assertFalse(self.native_state(admission)['consumers']['first']['admission'])
+            self.assertTrue(admission.recover()['consumer_admission_restored'])
+
+
+    def test_native_watchdog_paused_capture_preserves_prior_until_owned_recovery(self):
+        with self.admission_case(linked=True) as (admission, state):
+            state = self.advance_admission(admission, state)
+            self.publish_native_capture(admission)
+            state = admission.apply(state, 'release', 'first')
+            reference = state['release_boundary']
+            nested = FixtureSupervisor(reference['directory'], reference['root'])
+            descendant = admission.results / 'watchdog-nested-descendant'
+            child, _ = nested.dispatch([sys.executable, '-c',
+                'import os,time; from pathlib import Path; '
+                'pid=os.fork(); os._exit(0) if pid else None; os.setsid(); '
+                f'Path({str(descendant)!r}).touch(); time.sleep(60)'])
+            self.wait_file(descendant)
+            self.assertEqual(child.wait(timeout=5), 0)
+            locked = admission.results / 'capture-owner-locked'
+            owner = os.fork()
+            if owner == 0:
+                with self.controller._locked():
+                    locked.touch()
+                    os.kill(os.getpid(), signal.SIGSTOP)
+                    os._exit(0)
+            try:
+                self.wait_file(locked)
+                _, status = os.waitpid(owner, os.WUNTRACED)
+                self.assertTrue(os.WIFSTOPPED(status))
+                self.independent_watchdog()
+                self.assertIn('populated 0', (nested._read()[1] / 'cgroup.events').read_text())
+                before = self.native_state(admission)
+                self.assertTrue(before['consumers']['first']['admission'])
+                self.assertFalse(before['consumers']['second']['admission'])
+                self.assertFalse(before['consumers']['third']['admission'])
+                with self.assertRaisesRegex(BoundaryError, 'lock timeout'):
+                    admission.recover()
+                self.assertEqual(self.native_state(admission), before)
+            finally:
+                os.kill(owner, signal.SIGKILL)
+                os.waitpid(owner, 0)
+            restarted = admission_module.NativeAdmission(
+                FixtureSupervisor(self.directory, self.root), admission.database,
+                admission.identity, admission.results, capture_consumer='admission')
+            recovered = restarted.recover()
+            self.assertTrue(recovered['consumer_admission_restored'])
+            self.assertFalse(recovered['production_recovery_accepted'])
+            for name, prior in recovered['plan']['consumers'].items():
+                self.assertEqual(recovered['observed']['consumers'][name]['admission'],
+                                 prior['prior_admission'])
+            with self.assertRaises(BoundaryError):
+                restarted.apply(state, 'release', 'third')
+            self.assertEqual(restarted.recover()['observed']['consumers'],
+                             recovered['observed']['consumers'])
 
 
 if __name__ == '__main__':

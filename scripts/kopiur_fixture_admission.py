@@ -184,6 +184,10 @@ class NativeAdmission:
         state = copy.deepcopy(state)
         state['revision'] += 1
         _persist(self.path, state)
+        if state['phase'] in ('open', 'released'):
+            native, _ = self.supervisor._read()
+            if native['revoked'] or self.supervisor._watchdog_revoked(native):
+                raise BoundaryError('revoked native admission publication')
         return state
 
     def snapshot(self):
@@ -244,7 +248,8 @@ class NativeAdmission:
         observed = self._worker(self.supervisor, None, 'observe')
         with self.supervisor._locked():
             native, _ = self.supervisor._read()
-            if self.path.exists() or native['revoked'] or native.get('sealed') or observed['phase'] != 'idle':
+            if (self.path.exists() or native['revoked'] or native.get('sealed')
+                    or self.supervisor._watchdog_revoked(native) or observed['phase'] != 'idle'):
                 raise BoundaryError('fresh native admission cohort required')
             plan = {'generation': native['generation'], 'consumers': {
                 name: {'identity': v['identity'], 'prior_admission': v['admission']}
@@ -300,7 +305,7 @@ class NativeAdmission:
             state = self._read()
             native, _ = self.supervisor._read()
             if (state != expected or state['phase'] != 'open' or state['intent'] is not None
-                    or native['revoked']):
+                    or native['revoked'] or self.supervisor._watchdog_revoked(native)):
                 raise BoundaryError('stale or revoked admission coordinator')
             state['intent'] = {'action': action, 'consumer': consumer}
             staged = self._save(state)
@@ -309,7 +314,7 @@ class NativeAdmission:
         with self.supervisor._locked():
             state = self._read()
             native, _ = self.supervisor._read()
-            if state != staged or native['revoked']:
+            if state != staged or native['revoked'] or self.supervisor._watchdog_revoked(native):
                 raise BoundaryError('native admission acknowledgement became stale')
             state['observed'] = observed
             state['intent'] = None

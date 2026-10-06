@@ -116,6 +116,56 @@ class FenceTests(unittest.TestCase):
             with self.subTest(admission=admission), self.assertRaises(ValueError):
                 FixtureFence(self.path, SOURCE, admission=admission)
 
+    def test_native_restart_loads_prior_not_current_block(self):
+        for prior in (None, 'false', 'true'):
+            with self.subTest(prior=prior):
+                self.path.unlink(missing_ok=True)
+                admission = {'index_uuid': 'original-index', 'write_block': prior}
+                with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+                    journal.acquire(lambda: None)
+                observed = {'index_uuid': 'original-index', 'write_block': 'true'}
+                with FixtureFence.restart_native(self.path, SOURCE, lambda: observed) as (journal, saved):
+                    self.assertEqual(saved, admission)
+                    saved['write_block'] = 'false'
+                    self.assertEqual(json.loads(journal._admission), admission)
+                    self.assertTrue(journal.recover(lambda: None))
+                self.assertEqual(json.loads(self.path.read_text())['admission'], admission)
+
+    def test_native_restart_refuses_replacement_and_legacy_without_write(self):
+        admission = {'index_uuid': 'original-index', 'write_block': None}
+        with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+            journal.acquire(lambda: None)
+        before = self.path.read_bytes()
+        with self.assertRaises(RuntimeError):
+            with FixtureFence.restart_native(self.path, SOURCE, lambda: {
+                    'index_uuid': 'replacement', 'write_block': 'true'}):
+                self.fail('replacement admitted')
+        self.assertEqual(self.path.read_bytes(), before)
+        self.path.unlink()
+        with FixtureFence(self.path, SOURCE) as journal:
+            journal.acquire(lambda: None)
+        before = self.path.read_bytes()
+        with self.assertRaises(RuntimeError):
+            with FixtureFence.restart_native(self.path, SOURCE, lambda: self.fail('legacy observed')):
+                self.fail('legacy admitted')
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_native_restart_observer_runs_only_while_exclusively_owned(self):
+        admission = {'index_uuid': 'original-index', 'write_block': None}
+        with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+            journal.acquire(lambda: None)
+            with self.assertRaises(RuntimeError):
+                with FixtureFence.restart_native(self.path, SOURCE, lambda: self.fail('live owner observed')):
+                    self.fail('live owner bypassed')
+        def observe():
+            with self.assertRaises(RuntimeError):
+                with FixtureFence(self.path, SOURCE):
+                    self.fail('observer outside ownership')
+            return admission
+        with FixtureFence.restart_native(self.path, SOURCE, observe) as (journal, saved):
+            self.assertEqual(saved, admission)
+            self.assertEqual(journal.read(), 'fenced')
+
     def test_real_process_loss_before_and_after_fence_ack(self):
         for point in ('intent', 'fenced', 'released-before-journal'):
             with self.subTest(point=point):

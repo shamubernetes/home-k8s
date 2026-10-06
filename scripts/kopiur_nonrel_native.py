@@ -381,13 +381,21 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             if observed_admission()['write_block'] != 'true':
                 raise RuntimeError('Elasticsearch writer fence was not observed')
 
-        def release():
-            observed_admission()
+        def restore_admission(saved):
+            actual = elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
+            if actual['index_uuid'] != saved['index_uuid']:
+                raise RuntimeError('Elasticsearch fixture index replaced before recovery')
             if self.http(port, '/fixture/_settings', 'PUT',
-                         {'index.blocks.write': prior_admission['write_block']}).get('acknowledged') is not True:
+                         {'index.blocks.write': saved['write_block']}).get('acknowledged') is not True:
                 raise RuntimeError('Elasticsearch fixture writer resume failed')
-            if observed_admission() != prior_admission:
+            if elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true')) != saved:
                 raise RuntimeError('Elasticsearch prior fixture admission differs')
+
+        def release():
+            restore_admission(prior_admission)
+
+        def restart_observation():
+            return elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
 
         # A fresh journal owner recovers intent left by a lost capture owner.
         # Only this disposable source/index is ever admitted, not production.
@@ -421,10 +429,11 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                         child.kill()
                         child.join(timeout=10)
                     child.close()
-                with FixtureFence(journal, source, admission=prior_admission) as boundary:
+                with FixtureFence.restart_native(journal, source, restart_observation) as (boundary, saved):
                     expected_phase = 'intent' if point == 'intent' else 'fenced'
-                    if (boundary.read() != expected_phase or not boundary.recover(release)
-                            or boundary.recover(release)):
+                    if (boundary.read() != expected_phase
+                            or not boundary.recover(lambda: restore_admission(saved))
+                            or boundary.recover(lambda: restore_admission(saved))):
                         raise RuntimeError('Elasticsearch fixture restart recovery differs')
                 self.http(port, '/fixture/_doc/resumed?refresh=true', 'PUT',
                           {'title': 'post-restart-write', 'number': 3})
@@ -445,15 +454,9 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 except RuntimeError as error:
                     if str(error) != 'injected lost preblocked release acknowledgement':
                         raise
-            with FixtureFence(closed_journal, source, admission=preblocked) as boundary:
+            with FixtureFence.restart_native(closed_journal, source, restart_observation) as (boundary, saved):
                 def preserve_closed():
-                    if observed_admission() != preblocked:
-                        raise RuntimeError('preblocked native fixture admission changed')
-                    if self.http(port, '/fixture/_settings', 'PUT',
-                                 {'index.blocks.write': 'true'}).get('acknowledged') is not True:
-                        raise RuntimeError('preblocked native fixture release failed')
-                    if observed_admission() != preblocked:
-                        raise RuntimeError('preblocked native fixture reopened')
+                    restore_admission(saved)
                 if not boundary.recover(preserve_closed) or boundary.recover(preserve_closed):
                     raise RuntimeError('preblocked native journal recovery differs')
             closed_denial = self.http(port, '/fixture/_doc/preblocked?refresh=true', 'PUT',

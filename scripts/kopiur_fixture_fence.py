@@ -5,6 +5,7 @@ are admitted. Persist intent before mutation, then recover the same boundary
 when a capture process stops, without accepting an incomplete generation.
 """
 import fcntl
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,29 @@ class FixtureFence:
         # unbound journals never qualify this native admission protocol.
         self._admission = json.dumps(admission, sort_keys=True)
         self.lock = None
+
+    @classmethod
+    @contextmanager
+    def restart_native(cls, path, source, observe):
+        """Recover persisted prior admission under exclusive ownership.
+
+        Never infer prior admission from the current block. This recovers a
+        stopped owner, not independent revocation of a live capture process.
+        """
+        with cls(path, source) as journal:
+            state = json.loads(journal.path.read_text())
+            if not isinstance(state, dict) or set(state) != {'source', 'phase', 'admission'}:
+                raise RuntimeError('native fixture recovery requires a bound journal')
+            if state['admission'] is None:
+                raise RuntimeError('native fixture recovery requires prior admission')
+            binding = cls(path, source, admission=state['admission'])
+            journal._admission = binding._admission
+            journal.read()
+            actual = observe()
+            cls(path, source, admission=actual)
+            if actual is None or actual['index_uuid'] != state['admission']['index_uuid']:
+                raise RuntimeError('native fixture recovery index identity differs')
+            yield journal, json.loads(journal._admission)
 
     def __enter__(self):
         self.lock = self.path.with_suffix('.lock').open('a+b')

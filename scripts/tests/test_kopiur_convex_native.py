@@ -51,6 +51,20 @@ class ConvexTests(unittest.TestCase):
         self.assertFalse(any(key.startswith(('S3_', 'AWS_')) for key in env))
         self.assertEqual(start.call_args.kwargs['network'], 'container:database')
 
+    def test_launch_diagnostics_do_not_print_fixture_credentials(self):
+        key = 'original-private-fixture-admin-key'
+        secret = 'a' * 64
+        raw = json.dumps({'original_fixture_key': key, 'auth_secret': secret}).encode()
+        invoke = Mock(side_effect=[SimpleNamespace(stdout=raw), SimpleNamespace(stdout=b'0\n'),
+            SimpleNamespace(stdout=b'750 0 0 /convex/run_backend.sh\n')])
+        with patch.dict(self.scope, run=invoke):
+            with patch.object(self.drill, 'start', side_effect=RuntimeError('isolated launch failed')):
+                with self.assertRaises(RuntimeError) as failure:
+                    self.drill.app('restored-app', 'database', 'config')
+        self.assertIn('750 0 0', str(failure.exception))
+        self.assertNotIn(key, str(failure.exception))
+        self.assertNotIn(secret, str(failure.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

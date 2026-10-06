@@ -30,7 +30,7 @@ def contract():
         def request(self, container, path, payload=None, authenticated=False, check=True, form=False):
             extra_headers = ()
             if payload is not None and not authenticated and getattr(self, 'csrf_token', None):
-                extra_headers = ('Cookie: csrftoken=' + self.csrf_token, 'x-csrftoken: ' + self.csrf_token)
+                extra_headers = ('Cookie: romm_csrftoken=' + self.csrf_token, 'x-csrftoken: ' + self.csrf_token)
             return super().request(container, path, payload, authenticated, check, form, extra_headers)
 
         def bootstrap_csrf(self, container):
@@ -45,8 +45,8 @@ def contract():
                 if line.lower().startswith('set-cookie:'):
                     cookie = SimpleCookie()
                     cookie.load(line.split(':', 1)[1].strip())
-                    if 'csrftoken' in cookie:
-                        self.csrf_token = cookie['csrftoken'].value
+                    if 'romm_csrftoken' in cookie:
+                        self.csrf_token = cookie['romm_csrftoken'].value
                         return
             raise ValueError('native CSRF cookie is missing')
 

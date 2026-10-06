@@ -33,7 +33,7 @@ class RomMTests(unittest.TestCase):
             romm.stable_users([])
 
     def test_anonymous_bootstrap_uses_native_csrf_cookie_and_header(self):
-        invoke = Mock(return_value=SimpleNamespace(stdout=b'HTTP/1.1 200 OK\r\nSet-Cookie: csrftoken=fixture-csrf; Path=/\r\n\r\n', returncode=0))
+        invoke = Mock(return_value=SimpleNamespace(stdout=b'HTTP/1.1 200 OK\r\nSet-Cookie: romm_csrftoken=fixture-csrf; Path=/\r\n\r\n', returncode=0))
         with patch.dict(self.scope, run=invoke):
             self.drill.bootstrap_csrf('source-app')
         self.assertEqual(self.drill.csrf_token, 'fixture-csrf')
@@ -41,7 +41,7 @@ class RomMTests(unittest.TestCase):
         with patch.dict(self.scope, run=invoke):
             self.drill.request('source-app', '/api/users', {'username': 'fixture'})
         self.assertNotIn('fixture-csrf', str(invoke.call_args.args))
-        self.assertIn(b'Cookie: csrftoken=fixture-csrf', invoke.call_args.kwargs['stdin'])
+        self.assertIn(b'Cookie: romm_csrftoken=fixture-csrf', invoke.call_args.kwargs['stdin'])
         self.assertIn(b'x-csrftoken: fixture-csrf', invoke.call_args.kwargs['stdin'])
         with patch.dict(self.scope, run=invoke):
             self.drill.request('restored-app', '/api/users', authenticated=True)

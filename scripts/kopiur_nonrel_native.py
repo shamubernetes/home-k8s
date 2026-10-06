@@ -6,6 +6,7 @@ stream-consumer, security-identity or coherent multi-application claim is made.
 import base64
 import hashlib
 import io
+import inspect
 import json
 import os
 import secrets
@@ -25,6 +26,7 @@ IMAGES = {
     'rabbitmq-server': 'docker.io/library/rabbitmq:4.2.6-management@sha256:3ab808deef2f6552bc10ede59bdba1437b0d5c778e29d8927c5afbfa2586c22f',
 }
 MAX_ARCHIVE = 192 * 1024 * 1024
+CLIENT_IMAGE = 'docker.io/library/python:3.14.7-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d'
 
 
 def validate_archive(data):
@@ -90,6 +92,8 @@ class Fixture:
         self.containers = []
         self.deadline = time.monotonic() + 1200
         self.auth = None
+        self.client = None
+        self.host = None
 
     def run(self, *args, data=None, timeout=180):
         remaining = self.deadline - time.monotonic()
@@ -110,7 +114,7 @@ class Fixture:
             env[key] = value
             options.extend(('-e', key))
         command = ['docker', 'create', '--name', name, '--network', self.network,
-                   '--publish', '127.0.0.1::' + str(port), *extra, *options,
+                   *extra, *options,
                    IMAGES[self.service], *args]
         # Track exact names even if create partly succeeds, cleanup never prunes.
         self.containers.append(name)
@@ -121,11 +125,8 @@ class Fixture:
             validate_archive(archive)
             self.run('cp', '-a', '-', name + ':' + path, data=archive)
         self.run('start', name)
-        mapping = json.loads(self.run('inspect', '--format', '{{json .NetworkSettings.Ports}}', name))
-        binding = mapping[str(port) + '/tcp']
-        if len(binding) != 1 or binding[0]['HostIp'] != '127.0.0.1':
-            raise RuntimeError('fixture listener is not loopback-only')
-        return name, int(binding[0]['HostPort'])
+        self.host = name
+        return name, port
 
     def remove(self, name):
         self.run('rm', '-fv', name)
@@ -151,30 +152,48 @@ class Fixture:
             time.sleep(2)
         raise RuntimeError('native fixture readiness deadline exceeded')
 
+    def client_request(self, payload):
+        # Docker internal networks intentionally do not publish ports. The
+        # credential-free client joins only this UUID-owned isolated network.
+        if self.client is None:
+            self.client = self.prefix + '-client'
+            self.containers.append(self.client)
+            self.run('run', '-d', '--name', self.client, '--network', self.network,
+                     '--memory=128m', CLIENT_IMAGE, 'python', '-c', 'import time;time.sleep(1200)')
+        code = ('import sys,json,base64,socket,urllib.request\nfrom typing import Any\n'
+                + inspect.getsource(resp_read) + '''
+p=json.load(sys.stdin)
+if p['operation']=='redis':
+    items=[base64.b64decode(x) for x in p['args']]
+    wire=b'*'+str(len(items)).encode()+b'\\r\\n'
+    wire+=b''.join(b'$'+str(len(x)).encode()+b'\\r\\n'+x+b'\\r\\n' for x in items)
+    with socket.create_connection((p['host'],p['port']),timeout=20) as connection:
+        connection.sendall(wire)
+        with connection.makefile('rb') as stream: result=resp_read(stream)
+else:
+    data=None if p['body'] is None else json.dumps(p['body']).encode()
+    headers={'Content-Type':'application/json'}
+    if p['auth']: headers['Authorization']='Basic '+base64.b64encode(p['auth'].encode()).decode()
+    request=urllib.request.Request('http://'+p['host']+':'+str(p['port'])+p['path'],data=data,headers=headers,method=p['method'])
+    with urllib.request.urlopen(request,timeout=60) as response:
+        raw=response.read(8*1024*1024+1)
+        if len(raw)>8*1024*1024: raise ValueError('response bound')
+        result=json.loads(raw) if raw else {}
+print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decode()}))
+''')
+        wire = json.dumps(payload | {'host': self.host}).encode()
+        result = self.run('exec', '-i', self.client, 'python', '-c', code, data=wire, timeout=90)
+        return json.loads(result, object_hook=lambda item: base64.b64decode(item['__binary__'])
+                          if set(item) == {'__binary__'} else item)
+
     def redis(self, port, *args):
         items = [x if isinstance(x, bytes) else str(x).encode() for x in args]
-        wire = b'*' + str(len(items)).encode() + b'\r\n'
-        wire += b''.join(b'$' + str(len(x)).encode() + b'\r\n' + x + b'\r\n' for x in items)
-        with socket.create_connection(('127.0.0.1', port), timeout=20) as connection:
-            connection.sendall(wire)
-            with connection.makefile('rb') as stream:
-                return resp_read(stream)
+        return self.client_request({'operation': 'redis', 'port': port,
+                                    'args': [base64.b64encode(x).decode() for x in items]})
 
     def http(self, port, path, method='GET', body=None) -> Any:
-        data = None if body is None else json.dumps(body).encode()
-        headers = {'Content-Type': 'application/json'}
-        if self.auth:
-            headers['Authorization'] = 'Basic ' + base64.b64encode(self.auth.encode()).decode()
-        request = urllib.request.Request('http://127.0.0.1:' + str(port) + path,
-                                         data=data, headers=headers, method=method)
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                raw = response.read(8 * 1024 * 1024 + 1)
-                if len(raw) > 8 * 1024 * 1024:
-                    raise ValueError('native API response exceeds bound')
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError:
-            raise RuntimeError('native API request rejected') from None
+        return self.client_request({'operation': 'http', 'port': port, 'path': path,
+                                    'method': method, 'body': body, 'auth': self.auth})
 
     def dragonfly(self):
         args = ('--force_epoll', '--proactor_threads=2', '--maxmemory=512Mi',
@@ -309,6 +328,7 @@ class Fixture:
 def fixture(service):
     run = Fixture(service)
     run.run('pull', '--platform', 'linux/amd64', IMAGES[service], timeout=600)
+    run.run('pull', '--platform', 'linux/amd64', CLIENT_IMAGE, timeout=600)
     run.run('network', 'create', '--internal', run.network)
     try:
         method = 'rabbitmq' if service == 'rabbitmq-server' else service

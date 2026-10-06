@@ -273,6 +273,42 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(all(item.observe()['admission'] for item in self.adapters.values()))
 
+    def test_later_foreign_hold_prevents_any_resume(self):
+        self.begin()
+        self.expire()
+        adapter = list(self.adapters.values())[-1]
+        original = adapter.observe()
+        for field in ('epoch', 'generation'):
+            with self.subTest(field=field):
+                with database(adapter.path) as connection:
+                    connection.execute('UPDATE state SET ' + field + '=?', ('f' * 32,))
+                result = self.watchdog()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertTrue(all(not item.observe()['admission'] for item in self.adapters.values()))
+                with ConsumerJournal(self.path, self.source) as journal:
+                    state = journal.read()
+                    assert state is not None
+                    self.assertEqual(state['phase'], 'revoked')
+                with database(adapter.path) as connection:
+                    connection.execute('UPDATE state SET ' + field + '=?', (original[field],))
+        self.assertEqual(self.watchdog().returncode, 0)
+        self.assertTrue(all(item.observe()['admission'] for item in self.adapters.values()))
+
+    def test_cleared_token_with_changed_admission_prevents_any_resume(self):
+        self.begin()
+        self.expire()
+        adapter = list(self.adapters.values())[-1]
+        original = adapter.observe()
+        with database(adapter.path) as connection:
+            connection.execute('UPDATE state SET epoch=NULL, generation=NULL')
+        result = self.watchdog()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(all(not item.observe()['admission'] for item in self.adapters.values()))
+        with database(adapter.path) as connection:
+            connection.execute('UPDATE state SET epoch=?, generation=?',
+                               (original['epoch'], original['generation']))
+        self.assertEqual(self.watchdog().returncode, 0)
+
     def test_lost_resume_ack_is_idempotent_after_process_exit(self):
         self.begin()
         self.expire()

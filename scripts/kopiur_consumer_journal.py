@@ -155,6 +155,26 @@ class ConsumerJournal:
         self.current(epoch)
         return result
 
+    def preflight_recovery(self, state, adapters):
+        if set(adapters) != set(state['consumers']):
+            raise InvalidEvidence('adapter cohort differs from authoritative journal')
+        # Validate the whole cohort before reopening its first consumer. Cleared
+        # tokens require original admission, covering never-applied intent and
+        # acknowledged prior resume. Native mutations must still check ownership.
+        for app, adapter in adapters.items():
+            actual = adapter.observe()
+            expected = state['consumers'][app]
+            if (actual.get('identity') != expected['identity']
+                    or type(actual.get('admission')) is not bool
+                    or 'epoch' not in actual or 'generation' not in actual):
+                raise InvalidEvidence('incomplete native recovery ownership observation')
+            token = actual['epoch'], actual['generation']
+            if token == (state['epoch'], state['generation']):
+                if actual['admission'] is not False:
+                    raise InvalidEvidence('owned hold admission changed before recovery')
+            elif token != (None, None) or actual['admission'] is not expected['prior_admission']:
+                raise InvalidEvidence('consumer recovery ownership changed')
+
     def watchdog_recover(self, adapters, force=False):
         state = self.read()
         if state is None or state['phase'] == 'released':
@@ -166,7 +186,7 @@ class ConsumerJournal:
         state['revoked'] = True
         state['phase'] = 'revoked'
         self.save(state)
-        self.observe(state, adapters, held=False)
+        self.preflight_recovery(state, adapters)
         for app, adapter in adapters.items():
             expected = state['consumers'][app]
             adapter.resume(expected['identity'], state['epoch'],

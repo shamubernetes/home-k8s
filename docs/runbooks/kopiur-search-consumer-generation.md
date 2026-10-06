@@ -25,6 +25,14 @@ is deliberately killed after resume but before acknowledgement. These prove
 the fixture protocol, not TubeArchivist or Cowbell application recovery.
 Production source names are refused. This is not a deployed watchdog, and the
 existing metadata-only CLI does not gain native observations automatically.
+Before any resume, recovery preflights every native identity, admission and
+epoch/generation token. A foreign hold anywhere in the cohort prevents reopening
+its first consumer. Cleared tokens require the recorded prior admission, allowing
+never-applied intent and lost resume acknowledgements. Each native mutation must
+still atomically check ownership; this preflight alone is not a native fencing
+protocol. Tests cover a later consumer with a foreign epoch or generation and a
+cleared token with changed admission.
+
 Production adapter integration, bounded collector termination and deployment
 restart supervision still require review and implementation. Do not hold the
 journal lock across unbounded application operations.

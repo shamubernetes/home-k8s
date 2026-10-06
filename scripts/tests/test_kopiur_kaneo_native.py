@@ -19,6 +19,17 @@ class KaneoTests(unittest.TestCase):
         self.assertEqual(self.drill.image, kaneo.IMAGE)
         self.assertEqual(self.drill.port, 1337)
 
+    def test_catalog_includes_drizzle_migrations(self):
+        with patch.object(self.drill, 'sql', side_effect=['drizzle.__drizzle_migrations\npublic.task', '2', '1']) as sql:
+            self.assertEqual(self.drill.counts('database'), {'drizzle.__drizzle_migrations': 2, 'public.task': 1})
+        self.assertIn('quote_ident(schemaname)', sql.call_args_list[0].args[1])
+
+    def test_migration_content_changes_fingerprint(self):
+        with patch.object(self.drill, 'counts', return_value={'drizzle.__drizzle_migrations': 1}):
+            with patch.object(self.drill, 'sql', side_effect=['original', 'changed']):
+                self.assertNotEqual(self.drill.fingerprints('database', 'kaneo'),
+                                    self.drill.fingerprints('database', 'kaneo'))
+
     def test_original_session_and_signing_secret_are_separate(self):
         value = {'original_fixture_key': 'original-session-token',
                  'auth_secret': 'original-signing-secret', 'task_id': 'fixture-task'}

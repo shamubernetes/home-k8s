@@ -141,11 +141,25 @@ def validate_elasticsearch_restore(result):
 
 
 class Fixture:
-    def __init__(self, service):
+    def __init__(self, service, *, docker_endpoint=None, require_explicit_endpoint=False):
         if service not in IMAGES:
             raise ValueError('unknown shared-store fixture')
         if not os.environ.get('RUNNER_NAME', '').startswith('ghar-set-zoo-') or sys.platform != 'linux':
             raise RuntimeError('native fixtures require the owned Linux ARC runner')
+        if require_explicit_endpoint and docker_endpoint is None:
+            raise ValueError('explicit fixture Docker endpoint required')
+        if docker_endpoint is not None:
+            if (not isinstance(docker_endpoint, str)
+                    or not docker_endpoint.startswith('unix:///')
+                    or any(c.isspace() or ord(c) < 32 for c in docker_endpoint)
+                    or any(c in docker_endpoint for c in ('?', '#', '%'))
+                    or str(Path(docker_endpoint[7:])) != docker_endpoint[7:]
+                    or '..' in Path(docker_endpoint[7:]).parts
+                    or docker_endpoint.endswith('/')):
+                raise ValueError('canonical absolute Unix Docker endpoint required')
+        # Explicit routing is a prerequisite, not proof of a private daemon or
+        # server containment. Legacy fixtures retain their approved ARC endpoint.
+        self.docker_endpoint = docker_endpoint
         self.service = service
         self.prefix = 'k8s92-nonrel-' + uuid.uuid4().hex
         self.network = self.prefix + '-net'
@@ -157,11 +171,16 @@ class Fixture:
         self.client_started = False
         self.host = None
 
+    def docker_command(self, *args):
+        if self.docker_endpoint is None:
+            return ['docker', *args]
+        return ['docker', '--host', self.docker_endpoint, *args]
+
     def run(self, *args, data=None, timeout=180):
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             raise RuntimeError('native fixture deadline exceeded')
-        result = subprocess.run(['docker', *args], input=data, capture_output=True,
+        result = subprocess.run(self.docker_command(*args), input=data, capture_output=True,
                                 timeout=min(timeout, remaining))
         if result.returncode:
             # Docker output can contain the fixture password or message bodies.
@@ -175,9 +194,9 @@ class Fixture:
         for key, value in (variables or {}).items():
             env[key] = value
             options.extend(('-e', key))
-        command = ['docker', 'create', '--name', name, '--network', self.network,
+        command = self.docker_command('create', '--name', name, '--network', self.network,
                    *extra, *options,
-                   IMAGES[self.service], *args]
+                   IMAGES[self.service], *args)
         # Track exact names even if create partly succeeds, cleanup never prunes.
         self.containers.append(name)
         remaining = self.deadline - time.monotonic()
@@ -226,9 +245,9 @@ class Fixture:
             # Cleanup has its own bounded deadline but the same identity fence.
             # Never fall back to deleting a potentially replaced container name.
             try:
-                subprocess.run(['docker', 'rm', '-fv', container_id], capture_output=True, timeout=60, check=True)
+                subprocess.run(self.docker_command('rm', '-fv', container_id), capture_output=True, timeout=60, check=True)
                 inventory = subprocess.run(
-                    ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.ID}}'],
+                    self.docker_command('ps', '-a', '--no-trunc', '--format', '{{.ID}}'),
                     capture_output=True, timeout=60, check=True)
                 if container_id in inventory.stdout.decode().splitlines():
                     raise RuntimeError('server lifetime remains after removal')
@@ -238,7 +257,7 @@ class Fixture:
             self.containers.remove(name)
             del self.container_ids[name]
         try:
-            subprocess.run(['docker', 'network', 'rm', self.network], capture_output=True, timeout=60, check=True)
+            subprocess.run(self.docker_command('network', 'rm', self.network), capture_output=True, timeout=60, check=True)
         except (OSError, subprocess.SubprocessError):
             failures.append('network retirement unresolved')
         if failures:

@@ -31,9 +31,69 @@ class AdmissionTests(unittest.TestCase):
             self.assertRegex(image, r'@sha256:[0-9a-f]{64}$')
 
 
+class EndpointTests(unittest.TestCase):
+    def fixture(self, endpoint=None, required=False):
+        with patch.dict(native.os.environ, {'RUNNER_NAME': 'ghar-set-zoo-fixture'}), \
+                patch.object(native.sys, 'platform', 'linux'):
+            return native.Fixture('elasticsearch', docker_endpoint=endpoint,
+                                  require_explicit_endpoint=required)
+
+    def test_required_endpoint_never_defaults_to_ambient(self):
+        with self.assertRaisesRegex(ValueError, 'explicit fixture'):
+            self.fixture(required=True)
+        for endpoint in ('', 'tcp://example.invalid:2375', 'unix://relative',
+                         'unix:///tmp/../docker.sock', 'unix:///tmp//docker.sock',
+                         'unix:///tmp/./docker.sock', 'unix:///tmp/docker.sock?x',
+                         'unix:///tmp/docker.sock#x', 'unix:///tmp/docker%2esock',
+                         'unix:///tmp/docker.sock\n', 'unix:///', 42):
+            with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
+                self.fixture(endpoint, required=True)
+
+    def test_explicit_host_survives_ambient_changes(self):
+        fixture = self.fixture('unix:///fixture/generation/docker.sock', required=True)
+        result = native.subprocess.CompletedProcess([], 0, stdout=b'ok')
+        with patch.dict(native.os.environ, {'DOCKER_HOST': 'tcp://example.invalid:2375'}), \
+                patch.object(native.subprocess, 'run', return_value=result) as run:
+            self.assertEqual(fixture.run('info'), b'ok')
+        self.assertEqual(run.call_args.args[0],
+                         ['docker', '--host', 'unix:///fixture/generation/docker.sock', 'info'])
+
+    def test_endpoint_failure_never_retries_ambient(self):
+        fixture = self.fixture('unix:///fixture/generation/docker.sock', required=True)
+        for result in (native.subprocess.CompletedProcess([], 1, stdout=b'', stderr=b'secret'),
+                       OSError('endpoint absent')):
+            with patch.object(native.subprocess, 'run', **(
+                    {'side_effect': result} if isinstance(result, OSError) else {'return_value': result})) as run:
+                with self.assertRaises((RuntimeError, OSError)):
+                    fixture.run('info')
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][1:3],
+                             ['--host', 'unix:///fixture/generation/docker.sock'])
+
+    def test_create_and_cleanup_share_bound_endpoint(self):
+        fixture = self.fixture('unix:///fixture/generation/docker.sock', required=True)
+        created = native.subprocess.CompletedProcess([], 0, stdout=b'a' * 64)
+        with patch.object(native.subprocess, 'run', return_value=created) as create, \
+                patch.object(fixture, 'run', side_effect=[b'a' * 64, b'']):
+            fixture.create('source', 9200)
+        self.assertEqual(create.call_args.args[0][:4],
+                         ['docker', '--host', fixture.docker_endpoint, 'create'])
+        removed = native.subprocess.CompletedProcess([], 0, stdout=b'')
+        with patch.object(native.subprocess, 'run', return_value=removed) as cleanup:
+            fixture.cleanup()
+        self.assertEqual(len(cleanup.call_args_list), 3)
+        for call in cleanup.call_args_list:
+            self.assertEqual(call.args[0][:3], ['docker', '--host', fixture.docker_endpoint])
+
+    def test_legacy_endpoint_is_explicitly_unqualified(self):
+        fixture = self.fixture()
+        self.assertEqual(fixture.docker_command('info'), ['docker', 'info'])
+
+
 class ServerStartupTests(unittest.TestCase):
     def fixture(self):
         fixture = native.Fixture.__new__(native.Fixture)
+        fixture.docker_endpoint = None
         fixture.service = 'elasticsearch'
         fixture.prefix = 'owned'
         fixture.network = 'owned-network'
@@ -172,6 +232,7 @@ class ServerStartupTests(unittest.TestCase):
 class ServerRetirementTests(unittest.TestCase):
     def fixture(self):
         fixture = native.Fixture.__new__(native.Fixture)
+        fixture.docker_endpoint = None
         fixture.containers = ['owned-source']
         fixture.container_ids = {'owned-source': 'a' * 64}
         return fixture

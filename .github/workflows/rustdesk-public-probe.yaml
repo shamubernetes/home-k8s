@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "RustDesk - Public protocol probe"
+
+on:
+  workflow_dispatch:
+    inputs:
+      public_key:
+        description: RustDesk server public Ed25519 key, not the private key
+        type: string
+        required: true
+        default: "4oHXaBZDNOcdFIFTrE9oZbMz3cTWVuGiZ0wMV+DIKgc="
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: rustdesk-public-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: RustDesk native protocols from off-LAN
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Test probe wire codecs
+      run: python3 scripts/tests/test-rustdesk-protocol.py
+    - name: Test public registration and bidirectional relay
+      env:
+        PUBLIC_KEY: ${{ inputs.public_key }}
+      run: |
+        python3 scripts/rustdesk-protocol-probe.py rustdesk.thezoo.house "$PUBLIC_KEY" --require-public --check-closed | tee rustdesk-probe.json
+        {
+          printf '## RustDesk off-LAN protocol evidence\n\n```json\n'
+          cat rustdesk-probe.json
+          printf '\n```\n'
+        } >> "$GITHUB_STEP_SUMMARY"

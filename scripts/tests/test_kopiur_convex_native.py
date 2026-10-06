@@ -44,18 +44,19 @@ class ConvexTests(unittest.TestCase):
         with patch.dict(self.scope, run=invoke):
             with patch.object(self.drill, 'start', return_value='restored') as start:
                 self.assertEqual(self.drill.app('restored-app', 'database', 'config'), 'restored')
-        self.assertEqual(invoke.call_count, 1)
+        self.assertEqual(invoke.call_count, 2)
         self.assertNotIn('generate_admin_key.sh', str(invoke.call_args.args))
         env = start.call_args.kwargs['env']
         self.assertEqual(env['INSTANCE_SECRET'], 'a' * 64)
         self.assertFalse(any(key.startswith(('S3_', 'AWS_')) for key in env))
         self.assertEqual(start.call_args.kwargs['network'], 'container:database')
+        self.assertEqual(start.call_args.kwargs['user'], '0:0')
 
     def test_launch_diagnostics_do_not_print_fixture_credentials(self):
         key = 'original-private-fixture-admin-key'
         secret = 'a' * 64
         raw = json.dumps({'original_fixture_key': key, 'auth_secret': secret}).encode()
-        invoke = Mock(side_effect=[SimpleNamespace(stdout=raw), SimpleNamespace(stdout=b'0\n'),
+        invoke = Mock(side_effect=[SimpleNamespace(stdout=raw), SimpleNamespace(stdout=b''), SimpleNamespace(stdout=b'0\n'),
             SimpleNamespace(stdout=b'750 0 0 /convex/run_backend.sh\n')])
         with patch.dict(self.scope, run=invoke):
             with patch.object(self.drill, 'start', side_effect=RuntimeError('isolated launch failed')):

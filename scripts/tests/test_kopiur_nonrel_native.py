@@ -121,6 +121,19 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             restarted.initialize()
 
+    def test_legacy_manifest_denies_fixture_admission_and_existing_dispatch(self):
+        fixture = self.fixture()
+        state = self.manifest.read()
+        state['version'] = 1
+        del state['admissions']
+        self.manifest.write(state)
+        with self.assertRaises(RuntimeError):
+            self.fixture()
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.run('info')
+            run.assert_not_called()
+
     def reconciliation_responses(self, name, operation, container_id='b' * 64):
         row = {'Id': container_id, 'Name': '/' + name, 'Config': {'Labels': {
             'kopiur.fixture-generation': self.generation,

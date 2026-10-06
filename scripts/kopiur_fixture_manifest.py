@@ -56,10 +56,12 @@ class GenerationManifest:
             raise RuntimeError('fixture manifest exceeds bound')
         state = json.loads(self.path.read_text(), object_pairs_hook=unique_object)
         if (not isinstance(state, dict)
-                or set(state) != {'version', 'generation', 'endpoint', 'revoked', 'containers'}
-                or type(state['version']) is not int or state['version'] != 1
+                or type(state.get('version')) is not int or state['version'] not in (1, 2)
+                or set(state) != ({'version', 'generation', 'endpoint', 'revoked', 'containers'}
+                                 | ({'admissions'} if state['version'] == 2 else set()))
                 or state['generation'] != self.generation or state['endpoint'] != self.endpoint
-                or type(state['revoked']) is not bool or not isinstance(state['containers'], dict)):
+                or type(state['revoked']) is not bool or not isinstance(state['containers'], dict)
+                or not isinstance(state.get('admissions', {}), dict)):
             raise RuntimeError('fixture manifest binding malformed')
         for name, item in state['containers'].items():
             if (not isinstance(name, str) or not name.startswith(self.generation + '-')
@@ -72,6 +74,16 @@ class GenerationManifest:
                         not isinstance(item['id'], str)
                         or re.fullmatch(r'[0-9a-f]{64}', item['id']) is None))):
                 raise RuntimeError('fixture manifest container malformed')
+        for name, binding in state.get('admissions', {}).items():
+            item = state['containers'].get(name)
+            if (item is None or item['phase'] not in ('running', 'start-intent')
+                    or not isinstance(binding, dict)
+                    or set(binding) != {'container_id', 'index_name', 'index_uuid', 'write_block'}
+                    or binding['container_id'] != item['id'] or binding['index_name'] != 'fixture'
+                    or not isinstance(binding['index_uuid'], str)
+                    or re.fullmatch(r'[A-Za-z0-9_-]{22}', binding['index_uuid']) is None
+                    or binding['write_block'] not in (None, 'true', 'false')):
+                raise RuntimeError('fixture manifest admission malformed')
         return state
 
     def write(self, state):
@@ -95,8 +107,38 @@ class GenerationManifest:
         with self.transaction():
             if self.path.exists():
                 raise RuntimeError('fixture manifest already exists, reconcile before retry')
-            self.write({'version': 1, 'generation': self.generation, 'endpoint': self.endpoint,
-                        'revoked': False, 'containers': {}})
+            self.write({'version': 2, 'generation': self.generation, 'endpoint': self.endpoint,
+                        'revoked': False, 'containers': {}, 'admissions': {}})
+
+    def bind_admission(self, name, container_id, admission):
+        """Persist source identity and prior admission before a writer mutation.
+
+        This immutable binding is not authority to reopen a revoked source.
+        Old manifests remain retirement-readable but cannot admit new work.
+        """
+        if (not isinstance(admission, dict) or set(admission) != {'index_uuid', 'write_block'}
+                or not isinstance(admission['index_uuid'], str)
+                or re.fullmatch(r'[A-Za-z0-9_-]{22}', admission['index_uuid']) is None
+                or admission['write_block'] not in (None, 'true', 'false')):
+            raise ValueError('immutable fixture admission required')
+        binding = dict(admission, container_id=container_id, index_name='fixture')
+        with self.transaction():
+            state = self.read()
+            item = state['containers'].get(name)
+            if (state['version'] != 2 or state['revoked'] or item is None or item['phase'] != 'running'
+                    or item['id'] != container_id):
+                raise RuntimeError('fixture admission binding denied')
+            if name in state['admissions'] and state['admissions'][name] != binding:
+                raise RuntimeError('fixture prior admission is immutable')
+            state['admissions'][name] = binding
+            self.write(state)
+
+    def require_admission(self, name, container_id, admission):
+        with self.transaction():
+            state = self.read()
+            expected = dict(admission, container_id=container_id, index_name='fixture')
+            if state['version'] != 2 or state['revoked'] or state['admissions'].get(name) != expected:
+                raise RuntimeError('fixture admission authority denied')
 
     def create_intent(self, name):
         if not isinstance(name, str) or re.fullmatch(
@@ -104,7 +146,7 @@ class GenerationManifest:
             raise ValueError('owned fixture container name required')
         with self.transaction():
             state = self.read()
-            if state['revoked'] or name in state['containers']:
+            if state['version'] != 2 or state['revoked'] or name in state['containers']:
                 raise RuntimeError('fixture create denied, reconcile existing intent')
             operation = uuid.uuid4().hex
             state['containers'][name] = {'operation': operation, 'phase': 'create-intent', 'id': None}
@@ -120,7 +162,7 @@ class GenerationManifest:
         with self.transaction():
             state = self.read()
             item = state['containers'].get(name)
-            if (state['revoked'] or item is None or item['operation'] != operation
+            if (state['version'] != 2 or state['revoked'] or item is None or item['operation'] != operation
                     or item['phase'] != before or item['id'] not in (None, container_id)):
                 raise RuntimeError('fixture manifest transition denied')
             item.update(phase=after, id=container_id)

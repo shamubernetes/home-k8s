@@ -163,7 +163,7 @@ class Fixture:
                     or docker_endpoint is None or generation_manifest.endpoint != docker_endpoint):
                 raise ValueError('manifest requires its exact explicit Docker endpoint')
             state = generation_manifest.read()
-            if state['revoked'] or state['containers']:
+            if state['version'] != 2 or state['revoked'] or state['containers']:
                 raise RuntimeError('manifest generation requires reconciliation')
             self.prefix = generation_manifest.generation
         self.network = self.prefix + '-net'
@@ -181,8 +181,10 @@ class Fixture:
         return ['docker', '--host', self.docker_endpoint, *args]
 
     def check_dispatch(self):
-        if self.generation_manifest is not None and self.generation_manifest.read()['revoked']:
-            raise RuntimeError('fixture generation dispatch revoked')
+        if self.generation_manifest is not None:
+            state = self.generation_manifest.read()
+            if state['version'] != 2 or state['revoked']:
+                raise RuntimeError('fixture generation dispatch revoked')
 
     def run(self, *args, data=None, timeout=180):
         self.check_dispatch()

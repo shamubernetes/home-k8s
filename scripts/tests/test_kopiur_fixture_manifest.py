@@ -125,5 +125,103 @@ class RetirementTests(unittest.TestCase):
         self.assertEqual(json.loads(output.getvalue()), {'startup_allowed': False})
 
 
+class AdmissionTests(unittest.TestCase):
+    setUp = RetirementTests.setUp
+    result = RetirementTests.result
+    responses = RetirementTests.responses
+
+    def running_source(self):
+        self.manifest.register(self.name, self.operation, 'b' * 64)
+        self.manifest.start_intent(self.name, self.operation, 'b' * 64)
+        self.manifest.started(self.name, self.operation, 'b' * 64)
+
+    def test_prior_admission_survives_restart_without_normalization(self):
+        for block in (None, 'true', 'false'):
+            # Each distinct prior state belongs to a distinct manifest.
+            self.setUp()
+            self.running_source()
+            admission = {'index_uuid': 'x' * 22, 'write_block': block}
+            self.manifest.bind_admission(self.name, 'b' * 64, admission)
+            restarted = controller.GenerationManifest(self.path, self.generation, self.endpoint)
+            restarted.require_admission(self.name, 'b' * 64, admission)
+            self.assertEqual(restarted.read()['admissions'][self.name]['write_block'], block)
+            restarted.bind_admission(self.name, 'b' * 64, admission)
+
+    def test_binding_rejects_changed_uuid_container_and_prior_admission(self):
+        self.running_source()
+        admission = {'index_uuid': 'x' * 22, 'write_block': 'true'}
+        self.manifest.bind_admission(self.name, 'b' * 64, admission)
+        before = self.path.read_bytes()
+        for identity, saved in [('c' * 64, admission), ('b' * 64, dict(admission, index_uuid='y' * 22)),
+                                ('b' * 64, dict(admission, write_block='false'))]:
+            with self.assertRaises(RuntimeError):
+                self.manifest.bind_admission(self.name, identity, saved)
+            with self.assertRaises(RuntimeError):
+                self.manifest.require_admission(self.name, identity, saved)
+            self.assertEqual(self.path.read_bytes(), before)
+
+    def test_missing_unstarted_and_revoked_binding_denies(self):
+        admission = {'index_uuid': 'x' * 22, 'write_block': None}
+        with self.assertRaises(RuntimeError):
+            self.manifest.bind_admission(self.name, 'b' * 64, admission)
+        self.running_source()
+        with self.assertRaises(RuntimeError):
+            self.manifest.require_admission(self.name, 'b' * 64, admission)
+        self.manifest.bind_admission(self.name, 'b' * 64, admission)
+        self.manifest.revoke()
+        for method in (self.manifest.bind_admission, self.manifest.require_admission):
+            with self.assertRaises(RuntimeError):
+                method(self.name, 'b' * 64, admission)
+        self.assertEqual(self.manifest.read()['admissions'][self.name]['index_uuid'], 'x' * 22)
+
+    def test_malformed_binding_denies_without_rewriting(self):
+        self.running_source()
+        admission = {'index_uuid': 'x' * 22, 'write_block': None}
+        for invalid in (dict(admission, index_uuid='short'), dict(admission, write_block=False),
+                        dict(admission, unknown='field')):
+            with self.assertRaises(ValueError):
+                self.manifest.bind_admission(self.name, 'b' * 64, invalid)
+        self.manifest.bind_admission(self.name, 'b' * 64, admission)
+        original = self.manifest.read()
+        for field, value in [('index_uuid', 'short'), ('write_block', False),
+                             ('container_id', 'c' * 64), ('index_name', 'replacement')]:
+            state = json.loads(json.dumps(original))
+            state['admissions'][self.name][field] = value
+            self.manifest.write(state)
+            before = self.path.read_bytes()
+            with self.assertRaises(RuntimeError):
+                self.manifest.read()
+            self.assertEqual(self.path.read_bytes(), before)
+
+    def test_retirement_retains_bound_admission_evidence(self):
+        self.running_source()
+        admission = {'index_uuid': 'x' * 22, 'write_block': 'true'}
+        self.manifest.bind_admission(self.name, 'b' * 64, admission)
+        binding = self.manifest.read()['admissions']
+        with patch.object(controller.subprocess, 'run', side_effect=
+                self.responses() + [self.result(), self.result()]):
+            receipt = self.manifest.retire()
+        self.assertFalse(receipt['admission_release_allowed'])
+        self.assertEqual(self.manifest.read()['admissions'], binding)
+        self.assertTrue(self.manifest.read()['revoked'])
+
+    def test_legacy_manifest_retirement_readable_but_no_new_dispatch(self):
+        state = self.manifest.read()
+        state['version'] = 1
+        del state['admissions']
+        self.manifest.write(state)
+        self.assertEqual(self.manifest.read()['version'], 1)
+        with self.assertRaises(RuntimeError):
+            self.manifest.create_intent(self.generation + '-client')
+        with self.assertRaises(RuntimeError):
+            self.manifest.register(self.name, self.operation, 'b' * 64)
+        with patch.object(controller.subprocess, 'run', side_effect=
+                self.responses() + [self.result(), self.result()]):
+            receipt = self.manifest.retire()
+        self.assertFalse(receipt['admission_release_allowed'])
+        self.assertTrue(self.manifest.read()['revoked'])
+        self.assertEqual(self.manifest.read()['containers'][self.name]['id'], 'b' * 64)
+
+
 if __name__ == '__main__':
     unittest.main()

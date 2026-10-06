@@ -150,6 +150,32 @@ class FenceTests(unittest.TestCase):
                 self.fail('legacy admitted')
         self.assertEqual(self.path.read_bytes(), before)
 
+    def test_durable_admission_reads_exact_persisted_state(self):
+        for prior in (None, 'false', 'true'):
+            with self.subTest(prior=prior):
+                self.path.unlink(missing_ok=True)
+                admission = {'index_uuid': 'original-index', 'write_block': prior}
+                with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+                    journal.acquire(lambda: None)
+                self.assertEqual(
+                    json.loads(FixtureFence.durable_admission(self.path, SOURCE)), admission)
+
+    def test_durable_admission_denies_absent_foreign_and_legacy(self):
+        admission = {'index_uuid': 'original-index', 'write_block': None}
+        missing = self.path.with_name('missing.json')
+        with self.assertRaises(RuntimeError):
+            FixtureFence.durable_admission(missing, SOURCE)
+        with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+            journal.acquire(lambda: None)
+        with self.assertRaises(RuntimeError):
+            FixtureFence.durable_admission(self.path, SOURCE.replace('a', 'b', 1))
+        self.path.unlink()
+        with FixtureFence(self.path, SOURCE) as legacy:
+            legacy.acquire(lambda: None)
+        with self.assertRaises(RuntimeError):
+            FixtureFence.durable_admission(self.path, SOURCE)
+        self.assertNotIn('admission', json.loads(self.path.read_text()))
+
     def test_native_restart_observer_runs_only_while_exclusively_owned(self):
         admission = {'index_uuid': 'original-index', 'write_block': None}
         with FixtureFence(self.path, SOURCE, admission=admission) as journal:

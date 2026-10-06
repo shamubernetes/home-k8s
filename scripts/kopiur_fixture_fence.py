@@ -30,6 +30,25 @@ class FixtureFence:
         self.lock = None
 
     @classmethod
+    def durable_admission(cls, path, source):
+        """Read the exact persisted per-capture admission, failing closed.
+
+        Recovery authorization comes from this durable file, never from a
+        caller's reconstructed dictionary. A missing, legacy or foreign
+        journal denies every settings PUT it is asked to authorize.
+        """
+        if not Path(path).is_file():
+            raise RuntimeError('durable per-capture journal is absent')
+        state = json.loads(Path(path).read_text())
+        if not isinstance(state, dict) or set(state) != {'source', 'phase', 'admission'}:
+            raise RuntimeError('durable per-capture journal is not natively bound')
+        if state['source'] != source or state['admission'] is None:
+            raise RuntimeError('durable per-capture journal admission unavailable')
+        # Construction revalidates the exact admission shape this journal owns.
+        cls(path, source, admission=state['admission'])
+        return json.dumps(state['admission'], sort_keys=True)
+
+    @classmethod
     @contextmanager
     def restart_native(cls, path, source, observe):
         """Recover persisted prior admission under exclusive ownership.

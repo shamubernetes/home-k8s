@@ -497,7 +497,14 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             if observed_admission()['write_block'] != 'true':
                 raise RuntimeError('Elasticsearch writer fence was not observed')
 
-        def restore_admission(saved):
+        def durable_journal_admission(journal, expected):
+            """The persisted journal must exactly own the state being restored."""
+            persisted = json.loads(FixtureFence.durable_admission(journal, source))
+            if persisted != expected:
+                raise RuntimeError('Elasticsearch durable admission differs from journal')
+
+        def restore_admission(saved, journal):
+            durable_journal_admission(journal, saved)
             actual = elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
             if actual['index_uuid'] != saved['index_uuid']:
                 raise RuntimeError('Elasticsearch fixture index replaced before recovery')
@@ -508,7 +515,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 raise RuntimeError('Elasticsearch prior fixture admission differs')
 
         def release():
-            restore_admission(prior_admission)
+            restore_admission(prior_admission, journal)
 
         def restart_observation():
             return elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
@@ -548,8 +555,8 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 with FixtureFence.restart_native(journal, source, restart_observation) as (boundary, saved):
                     expected_phase = 'intent' if point == 'intent' else 'fenced'
                     if (boundary.read() != expected_phase
-                            or not boundary.recover(lambda: restore_admission(saved))
-                            or boundary.recover(lambda: restore_admission(saved))):
+                            or not boundary.recover(lambda: restore_admission(saved, journal))
+                            or boundary.recover(lambda: restore_admission(saved, journal))):
                         raise RuntimeError('Elasticsearch fixture restart recovery differs')
                 self.http(port, '/fixture/_doc/resumed?refresh=true', 'PUT',
                           {'title': 'post-restart-write', 'number': 3})
@@ -572,7 +579,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                         raise
             with FixtureFence.restart_native(closed_journal, source, restart_observation) as (boundary, saved):
                 def preserve_closed():
-                    restore_admission(saved)
+                    restore_admission(saved, closed_journal)
                 if not boundary.recover(preserve_closed) or boundary.recover(preserve_closed):
                     raise RuntimeError('preblocked native journal recovery differs')
             closed_denial = self.http(port, '/fixture/_doc/preblocked?refresh=true', 'PUT',

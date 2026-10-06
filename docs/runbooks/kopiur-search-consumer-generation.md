@@ -3,6 +3,32 @@
 Kaneo `i894pxqe3jf5oc43vgh6y616`, original search execution `t_427cf088`.
 This is a review candidate, not deployed production recovery.
 
+## Isolated journal integration
+
+`scripts/kopiur_consumer_journal.py` adds a UUID-fixture-only locked journal.
+The same exclusive lock guards ownership epochs, persisted prior admissions,
+native adapter observations, publication and read-only receipt admission.
+The closed journal retains the exact receipt, so a stale caller cannot replace
+its point IDs or promote a revoked generation. Each observation binds identity,
+epoch, generation, closed admission and zero active writers. Results retain
+the existing false production acceptance and release authorization fields.
+
+An independent recovery process opens the same journal after timeout. It
+persists revocation before restoring admission, verifies acknowledgements and
+leaves failures retryable. A new epoch rejects old collectors. Prior closed
+admissions remain closed. Adapters must perform identity-checked, bounded,
+idempotent native operations, including recovery after lost acknowledgements.
+
+The ARC tests use two real isolated SQLite writer processes and native
+transactional admission. A separate subprocess performs watchdog recovery and
+is deliberately killed after resume but before acknowledgement. These prove
+the fixture protocol, not TubeArchivist or Cowbell application recovery.
+Production source names are refused. This is not a deployed watchdog, and the
+existing metadata-only CLI does not gain native observations automatically.
+Production adapter integration, bounded collector termination and deployment
+restart supervision still require review and implementation. Do not hold the
+journal lock across unbounded application operations.
+
 ## Read-only receipt admission
 
 Run `python3 scripts/kopiur_consumer_generation.py --ledger <original-inventory.json> --receipt <held-receipt.json>` on private original capture/restore metadata.

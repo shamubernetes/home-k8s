@@ -83,6 +83,20 @@ def contract():
                     '/convex', '/convex/run_backend.sh', '/convex/generate_admin_key.sh', check=False).stdout.decode()[:2048]
                 raise RuntimeError(str(error) + '; image user=' + user + '; fixed-path modes=' + modes.strip()) from error
 
+        def capture(self, database, config, databases, **kwargs):
+            # Convex's root entrypoint can reset ownership on its data mount.
+            # Repair only the helper-owned staging tree after the producer stops.
+            scope['run']('docker', 'run', '--rm', '--read-only', '--network', 'none',
+                '--cap-drop=ALL', '--cap-add=CHOWN', '--cap-add=DAC_READ_SEARCH',
+                '--security-opt=no-new-privileges:true', '--user', '0:0',
+                '--entrypoint', 'sh', '--mount',
+                'type=volume,src=' + config + ',dst=/config', scope['PG_IMAGE'],
+                '-ceu', 'test ! -L /config/.kopiur-postgres; '
+                'if [ -d /config/.kopiur-postgres ]; then '
+                'test -z "$(find /config/.kopiur-postgres -type l -print -quit)"; '
+                'chown -R 568:568 /config/.kopiur-postgres; fi')
+            return super().capture(database, config, databases, **kwargs)
+
         def healthy(self, container):
             from kopiur_native_fixture import startup_failure
             for _ in range(180):

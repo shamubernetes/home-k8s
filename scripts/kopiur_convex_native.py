@@ -69,7 +69,7 @@ def contract():
                 '--mount', 'type=volume,src=' + config + ',dst=/config', scope['PG_IMAGE'],
                 '-ceu', 'chown 0:568 /config; chown -R 0:568 /config; chmod 0775 /config; '
                 'if [ -d /config/.kopiur-postgres ]; then '
-                'chown -R 568:568 /config/.kopiur-postgres; chmod 0700 /config/.kopiur-postgres; fi')
+                'chown -R 568:568 /config/.kopiur-postgres; fi')
             try:
                 return self.start(name, self.image, network='container:' + database, env=env,
                     mounts=[(config, '/config', 'rw'), (config, '/convex/data', 'rw')], user='0:0')

@@ -48,7 +48,7 @@ class ConvexTests(unittest.TestCase):
         self.assertEqual(invoke.call_count, 2)
         self.assertIn('chown 0:568 /config', invoke.call_args.args[-1])
         self.assertIn('chown -R 568:568 /config/.kopiur-postgres', invoke.call_args.args[-1])
-        self.assertIn('chmod 0700 /config/.kopiur-postgres', invoke.call_args.args[-1])
+        self.assertNotIn('chmod 0700 /config/.kopiur-postgres', invoke.call_args.args[-1])
         self.assertIn('--cap-add=DAC_READ_SEARCH', invoke.call_args.args)
         self.assertNotIn('--cap-add=DAC_OVERRIDE', invoke.call_args.args)
         self.assertNotIn('generate_admin_key', ' '.join(invoke.call_args.args))

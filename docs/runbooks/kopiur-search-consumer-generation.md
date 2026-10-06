@@ -39,6 +39,16 @@ journal lock across unbounded application operations.
 
 ## Native fencing prerequisite
 
+The isolated consumer journal now uses schema v2. Every write compares the full
+expected snapshot under its existing exclusive lock before replacing any bytes.
+Accepted writes advance a monotonic state revision and record a new operation
+identity; malformed candidates and stale same-phase or revoked snapshots leave
+the journal unchanged. Initial creation compares absence. Schema v1 journals
+are refused without rewriting them, since these are disposable fixture states,
+not a production migration. This is a CAS prerequisite only. It deliberately
+does not shorten locks, make revocation independent of hung native I/O, change
+commit/release semantics, or establish supervised command cessation.
+
 `scripts/kopiur_consumer_fencing.py` implements a separate, UUID-source-only
 SQLite fixture adapter. It is intentionally not connected to the existing
 consumer journal. Under one native transaction, commands compare resource

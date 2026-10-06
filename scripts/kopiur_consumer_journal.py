@@ -37,8 +37,13 @@ class ConsumerJournal:
         if not self.path.exists():
             return None
         state = json.loads(self.path.read_text())
+        return self.validate(state)
+
+    def validate(self, state):
         if (not isinstance(state, dict) or state.get('source') != self.source
-                or state.get('schema') != 'k8s92-isolated-consumer-journal/v1'
+                or state.get('schema') != 'k8s92-isolated-consumer-journal/v2'
+                or type(state.get('revision')) is not int or state['revision'] < 1
+                or not re.fullmatch(r'[0-9a-f]{32}', state.get('operation', ''))
                 or state.get('phase') not in ('intent', 'held', 'closed', 'revoked', 'released')
                 or not re.fullmatch(r'[0-9a-f]{32}', state.get('epoch', ''))
                 or not re.fullmatch(r'[0-9a-f]{32}', state.get('generation', ''))
@@ -54,13 +59,20 @@ class ConsumerJournal:
                 raise InvalidEvidence('invalid journal consumer boundary')
         return state
 
-    def save(self, state):
-        # Re-read while holding the same stable lock inode before atomic replace.
-        self.read()
+    def save(self, state, expected):
+        # Full snapshot CAS. Keep the legacy lock until supervised cessation and
+        # fenced native dispatch are integrated, rather than shorten it here.
+        current = self.read()
+        if current != expected:
+            raise InvalidEvidence('consumer journal snapshot changed')
+        candidate = copy.deepcopy(state)
+        candidate['revision'] = 1 if current is None else current['revision'] + 1
+        candidate['operation'] = uuid.uuid4().hex
+        self.validate(candidate)
         fd, name = tempfile.mkstemp(dir=self.path.parent, prefix=self.path.name + '.')
         try:
             with os.fdopen(fd, 'w') as stream:
-                json.dump(state, stream, sort_keys=True, allow_nan=False)
+                json.dump(candidate, stream, sort_keys=True, allow_nan=False)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(name, self.path)
@@ -72,6 +84,7 @@ class ConsumerJournal:
         finally:
             if os.path.exists(name):
                 os.unlink(name)
+        return candidate
 
     def begin(self, adapters, timeout_seconds):
         if (type(timeout_seconds) not in (int, float)
@@ -90,11 +103,11 @@ class ConsumerJournal:
                 raise InvalidEvidence('native consumer identity and prior admission required')
             consumers[app] = {'identity': observed['identity'],
                               'prior_admission': observed['admission']}
-        state = {'schema': 'k8s92-isolated-consumer-journal/v1', 'source': self.source,
+        state = {'schema': 'k8s92-isolated-consumer-journal/v2', 'source': self.source,
                  'epoch': uuid.uuid4().hex, 'generation': uuid.uuid4().hex,
                  'phase': 'intent', 'revoked': False,
                  'deadline': time.time() + timeout_seconds, 'consumers': consumers}
-        self.save(state)
+        self.save(state, previous)
         return state['epoch'], state['generation']
 
     def current(self, epoch):
@@ -122,6 +135,7 @@ class ConsumerJournal:
 
     def hold(self, epoch, adapters):
         state = self.current(epoch)
+        expected = copy.deepcopy(state)
         if state['phase'] != 'intent':
             raise InvalidEvidence('hold requires persisted intent')
         self.observe(state, adapters, held=False)
@@ -130,10 +144,11 @@ class ConsumerJournal:
         self.observe(state, adapters, held=True)
         self.current(epoch)
         state['phase'] = 'held'
-        self.save(state)
+        self.save(state, expected)
 
     def publish(self, epoch, ledger, receipt, adapters):
         state = self.current(epoch)
+        expected = copy.deepcopy(state)
         if state['phase'] != 'held' or receipt.get('generation') != state['generation']:
             raise InvalidEvidence('publication requires the held journal generation')
         result = reconcile(ledger, receipt)
@@ -143,7 +158,7 @@ class ConsumerJournal:
         self.current(epoch)
         state['receipt'] = copy.deepcopy(receipt)
         state['phase'] = 'closed'
-        self.save(state)
+        self.save(state, expected)
         return result
 
     def admit(self, epoch, ledger, receipt, adapters):
@@ -183,9 +198,11 @@ class ConsumerJournal:
             return False
         # Persist revocation before any external resume. A failed resume remains
         # retryable by a fresh watchdog process, and late publication is denied.
+        expected = copy.deepcopy(state)
         state['revoked'] = True
         state['phase'] = 'revoked'
-        self.save(state)
+        state = self.save(state, expected)
+        snapshot = copy.deepcopy(state)
         self.preflight_recovery(state, adapters)
         for app, adapter in adapters.items():
             expected = state['consumers'][app]
@@ -196,5 +213,5 @@ class ConsumerJournal:
                     or actual.get('admission') is not expected['prior_admission']):
                 raise InvalidEvidence('native consumer resume was not acknowledged')
         state['phase'] = 'released'
-        self.save(state)
+        self.save(state, snapshot)
         return True

@@ -276,8 +276,58 @@ class JournalTests(unittest.TestCase):
         with ConsumerJournal(self.path, self.source) as journal:
             state = journal.read()
             assert state is not None
+            expected = copy.deepcopy(state)
             state['deadline'] = time.time() - 1
-            journal.save(state)
+            journal.save(state, expected)
+
+    def test_stale_snapshot_cannot_overwrite_revocation_or_same_phase_update(self):
+        self.begin()
+        with ConsumerJournal(self.path, self.source) as journal:
+            stale = journal.read()
+            assert stale is not None
+            updated = copy.deepcopy(stale)
+            updated['deadline'] += 10
+            saved = journal.save(updated, stale)
+            self.assertEqual(saved['revision'], stale['revision'] + 1)
+            self.assertNotEqual(saved['operation'], stale['operation'])
+            before = self.path.read_bytes()
+            with self.assertRaises(InvalidEvidence):
+                journal.save(stale, stale)
+            self.assertEqual(self.path.read_bytes(), before)
+            revoked = copy.deepcopy(saved)
+            revoked.update(phase='revoked', revoked=True)
+            journal.save(revoked, saved)
+            before = self.path.read_bytes()
+            with self.assertRaises(InvalidEvidence):
+                journal.save(saved, saved)
+            self.assertEqual(self.path.read_bytes(), before)
+
+    def test_cas_absence_and_malformed_candidate_preserve_bytes(self):
+        self.begin()
+        with ConsumerJournal(self.path, self.source) as journal:
+            current = journal.read()
+            assert current is not None
+            before = self.path.read_bytes()
+            with self.assertRaises(InvalidEvidence):
+                journal.save(current, None)
+            malformed = copy.deepcopy(current)
+            malformed['source'] = 'database/elasticsearch'
+            with self.assertRaises(InvalidEvidence):
+                journal.save(malformed, current)
+            self.assertEqual(self.path.read_bytes(), before)
+
+    def test_full_snapshot_checks_generation_phase_operation_and_boundary(self):
+        self.begin()
+        with ConsumerJournal(self.path, self.source) as journal:
+            current = journal.read()
+            assert current is not None
+            before = self.path.read_bytes()
+            for field in ('epoch', 'generation', 'phase', 'revision', 'operation', 'consumers'):
+                wrong = copy.deepcopy(current)
+                wrong[field] = 'changed'
+                with self.subTest(field=field), self.assertRaises(InvalidEvidence):
+                    journal.save(current, wrong)
+                self.assertEqual(self.path.read_bytes(), before)
 
     def test_real_writers_drained_and_locked_closed_receipt_admitted(self):
         epoch, ledger, receipt = self.begin()
@@ -547,10 +597,10 @@ if __name__ == '__main__':
             if sys.argv[1] == 'crash-released':
                 import os
                 save = journal.save
-                def crash_save(state):
+                def crash_save(state, expected):
                     if state['phase'] == 'released':
                         os._exit(23)
-                    save(state)
+                    return save(state, expected)
                 journal.save = crash_save
             if sys.argv[1] == 'crash-hold':
                 state = journal.read()

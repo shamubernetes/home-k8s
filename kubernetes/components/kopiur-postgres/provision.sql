@@ -36,6 +36,7 @@ BEGIN
     WHEN 'kaneo' THEN allowed_databases := ARRAY['kaneo']; expected_role := 'kopiur_kaneo'; allowed_schemas := ARRAY['public','drizzle'];
     WHEN 'documenso' THEN allowed_databases := ARRAY['documenso']; expected_role := 'kopiur_documenso';
     WHEN 'convex' THEN allowed_databases := ARRAY['convex']; expected_role := 'kopiur_convex';
+    WHEN 'pelican' THEN allowed_databases := ARRAY['pelican']; expected_role := 'kopiur_pelican';
     WHEN 'romm' THEN allowed_databases := ARRAY['romm']; expected_role := 'kopiur_romm';
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
     WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
@@ -48,7 +49,7 @@ BEGIN
     ELSE RAISE EXCEPTION 'unqualified application';
   END CASE;
   ownership_marker := 'K8S-92 readonly backup for ' ||
-    CASE WHEN application_name IN ('atuin','n8n','kaneo','documenso','convex') THEN 'services/'
+    CASE WHEN application_name IN ('atuin','n8n','kaneo','documenso','convex','pelican') THEN 'services/'
          WHEN application_name = 'romm' THEN 'games/'
          WHEN application_name = 'pocket-id' THEN 'security/'
          WHEN application_name = 'home-assistant-fixture' THEN 'home-assistant/'

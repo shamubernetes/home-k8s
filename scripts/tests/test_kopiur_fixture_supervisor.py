@@ -14,9 +14,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import kopiur_fixture_supervisor as supervisor
 from kopiur_fixture_supervisor import BoundaryError, FixtureSupervisor
 from kopiur_fixture_controller import FixtureController
+from fixture_admission_cases import NativeAdmissionCases
 
 
-class KernelBoundaryTests(unittest.TestCase):
+class KernelBoundaryTests(NativeAdmissionCases, unittest.TestCase):
     def setUp(self):
         if os.environ.get('K8S92_CGROUP_FIXTURE') != 'isolated-arc-only':
             self.fail('requires explicitly admitted isolated ARC cgroup fixture')

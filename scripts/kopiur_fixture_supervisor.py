@@ -279,7 +279,10 @@ class FixtureSupervisor:
             if not state['revoked']:
                 state['revoked'] = True
                 state['revision'] += 1
-                _persist(self.path, state)
+            # Visible revoked bytes after a lost directory-fsync acknowledgement
+            # are not durable revocation. Every retry repeats both barriers
+            # before cessation can kill the owned boundary or restore admission.
+            _persist(self.path, state)
             return state['generation']
 
     def cease(self, timeout=5):

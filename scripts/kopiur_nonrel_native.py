@@ -105,7 +105,10 @@ def validate_elasticsearch_restore(result):
             or type(shards.get('successful')) is not int
             or shards['successful'] != total
             or type(shards.get('failed')) is not int or shards['failed'] != 0
-            or snapshot.get('indices') != ['fixture']):
+            or not isinstance(snapshot.get('indices'), list)
+            or 'fixture' not in snapshot['indices']
+            or any(not isinstance(index, str) or (index != 'fixture' and not index.startswith('.security-'))
+                   for index in snapshot['indices'])):
         raise RuntimeError('Elasticsearch native restore is incomplete')
     return total
 
@@ -262,7 +265,10 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'ttl_and_acl_recovery_qualified': False}
 
     def elasticsearch(self):
-        variables = {'discovery.type': 'single-node', 'xpack.security.enabled': 'false',
+        password = secrets.token_hex(24)
+        self.auth = 'elastic:' + password
+        variables = {'discovery.type': 'single-node', 'xpack.security.enabled': 'true',
+                     'xpack.security.http.ssl.enabled': 'false', 'ELASTIC_PASSWORD': password,
                      'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false',
                      'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2',
                      'path.repo': '/usr/share/elasticsearch/data/snapshot'}
@@ -271,6 +277,11 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         extra = ('--memory=1600m', '--user=elasticsearch')
         source, port = self.create('source', 9200, variables, extra=extra)
         self.ready(source, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
+        role = {'cluster': [], 'indices': [{'names': ['fixture'], 'privileges': ['read']}]}
+        self.http(port, '/_security/role/fixture-reader', 'PUT', role)
+        user_password = secrets.token_hex(24)
+        self.http(port, '/_security/user/fixture-reader', 'PUT',
+                  {'password': user_password, 'roles': ['fixture-reader'], 'enabled': True})
         mappings = {'properties': {'title': {'type': 'keyword'}, 'number': {'type': 'integer'},
                                    '@timestamp': {'type': 'date'}, 'tags': {'type': 'keyword'}}}
         self.http(port, '/fixture', 'PUT', {'settings': {'number_of_shards': 1, 'number_of_replicas': 0},
@@ -307,9 +318,13 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         repo = {'type': 'fs', 'settings': {'location': '/usr/share/elasticsearch/data/snapshot'}}
         self.http(port, '/_snapshot/fixture', 'PUT', repo)
         result = self.http(port, '/_snapshot/fixture/generation?wait_for_completion=true', 'PUT',
-                           {'indices': 'fixture', 'include_global_state': True})['snapshot']
+                           {'indices': 'fixture', 'include_global_state': True,
+                            'feature_states': ['security']})['snapshot']
         if result['state'] != 'SUCCESS' or result['shards']['failed'] != 0 or result.get('failures'):
             raise RuntimeError('Elasticsearch native snapshot is partial')
+        if not any(state.get('feature_name') == 'security' and state.get('indices')
+                   for state in result.get('feature_states', [])):
+            raise RuntimeError('Elasticsearch security feature state is absent')
         archive = self.run('cp', source + ':/usr/share/elasticsearch/data/snapshot/.', '-')
         digest = validate_archive(archive)
         self.remove(source)
@@ -318,19 +333,35 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         self.ready(restored, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
         self.http(port, '/_snapshot/fixture', 'PUT', {'type': 'fs', 'settings': repo['settings'] | {'readonly': True}})
         restore = self.http(port, '/_snapshot/fixture/generation/_restore?wait_for_completion=true', 'POST',
-                            {'indices': 'fixture', 'include_global_state': True})
+                            {'indices': 'fixture', 'include_global_state': True,
+                             'feature_states': ['security']})
         shard_count = validate_elasticsearch_restore(restore)
         self.ready(restored, lambda: self.http(port, '/_cluster/health/fixture')['status'] == 'green')
         actual = inventory(port)
         if actual != expected:
             mismatches = [reads[i] for i in range(len(reads)) if actual[i] != expected[i]]
             raise RuntimeError('Elasticsearch documents or metadata differ: ' + ', '.join(mismatches))
+        recovered_role = self.http(port, '/_security/role/fixture-reader').get('fixture-reader', {})
+        if (recovered_role.get('cluster') != []
+                or len(recovered_role.get('indices', [])) != 1
+                or recovered_role['indices'][0].get('names') != ['fixture']
+                or recovered_role['indices'][0].get('privileges') != ['read']):
+            raise RuntimeError('Elasticsearch restored role differs')
+        self.auth = 'fixture-reader:' + user_password
+        identity = self.http(port, '/_security/_authenticate')
+        if identity.get('username') != 'fixture-reader' or identity.get('roles') != ['fixture-reader']:
+            raise RuntimeError('Elasticsearch original synthetic user did not recover')
+        hits = self.http(port, '/fixture/_search?sort=number&size=10')['hits']['hits']
+        if [{'_id': hit['_id'], '_source': hit['_source']} for hit in hits] != expected[0]:
+            raise RuntimeError('Elasticsearch original user cannot read restored documents')
+        self.auth = 'elastic:' + password
         return {'snapshot_sha256': digest, 'snapshot_uuid': result['uuid'],
                 'documents_mappings_aliases_templates_pipelines_equal': True,
                 'timestamps_tags_alias_query_settings_ilm_equal': True,
                 'restored_shards': shard_count,
                 'fixture_retention_policy': policy['policy'],
                 'production_retention_approved': False,
+                'synthetic_security_feature_state_recovered': True,
                 'security_feature_state_recovery_qualified': False}
 
     def rabbitmq(self):

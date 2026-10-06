@@ -53,6 +53,15 @@ class ElasticsearchRestoreTests(unittest.TestCase):
             native.validate_elasticsearch_restore({'snapshot': {
                 'indices': ['other'], 'shards': {'total': 1, 'successful': 1, 'failed': 0}}})
 
+    def test_security_feature_shards_counted(self):
+        self.assertEqual(native.validate_elasticsearch_restore({'snapshot': {
+            'indices': ['fixture', '.security-7'],
+            'shards': {'total': 2, 'successful': 2, 'failed': 0}}}), 2)
+        for indices in (['fixture', 'other'], ['fixture', None], 'fixture'):
+            with self.subTest(indices=indices), self.assertRaises(RuntimeError):
+                native.validate_elasticsearch_restore({'snapshot': {
+                    'indices': indices, 'shards': {'total': 2, 'successful': 2, 'failed': 0}}})
+
 
 class RespTests(unittest.TestCase):
     def test_binary_bulk(self):

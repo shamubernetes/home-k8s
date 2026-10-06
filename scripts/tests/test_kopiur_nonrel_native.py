@@ -1,5 +1,6 @@
 """Host-only parsing/admission regressions, never native engine proof."""
 import io
+import json
 import sys
 import tarfile
 import tempfile
@@ -119,6 +120,74 @@ class ManifestTests(unittest.TestCase):
             self.fixture()
         with self.assertRaises(RuntimeError):
             restarted.initialize()
+
+    def reconciliation_responses(self, name, operation, container_id='b' * 64):
+        row = {'Id': container_id, 'Name': '/' + name, 'Config': {'Labels': {
+            'kopiur.fixture-generation': self.generation,
+            'kopiur.fixture-operation': operation}}}
+        return [native.subprocess.CompletedProcess([], 0, stdout=(container_id + '\n').encode()),
+                native.subprocess.CompletedProcess([], 0, stdout=json.dumps([row]).encode())]
+
+    def test_reconcile_lost_create_ack_only_recovers_retirement_identity(self):
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        with patch.object(native.subprocess, 'run', side_effect=self.reconciliation_responses(
+                name, operation)) as run:
+            result = self.manifest.reconcile()
+        self.assertEqual(result['observed'], {name: 'b' * 64})
+        self.assertFalse(result['startup_allowed'])
+        self.assertFalse(result['cessation_proved'])
+        self.assertTrue(self.manifest.read()['revoked'])
+        self.assertEqual(self.manifest.read()['containers'][name]['id'], 'b' * 64)
+        for call in run.call_args_list:
+            self.assertEqual(call.args[0][:3], ['docker', '--host', self.endpoint])
+        with self.assertRaises(RuntimeError):
+            self.manifest.start_intent(name, operation, 'b' * 64)
+
+    def test_reconcile_missing_create_is_not_cessation(self):
+        name = self.generation + '-source'
+        self.manifest.create_intent(name)
+        with patch.object(native.subprocess, 'run', return_value=
+                          native.subprocess.CompletedProcess([], 0, stdout=b'')):
+            result = self.manifest.reconcile()
+        self.assertEqual(result['unobserved'], [name])
+        self.assertFalse(result['cessation_proved'])
+        self.assertIsNone(self.manifest.read()['containers'][name]['id'])
+
+    def test_reconcile_wrong_operation_or_replaced_id_denies(self):
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        self.manifest.register(name, operation, 'b' * 64)
+        for token, container_id in (('c' * 32, 'b' * 64), (operation, 'c' * 64)):
+            with self.subTest(token=token, container_id=container_id), \
+                    patch.object(native.subprocess, 'run', side_effect=
+                                 self.reconciliation_responses(name, token, container_id)):
+                with self.assertRaises(RuntimeError):
+                    self.manifest.reconcile()
+            self.assertEqual(self.manifest.read()['containers'][name]['id'], 'b' * 64)
+            self.assertTrue(self.manifest.read()['revoked'])
+
+    def test_reconcile_failure_is_terminal_and_never_falls_back(self):
+        with patch.object(native.subprocess, 'run', return_value=
+                          native.subprocess.CompletedProcess([], 1, stdout=b'')) as run:
+            with self.assertRaises(RuntimeError):
+                self.manifest.reconcile()
+        self.assertEqual(run.call_count, 1)
+        self.assertTrue(self.manifest.read()['revoked'])
+
+    def test_reconcile_manifest_change_during_io_denies_write(self):
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        responses = iter(self.reconciliation_responses(name, operation))
+        def query(*args, **kwargs):
+            state = self.manifest.read()
+            state['containers'][name]['operation'] = 'c' * 32
+            self.manifest.write(state)
+            return next(responses)
+        with patch.object(native.subprocess, 'run', side_effect=query):
+            with self.assertRaisesRegex(RuntimeError, 'changed during reconciliation'):
+                self.manifest.reconcile()
+        self.assertIsNone(self.manifest.read()['containers'][name]['id'])
 
     def test_durable_identity_and_revocation_never_reset(self):
         name = self.generation + '-source'

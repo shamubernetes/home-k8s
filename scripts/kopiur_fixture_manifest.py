@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import tempfile
 import uuid
+import subprocess
 from contextlib import contextmanager
 
 
@@ -139,3 +140,58 @@ class GenerationManifest:
             state = self.read()
             state['revoked'] = True
             self.write(state)
+
+    def reconcile(self, *, timeout=30):
+        """Recover immutable IDs for retirement, never authorize restarted work.
+
+        Revoke before I/O so lost acknowledgments cannot allow a new dispatch.
+        Query the exact endpoint, including stopped containers, then inspect
+        immutable IDs. Absence is not proof that delayed creates have ceased.
+        """
+        self.revoke()
+        with self.transaction():
+            expected = self.read()
+
+        def docker(*args):
+            result = subprocess.run(['docker', '--host', self.endpoint, *args],
+                                    capture_output=True, timeout=timeout)
+            if result.returncode:
+                raise RuntimeError('fixture reconciliation Docker query failed')
+            return result.stdout
+
+        ids = docker('ps', '--all', '--no-trunc', '--quiet', '--filter',
+                     'label=kopiur.fixture-generation=' + self.generation).decode().splitlines()
+        if (len(ids) > len(expected['containers']) or len(ids) != len(set(ids))
+                or any(re.fullmatch(r'[0-9a-f]{64}', value) is None for value in ids)):
+            raise RuntimeError('fixture reconciliation inventory ambiguous')
+        observations = {}
+        for container_id in ids:
+            rows = json.loads(docker('inspect', container_id), object_pairs_hook=unique_object)
+            if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+                raise RuntimeError('fixture reconciliation inspection malformed')
+            row = rows[0]
+            name = row.get('Name')
+            config = row.get('Config')
+            labels = config.get('Labels') if isinstance(config, dict) else None
+            if not isinstance(name, str) or not name.startswith('/') or not isinstance(labels, dict):
+                raise RuntimeError('fixture reconciliation ownership malformed')
+            name = name[1:]
+            item = expected['containers'].get(name)
+            if (item is None or name in observations or row.get('Id') != container_id
+                    or labels.get('kopiur.fixture-generation') != self.generation
+                    or labels.get('kopiur.fixture-operation') != item['operation']
+                    or item['id'] not in (None, container_id)):
+                raise RuntimeError('fixture reconciliation ownership mismatch')
+            observations[name] = container_id
+        with self.transaction():
+            state = self.read()
+            if state != expected:
+                raise RuntimeError('fixture manifest changed during reconciliation')
+            for name, container_id in observations.items():
+                item = state['containers'][name]
+                if item['phase'] == 'create-intent':
+                    item.update(phase='registered', id=container_id)
+            self.write(state)
+        return {'observed': observations,
+                'unobserved': sorted(set(expected['containers']) - set(observations)),
+                'startup_allowed': False, 'cessation_proved': False}

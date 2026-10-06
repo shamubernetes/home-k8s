@@ -63,7 +63,8 @@ def contract():
                 'DO_NOT_REQUIRE_SSL': '1', 'DISABLE_BEACON': 'true', 'RUST_LOG': 'info'}
             # The pinned image has root-owned mode-744 entrypoint/key scripts and no USER override.
             scope['run']('docker', 'run', '--rm', '--read-only', '--network', 'none',
-                '--cap-drop=ALL', '--cap-add=CHOWN', '--security-opt=no-new-privileges:true',
+                '--cap-drop=ALL', '--cap-add=CHOWN', '--cap-add=DAC_READ_SEARCH',
+                '--security-opt=no-new-privileges:true',
                 '--user', '0:0', '--entrypoint', 'sh',
                 '--mount', 'type=volume,src=' + config + ',dst=/config', scope['PG_IMAGE'],
                 '-ceu', 'chown 0:568 /config; chown -R 0:568 /config; chmod 0775 /config')

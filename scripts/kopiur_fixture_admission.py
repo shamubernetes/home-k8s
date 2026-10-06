@@ -282,7 +282,7 @@ class NativeAdmission:
         directory = Path(reference['directory'])
         if (reference['root'] != str(parent) or directory.parent != self.supervisor.directory
                 or not directory.name.startswith('release-') or directory.is_symlink()
-                or _uuid(directory.name.removeprefix('release-')) != directory.name.removeprefix('release-')):
+                or not _uuid(directory.name.removeprefix('release-'))):
             raise BoundaryError('native release reference outside original owned boundary')
         release = FixtureSupervisor(directory, parent)
         native, _ = release._read()

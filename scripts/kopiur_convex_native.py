@@ -61,8 +61,18 @@ def contract():
                 'CONVEX_CLOUD_ORIGIN': 'http://127.0.0.1:3210',
                 'CONVEX_SITE_ORIGIN': 'http://127.0.0.1:3211',
                 'DO_NOT_REQUIRE_SSL': '1', 'DISABLE_BEACON': 'true', 'RUST_LOG': 'info'}
-            return self.start(name, self.image, network='container:' + database, env=env,
-                mounts=[(config, '/config', 'rw'), (config, '/convex/data', 'rw')], user='568:568')
+            try:
+                return self.start(name, self.image, network='container:' + database, env=env,
+                    mounts=[(config, '/config', 'rw'), (config, '/convex/data', 'rw')], user='568:568')
+            except RuntimeError as error:
+                user = scope['run']('docker', 'inspect', '--format', '{{.Config.User}}', IMAGE, check=False).stdout.decode().strip()
+                if not re.fullmatch(r'[A-Za-z0-9_:-]{0,128}', user):
+                    user = 'unavailable'
+                modes = scope['run']('docker', 'run', '--rm', '--read-only', '--network', 'none',
+                    '--cap-drop=ALL', '--security-opt=no-new-privileges:true', '--user', '0:0',
+                    '--entrypoint', 'stat', IMAGE, '-c', '%a %u %g %n',
+                    '/convex', '/convex/run_backend.sh', '/convex/generate_admin_key.sh', check=False).stdout.decode()[:2048]
+                raise RuntimeError(str(error) + '; image user=' + user + '; fixed-path modes=' + modes.strip()) from error
 
         def healthy(self, container):
             from kopiur_native_fixture import startup_failure

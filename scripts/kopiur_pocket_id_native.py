@@ -21,8 +21,10 @@ def contract():
         def auth_header(self):
             return 'X-API-Key: ' + self.api_key
 
-        def request(self, container, path, payload=None, authenticated=False, check=True, form=False):
+        def request(self, container, path, payload=None, authenticated=False, check=True, form=False, extra_headers=()):
             config = 'url = "http://127.0.0.1:' + str(self.port) + path + '"\n'
+            for header in extra_headers:
+                config += 'header = ' + json.dumps(header) + '\n'
             if authenticated:
                 config += 'header = ' + json.dumps(self.auth_header()) + '\n'
             if payload is not None:

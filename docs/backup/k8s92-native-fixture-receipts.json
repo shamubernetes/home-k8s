@@ -3,7 +3,7 @@
   "execution_card": "t_9b1e7179",
   "whole_application_recovery_accepted": false,
   "encrypted_provider_transport_qualified_by_these_receipts": false,
-  "native_fixture_passed_count": 11,
+  "native_fixture_passed_count": 12,
   "native_fixture_proofs": {
     "prowlarr": {
       "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37380690362",
@@ -315,6 +315,35 @@
         "production_recovery_accepted": false,
         "production_rom_catalog_and_shared_nfs_qualified": false,
         "production_dragonfly_session_recovery_qualified": false
+      }
+    },
+    "convex": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37404192075",
+      "candidate": "4a6f70301ab06342e4c36e605820052768c4a9b5",
+      "job": 112077959018,
+      "runner": "ghar-set-zoo-runner-w4ktx",
+      "pod_uid": "453bd3f8-3749-4ed0-9623-8f1f00915667",
+      "request": null,
+      "receipt": {
+        "app": "convex",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 7,
+        "rows": 389,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 29,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_database_binding_qualified": false,
+        "production_rgw_bucket_set_qualified": false,
+        "deployed_functions_and_search_rebuild_qualified": false
       }
     }
   },

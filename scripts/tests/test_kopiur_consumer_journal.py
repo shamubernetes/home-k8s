@@ -13,6 +13,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from kopiur_consumer_journal import ConsumerJournal
+from kopiur_consumer_fencing import SQLiteFencing
 from kopiur_shared import InvalidEvidence
 from test_kopiur_consumer_generation import fixture
 
@@ -68,6 +69,103 @@ def writer(path):
             connection.execute('BEGIN IMMEDIATE')
             connection.execute('UPDATE state SET writes=writes+1 WHERE admission=1')
         time.sleep(0.01)
+
+
+class NativeFencingTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.path = Path(self.directory.name) / 'native.db'
+        self.source = 'k8s92-nonrel-' + uuid.uuid4().hex + '-source'
+        self.adapter = SQLiteFencing(self.path, self.source)
+        self.plan = {'identity': uuid.uuid4().hex, 'epoch': uuid.uuid4().hex,
+                     'generation': uuid.uuid4().hex, 'expected_revision': 0,
+                     'expected_operation': None, 'expected_stage': 'idle',
+                     'hold_revision': 1, 'terminal_revision': 2,
+                     'hold_operation': uuid.uuid4().hex,
+                     'terminal_operation': uuid.uuid4().hex, 'prior_admission': True}
+        with database(self.path) as connection:
+            connection.execute('CREATE TABLE fencing(identity TEXT, admission INTEGER, '
+                               'epoch TEXT, generation TEXT, revision INTEGER, operation TEXT, stage TEXT)')
+            connection.execute('INSERT INTO fencing VALUES(?,1,NULL,NULL,0,NULL,?)',
+                               (self.plan['identity'], 'idle'))
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def state(self):
+        with database(self.path) as connection:
+            return connection.execute('SELECT * FROM fencing').fetchone()
+
+    def test_terminal_retry_after_release_does_not_reclose(self):
+        for command in ('hold', 'hold', 'fence', 'fence', 'resume', 'resume', 'fence'):
+            self.adapter.apply(self.plan, command)
+        self.assertEqual(self.state()[1], 1)
+        self.assertEqual(self.state()[4:7], (2, self.plan['terminal_operation'], 'released'))
+        before = self.state()
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.apply(self.plan, 'hold')
+        self.assertEqual(self.state(), before)
+
+    def test_revoked_unapplied_hold_cannot_arrive_after_release(self):
+        self.adapter.apply(self.plan, 'fence')
+        self.adapter.apply(self.plan, 'resume')
+        self.adapter.prepare_next(self.plan)
+        self.assertEqual(self.state()[2:4], (None, None))
+        self.assertEqual(self.state()[4:7], (2, self.plan['terminal_operation'], 'released'))
+        newer = dict(self.plan, epoch=uuid.uuid4().hex, generation=uuid.uuid4().hex,
+                     expected_revision=2, expected_operation=self.plan['terminal_operation'],
+                     expected_stage='released', hold_revision=3, terminal_revision=4,
+                     hold_operation=uuid.uuid4().hex, terminal_operation=uuid.uuid4().hex)
+        self.adapter.apply(newer, 'hold')
+        before = self.state()
+        for command in ('hold', 'fence', 'resume'):
+            with self.subTest(command=command), self.assertRaises(InvalidEvidence):
+                self.adapter.apply(self.plan, command)
+            self.assertEqual(self.state(), before)
+
+    def test_equal_revision_does_not_authorize_foreign_ownership(self):
+        for token in ('epoch', 'generation', 'operation'):
+            with self.subTest(token=token):
+                with database(self.path) as connection:
+                    connection.execute('UPDATE fencing SET epoch=NULL, generation=NULL, operation=NULL')
+                    connection.execute('UPDATE fencing SET ' + token + '=?', ('foreign',))
+                before = self.state()
+                with self.assertRaises(InvalidEvidence):
+                    self.adapter.apply(self.plan, 'fence')
+                self.assertEqual(self.state(), before)
+
+    def test_equal_held_or_terminal_revision_rejects_foreign_tokens(self):
+        self.adapter.apply(self.plan, 'hold')
+        for stage_command, commands in (('hold', ('hold', 'fence')),
+                                        ('fence', ('fence', 'resume'))):
+            self.adapter.apply(self.plan, stage_command)
+            original = self.state()
+            for token in ('identity', 'epoch', 'generation', 'operation'):
+                with self.subTest(stage=stage_command, token=token):
+                    with database(self.path) as connection:
+                        connection.execute('UPDATE fencing SET ' + token + '=?', ('foreign',))
+                    before = self.state()
+                    for command in commands:
+                        with self.assertRaises(InvalidEvidence):
+                            self.adapter.apply(self.plan, command)
+                        self.assertEqual(self.state(), before)
+                    with database(self.path) as connection:
+                        connection.execute('UPDATE fencing SET identity=?, admission=?, epoch=?, '
+                                           'generation=?, revision=?, operation=?, stage=?', original)
+
+    def test_resume_requires_exact_barrier_and_preserves_closed_admission(self):
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.apply(self.plan, 'resume')
+        self.plan['prior_admission'] = False
+        with database(self.path) as connection:
+            connection.execute('UPDATE fencing SET admission=0')
+        self.adapter.apply(self.plan, 'hold')
+        self.adapter.apply(self.plan, 'fence')
+        wrong = dict(self.plan, terminal_operation=uuid.uuid4().hex)
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.apply(wrong, 'resume')
+        self.adapter.apply(self.plan, 'resume')
+        self.assertEqual(self.state()[1], 0)
 
 
 class JournalTests(unittest.TestCase):

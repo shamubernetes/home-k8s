@@ -3,7 +3,7 @@
   "execution_card": "t_9b1e7179",
   "whole_application_recovery_accepted": false,
   "encrypted_provider_transport_qualified_by_these_receipts": false,
-  "native_fixture_passed_count": 8,
+  "native_fixture_passed_count": 11,
   "native_fixture_proofs": {
     "prowlarr": {
       "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37380690362",
@@ -11,10 +11,7 @@
       "job": 112001607071,
       "runner": "ghar-set-zoo-runner-k95tz",
       "pod_uid": "8d97a0d2-e64f-4684-9b1f-225d6552462e",
-      "request": {
-        "operation": "native-arr-fixture",
-        "app": "prowlarr"
-      },
+      "request": null,
       "receipt": {
         "app": "prowlarr",
         "native_restore": true,
@@ -40,10 +37,7 @@
       "job": 112001607071,
       "runner": "ghar-set-zoo-runner-k95tz",
       "pod_uid": "8d97a0d2-e64f-4684-9b1f-225d6552462e",
-      "request": {
-        "operation": "native-arr-fixture",
-        "app": "chaptarr"
-      },
+      "request": null,
       "receipt": {
         "app": "chaptarr",
         "native_restore": true,
@@ -69,9 +63,7 @@
       "job": 112006438039,
       "runner": "ghar-set-zoo-runner-ssmc7",
       "pod_uid": "ebf25dc3-ca5f-4cee-92bb-3d7e7e7fc515",
-      "request": {
-        "operation": "native-grafana-fixture"
-      },
+      "request": null,
       "receipt": {
         "app": "grafana",
         "native_restore": true,
@@ -99,9 +91,7 @@
       "job": 112006438039,
       "runner": "ghar-set-zoo-runner-ssmc7",
       "pod_uid": "ebf25dc3-ca5f-4cee-92bb-3d7e7e7fc515",
-      "request": {
-        "operation": "native-atuin-fixture"
-      },
+      "request": null,
       "receipt": {
         "app": "atuin",
         "native_restore": true,
@@ -128,9 +118,7 @@
       "job": 112011747736,
       "runner": "ghar-set-zoo-runner-w79pj",
       "pod_uid": "c8ba6ce8-6b4e-42d5-9ef8-ee8ad41dea24",
-      "request": {
-        "operation": "native-gatus-fixture"
-      },
+      "request": null,
       "receipt": {
         "app": "gatus",
         "native_restore": true,
@@ -158,9 +146,7 @@
       "job": 112027539563,
       "runner": "ghar-set-zoo-runner-blhsf",
       "pod_uid": "74d62a53-4e7c-4d27-ad77-629a279c267d",
-      "request": {
-        "operation": "native-pocket-id-fixture"
-      },
+      "request": null,
       "receipt": {
         "app": "pocket-id",
         "native_restore": true,
@@ -184,14 +170,12 @@
       }
     },
     "n8n": {
-      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37389732545",
-      "candidate": "6c43f688a1ef32ffbde42fe986f185f9aa1e6042",
-      "job": 112031703401,
-      "runner": "ghar-set-zoo-runner-p9kgz",
-      "pod_uid": "55bdc1d2-657f-40a5-9e49-5faf87555974",
-      "request": {
-        "operation": "native-n8n-fixture"
-      },
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37392034063",
+      "candidate": "6489f070024c1724c84d4cb7cd140a4d6974b6bc",
+      "job": 112039130021,
+      "runner": "ghar-set-zoo-runner-qtplc",
+      "pod_uid": "1071227b-a60c-4755-8595-c704f44e01d6",
+      "request": null,
       "receipt": {
         "app": "n8n",
         "native_restore": true,
@@ -221,9 +205,7 @@
       "job": 112032302417,
       "runner": "ghar-set-zoo-runner-vxfjr",
       "pod_uid": "f5aa7195-4fb2-4498-a0f0-fce91ac0f58b",
-      "request": {
-        "operation": "native-home-assistant-fixture"
-      },
+      "request": null,
       "receipt": {
         "app": "home-assistant",
         "native_restore": true,
@@ -246,6 +228,94 @@
         "production_devices_hacs_git_qualified": false,
         "fixture_app_name": "home-assistant-fixture"
       }
+    },
+    "kaneo": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37392034063",
+      "candidate": "6489f070024c1724c84d4cb7cd140a4d6974b6bc",
+      "job": 112039130021,
+      "runner": "ghar-set-zoo-runner-qtplc",
+      "pod_uid": "1071227b-a60c-4755-8595-c704f44e01d6",
+      "request": null,
+      "receipt": {
+        "app": "kaneo",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 45,
+        "rows": 81,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 16,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_oidc_identity_qualified": false,
+        "production_redis_rgw_qualified": false,
+        "bundled_nginx_entrypoint_qualified": false,
+        "additional_unqualified_schema_rejected": true,
+        "migration_schema_contents_compared": true
+      }
+    },
+    "documenso": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37392647136",
+      "candidate": "4d21bb4249e5d5bfcf86011bb8b568f9dc5ecd4f",
+      "job": 112041117955,
+      "runner": "ghar-set-zoo-runner-vbhkd",
+      "pod_uid": "f4e65094-4622-4866-b366-e0b6a0dce533",
+      "request": null,
+      "receipt": {
+        "app": "documenso",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 54,
+        "rows": 251,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 16,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "fixture_encryption_key_use_qualified": false,
+        "production_signing_certificate_and_key_use_qualified": false,
+        "production_redis_smtp_delivery_qualified": false
+      }
+    },
+    "romm": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37397652524",
+      "candidate": "f6bcd6116d099a5078750ea13747774822aeecd9",
+      "job": 112057351806,
+      "runner": "ghar-set-zoo-runner-zn8fw",
+      "pod_uid": "3c44e768-3100-4e9a-987a-3ec6235dfb1f",
+      "request": null,
+      "receipt": {
+        "app": "romm",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 38,
+        "rows": 42,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 26,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_rom_catalog_and_shared_nfs_qualified": false,
+        "production_dragonfly_session_recovery_qualified": false
+      }
     }
   },
   "limitations": [
@@ -253,6 +323,8 @@
     "No NAS/R2 qualification for these applications, no incumbent recovery point retirement.",
     "Each run used trusted-main recovery-verify.yaml with suite=identities and explicit candidate SHA.",
     "Home Assistant excludes only the pinned entrypoint stdout symlink, not persistent files. Log-stream recovery is unqualified.",
-    "n8n proof includes inactive workflow and native CLI decryption with the original fixture encryption key."
+    "n8n proof includes inactive workflow and native CLI decryption with the original fixture encryption key.",
+    "Kaneo captures public and observed drizzle catalogs and rejects an additional schema. Bundled frontend, Redis, OIDC and RGW are unqualified.",
+    "Documenso proof uses a real API-created PDF and the original fixture API token. Production signing, encryption-key use and Redis are unqualified."
   ]
 }

@@ -151,7 +151,10 @@ class Fixture:
                    IMAGES[self.service], *args]
         # Track exact names even if create partly succeeds, cleanup never prunes.
         self.containers.append(name)
-        result = subprocess.run(command, env=env, capture_output=True, timeout=60)
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError('native fixture deadline exceeded before create')
+        result = subprocess.run(command, env=env, capture_output=True, timeout=min(60, remaining))
         if result.returncode:
             raise RuntimeError('native fixture create failed')
         if archive is not None:
@@ -193,7 +196,7 @@ class Fixture:
             self.containers.append(self.client)
             self.run('run', '-d', '--name', self.client, '--network', self.network,
                      '--memory=128m', CLIENT_IMAGE, 'python', '-c', 'import time;time.sleep(1200)')
-        code = ('import sys,json,base64,socket,urllib.request\nfrom typing import Any\n'
+        code = ('import sys,json,base64,socket,urllib.request,urllib.error\nfrom typing import Any\n'
                 + inspect.getsource(resp_read) + '''
 p=json.load(sys.stdin)
 if p['operation']=='redis':
@@ -208,7 +211,20 @@ else:
     headers={'Content-Type':'application/json'}
     if p['auth']: headers['Authorization']='Basic '+base64.b64encode(p['auth'].encode()).decode()
     request=urllib.request.Request('http://'+p['host']+':'+str(p['port'])+p['path'],data=data,headers=headers,method=p['method'])
-    with urllib.request.urlopen(request,timeout=60) as response:
+    try:
+        response=urllib.request.urlopen(request,timeout=60)
+    except urllib.error.HTTPError as error:
+        if not p.get('expect_write_block'): raise
+        raw=error.read(65537)
+        if len(raw)>65536: raise ValueError('error response bound')
+        failure=json.loads(raw)
+        result={'status':error.code,'error_type':failure.get('error',{}).get('type')}
+        response=None
+    if response is not None and p.get('expect_write_block'):
+        response.close()
+        raise ValueError('write unexpectedly allowed')
+    if response is not None:
+      with response:
         raw=response.read(8*1024*1024+1)
         if len(raw)>8*1024*1024: raise ValueError('response bound')
         result=json.loads(raw) if raw else {}
@@ -224,9 +240,10 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         return self.client_request({'operation': 'redis', 'port': port,
                                     'args': [base64.b64encode(x).decode() for x in items]})
 
-    def http(self, port, path, method='GET', body=None) -> Any:
+    def http(self, port, path, method='GET', body=None, *, expect_write_block=False) -> Any:
         return self.client_request({'operation': 'http', 'port': port, 'path': path,
-                                    'method': method, 'body': body, 'auth': self.auth})
+                                    'method': method, 'body': body, 'auth': self.auth,
+                                    'expect_write_block': expect_write_block})
 
     def dragonfly(self):
         args = ('--force_epoll', '--proactor_threads=2', '--maxmemory=512Mi',
@@ -264,7 +281,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         return {'snapshot_sha256': digest, 'keys_and_stream_pending_equal': True,
                 'ttl_and_acl_recovery_qualified': False}
 
-    def elasticsearch(self):
+    def elasticsearch(self, transport=None):
         password = secrets.token_hex(24)
         self.auth = 'elastic:' + password
         variables = {'discovery.type': 'single-node', 'xpack.security.enabled': 'true',
@@ -315,6 +332,18 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             values[7] = [{'_id': hit['_id'], '_source': hit['_source']} for hit in values[7]['hits']['hits']]
             return values
         expected = inventory(port)
+        # The add-block API waits for in-flight writes before acknowledging the
+        # block. Test the actual writer boundary, not merely a settings flag.
+        fence = self.http(port, '/fixture/_block/write', 'PUT')
+        if (fence.get('acknowledged') is not True
+                or fence.get('shards_acknowledged') is not True
+                or fence.get('indices') != [{'name': 'fixture', 'blocked': True}]):
+            raise RuntimeError('Elasticsearch writer fence was not acknowledged')
+        denial = self.http(port, '/fixture/_doc/fenced?refresh=true', 'PUT',
+                           {'title': 'must-not-enter-capture', 'number': 3}, expect_write_block=True)
+        if (denial != {'status': 403, 'error_type': 'cluster_block_exception'}
+                or self.http(port, '/fixture/_count')['count'] != 2):
+            raise RuntimeError('Elasticsearch writer boundary was not enforced')
         repo = {'type': 'fs', 'settings': {'location': '/usr/share/elasticsearch/data/snapshot'}}
         self.http(port, '/_snapshot/fixture', 'PUT', repo)
         result = self.http(port, '/_snapshot/fixture/generation?wait_for_completion=true', 'PUT',
@@ -328,6 +357,11 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         archive = self.run('cp', source + ':/usr/share/elasticsearch/data/snapshot/.', '-')
         digest = validate_archive(archive)
         self.remove(source)
+        transport_receipt = None
+        if transport is not None:
+            archive, transport_receipt = transport(archive)
+            if validate_archive(archive) != digest:
+                raise RuntimeError('Elasticsearch provider-restored repository differs')
         restored, port = self.create('restore', 9200, variables, extra=extra,
                                      archive=repository_envelope(archive), path='/usr/share/elasticsearch/data')
         self.ready(restored, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
@@ -337,6 +371,14 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                              'feature_states': ['security']})
         shard_count = validate_elasticsearch_restore(restore)
         self.ready(restored, lambda: self.http(port, '/_cluster/health/fixture')['status'] == 'green')
+        restored_settings = self.http(port, '/fixture/_settings?flat_settings=true')
+        if restored_settings['fixture']['settings'].get('index.blocks.write') != 'true':
+            raise RuntimeError('Elasticsearch captured writer fence was lost')
+        # Release only the synthetic index after recovery. Production consumer
+        # fences, multi-store generations and restart watchdogs remain open.
+        released = self.http(port, '/fixture/_settings', 'PUT', {'index.blocks.write': None})
+        if released.get('acknowledged') is not True:
+            raise RuntimeError('Elasticsearch fixture writer resume failed')
         actual = inventory(port)
         if actual != expected:
             mismatches = [reads[i] for i in range(len(reads)) if actual[i] != expected[i]]
@@ -362,6 +404,9 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'fixture_retention_policy': policy['policy'],
                 'production_retention_approved': False,
                 'synthetic_security_feature_state_recovered': True,
+                'synthetic_writer_fence_restored_and_released': True,
+                'provider_native_fixture_receipt': transport_receipt,
+                'production_consumer_coherence_qualified': False,
                 'security_feature_state_recovery_qualified': False}
 
     def rabbitmq(self):
@@ -413,14 +458,19 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'stream_and_cluster_recovery_qualified': False}
 
 
-def fixture(service):
+def fixture(service, *, transport=None, deadline=None):
+    if transport is not None and service != 'elasticsearch':
+        raise ValueError('provider callback is restricted to Elasticsearch')
     run = Fixture(service)
-    run.run('pull', '--platform', 'linux/amd64', IMAGES[service], timeout=600)
-    run.run('pull', '--platform', 'linux/amd64', CLIENT_IMAGE, timeout=600)
-    run.run('network', 'create', '--internal', run.network)
+    if deadline is not None:
+        run.deadline = min(run.deadline, deadline)
     try:
+        run.run('pull', '--platform', 'linux/amd64', IMAGES[service], timeout=600)
+        run.run('pull', '--platform', 'linux/amd64', CLIENT_IMAGE, timeout=600)
+        run.run('network', 'create', '--internal', run.network)
         method = 'rabbitmq' if service == 'rabbitmq-server' else service
-        proof = getattr(run, method)()
+        proof = (run.elasticsearch(transport) if transport is not None
+                 else getattr(run, method)())
     finally:
         run.cleanup()
     return {'app': service, 'image': IMAGES[service], 'native_fixture_recovery': True,

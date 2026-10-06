@@ -43,7 +43,7 @@ CREDENTIAL_FREE_FIXTURES = {
 ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
 APPS = {"canary", "kometa", "listenarr", "tautulli", "sabnzbd", "wizarr", "homarr",
         "profilarr", "audiobookshelf", "seerr", "cwa-bdl", "changedetection",
-        "radarr", "radarr-3d", "sonarr", "whisparr", "grimmory", "tubearchivist", "bazarr"}
+        "radarr", "radarr-3d", "sonarr", "whisparr", "grimmory", "tubearchivist", "bazarr", "elasticsearch"}
 
 
 def run(args, *, stdin=None, check=True, timeout=180.0):
@@ -207,6 +207,11 @@ class Drill:
 
 
 def exercise_payload(payload, deadline=None):
+    if payload.get('operation') == 'native-elasticsearch-provider':
+        if set(payload) != {'operation', 'app', 'fields'} or payload['app'] != 'elasticsearch':
+            raise ValueError('dedicated Elasticsearch provider request required')
+        from kopiur_elasticsearch_provider_fixture import exercise_payload as search_exercise
+        return search_exercise({'app': payload['app'], 'fields': payload['fields']}, deadline=deadline)
     app, fields = payload["app"], payload["fields"]
     assert app in APPS and fields["R2_BUCKET"] == "kopiur-" + app
     assert fields["NAS_USERNAME"] == "kp-" + app and fields["NAS_SHARE"] == "kopiur-" + app
@@ -326,6 +331,10 @@ def main():
     # regressions before real backend qualification, with no local runtime tests.
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_kopiur_shared.py", "-v"], timeout=120, check=True)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_kopiur_elasticsearch_provider_fixture.py", "-v"], timeout=120, check=True)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_kopiur_nonrel_native.py", "-v"], timeout=120, check=True)
     print(json.dumps({'shared_regressions_passed': True}), flush=True)
     # Production is distroless. Supply credential-free static shell tooling from
     # a pinned image in a separate read-only volume. Kopia/rclone remain exactly

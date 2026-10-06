@@ -99,7 +99,8 @@ def contract():
                 self.api_key = key
                 identity = {'original_fixture_key': self.api_key, 'auth_secret': self.auth_secret}
                 scope['run']('docker', 'exec', '-i', container, 'sh', '-c',
-                    'umask 077; cat > /config/fixture-identity.json', stdin=json.dumps(identity).encode())
+                    'umask 077; cat > /config/fixture-identity.json; chmod 0640 /config/fixture-identity.json',
+                    stdin=json.dumps(identity).encode())
                 result = json.loads(self.request(container,
                     '/api/import?tableName=' + TABLE + '&format=jsonArray',
                     [{'value': 'native-recovery-proof'}], authenticated=True).stdout)

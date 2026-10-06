@@ -94,20 +94,74 @@ class ServerRetirementTests(unittest.TestCase):
     def test_cleanup_never_removes_by_replaced_name(self):
         fixture = self.fixture()
         fixture.network = 'owned-network'
-        with patch.object(native.subprocess, 'run') as run:
+        with patch.object(native.subprocess, 'run', return_value=native.subprocess.CompletedProcess([], 0, stdout=b'')) as run:
             fixture.cleanup()
         self.assertEqual([call.args[0] for call in run.call_args_list], [
             ['docker', 'rm', '-fv', 'a' * 64],
+            ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.ID}}'],
             ['docker', 'network', 'rm', 'owned-network']])
         self.assertEqual(fixture.container_ids, {})
 
     def test_cleanup_missing_identity_never_falls_back_to_name(self):
         fixture = self.fixture()
+        fixture.network = 'owned-network'
         fixture.container_ids.clear()
         with patch.object(native.subprocess, 'run') as run:
             with self.assertRaisesRegex(RuntimeError, 'lacks immutable'):
                 fixture.cleanup()
-        run.assert_not_called()
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['docker', 'network', 'rm', 'owned-network']])
+        self.assertEqual(fixture.containers, ['owned-source'])
+
+    def test_cleanup_missing_identity_does_not_skip_known_servers(self):
+        fixture = self.fixture()
+        fixture.network = 'owned-network'
+        fixture.containers.insert(0, 'unresolved')
+        with patch.object(native.subprocess, 'run', return_value=native.subprocess.CompletedProcess([], 0, stdout=b'')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'lacks immutable'):
+                fixture.cleanup()
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['docker', 'rm', '-fv', 'a' * 64],
+            ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.ID}}'],
+            ['docker', 'network', 'rm', 'owned-network']])
+        self.assertEqual(fixture.containers, ['unresolved'])
+        self.assertEqual(fixture.container_ids, {})
+
+    def test_cleanup_failure_does_not_skip_other_servers_and_suppresses_output(self):
+        fixture = self.fixture()
+        fixture.network = 'owned-network'
+        fixture.containers.append('second')
+        fixture.container_ids['second'] = 'b' * 64
+        success = native.subprocess.CompletedProcess([], 0, stdout=b'')
+        failure = native.subprocess.CalledProcessError(1, ['docker'], output=b'fixture-secret')
+        for error in (failure, native.subprocess.TimeoutExpired(['docker'], 60), OSError('daemon unavailable')):
+            with self.subTest(error=type(error).__name__):
+                fixture.containers = ['owned-source', 'second']
+                fixture.container_ids = {'owned-source': 'a' * 64, 'second': 'b' * 64}
+                with patch.object(native.subprocess, 'run', side_effect=[error, success, success, failure]) as run:
+                    with self.assertRaisesRegex(RuntimeError, 'exact server retirement unresolved') as caught:
+                        fixture.cleanup()
+                self.assertNotIn('fixture-secret', str(caught.exception))
+                self.assertEqual([call.args[0] for call in run.call_args_list], [
+                    ['docker', 'rm', '-fv', 'a' * 64],
+                    ['docker', 'rm', '-fv', 'b' * 64],
+                    ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.ID}}'],
+                    ['docker', 'network', 'rm', 'owned-network']])
+                self.assertEqual(fixture.containers, ['owned-source'])
+                self.assertEqual(fixture.container_ids, {'owned-source': 'a' * 64})
+
+    def test_cleanup_inventory_failure_or_residual_server_remains_unresolved(self):
+        for inventory in (native.subprocess.CompletedProcess([], 0, stdout=b'a' * 64 + b'\n'),
+                          OSError('daemon unavailable'),
+                          native.subprocess.CompletedProcess([], 0, stdout=b'\xff')):
+            fixture = self.fixture()
+            fixture.network = 'owned-network'
+            success = native.subprocess.CompletedProcess([], 0, stdout=b'')
+            with patch.object(native.subprocess, 'run', side_effect=[success, inventory, success]):
+                with self.assertRaisesRegex(RuntimeError, 'exact server retirement unresolved'):
+                    fixture.cleanup()
+            self.assertEqual(fixture.containers, ['owned-source'])
+            self.assertEqual(fixture.container_ids, {'owned-source': 'a' * 64})
 
 
 class ElasticsearchAdmissionTests(unittest.TestCase):

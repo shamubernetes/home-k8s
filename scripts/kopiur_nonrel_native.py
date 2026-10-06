@@ -216,16 +216,35 @@ class Fixture:
                 'production_mutation_cessation_qualified': False}
 
     def cleanup(self):
-        for name in self.containers:
+        failures = []
+        for name in list(self.containers):
             container_id = self.container_ids.get(name)
             if container_id is None:
-                raise RuntimeError('native cleanup lacks immutable container identity')
+                failures.append('lacks immutable container identity')
+                continue
             # Cleanup has its own bounded deadline but the same identity fence.
             # Never fall back to deleting a potentially replaced container name.
-            subprocess.run(['docker', 'rm', '-fv', container_id], capture_output=True, timeout=60, check=True)
-        self.containers.clear()
-        self.container_ids.clear()
-        subprocess.run(['docker', 'network', 'rm', self.network], capture_output=True, timeout=60, check=True)
+            try:
+                subprocess.run(['docker', 'rm', '-fv', container_id], capture_output=True, timeout=60, check=True)
+                inventory = subprocess.run(
+                    ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.ID}}'],
+                    capture_output=True, timeout=60, check=True)
+                if container_id in inventory.stdout.decode().splitlines():
+                    raise RuntimeError('server lifetime remains after removal')
+            except (OSError, subprocess.SubprocessError, RuntimeError, UnicodeError):
+                failures.append('exact server retirement unresolved')
+                continue
+            self.containers.remove(name)
+            del self.container_ids[name]
+        try:
+            subprocess.run(['docker', 'network', 'rm', self.network], capture_output=True, timeout=60, check=True)
+        except (OSError, subprocess.SubprocessError):
+            failures.append('network retirement unresolved')
+        if failures:
+            # Preserve unresolved identities for reconciliation, but do not let
+            # one failure prevent retiring other established server lifetimes.
+            # Never expose subprocess output, which can contain fixture secrets.
+            raise RuntimeError('native cleanup unresolved: ' + '; '.join(failures))
 
     def ready(self, name, check):
         deadline = min(self.deadline, time.monotonic() + 240)

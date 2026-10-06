@@ -43,6 +43,7 @@ class FixtureController:
         if current != expected:
             raise BoundaryError('controller snapshot changed')
         if (current is None or current['phase'] not in phases or native['revoked']
+                or self.supervisor._watchdog_revoked(native)
                 or time.monotonic() >= current['deadline_monotonic']):
             raise BoundaryError('controller expired, terminal or revoked')
         return current, native, boundary
@@ -51,6 +52,10 @@ class FixtureController:
         state = copy.deepcopy(state)
         state['revision'] += 1
         _persist(self.path, state)
+        if state['phase'] != 'ceased':
+            native, _ = self.supervisor._read()
+            if self.supervisor._watchdog_revoked(native):
+                raise BoundaryError('independently revoked controller publication')
         return copy.deepcopy(state)
 
     def begin(self, consumers, timeout):
@@ -62,7 +67,8 @@ class FixtureController:
             raise BoundaryError('explicit fixture cohort and finite timeout required')
         with self.supervisor._locked():
             native, _ = self.supervisor._read()
-            if self._read(native) is not None or native['revoked'] or native['commands']:
+            if (self._read(native) is not None or native['revoked'] or native['commands']
+                    or self.supervisor._watchdog_revoked(native)):
                 raise BoundaryError('fresh unused supervisor generation required')
             state = {'schema': 'k8s92-arc-controller/v1', 'revision': 0,
                      'generation': native['generation'], 'boundary': native['boundary'],
@@ -176,6 +182,8 @@ class FixtureController:
                 raise BoundaryError('whole-cohort preparation changed')
             _persist(self.supervisor.path, native)
             _persist(self.path, state)
+            if self.supervisor._watchdog_revoked(native):
+                raise BoundaryError('independently revoked prepared receipt')
             return copy.deepcopy(state['prepared'])
 
     def commit(self, expected):
@@ -194,7 +202,8 @@ class FixtureController:
             native, boundary = self.supervisor._read()
             state = self._read(native)
             if (state != expected or state is None or state['phase'] != 'committed'
-                    or native['revoked'] or native.get('sealed') is not True
+                    or native['revoked'] or self.supervisor._watchdog_revoked(native)
+                    or native.get('sealed') is not True
                     or state['terminal']['operations'] !=
                     [c['operation'] for c in native['commands']]
                     or any(c['stage'] != 'completed' for c in native['commands'])
@@ -205,6 +214,8 @@ class FixtureController:
                 raise BoundaryError('whole-cohort terminal changed')
             _persist(self.supervisor.path, native)
             _persist(self.path, state)
+            if self.supervisor._watchdog_revoked(native):
+                raise BoundaryError('independently revoked terminal receipt')
             return copy.deepcopy(state['terminal'])
 
     def recover(self):

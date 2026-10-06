@@ -14,6 +14,7 @@ import json
 import math
 import os
 from pathlib import Path
+import select
 import subprocess
 import sys
 import time
@@ -142,6 +143,148 @@ class FixtureSupervisor:
             raise BoundaryError('cgroup identity changed, cessation unresolved')
         return state, boundary
 
+    def _revocation_path(self, state):
+        return self.directory / ('revoked-' + state['generation'] + '.json')
+
+    def _watchdog_revoked(self, state):
+        path = self._revocation_path(state)
+        if path.is_symlink():
+            raise BoundaryError('independent revocation identity changed')
+        if not path.exists():
+            return False
+        expected = {'version': 1, 'fixture_only': True,
+                    'generation': state['generation'], 'root': state['root'],
+                    'boundary': state['boundary'], 'revoked': True}
+        if json.loads(path.read_text()) != expected:
+            raise BoundaryError('independent revocation identity changed')
+        return True
+
+    def admit_watchdog(self, owner_pid, timeout):
+        """Bind one immutable owner/deadline before any fixture dispatch."""
+        if (type(owner_pid) is not int or owner_pid <= 0
+                or type(timeout) not in (int, float) or not math.isfinite(timeout)
+                or timeout <= 0):
+            raise BoundaryError('explicit owner and finite watchdog deadline required')
+        with self._locked():
+            state, _ = self._read()
+            path = self.directory / 'watchdog.json'
+            if (path.exists() or state['commands'] or state['revoked']
+                    or self._watchdog_revoked(state)):
+                raise BoundaryError('watchdog admission requires unused generation')
+            ticks = Path(f'/proc/{owner_pid}/stat').read_text().rsplit(')', 1)[1].split()[19]
+            contract = {'generation': state['generation'], 'boundary': state['boundary'],
+                        'owner_pid': owner_pid, 'owner_start_ticks': ticks,
+                        'deadline_monotonic': time.monotonic() + timeout}
+            _persist(path, contract)
+            if self._watchdog_revoked(state):
+                raise BoundaryError('watchdog generation revoked during admission')
+            return copy.deepcopy(contract)
+
+    def monitor_watchdog(self):
+        """Independent process waits for admitted owner death or deadline.
+
+        It never signals a numeric owner PID or needs its state lock. A reused
+        PID is owner loss, not authority to terminate another process. The
+        immutable boundary includes boot identity, so monotonic time survives
+        watchdog restart only within that same proven boot.
+        """
+        state, _ = self._read()
+        contract = json.loads((self.directory / 'watchdog.json').read_text())
+        if (contract['generation'] != state['generation']
+                or contract['boundary'] != state['boundary']
+                or type(contract['owner_pid']) is not int or contract['owner_pid'] <= 0
+                or type(contract['deadline_monotonic']) not in (int, float)
+                or not math.isfinite(contract['deadline_monotonic'])
+                or contract['deadline_monotonic'] <= 0
+                or not isinstance(contract['owner_start_ticks'], str)
+                or not contract['owner_start_ticks'].isdigit()):
+            raise BoundaryError('watchdog contract identity changed')
+        pidfd = None
+        try:
+            try:
+                pidfd = getattr(os, 'pidfd_open')(contract['owner_pid'])
+                ticks = Path(f'/proc/{contract["owner_pid"]}/stat').read_text().rsplit(')', 1)[1].split()[19]
+            except ProcessLookupError:
+                return self.watchdog_cease()
+            except FileNotFoundError:
+                return self.watchdog_cease()
+            if ticks != contract['owner_start_ticks']:
+                return self.watchdog_cease()
+            poller = select.poll()
+            poller.register(pidfd, select.POLLIN)
+            while True:
+                remaining = contract['deadline_monotonic'] - time.monotonic()
+                if remaining <= 0:
+                    break
+                # poll has no FD_SETSIZE limitation. Round up to avoid an early
+                # deadline, and cap each wait at its signed integer limit.
+                if poller.poll(min(math.ceil(remaining * 1000), 2147483647)):
+                    break
+            return self.watchdog_cease()
+        except BaseException:
+            # A monitoring failure is never permission to abandon live workers.
+            self.watchdog_cease()
+            raise
+        finally:
+            if pidfd is not None:
+                os.close(pidfd)
+
+    def watchdog_cease(self, timeout=5):
+        """Revoke and freeze the exact boundary without acquiring owner locks.
+
+        The separate permanent tombstone cannot be overwritten by an owner's
+        stale supervisor.json replacement. The frozen boundary is never thawed,
+        so a dispatch paused between its last check and gate write cannot run
+        after cessation. This proof does NOT restore consumer admission or
+        reconcile the command cohort. Those still need owner-lock recovery.
+        """
+        if (type(timeout) not in (int, float) or not math.isfinite(timeout)
+                or timeout <= 0):
+            raise BoundaryError('finite positive watchdog timeout required')
+        state, boundary = self._read()
+        revoked = {'version': 1, 'fixture_only': True,
+                   'generation': state['generation'], 'root': state['root'],
+                   'boundary': state['boundary'], 'revoked': True}
+        if self._revocation_path(state).exists():
+            self._watchdog_revoked(state)
+        # Every retry repeats both durability barriers before kernel mutation.
+        _persist(self._revocation_path(state), revoked)
+        (boundary / 'cgroup.freeze').write_text('1')
+        deadline = time.monotonic() + timeout
+        while True:
+            current, checked = self._read()
+            if checked != boundary or current['boundary'] != state['boundary']:
+                raise BoundaryError('watchdog boundary changed')
+            if not self._watchdog_revoked(current):
+                raise BoundaryError('independent revocation disappeared')
+            events = dict(line.split() for line in
+                          (boundary / 'cgroup.events').read_text().splitlines())
+            # Kill remains effective against frozen descendants. Repeat it for
+            # a gated launcher added by a dispatch already in progress.
+            (boundary / 'cgroup.kill').write_text('1')
+            if events.get('frozen') == '1' and events.get('populated') == '0':
+                return self.verify_watchdog_cessation()
+            if time.monotonic() >= deadline:
+                raise BoundaryError('watchdog boundary cessation unresolved')
+            time.sleep(0.01)
+
+    def verify_watchdog_cessation(self):
+        """Fresh kernel proof, never an admission-restoration authorization."""
+        state, boundary = self._read()
+        if not self._watchdog_revoked(state):
+            raise BoundaryError('no durable independent revocation')
+        revoked = json.loads(self._revocation_path(state).read_text())
+        _persist(self._revocation_path(state), revoked)
+        events = dict(line.split() for line in
+                      (boundary / 'cgroup.events').read_text().splitlines())
+        if (events.get('frozen') != '1' or events.get('populated') != '0'
+                or (boundary / 'cgroup.freeze').read_text().strip() != '1'):
+            raise BoundaryError('independent frozen boundary remains unresolved')
+        return {'generation': state['generation'], 'boundary': state['boundary'],
+                'revoked': True, 'frozen': True, 'populated': 0,
+                'consumer_admission_restored': False,
+                'production_recovery_accepted': False}
+
     def begin(self):
         with self._locked():
             if self.path.exists():
@@ -161,7 +304,7 @@ class FixtureSupervisor:
             raise BoundaryError('absolute executable required')
         with self._locked():
             state, boundary = self._read()
-            if state['revoked'] or state.get('sealed', False):
+            if state['revoked'] or state.get('sealed', False) or self._watchdog_revoked(state):
                 raise BoundaryError('revoked generation: queued start denied')
             read_fd, write_fd = os.pipe()
             child = None
@@ -187,7 +330,10 @@ class FixtureSupervisor:
                 state['commands'].append(command)
                 state['revision'] += 1
                 _persist(self.path, state)
-                # The permanent state lock serializes gate opening and revoke.
+                # Independent watchdog revocation is outside this owner lock.
+                # Its permanent freeze also covers a race after this check.
+                if self._watchdog_revoked(state):
+                    raise BoundaryError('revoked generation: queued start denied')
                 os.write(write_fd, b'G')
                 admitted = True
                 self._children[command['operation']] = (child, copy.deepcopy(command))
@@ -197,6 +343,11 @@ class FixtureSupervisor:
                     os.close(read_fd)
                 os.close(write_fd)
                 if child is not None and not admitted:
+                    # A delayed insertion can join an already frozen boundary.
+                    # Pipe EOF cannot wake it there. Kill the exact owned Popen
+                    # for cleanup; this is not complete-boundary release proof.
+                    if self._revocation_path(state).exists():
+                        child.kill()
                     child.wait(timeout=2)
                 # EOF refuses dispatch if registration failed. A bounded wait
                 # reaps the non-admitted launcher, never a native command.
@@ -220,7 +371,7 @@ class FixtureSupervisor:
             raise BoundaryError('native command did not exit successfully')
         with self._locked():
             state, boundary = self._read()
-            if state['revoked']:
+            if state['revoked'] or self._watchdog_revoked(state):
                 raise BoundaryError('revoked generation cannot complete')
             commands = [item for item in state['commands'] if item['operation'] == operation]
             if len(commands) != 1:
@@ -249,6 +400,8 @@ class FixtureSupervisor:
             command['completion'] = proof
             state['revision'] += 1
             _persist(self.path, state)
+            if self._watchdog_revoked(state):
+                raise BoundaryError('revoked generation cannot complete')
             return copy.deepcopy(proof)
 
     def verify_completion(self, operation):
@@ -256,7 +409,8 @@ class FixtureSupervisor:
         with self._locked():
             state, boundary = self._read()
             commands = [item for item in state['commands'] if item['operation'] == operation]
-            if state['revoked'] or len(commands) != 1 or commands[0]['stage'] != 'completed':
+            if (state['revoked'] or self._watchdog_revoked(state)
+                    or len(commands) != 1 or commands[0]['stage'] != 'completed'):
                 raise BoundaryError('no current successful native completion')
             proof = commands[0].get('completion')
             events = dict(line.split() for line in
@@ -271,6 +425,8 @@ class FixtureSupervisor:
             # Visible bytes after a failed replace acknowledgement are not yet
             # durability proof. Re-establish both barriers before returning.
             _persist(self.path, state)
+            if self._watchdog_revoked(state):
+                raise BoundaryError('no current successful native completion')
             return copy.deepcopy(proof)
 
     def revoke(self):

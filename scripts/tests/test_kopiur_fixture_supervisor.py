@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import kopiur_fixture_supervisor as supervisor
+import kopiur_fixture_controller as controller_module
 from kopiur_fixture_supervisor import BoundaryError, FixtureSupervisor
 from kopiur_fixture_controller import FixtureController
 from fixture_admission_cases import NativeAdmissionCases
@@ -609,6 +610,259 @@ while True:
         with self.assertRaises(BoundaryError):
             self.controller.begin()
         self.assertEqual(original, self.controller.path.read_bytes())
+
+    def independent_watchdog(self, monitor=False):
+        code = ('import json; from kopiur_fixture_supervisor import FixtureSupervisor; '
+                f's=FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r}); '
+                f'p=s.{"monitor_watchdog" if monitor else "watchdog_cease"}(); '
+                'assert s.verify_watchdog_cessation()==p; '
+                'print(json.dumps(p))')
+        result = subprocess.run([sys.executable, '-c', code], check=True, timeout=10,
+                                capture_output=True, text=True,
+                                env={'PYTHONPATH': str(Path(supervisor.__file__).parent)})
+        proof = json.loads(result.stdout)
+        self.assertTrue(proof['frozen'])
+        self.assertFalse(proof['consumer_admission_restored'])
+        return proof
+
+    def test_watchdog_ceases_descendants_while_capture_owner_holds_lock(self):
+        with tempfile.TemporaryDirectory() as public:
+            os.chmod(public, 0o777)
+            marker = Path(public) / 'descendant'
+            self.command('import os,time; from pathlib import Path; '
+                         'pid=os.fork(); os._exit(0) if pid else None; os.setsid(); '
+                         f'Path({str(marker)!r}).touch(); time.sleep(60)')
+            self.wait_file(marker)
+            locked = Path(public) / 'locked'
+            owner = os.fork()
+            if owner == 0:
+                with self.controller._locked():
+                    locked.touch()
+                    os.kill(os.getpid(), signal.SIGSTOP)
+                    os._exit(0)
+            try:
+                self.wait_file(locked)
+                _, status = os.waitpid(owner, os.WUNTRACED)
+                self.assertTrue(os.WIFSTOPPED(status))
+                proof = self.independent_watchdog()
+                self.assertEqual(proof['populated'], 0)
+                # Ordinary cessation really is excluded by this live owner.
+                with self.assertRaisesRegex(BoundaryError, 'lock timeout'):
+                    self.controller.revoke()
+                self.assertEqual(self.controller.verify_watchdog_cessation(), proof)
+            finally:
+                os.kill(owner, signal.SIGKILL)
+                os.waitpid(owner, 0)
+            restarted = FixtureSupervisor(self.directory, self.root)
+            with self.assertRaisesRegex(BoundaryError, 'queued start denied'):
+                restarted.dispatch([sys.executable, '-c', 'pass'])
+
+    def paused_watchdog_dispatch(self, point):
+        with tempfile.TemporaryDirectory() as public:
+            os.chmod(public, 0o777)
+            registered = Path(public) / 'registered'
+            mutation = Path(public) / 'must-not-exist'
+            owner = os.fork()
+            if owner == 0:
+                def pause():
+                    registered.touch()
+                    os.kill(os.getpid(), signal.SIGSTOP)
+                if point == 'registered':
+                    original = supervisor._persist
+                    def persist(path, state):
+                        original(path, state)
+                        pause()
+                    supervisor._persist = persist
+                elif point == 'membership':
+                    original = Path.write_text
+                    def write_text(path, text, *args, **kwargs):
+                        if path.name == 'cgroup.procs':
+                            pause()
+                        return original(path, text, *args, **kwargs)
+                    patch.object(Path, 'write_text', write_text).start()
+                elif point == 'gate':
+                    original = os.write
+                    def write(fd, value):
+                        if value == b'G':
+                            pause()
+                        return original(fd, value)
+                    os.write = write
+                else:
+                    os._exit(78)
+                try:
+                    self.controller.dispatch([sys.executable, '-c',
+                        f'from pathlib import Path; Path({str(mutation)!r}).touch()'])
+                except (BoundaryError, BrokenPipeError):
+                    os._exit(0)
+                os._exit(77)
+            try:
+                self.wait_file(registered)
+                _, status = os.waitpid(owner, os.WUNTRACED)
+                self.assertTrue(os.WIFSTOPPED(status))
+                self.independent_watchdog()
+                os.kill(owner, signal.SIGCONT)
+                _, status = os.waitpid(owner, 0)
+                owner = None
+                self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+                self.assertFalse(mutation.exists())
+                self.assertEqual(self.controller.verify_watchdog_cessation()['populated'], 0)
+            finally:
+                if owner is not None:
+                    os.kill(owner, signal.SIGKILL)
+                    os.waitpid(owner, 0)
+
+    def test_watchdog_after_registration_before_gate_refuses_delayed_dispatch(self):
+        self.paused_watchdog_dispatch('registered')
+
+    def test_watchdog_before_membership_reaps_delayed_frozen_launcher(self):
+        self.paused_watchdog_dispatch('membership')
+
+    def test_watchdog_after_final_check_permanent_freeze_denies_gate_race(self):
+        self.paused_watchdog_dispatch('gate')
+
+    def test_watchdog_tombstone_survives_stale_owner_journal_replacement(self):
+        state, _ = self.controller._read()
+        self.independent_watchdog()
+        supervisor._persist(self.controller.path, state)
+        self.assertFalse(self.controller._read()[0]['revoked'])
+        self.assertEqual(self.controller.verify_watchdog_cessation()['populated'], 0)
+        with self.assertRaises(BoundaryError):
+            self.command('pass')
+        with self.assertRaises(BoundaryError):
+            FixtureController(self.controller).begin({'first': 'native-first'}, 30)
+
+    def test_watchdog_invalidates_completed_native_and_terminal_receipts(self):
+        controller, state = self.make_controller()
+        state = self.controller_plan(controller, state, 'first')
+        state = controller.commit(controller.prepare(state))
+        operation = state['terminal']['operations'][0]
+        self.independent_watchdog()
+        with self.assertRaises(BoundaryError):
+            self.controller.verify_completion(operation)
+        with self.assertRaises(BoundaryError):
+            controller.verify_terminal(state)
+
+    def test_watchdog_failed_revocation_durability_cannot_mutate_kernel(self):
+        _, boundary = self.controller._read()
+        original = os.fsync
+        calls = []
+        def fail_directory(fd):
+            calls.append(fd)
+            if len(calls) == 2:
+                raise OSError('injected independent revocation directory fsync failure')
+            original(fd)
+        with patch.object(supervisor.os, 'fsync', side_effect=fail_directory):
+            with self.assertRaises(OSError):
+                self.controller.watchdog_cease()
+        self.assertEqual((boundary / 'cgroup.freeze').read_text().strip(), '0')
+        with patch.object(supervisor.os, 'fsync', side_effect=OSError('still unavailable')):
+            with self.assertRaises(OSError):
+                self.controller.watchdog_cease()
+        self.assertEqual((boundary / 'cgroup.freeze').read_text().strip(), '0')
+        self.independent_watchdog()
+
+    def test_watchdog_changed_identity_never_freezes_another_boundary(self):
+        state, boundary = self.controller._read()
+        original = json.loads(json.dumps(state))
+        state['boundary']['inode'] += 1
+        supervisor._persist(self.controller.path, state)
+        try:
+            with self.assertRaisesRegex(BoundaryError, 'identity changed'):
+                self.controller.watchdog_cease()
+            self.assertEqual((boundary / 'cgroup.freeze').read_text().strip(), '0')
+        finally:
+            supervisor._persist(self.controller.path, original)
+
+
+    def test_watchdog_deadline_monitor_does_not_acquire_live_owner_lock(self):
+        self.controller.admit_watchdog(os.getpid(), 0.2)
+        child, _ = self.command('import time; time.sleep(60)')
+        with self.controller._locked():
+            self.independent_watchdog(monitor=True)
+        self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+        with self.assertRaises(BoundaryError):
+            self.command('pass')
+
+    def test_watchdog_monitor_restarts_after_admitted_owner_process_loss(self):
+        read_fd, write_fd = os.pipe()
+        owner = os.fork()
+        if owner == 0:
+            os.close(write_fd)
+            os.read(read_fd, 1)
+            os._exit(0)
+        os.close(read_fd)
+        try:
+            self.controller.admit_watchdog(owner, 60)
+            child, _ = self.command('import time; time.sleep(60)')
+        finally:
+            os.close(write_fd)
+            os.waitpid(owner, 0)
+        self.independent_watchdog(monitor=True)
+        self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+        self.independent_watchdog(monitor=True)
+
+    def test_watchdog_contract_refuses_rebinding_and_changed_boundary(self):
+        self.controller.admit_watchdog(os.getpid(), 0.2)
+        with self.assertRaisesRegex(BoundaryError, 'unused generation'):
+            self.controller.admit_watchdog(os.getpid(), 60)
+        path = self.directory / 'watchdog.json'
+        contract = json.loads(path.read_text())
+        contract['boundary']['inode'] += 1
+        supervisor._persist(path, contract)
+        _, boundary = self.controller._read()
+        with self.assertRaisesRegex(BoundaryError, 'contract identity changed'):
+            self.controller.monitor_watchdog()
+        self.assertEqual((boundary / 'cgroup.freeze').read_text().strip(), '0')
+
+
+    def test_watchdog_monitor_pidfd_above_select_descriptor_limit(self):
+        self.controller.admit_watchdog(os.getpid(), 0.2)
+        original = getattr(os, 'pidfd_open')
+        def high_pidfd(pid):
+            fd = original(pid)
+            try:
+                return supervisor.fcntl.fcntl(fd, supervisor.fcntl.F_DUPFD_CLOEXEC, 2048)
+            finally:
+                os.close(fd)
+        with patch.object(supervisor.os, 'pidfd_open', side_effect=high_pidfd):
+            self.controller.monitor_watchdog()
+        self.controller.verify_watchdog_cessation()
+
+    def test_watchdog_monitor_failure_does_not_abandon_native_workers(self):
+        self.controller.admit_watchdog(os.getpid(), 60)
+        child, _ = self.command('import time; time.sleep(60)')
+        with patch.object(supervisor.select, 'poll', side_effect=OSError('injected poll failure')):
+            with self.assertRaises(OSError):
+                self.controller.monitor_watchdog()
+        self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+        self.controller.verify_watchdog_cessation()
+
+    def test_watchdog_during_native_completion_persistence_cannot_publish_success(self):
+        child, registration = self.command('pass')
+        child.wait(timeout=5)
+        operation = registration['operation']
+        original = supervisor._persist
+        def revoke_after_persist(path, state):
+            original(path, state)
+            self.independent_watchdog()
+        with patch.object(supervisor, '_persist', side_effect=revoke_after_persist):
+            with self.assertRaisesRegex(BoundaryError, 'cannot complete'):
+                self.controller.complete(operation)
+        with self.assertRaises(BoundaryError):
+            self.controller.verify_completion(operation)
+
+    def test_watchdog_during_terminal_commit_cannot_publish_success(self):
+        controller, state = self.make_controller()
+        state = self.controller_plan(controller, state, 'first')
+        state = controller.prepare(state)
+        original = controller_module._persist
+        def revoke_after_persist(path, state):
+            original(path, state)
+            self.independent_watchdog()
+        with patch.object(controller_module, '_persist', side_effect=revoke_after_persist):
+            with self.assertRaisesRegex(BoundaryError, 'revoked controller publication'):
+                controller.commit(state)
+        self.assertEqual(controller.recover()['phase'], 'ceased')
 
 
 if __name__ == '__main__':

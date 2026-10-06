@@ -23,7 +23,7 @@ spec:
   values:
     image:
       repository: docker.io/rook/ceph
-      tag: v1.20.8@sha256:d47a748c058a27062306adbe325cb7e8aa4d40514d57ce7ecea8bb0934e97e3f
+      tag: v1.21.0@sha256:2c3a65786d3cc85ba15d7f258461c0bf392c6a6ee19dde8011259b8d34eeedd0
     ceph-csi-operator:
       controllerManager:
         manager:

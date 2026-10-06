@@ -7,6 +7,7 @@ root supervisor has durably registered them. Revocation survives restart.
 """
 
 import contextlib
+import copy
 import ctypes
 import fcntl
 import json
@@ -94,6 +95,7 @@ class FixtureSupervisor:
     path: Path
     lock: Path
     root: Path
+    _children: dict
 
     def __init__(self, directory, cgroup_root: str | Path = '/sys/fs/cgroup'):
         if sys.platform != 'linux' or os.geteuid() != 0:
@@ -105,6 +107,7 @@ class FixtureSupervisor:
         self.path = self.directory / 'supervisor.json'
         self.lock = self.directory / 'supervisor.lock'
         self.root = Path(cgroup_root).resolve(strict=True)
+        self._children = {}
         _require_cgroup2(self.root)
         if not (self.root / 'cgroup.controllers').is_file():
             raise BoundaryError('cgroup v2 required')
@@ -186,7 +189,8 @@ class FixtureSupervisor:
                 # The permanent state lock serializes gate opening and revoke.
                 os.write(write_fd, b'G')
                 admitted = True
-                return child, command
+                self._children[command['operation']] = (child, copy.deepcopy(command))
+                return child, copy.deepcopy(command)
             finally:
                 if read_fd >= 0:
                     os.close(read_fd)
@@ -195,6 +199,78 @@ class FixtureSupervisor:
                     child.wait(timeout=2)
                 # EOF refuses dispatch if registration failed. A bounded wait
                 # reaps the non-admitted launcher, never a native command.
+
+    def complete(self, operation, timeout=5):
+        """Persist success only from an owned child and an empty native boundary.
+
+        Waiting never holds the state lock. A restarted supervisor cannot infer
+        success from an absent PID, and must revoke/recover an unknown outcome.
+        This receipt does not authorize consumer admission or production use.
+        """
+        if (type(timeout) not in (int, float) or not math.isfinite(timeout)
+                or timeout <= 0):
+            raise BoundaryError('finite positive completion timeout required')
+        owned = self._children.get(operation)
+        if owned is None:
+            raise BoundaryError('native outcome unknown after supervisor restart')
+        child, registration = owned
+        # This Popen belongs to this supervisor, not a caller-supplied exit code.
+        if child.wait(timeout=timeout) != 0:
+            raise BoundaryError('native command did not exit successfully')
+        with self._locked():
+            state, boundary = self._read()
+            if state['revoked']:
+                raise BoundaryError('revoked generation cannot complete')
+            commands = [item for item in state['commands'] if item['operation'] == operation]
+            if len(commands) != 1:
+                raise BoundaryError('completion requires exact registered operation')
+            command = commands[0]
+            if command['stage'] not in ('registered', 'completed'):
+                raise BoundaryError('native registration stage changed')
+            expected = copy.deepcopy(command)
+            expected.pop('completion', None)
+            expected['stage'] = 'registered'
+            if expected != registration:
+                raise BoundaryError('native registration changed')
+            events = dict(line.split() for line in
+                          (boundary / 'cgroup.events').read_text().splitlines())
+            if events.get('populated') != '0':
+                raise BoundaryError('native descendants remain populated')
+            proof = {'generation': state['generation'], 'boundary': state['boundary'],
+                     'operation': operation, 'populated': 0, 'returncode': 0,
+                     'registered_operations': [item['operation'] for item in state['commands']]}
+            if command.get('completion') is not None:
+                if command['completion'] != proof:
+                    raise BoundaryError('completion cohort changed')
+                # Retry must repeat fsync, including after replace succeeded but
+                # directory durability acknowledgement was lost.
+            command['stage'] = 'completed'
+            command['completion'] = proof
+            state['revision'] += 1
+            _persist(self.path, state)
+            return copy.deepcopy(proof)
+
+    def verify_completion(self, operation):
+        """Re-read durable completion; revocation or later dispatch invalidates it."""
+        with self._locked():
+            state, boundary = self._read()
+            commands = [item for item in state['commands'] if item['operation'] == operation]
+            if state['revoked'] or len(commands) != 1 or commands[0]['stage'] != 'completed':
+                raise BoundaryError('no current successful native completion')
+            proof = commands[0].get('completion')
+            events = dict(line.split() for line in
+                          (boundary / 'cgroup.events').read_text().splitlines())
+            if (not proof or proof['generation'] != state['generation']
+                    or proof['boundary'] != state['boundary'] or proof['operation'] != operation
+                    or proof['returncode'] != 0 or proof['populated'] != 0
+                    or events.get('populated') != '0'
+                    or proof['registered_operations'] !=
+                    [item['operation'] for item in state['commands']]):
+                raise BoundaryError('completion boundary or cohort changed')
+            # Visible bytes after a failed replace acknowledgement are not yet
+            # durability proof. Re-establish both barriers before returning.
+            _persist(self.path, state)
+            return copy.deepcopy(proof)
 
     def revoke(self):
         with self._locked():

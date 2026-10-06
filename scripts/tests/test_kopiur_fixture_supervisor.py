@@ -268,6 +268,118 @@ while True:
             state['boundary'] = original
             supervisor._persist(self.controller.path, state)
 
+    def test_successful_completion_is_durable_and_revocation_invalidates_it(self):
+        child, command = self.command('pass')
+        proof = self.controller.complete(command['operation'])
+        self.assertEqual(child.returncode, 0)
+        restarted = FixtureSupervisor(self.directory, self.root)
+        self.assertEqual(restarted.verify_completion(command['operation']), proof)
+        self.assertEqual(self.controller.complete(command['operation']), proof)
+        restarted.revoke()
+        with self.assertRaises(BoundaryError):
+            self.controller.complete(command['operation'])
+        with self.assertRaises(BoundaryError):
+            restarted.verify_completion(command['operation'])
+
+    def test_exited_parent_with_live_descendant_cannot_complete(self):
+        with tempfile.TemporaryDirectory() as public:
+            os.chmod(public, 0o777)
+            marker = Path(public) / 'descendant'
+            _, command = self.command(
+                'import os,time; from pathlib import Path; '
+                'pid=os.fork(); '
+                'os._exit(0) if pid else None; os.setsid(); '
+                f'Path({str(marker)!r}).touch(); time.sleep(60)')
+            self.wait_file(marker)
+            original = self.controller.path.read_bytes()
+            with self.assertRaisesRegex(BoundaryError, 'descendants remain'):
+                self.controller.complete(command['operation'])
+            self.assertEqual(self.controller.path.read_bytes(), original)
+
+    def test_nonzero_and_unknown_restart_outcomes_cannot_complete(self):
+        child, command = self.command('raise SystemExit(9)')
+        self.assertEqual(child.wait(timeout=5), 9)
+        original = self.controller.path.read_bytes()
+        with self.assertRaisesRegex(BoundaryError, 'successfully'):
+            self.controller.complete(command['operation'])
+        with self.assertRaisesRegex(BoundaryError, 'unknown'):
+            FixtureSupervisor(self.directory, self.root).complete(command['operation'])
+        self.assertEqual(self.controller.path.read_bytes(), original)
+
+    def test_later_dispatch_invalidates_old_completion_even_after_exit(self):
+        _, first = self.command('pass')
+        self.controller.complete(first['operation'])
+        child, second = self.command('pass')
+        self.assertEqual(child.wait(timeout=5), 0)
+        with self.assertRaisesRegex(BoundaryError, 'cohort changed'):
+            self.controller.verify_completion(first['operation'])
+        with self.assertRaisesRegex(BoundaryError, 'cohort changed'):
+            self.controller.complete(first['operation'])
+        self.controller.complete(second['operation'])
+
+    def test_completion_directory_fsync_failure_retry_repeats_barrier(self):
+        _, command = self.command('pass')
+        original = os.fsync
+        calls = []
+        def fail_directory(fd):
+            calls.append(fd)
+            if len(calls) == 2:
+                raise OSError('injected completion directory fsync failure')
+            original(fd)
+        with patch.object(supervisor.os, 'fsync', side_effect=fail_directory):
+            with self.assertRaises(OSError):
+                self.controller.complete(command['operation'])
+        restarted = FixtureSupervisor(self.directory, self.root)
+        with patch.object(supervisor.os, 'fsync', side_effect=OSError('still unavailable')):
+            with self.assertRaises(OSError):
+                restarted.verify_completion(command['operation'])
+        with patch.object(supervisor.os, 'fsync', wraps=original) as barrier:
+            proof = self.controller.complete(command['operation'])
+            self.assertEqual(barrier.call_count, 2)
+        self.assertEqual(self.controller.verify_completion(command['operation']), proof)
+
+    def test_completion_wait_does_not_block_independent_revoke(self):
+        child, command = self.command('import time; time.sleep(60)')
+        original = child.wait
+        def independently_cease(*args, **kwargs):
+            code = ('from kopiur_fixture_supervisor import FixtureSupervisor; '
+                    f's=FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r}); '
+                    's.cease()')
+            subprocess.run([sys.executable, '-c', code], check=True, timeout=10,
+                           env={'PYTHONPATH': str(Path(supervisor.__file__).parent)})
+            return original(*args, **kwargs)
+        with patch.object(child, 'wait', side_effect=independently_cease):
+            with self.assertRaisesRegex(BoundaryError, 'successfully'):
+                self.controller.complete(command['operation'], timeout=5)
+        self.assertEqual(self.controller.verify_cessation()['populated'], 0)
+
+    def test_revoke_wins_after_successful_wait_before_completion_lock(self):
+        child, command = self.command('pass')
+        original = child.wait
+        def revoke_after_wait(*args, **kwargs):
+            result = original(*args, **kwargs)
+            self.assertEqual(result, 0)
+            code = ('from kopiur_fixture_supervisor import FixtureSupervisor; '
+                    f's=FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r}); '
+                    's.revoke()')
+            subprocess.run([sys.executable, '-c', code], check=True, timeout=10,
+                           env={'PYTHONPATH': str(Path(supervisor.__file__).parent)})
+            return result
+        with patch.object(child, 'wait', side_effect=revoke_after_wait):
+            with self.assertRaisesRegex(BoundaryError, 'revoked generation'):
+                self.controller.complete(command['operation'])
+        self.assertNotIn('completion', self.controller._read()[0]['commands'][0])
+
+    def test_returned_registration_cannot_mutate_owned_identity(self):
+        _, command = self.command('pass')
+        operation = command['operation']
+        command['boundary']['inode'] += 1
+        command['pid'] += 1
+        proof = self.controller.complete(operation)
+        state, _ = self.controller._read()
+        self.assertEqual(proof['boundary'], state['boundary'])
+        self.assertNotEqual(command['boundary'], state['boundary'])
+
     def test_old_generation_is_not_overwritten(self):
         original = self.controller.path.read_bytes()
         with self.assertRaises(BoundaryError):

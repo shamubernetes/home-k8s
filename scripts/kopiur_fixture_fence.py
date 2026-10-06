@@ -13,11 +13,19 @@ import tempfile
 
 
 class FixtureFence:
-    def __init__(self, path, source):
+    def __init__(self, path, source, admission=None):
         if re.fullmatch(r'k8s92-nonrel-[0-9a-f]{32}-source', source) is None:
             raise ValueError('only an owned nonrel fixture source is admitted')
+        if admission is not None and (
+                not isinstance(admission, dict) or set(admission) != {'index_uuid', 'write_block'}
+                or not isinstance(admission['index_uuid'], str) or not admission['index_uuid']
+                or admission['write_block'] not in (None, 'true', 'false')):
+            raise ValueError('exact observed native admission required')
         self.path = Path(path)
         self.source = source
+        # Capture immutable bytes, not a mutable caller dictionary. Legacy
+        # unbound journals never qualify this native admission protocol.
+        self._admission = json.dumps(admission, sort_keys=True)
         self.lock = None
 
     def __enter__(self):
@@ -42,7 +50,10 @@ class FixtureFence:
         if not self.path.exists():
             return None
         state = json.loads(self.path.read_text())
-        if (set(state) != {'source', 'phase'} or state['source'] != self.source
+        admission = json.loads(self._admission)
+        required = {'source', 'phase'} if admission is None else {'source', 'phase', 'admission'}
+        if (set(state) != required or state['source'] != self.source
+                or (admission is not None and state['admission'] != admission)
                 or state['phase'] not in ('intent', 'fenced', 'released')):
             raise RuntimeError('fixture journal does not match the owned boundary')
         return state['phase']
@@ -54,7 +65,11 @@ class FixtureFence:
         fd, name = tempfile.mkstemp(dir=self.path.parent, prefix=self.path.name + '.')
         try:
             with os.fdopen(fd, 'w') as stream:
-                json.dump({'source': self.source, 'phase': phase}, stream)
+                state = {'source': self.source, 'phase': phase}
+                admission = json.loads(self._admission)
+                if admission is not None:
+                    state['admission'] = admission
+                json.dump(state, stream)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(name, self.path)

@@ -1,4 +1,5 @@
 """Real process-interruption tests for the non-production fixture journal."""
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -51,6 +52,69 @@ class FenceTests(unittest.TestCase):
     def test_production_source_denied(self):
         with self.assertRaises(ValueError):
             FixtureFence(self.path, 'elasticsearch-production')
+
+    def test_native_admission_persisted_before_first_mutation(self):
+        admission: dict[str, str | None] = {'index_uuid': 'original-index', 'write_block': 'true'}
+        with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+            admission['write_block'] = None
+            def block():
+                state = json.loads(self.path.read_text())
+                self.assertEqual(state['phase'], 'intent')
+                self.assertEqual(state['admission'], {'index_uuid': 'original-index', 'write_block': 'true'})
+            journal.acquire(block)
+        with FixtureFence(self.path, SOURCE, admission={'index_uuid': 'original-index', 'write_block': 'true'}) as journal:
+            self.assertTrue(journal.recover(lambda: None))
+
+    def test_replaced_index_or_changed_prior_admission_denies_release(self):
+        original = {'index_uuid': 'original-index', 'write_block': None}
+        with FixtureFence(self.path, SOURCE, admission=original) as journal:
+            journal.acquire(lambda: None)
+        before = self.path.read_bytes()
+        for changed in ({'index_uuid': 'replacement-index', 'write_block': None},
+                        {'index_uuid': 'original-index', 'write_block': 'false'},
+                        {'index_uuid': 'original-index', 'write_block': 'true'}):
+            with self.subTest(changed=changed), FixtureFence(self.path, SOURCE, admission=changed) as journal:
+                with self.assertRaises(RuntimeError):
+                    journal.recover(lambda: self.fail('changed native boundary released'))
+                self.assertEqual(self.path.read_bytes(), before)
+
+    def test_legacy_journal_cannot_be_upgraded_or_downgraded_implicitly(self):
+        admission = {'index_uuid': 'original-index', 'write_block': None}
+        with FixtureFence(self.path, SOURCE) as journal:
+            journal.acquire(lambda: None)
+        with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+            with self.assertRaises(RuntimeError):
+                journal.recover(lambda: self.fail('unbound journal admitted'))
+        self.path.unlink()
+        with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+            journal.acquire(lambda: None)
+        with FixtureFence(self.path, SOURCE) as journal:
+            with self.assertRaises(RuntimeError):
+                journal.recover(lambda: self.fail('native binding bypassed'))
+
+    def test_native_lost_release_ack_retains_exact_prior_block(self):
+        for block in (None, 'false', 'true'):
+            with self.subTest(block=block):
+                self.path.unlink(missing_ok=True)
+                admission = {'index_uuid': 'original-index', 'write_block': block}
+                with FixtureFence(self.path, SOURCE, admission=admission) as journal:
+                    journal.acquire(lambda: None)
+                    def lost_ack():
+                        raise RuntimeError('lost acknowledgement')
+                    with self.assertRaises(RuntimeError):
+                        journal.recover(lost_ack)
+                    self.assertEqual(journal.read(), 'fenced')
+                with FixtureFence(self.path, SOURCE, admission=admission) as restarted:
+                    self.assertTrue(restarted.recover(lambda: None))
+                    self.assertFalse(restarted.recover(lambda: self.fail('duplicate release')))
+                self.assertEqual(json.loads(self.path.read_text())['admission'], admission)
+
+    def test_malformed_native_admission_refused(self):
+        for admission in ({}, {'index_uuid': '', 'write_block': None},
+                          {'index_uuid': 'index', 'write_block': False},
+                          {'index_uuid': 'index', 'write_block': 'unknown'}):
+            with self.subTest(admission=admission), self.assertRaises(ValueError):
+                FixtureFence(self.path, SOURCE, admission=admission)
 
     def test_real_process_loss_before_and_after_fence_ack(self):
         for point in ('intent', 'fenced', 'released-before-journal'):

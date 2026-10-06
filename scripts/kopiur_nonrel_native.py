@@ -395,7 +395,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             journal = Path(directory) / 'fence.json'
             for point in ('intent', 'fenced', 'released-before-journal'):
                 def interrupted_capture():
-                    with FixtureFence(journal, source) as boundary:
+                    with FixtureFence(journal, source, admission=prior_admission) as boundary:
                         def interrupted_block():
                             block()
                             if point == 'intent':
@@ -421,7 +421,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                         child.kill()
                         child.join(timeout=10)
                     child.close()
-                with FixtureFence(journal, source) as boundary:
+                with FixtureFence(journal, source, admission=prior_admission) as boundary:
                     expected_phase = 'intent' if point == 'intent' else 'fenced'
                     if (boundary.read() != expected_phase or not boundary.recover(release)
                             or boundary.recover(release)):
@@ -429,7 +429,39 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 self.http(port, '/fixture/_doc/resumed?refresh=true', 'PUT',
                           {'title': 'post-restart-write', 'number': 3})
                 self.http(port, '/fixture/_doc/resumed?refresh=true', 'DELETE')
-            with FixtureFence(journal, source) as boundary:
+            # A previously blocked index must remain blocked across a lost
+            # release acknowledgement. Its prior state is journaled before
+            # mutation and survives a new owner's object construction.
+            self.http(port, '/fixture/_settings', 'PUT', {'index.blocks.write': 'true'})
+            preblocked = observed_admission()
+            closed_journal = Path(directory) / 'preblocked.json'
+            with FixtureFence(closed_journal, source, admission=preblocked) as boundary:
+                boundary.acquire(block)
+                def lost_closed_release():
+                    self.http(port, '/fixture/_settings', 'PUT', {'index.blocks.write': 'true'})
+                    raise RuntimeError('injected lost preblocked release acknowledgement')
+                try:
+                    boundary.recover(lost_closed_release)
+                except RuntimeError as error:
+                    if str(error) != 'injected lost preblocked release acknowledgement':
+                        raise
+            with FixtureFence(closed_journal, source, admission=preblocked) as boundary:
+                def preserve_closed():
+                    if observed_admission() != preblocked:
+                        raise RuntimeError('preblocked native fixture admission changed')
+                    if self.http(port, '/fixture/_settings', 'PUT',
+                                 {'index.blocks.write': 'true'}).get('acknowledged') is not True:
+                        raise RuntimeError('preblocked native fixture release failed')
+                    if observed_admission() != preblocked:
+                        raise RuntimeError('preblocked native fixture reopened')
+                if not boundary.recover(preserve_closed) or boundary.recover(preserve_closed):
+                    raise RuntimeError('preblocked native journal recovery differs')
+            closed_denial = self.http(port, '/fixture/_doc/preblocked?refresh=true', 'PUT',
+                                     {'title': 'must-stay-blocked'}, expect_write_block=True)
+            if closed_denial != {'status': 403, 'error_type': 'cluster_block_exception'}:
+                raise RuntimeError('preblocked native writer boundary reopened')
+            release()
+            with FixtureFence(journal, source, admission=prior_admission) as boundary:
                 boundary.acquire(block)
         denial = self.http(port, '/fixture/_doc/fenced?refresh=true', 'PUT',
                            {'title': 'must-not-enter-capture', 'number': 3}, expect_write_block=True)
@@ -498,6 +530,8 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'synthetic_security_feature_state_recovered': True,
                 'synthetic_writer_fence_restored_and_released': True,
                 'synthetic_source_fence_journal_recovery_exercised': True,
+                'synthetic_native_admission_journal_bound': True,
+                'synthetic_preblocked_lost_release_ack_preserved': True,
                 'synthetic_capture_process_loss_points': ['intent', 'fenced', 'released-before-journal'],
                 'production_restart_watchdog_qualified': False,
                 'provider_native_fixture_receipt': transport_receipt,

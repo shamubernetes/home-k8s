@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/externaldns.k8s.io/dnsendpoint_v1alpha1.json
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: rustdesk
+spec:
+  endpoints:
+  - dnsName: "rustdesk.${HOME_DOMAIN}"
+    recordType: CNAME
+    recordTTL: 300
+    # Existing Cloudflare DDNS owns this DNS-only WAN A record.
+    targets: ["external.${GAME_DOMAIN}"]
+    providerSpecific:
+    - name: cloudflare-proxied
+      value: "false"

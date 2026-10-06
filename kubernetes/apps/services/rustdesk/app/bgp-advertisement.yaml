@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumbgpadvertisement_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: rustdesk
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+  - advertisementType: Service
+    service:
+      addresses: [LoadBalancerIP]
+    selector:
+      matchLabels:
+        app.kubernetes.io/name: rustdesk

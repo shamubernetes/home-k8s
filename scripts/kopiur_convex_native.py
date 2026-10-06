@@ -61,9 +61,15 @@ def contract():
                 'CONVEX_CLOUD_ORIGIN': 'http://127.0.0.1:3210',
                 'CONVEX_SITE_ORIGIN': 'http://127.0.0.1:3211',
                 'DO_NOT_REQUIRE_SSL': '1', 'DISABLE_BEACON': 'true', 'RUST_LOG': 'info'}
+            # The pinned image has root-owned mode-744 entrypoint/key scripts and no USER override.
+            scope['run']('docker', 'run', '--rm', '--read-only', '--network', 'none',
+                '--cap-drop=ALL', '--cap-add=CHOWN', '--security-opt=no-new-privileges:true',
+                '--user', '0:0', '--entrypoint', 'sh',
+                '--mount', 'type=volume,src=' + config + ',dst=/config', scope['PG_IMAGE'],
+                '-ceu', 'chown -R 0:0 /config; chmod 0775 /config')
             try:
                 return self.start(name, self.image, network='container:' + database, env=env,
-                    mounts=[(config, '/config', 'rw'), (config, '/convex/data', 'rw')], user='568:568')
+                    mounts=[(config, '/config', 'rw'), (config, '/convex/data', 'rw')], user='0:0')
             except RuntimeError as error:
                 user = scope['run']('docker', 'inspect', '--format', '{{.Config.User}}', IMAGE, check=False).stdout.decode().strip()
                 if not re.fullmatch(r'[A-Za-z0-9_:-]{0,128}', user):

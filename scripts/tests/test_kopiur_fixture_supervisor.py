@@ -376,6 +376,7 @@ while True:
         operation = command['operation']
         command['boundary']['inode'] += 1
         command['pid'] += 1
+        command['argv'][-1] = 'raise RuntimeError("mutated returned argv")'
         proof = self.controller.complete(operation)
         state, _ = self.controller._read()
         self.assertEqual(proof['boundary'], state['boundary'])
@@ -397,8 +398,15 @@ while True:
         controller, state = self.make_controller({'first': 'native-first', 'second': 'native-second'})
         state = self.controller_plan(controller, state, 'first')
         with self.assertRaisesRegex(BoundaryError, 'entire authoritative'):
-            controller.commit(state)
+            controller.prepare(state)
         state = self.controller_plan(controller, state, 'second')
+        with self.assertRaises(BoundaryError):
+            controller.commit(state)
+        prepared = controller.prepare(state)
+        self.assertEqual(controller.verify_prepared(prepared)['consumers'], state['consumers'])
+        with self.assertRaises(BoundaryError):
+            controller.commit(state)
+        state = prepared
         state = controller.commit(state)
         restarted = FixtureController(FixtureSupervisor(self.directory, self.root))
         receipt = restarted.verify_terminal(state)
@@ -483,7 +491,7 @@ while True:
         self.controller.complete(extra['operation'])
         self.assertEqual(child.returncode, 0)
         with self.assertRaisesRegex(BoundaryError, 'entire authoritative'):
-            controller.commit(state)
+            controller.prepare(state)
 
     def test_controller_expired_snapshot_never_dispatches_native_plan(self):
         controller = FixtureController(self.controller)
@@ -498,6 +506,7 @@ while True:
     def test_controller_terminal_persistence_failure_cannot_reopen_dispatch(self):
         controller, state = self.make_controller()
         state = self.controller_plan(controller, state, 'first')
+        state = controller.prepare(state)
         original = controller._save
         def fail_terminal(candidate):
             if candidate['phase'] == 'committed':
@@ -510,6 +519,89 @@ while True:
             self.command('pass')
         terminal = controller.commit(state)
         self.assertFalse(controller.verify_terminal(terminal)['production_recovery_accepted'])
+
+    def test_controller_prepared_generation_aborts_without_admission_claim(self):
+        controller, state = self.make_controller({'first': 'native-first', 'second': 'native-second'})
+        state = self.controller_plan(controller, state, 'first')
+        state = self.controller_plan(controller, state, 'second')
+        state = controller.prepare(state)
+        restarted = FixtureController(FixtureSupervisor(self.directory, self.root))
+        aborted = restarted.recover()
+        self.assertEqual(aborted['abort']['prior_phase'], 'prepared')
+        self.assertEqual(aborted['abort']['consumers'], state['consumers'])
+        self.assertFalse(aborted['abort']['consumer_admission_restored'])
+        self.assertFalse(aborted['abort']['production_recovery_accepted'])
+        self.assertEqual(restarted.recover()['abort'], aborted['abort'])
+        with self.assertRaises(BoundaryError):
+            controller.commit(state)
+
+    def test_controller_lost_preparation_ack_requires_durability_barrier(self):
+        controller, state = self.make_controller()
+        state = self.controller_plan(controller, state, 'first')
+        original = controller._save
+        def lost_ack(candidate):
+            result = original(candidate)
+            if candidate['phase'] == 'prepared':
+                raise OSError('lost preparation acknowledgement')
+            return result
+        with patch.object(controller, '_save', side_effect=lost_ack):
+            with self.assertRaises(OSError):
+                controller.prepare(state)
+        visible = controller.snapshot()
+        assert visible is not None
+        self.assertEqual(visible['phase'], 'prepared')
+        with self.assertRaisesRegex(BoundaryError, 'queued start denied'):
+            self.command('pass')
+        with patch.object(supervisor.os, 'fsync', side_effect=OSError('unavailable')):
+            with self.assertRaises(OSError):
+                controller.verify_prepared(visible)
+        self.assertEqual(controller.verify_prepared(visible), visible['prepared'])
+        self.assertFalse(controller.commit(visible)['terminal']['production_recovery_accepted'])
+
+    def test_controller_process_loss_after_dispatch_is_independently_recoverable(self):
+        controller, state = self.make_controller()
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'import time; time.sleep(60)'])
+        code = ('import os; from kopiur_fixture_supervisor import FixtureSupervisor; '
+                'from kopiur_fixture_controller import FixtureController; '
+                f'c=FixtureController(FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r})); '
+                f'c.dispatch(c.snapshot(), {state["plans"][0]["id"]!r}); os._exit(0)')
+        subprocess.run([sys.executable, '-c', code], check=True, timeout=10,
+                       env={'PYTHONPATH': str(Path(supervisor.__file__).parent)})
+        restarted = FixtureController(FixtureSupervisor(self.directory, self.root))
+        running = restarted.snapshot()
+        assert running is not None
+        self.assertEqual(running['plans'][0]['stage'], 'running')
+        with self.assertRaisesRegex(BoundaryError, 'unknown'):
+            restarted.complete(running, running['plans'][0]['id'])
+        recovered = restarted.recover()
+        self.assertEqual(recovered['phase'], 'ceased')
+        self.assertEqual(recovered['abort']['plans'], [state['plans'][0]['id']])
+        self.assertEqual(recovered['abort']['populated'], 0)
+
+    def test_controller_queued_cohort_abort_has_no_native_side_effect(self):
+        controller, state = self.make_controller({'first': 'native-first', 'second': 'native-second'})
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'raise RuntimeError("queued")'])
+        state = controller.stage(state, 'second', [sys.executable, '-c', 'raise RuntimeError("queued")'])
+        recovered = controller.recover()
+        self.assertEqual(recovered['abort']['plans'], [p['id'] for p in state['plans']])
+        self.assertEqual(recovered['abort']['operations'], [])
+        for plan in state['plans']:
+            with self.assertRaises(BoundaryError):
+                controller.dispatch(state, plan['id'])
+        self.assertEqual(self.controller._read()[0]['commands'], [])
+
+    def test_controller_preparation_rejects_changed_durable_native_arguments(self):
+        controller, state = self.make_controller()
+        state = self.controller_plan(controller, state, 'first')
+        native, _ = self.controller._read()
+        original = json.loads(json.dumps(native))
+        native['commands'][0]['argv'][-1] = 'raise RuntimeError("changed native argv")'
+        supervisor._persist(self.controller.path, native)
+        try:
+            with self.assertRaisesRegex(BoundaryError, 'native registration'):
+                controller.prepare(state)
+        finally:
+            supervisor._persist(self.controller.path, original)
 
     def test_old_generation_is_not_overwritten(self):
         original = self.controller.path.read_bytes()

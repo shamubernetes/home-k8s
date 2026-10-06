@@ -180,6 +180,7 @@ class FixtureSupervisor:
                     raise BoundaryError('gated child not in owned cgroup')
                 stat = Path(f'/proc/{child.pid}/stat').read_text().rsplit(')', 1)[1].split()
                 command = {'operation': str(uuid.uuid4()), 'pid': child.pid,
+                           'argv': list(argv),
                            'start_ticks': stat[19], 'session': stat[3],
                            'group': stat[2], 'boundary': state['boundary'],
                            'stage': 'registered'}

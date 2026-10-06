@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: bazarr-kopiur-scoped-grants-v1
+  name: bazarr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -25,7 +25,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
         command:
         - sh
         - -ec
@@ -115,7 +115,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: radarr-kopiur-scoped-grants-v1
+  name: radarr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -138,7 +138,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
         command:
         - sh
         - -ec
@@ -228,7 +228,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: radarr-3d-kopiur-scoped-grants-v1
+  name: radarr-3d-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -251,7 +251,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
         command:
         - sh
         - -ec
@@ -341,7 +341,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: sonarr-kopiur-scoped-grants-v1
+  name: sonarr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -364,7 +364,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
         command:
         - sh
         - -ec
@@ -454,7 +454,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: whisparr-kopiur-scoped-grants-v1
+  name: whisparr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -477,7 +477,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
         command:
         - sh
         - -ec

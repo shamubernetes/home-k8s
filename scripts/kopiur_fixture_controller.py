@@ -1,8 +1,9 @@
 """Short snapshot-CAS controller for the isolated ARC supervisor only.
 
 Every native operation has durable intent before dispatch. Native execution and
-waiting never hold the controller lock; independent revocation uses the same
-supervisor's permanent state lock. This module never admits production consumers
+waiting never hold the controller lock. Recovery independently revokes and ceases
+the boundary before taking the supervisor's permanent state lock for reconciliation.
+This module never admits production consumers
 or replaces ConsumerJournal's legacy lock. A committed fixture plan is not an
 application recovery acceptance receipt.
 """
@@ -219,6 +220,12 @@ class FixtureController:
             return copy.deepcopy(state['terminal'])
 
     def recover(self):
+        # The abandoned owner may still hold the permanent state lock. Cease
+        # the independently identified boundary before lock-based reconciliation
+        # so a lock timeout cannot leave registered workers running. This is
+        # client-boundary cessation, never proof about a Docker daemon or native
+        # source admission. The permanent tombstone survives reconciliation loss.
+        self.supervisor.watchdog_cease()
         proof = self.supervisor.cease()
         with self.supervisor._locked():
             native, boundary = self.supervisor._read()

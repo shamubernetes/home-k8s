@@ -496,6 +496,50 @@ while True:
         with self.assertRaisesRegex(BoundaryError, 'entire authoritative'):
             controller.prepare(state)
 
+    def test_controller_recovery_ceases_workers_before_stopped_owner_lock_timeout(self):
+        controller, state = self.make_controller()
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'import time; time.sleep(60)'])
+        child, state = controller.dispatch(state, state['plans'][0]['id'])
+        self.children.append(child)
+        locked = self.directory / 'locked-owner'
+        owner = os.fork()
+        if owner == 0:
+            with self.controller._locked():
+                locked.touch()
+                os.kill(os.getpid(), signal.SIGSTOP)
+                os._exit(0)
+        try:
+            self.wait_file(locked)
+            _, status = os.waitpid(owner, os.WUNTRACED)
+            self.assertTrue(os.WIFSTOPPED(status))
+            with self.assertRaisesRegex(BoundaryError, 'lock timeout'):
+                controller.recover()
+            self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+            proof = self.controller.verify_watchdog_cessation()
+            self.assertEqual(proof['populated'], 0)
+            self.assertFalse(proof['consumer_admission_restored'])
+            self.assertFalse(proof['production_recovery_accepted'])
+        finally:
+            os.kill(owner, signal.SIGKILL)
+            os.waitpid(owner, 0)
+        restarted = FixtureController(FixtureSupervisor(self.directory, self.root))
+        recovered = restarted.recover()
+        self.assertEqual(recovered['phase'], 'ceased')
+        self.assertEqual(recovered['abort']['plans'], [state['plans'][0]['id']])
+        self.assertFalse(recovered['abort']['consumer_admission_restored'])
+        with self.assertRaises(BoundaryError):
+            controller.dispatch(state, state['plans'][0]['id'])
+
+    def test_controller_recovery_independent_revocation_failure_denies_reconciliation(self):
+        controller, state = self.make_controller()
+        with patch.object(self.controller, 'watchdog_cease', side_effect=OSError('durability unavailable')), \
+                patch.object(self.controller, 'cease') as cease:
+            with self.assertRaises(OSError):
+                controller.recover()
+            cease.assert_not_called()
+        self.assertEqual(controller.snapshot(), state)
+        self.assertEqual(controller.recover()['phase'], 'ceased')
+
     def test_controller_expired_snapshot_never_dispatches_native_plan(self):
         controller = FixtureController(self.controller)
         state = controller.begin({'first': 'native-first'}, 0.05)

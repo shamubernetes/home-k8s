@@ -81,6 +81,14 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             native.validate_archive(self.archive([]))
 
+    def test_repository_envelope(self):
+        data = self.archive([('.', tarfile.DIRTYPE), ('./index-0', tarfile.REGTYPE)])
+        wrapped = native.repository_envelope(data)
+        with tarfile.open(fileobj=io.BytesIO(wrapped), mode='r:') as archive:
+            self.assertEqual(archive.getnames(), ['snapshot', 'snapshot/index-0'])
+            self.assertEqual(archive.extractfile('snapshot/index-0').read(), b'abc')
+            self.assertTrue(archive.getmember('snapshot').isdir())
+
     def test_archive_size_bound(self):
         with patch.object(native, 'MAX_ARCHIVE', 1):
             with self.assertRaises(ValueError):

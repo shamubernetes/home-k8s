@@ -80,6 +80,22 @@ def resp_read(stream, depth=0) -> Any:
     return data
 
 
+def repository_envelope(data):
+    """Create the missing ES snapshot directory without changing native bytes."""
+    validate_archive(data)
+    result = io.BytesIO()
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as source:
+        with tarfile.open(fileobj=result, mode='w') as target:
+            for member in source:
+                original = member.name
+                member.name = 'snapshot/' + original.removeprefix('./').lstrip('/')
+                if original in ('.', './'):
+                    member.name = 'snapshot'
+                target.addfile(member, source.extractfile(member) if member.isfile() else None)
+    validate_archive(result.getvalue())
+    return result.getvalue()
+
+
 class Fixture:
     def __init__(self, service):
         if service not in IMAGES:
@@ -265,7 +281,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         digest = validate_archive(archive)
         self.remove(source)
         restored, port = self.create('restore', 9200, variables, extra=('--memory=1600m',),
-                                     archive=archive, path='/usr/share/elasticsearch/data/snapshot')
+                                     archive=repository_envelope(archive), path='/usr/share/elasticsearch/data')
         self.ready(restored, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
         self.http(port, '/_snapshot/fixture', 'PUT', {'type': 'fs', 'settings': repo['settings'] | {'readonly': True}})
         self.http(port, '/_snapshot/fixture/generation/_restore?wait_for_completion=true', 'POST',

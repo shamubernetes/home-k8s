@@ -37,6 +37,29 @@ Production adapter integration, bounded collector termination and deployment
 restart supervision still require review and implementation. Do not hold the
 journal lock across unbounded application operations.
 
+## Native fencing prerequisite
+
+`scripts/kopiur_consumer_fencing.py` implements a separate, UUID-source-only
+SQLite fixture adapter. It is intentionally not connected to the existing
+consumer journal. Under one native transaction, commands compare resource
+identity, predecessor revision/operation/stage, epoch/generation and admission.
+The caller must persist the exact plan before dispatch. Holds and terminal
+fences use distinct operation identities and predetermined revisions. Terminal
+retries reuse the same barrier; a fence retry after release never recloses
+admission. Cleared next-generation tokens retain revision/operation tombstones,
+and delayed older commands cannot overwrite newer ownership. Resume preserves
+the recorded prior admission, including a prior closed boundary.
+
+Five ARC regressions exercise terminal retry after release, never-applied hold
+recovery followed by a delayed command against newer ownership, foreign tokens
+at equal predecessor/held/terminal revisions, and exact terminal resume with
+prior closed admission. This prerequisite does not resolve the existing
+context-long journal lock, collector cessation, successful receipt release,
+restart supervision or immutable per-generation history. Do not shorten the
+journal locks or admit production adapters until those contracts are implemented
+and independently exercised. Complete cohort terminal fencing and affirmative
+command cessation must precede the first admission restoration.
+
 ## Read-only receipt admission
 
 Run `python3 scripts/kopiur_consumer_generation.py --ledger <original-inventory.json> --receipt <held-receipt.json>` on private original capture/restore metadata.

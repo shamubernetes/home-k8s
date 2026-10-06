@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: bazarr-kopiur-scoped-grants-v1
+  name: bazarr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -115,7 +115,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: radarr-kopiur-scoped-grants-v1
+  name: radarr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -228,7 +228,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: radarr-3d-kopiur-scoped-grants-v1
+  name: radarr-3d-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -341,7 +341,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: sonarr-kopiur-scoped-grants-v1
+  name: sonarr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -454,7 +454,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: whisparr-kopiur-scoped-grants-v1
+  name: whisparr-kopiur-scoped-grants-v2
   labels:
     k8s92.phase: backup-identities
 spec:

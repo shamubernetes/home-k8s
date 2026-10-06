@@ -570,7 +570,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             with FixtureFence(closed_journal, source, admission=preblocked) as boundary:
                 boundary.acquire(block)
                 def lost_closed_release():
-                    self.http(port, '/fixture/_settings', 'PUT', {'index.blocks.write': 'true'})
+                    restore_admission(preblocked, closed_journal)
                     raise RuntimeError('injected lost preblocked release acknowledgement')
                 try:
                     boundary.recover(lost_closed_release)

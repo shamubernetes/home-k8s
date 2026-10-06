@@ -15,6 +15,7 @@ import sys
 import uuid
 
 from kopiur_fixture_supervisor import BoundaryError, FixtureSupervisor, _persist
+from kopiur_fixture_controller import FixtureController
 
 
 def _uuid(value):
@@ -162,19 +163,20 @@ class NativeAdmission:
     before a fresh recovery boundary can mutate admission. Restart never infers
     command success. Recovery progress remains independently retryable.
     """
-    def __init__(self, supervisor, database, identity, results):
+    def __init__(self, supervisor, database, identity, results, capture_consumer=None):
         self.supervisor = supervisor
         self.path = supervisor.directory / 'admission.json'
         self.database = Path(database)
         self.identity = copy.deepcopy(identity)
         self.results = Path(results)
+        self.capture_consumer = capture_consumer
 
     def _read(self):
         state = json.loads(self.path.read_text())
         native, _ = self.supervisor._read()
         if (state['generation'] != native['generation'] or state['boundary'] != native['boundary']
                 or state['database'] != str(self.database) or state['database_identity'] != self.identity
-                or state['results'] != str(self.results)):
+                or state['results'] != str(self.results) or state['capture_consumer'] != self.capture_consumer):
             raise BoundaryError('native admission coordinator identity changed')
         return state
 
@@ -193,9 +195,36 @@ class NativeAdmission:
         payload = {'path': str(self.database), 'identity': self.identity, 'plan': plan,
                    'action': action, 'consumer': consumer, 'value': value}
         argv = [sys.executable, str(Path(__file__).resolve()), json.dumps(payload, sort_keys=True), str(output)]
-        child, registration = command_supervisor.dispatch(argv)
+        publisher = FixtureController(self.supervisor) if self.capture_consumer else None
+        running = plan_id = committed = None
+        if publisher and command_supervisor is self.supervisor:
+            state = publisher.stage(publisher.snapshot(), self.capture_consumer, argv)
+            plan_id = state['plans'][-1]['id']
+            child, running = publisher.dispatch(state, plan_id)
+            registration = running['plans'][-1]['registration']
+        elif publisher and action == 'release':
+            committed = publisher.snapshot()
+            publisher.verify_terminal(committed)
+            # Only the short parent-before-child dispatch gate holds the lock.
+            # Parent revocation kills the nested release worker too; neither
+            # SQL nor completion waits prevent independent parent revocation.
+            with self.supervisor._locked():
+                publisher._current(committed, ('committed',))
+                admission = self._read()
+                if admission['phase'] != 'open' or admission['intent'] != {'action': 'release', 'consumer': consumer}:
+                    raise BoundaryError('native release intent retired')
+                child, registration = command_supervisor.dispatch(argv)
+        else:
+            child, registration = command_supervisor.dispatch(argv)
         try:
-            command_supervisor.complete(registration['operation'])
+            if publisher and running is not None and plan_id is not None:
+                publisher.complete(running, plan_id)
+            else:
+                command_supervisor.complete(registration['operation'])
+            if publisher and committed is not None:
+                publisher.verify_terminal(committed)
+                with self.supervisor._locked():
+                    publisher._current(committed, ('committed',))
             observed = json.loads(output.read_text())
             return observed
         except BaseException:
@@ -208,6 +237,10 @@ class NativeAdmission:
     def begin(self):
         # The observed state is obtained by an owned successful native command,
         # not a caller-supplied prior-admission flag.
+        if self.capture_consumer:
+            capture = FixtureController(self.supervisor).snapshot()
+            if not capture or capture['consumers'].get(self.capture_consumer) != self.database.stem:
+                raise BoundaryError('capture consumer must bind the exact native database UUID')
         observed = self._worker(self.supervisor, None, 'observe')
         with self.supervisor._locked():
             native, _ = self.supervisor._read()
@@ -219,11 +252,50 @@ class NativeAdmission:
             return self._save({'revision': 0, 'generation': native['generation'], 'boundary': native['boundary'],
                                'database': str(self.database), 'database_identity': self.identity,
                                'results': str(self.results), 'plan': plan, 'phase': 'open',
-                               'boundaries': [], 'intent': None})
+                               'capture_consumer': self.capture_consumer,
+                               'boundaries': [], 'release_boundary': None, 'intent': None})
+
+    def _release_supervisor(self, expected):
+        publisher = FixtureController(self.supervisor)
+        committed = publisher.snapshot()
+        publisher.verify_terminal(committed)
+        with self.supervisor._locked():
+            publisher._current(committed, ('committed',))
+            state = self._read()
+            if state != expected or state['phase'] != 'open' or state['intent'] is not None:
+                raise BoundaryError('native release snapshot retired')
+            if state['release_boundary'] is None:
+                _, parent = self.supervisor._read()
+                directory = self.supervisor.directory / ('release-' + str(uuid.uuid4()))
+                directory.mkdir(mode=0o700)
+                release = FixtureSupervisor(directory, parent)
+                release.begin()
+                native, _ = release._read()
+                state['release_boundary'] = {'directory': str(directory), 'root': str(parent),
+                                             'generation': native['generation'], 'boundary': native['boundary']}
+                state = self._save(state)
+            release = self._release_reference(state['release_boundary'])
+            return state, release
+
+    def _release_reference(self, reference):
+        _, parent = self.supervisor._read()
+        directory = Path(reference['directory'])
+        if (reference['root'] != str(parent) or directory.parent != self.supervisor.directory
+                or not directory.name.startswith('release-') or directory.is_symlink()
+                or _uuid(directory.name.removeprefix('release-')) != directory.name.removeprefix('release-')):
+            raise BoundaryError('native release reference outside original owned boundary')
+        release = FixtureSupervisor(directory, parent)
+        native, _ = release._read()
+        if native['generation'] != reference['generation'] or native['boundary'] != reference['boundary']:
+            raise BoundaryError('native release boundary identity changed')
+        return release
 
     def apply(self, expected, action, consumer=None):
         if action not in ('hold', 'prepare', 'commit', 'release'):
             raise BoundaryError('explicit forward admission operation required')
+        command_supervisor = self.supervisor
+        if action == 'release' and self.capture_consumer:
+            expected, command_supervisor = self._release_supervisor(expected)
         with self.supervisor._locked():
             state = self._read()
             native, _ = self.supervisor._read()
@@ -233,7 +305,7 @@ class NativeAdmission:
             state['intent'] = {'action': action, 'consumer': consumer}
             staged = self._save(state)
         # Never retain the coordinator lock across native SQL or wait.
-        observed = self._worker(self.supervisor, staged['plan'], action, consumer)
+        observed = self._worker(command_supervisor, staged['plan'], action, consumer)
         with self.supervisor._locked():
             state = self._read()
             native, _ = self.supervisor._read()
@@ -254,6 +326,11 @@ class NativeAdmission:
             staged = self._save(state)
             boundaries = copy.deepcopy(state['boundaries'])
         proofs = [self.supervisor.cease()]
+        if staged['release_boundary'] is not None:
+            release = self._release_reference(staged['release_boundary'])
+            proofs.append(release.cease())
+        if self.capture_consumer:
+            FixtureController(self.supervisor).recover()
         for directory in boundaries:
             prior = FixtureSupervisor(directory, self.supervisor.root)
             proofs.append(prior.cease())

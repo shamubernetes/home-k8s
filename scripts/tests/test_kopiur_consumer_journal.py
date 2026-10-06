@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -301,6 +302,81 @@ class JournalTests(unittest.TestCase):
             with self.assertRaises(InvalidEvidence):
                 journal.save(saved, saved)
             self.assertEqual(self.path.read_bytes(), before)
+
+    def test_next_begin_retains_exact_terminal_generation(self):
+        _, ledger, receipt = self.begin()
+        with ConsumerJournal(self.path, self.source) as journal:
+            state = journal.read()
+            assert state is not None
+            journal.publish(state['epoch'], ledger, receipt, self.adapters)
+        self.expire()
+        self.assertEqual(self.watchdog().returncode, 0)
+        with ConsumerJournal(self.path, self.source) as journal:
+            terminal = journal.read()
+            assert terminal is not None
+            expected = json.dumps(terminal, sort_keys=True, allow_nan=False).encode()
+            path = self.path.with_name(self.path.name + '.history') / (
+                terminal['epoch'] + '-' + terminal['generation'] + '.json')
+            self.assertFalse(path.exists())
+            newer, _ = journal.begin(self.adapters, 60)
+            self.assertNotEqual(newer, terminal['epoch'])
+            self.assertEqual(path.read_bytes(), expected)
+            self.assertEqual(json.loads(path.read_bytes())['receipt'], receipt)
+            self.assertTrue(json.loads(path.read_bytes())['revoked'])
+
+    def test_conflicting_history_refuses_new_generation_without_rewriting(self):
+        self.begin()
+        self.expire()
+        self.assertEqual(self.watchdog().returncode, 0)
+        with ConsumerJournal(self.path, self.source) as journal:
+            terminal = journal.read()
+            assert terminal is not None
+            path = journal.retain(terminal)
+            path.write_bytes(b'foreign terminal history')
+            before = self.path.read_bytes()
+            with self.assertRaises(InvalidEvidence):
+                journal.begin(self.adapters, 60)
+            self.assertEqual(self.path.read_bytes(), before)
+            self.assertEqual(path.read_bytes(), b'foreign terminal history')
+
+    def test_history_link_acknowledgement_loss_is_retryable(self):
+        self.begin()
+        self.expire()
+        self.assertEqual(self.watchdog().returncode, 0)
+        with ConsumerJournal(self.path, self.source) as journal:
+            terminal = journal.read()
+            assert terminal is not None
+            before = self.path.read_bytes()
+            # File fsync succeeds, atomic link lands, directory acknowledgement
+            # fails. The journal is not replaced and retry verifies exact bytes.
+            with patch('kopiur_consumer_journal.os.fsync', side_effect=[None, OSError('lost directory acknowledgement')]):
+                with self.assertRaises(OSError):
+                    journal.begin(self.adapters, 60)
+            self.assertEqual(self.path.read_bytes(), before)
+            path = journal.retain(terminal)
+            archive = path.read_bytes()
+            inode = path.stat().st_ino
+            journal.begin(self.adapters, 60)
+            self.assertEqual(path.read_bytes(), archive)
+            self.assertEqual(path.stat().st_ino, inode)
+
+    def test_unreleased_and_stale_snapshots_cannot_create_history(self):
+        self.begin()
+        with ConsumerJournal(self.path, self.source) as journal:
+            held = journal.read()
+            with self.assertRaises(InvalidEvidence):
+                journal.retain(held)
+            self.assertFalse(self.path.with_name(self.path.name + '.history').exists())
+        self.expire()
+        self.assertEqual(self.watchdog().returncode, 0)
+        with ConsumerJournal(self.path, self.source) as journal:
+            terminal = journal.read()
+            assert terminal is not None
+            stale = copy.deepcopy(terminal)
+            stale['revision'] -= 1
+            with self.assertRaises(InvalidEvidence):
+                journal.retain(stale)
+            self.assertFalse(self.path.with_name(self.path.name + '.history').exists())
 
     def test_cas_absence_and_malformed_candidate_preserve_bytes(self):
         self.begin()

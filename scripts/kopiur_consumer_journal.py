@@ -93,6 +93,8 @@ class ConsumerJournal:
         previous = self.read()
         if previous is not None and previous['phase'] != 'released':
             raise InvalidEvidence('recover the previous generation first')
+        if previous is not None:
+            self.retain(previous)
         if not adapters:
             raise InvalidEvidence('explicit isolated consumer adapters required')
         consumers = {}
@@ -109,6 +111,42 @@ class ConsumerJournal:
                  'deadline': time.time() + timeout_seconds, 'consumers': consumers}
         self.save(state, previous)
         return state['epoch'], state['generation']
+
+    def retain(self, state):
+        """Retain exact terminal bytes before replacing a fixture generation.
+
+        A linked, fsynced temporary file makes creation exclusive and atomic.
+        An interrupted acknowledgement is retryable only with identical bytes.
+        This is terminal fixture history, not a production recovery receipt.
+        """
+        if state is None or state != self.read() or state['phase'] != 'released':
+            raise InvalidEvidence('retention requires the current released snapshot')
+        payload = json.dumps(state, sort_keys=True, allow_nan=False).encode()
+        history = self.path.with_name(self.path.name + '.history')
+        history.mkdir(mode=0o700, exist_ok=True)
+        target = history / (state['epoch'] + '-' + state['generation'] + '.json')
+        fd, name = tempfile.mkstemp(dir=history, prefix='.pending-')
+        try:
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            try:
+                os.link(name, target)
+            except FileExistsError:
+                pass
+            if target.read_bytes() != payload:
+                raise InvalidEvidence('terminal history differs from the released snapshot')
+            for path in (history, history.parent):
+                directory = os.open(path, os.O_RDONLY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
+        finally:
+            if os.path.exists(name):
+                os.unlink(name)
+        return target
 
     def current(self, epoch):
         state = self.read()

@@ -47,6 +47,8 @@ class ConvexTests(unittest.TestCase):
                 self.assertEqual(self.drill.app('restored-app', 'database', 'config'), 'restored')
         self.assertEqual(invoke.call_count, 2)
         self.assertIn('chown 0:568 /config', invoke.call_args.args[-1])
+        self.assertIn('--cap-add=DAC_READ_SEARCH', invoke.call_args.args)
+        self.assertNotIn('--cap-add=DAC_OVERRIDE', invoke.call_args.args)
         self.assertNotIn('generate_admin_key', ' '.join(invoke.call_args.args))
         env = start.call_args.kwargs['env']
         self.assertEqual(env['INSTANCE_SECRET'], 'a' * 64)

@@ -21,6 +21,32 @@ spec:
       rustdesk:
         # One Pod keeps both servers on the same RWO identity volume.
         strategy: Recreate
+        initContainers:
+          wait-relay-dns:
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+            command: [sh, -ec]
+            # hbbs resolves the advertised relay only at startup. A first install
+            # can race external-dns and silently discard an unresolved hostname.
+            args:
+            - |
+              for attempt in $(seq 1 120); do
+                if nslookup rustdesk.${HOME_DOMAIN}; then exit 0; fi
+                sleep 2
+              done
+              echo "Relay DNS did not become available" >&2
+              exit 1
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: [ALL]}
+            resources:
+              requests:
+                cpu: 5m
+                memory: 8Mi
+              limits:
+                memory: 32Mi
         containers:
           hbbs:
             image: &image
@@ -85,7 +111,7 @@ spec:
                   tcpSocket:
                     port: 21117
                   periodSeconds: 5
-                  # hbbr allows hbbs up to 300 seconds to generate the key.
+                  # Allow startup and persisted identity loading to settle.
                   failureThreshold: 72
             securityContext: *security
             resources: *resources

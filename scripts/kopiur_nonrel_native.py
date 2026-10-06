@@ -260,6 +260,18 @@ class Fixture:
                 'production_mutation_cessation_qualified': False}
 
     def cleanup(self):
+        if self.generation_manifest is not None:
+            # Retirement revokes durably before Docker I/O and recovers lost
+            # create acknowledgments from exact generation/operation labels.
+            # Keep local identities and durable intents: sampled absence is
+            # not whole-generation cessation or permission to reopen admission.
+            receipt = self.generation_manifest.retire(timeout=60)
+            try:
+                subprocess.run(self.docker_command('network', 'rm', self.network),
+                               capture_output=True, timeout=60, check=True)
+            except (OSError, subprocess.SubprocessError):
+                raise RuntimeError('native cleanup unresolved: network retirement unresolved') from None
+            return receipt
         failures = []
         for name in list(self.containers):
             container_id = self.container_ids.get(name)

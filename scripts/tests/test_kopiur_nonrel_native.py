@@ -157,6 +157,70 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.manifest.start_intent(name, operation, 'b' * 64)
 
+    def test_cleanup_recovers_lost_create_ack_after_durable_revocation(self):
+        fixture = self.fixture()
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        fixture.containers.append(name)
+        responses = iter(self.reconciliation_responses(name, operation) + [
+            native.subprocess.CompletedProcess([], 0, stdout=b''),
+            native.subprocess.CompletedProcess([], 0, stdout=b''),
+            native.subprocess.CompletedProcess([], 0, stdout=b'')])
+        def query(command, **kwargs):
+            self.assertTrue(self.manifest.read()['revoked'])
+            self.assertEqual(command[:3], ['docker', '--host', self.endpoint])
+            return next(responses)
+        with patch.object(native.subprocess, 'run', side_effect=query) as run:
+            receipt = fixture.cleanup()
+        self.assertEqual(run.call_args_list[2].args[0][3:], ['rm', '--force', 'b' * 64])
+        self.assertFalse(receipt['cessation_proved'])
+        self.assertFalse(receipt['admission_release_allowed'])
+        self.assertEqual(fixture.containers, [name])
+        self.assertEqual(self.manifest.read()['containers'][name]['id'], 'b' * 64)
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.run('start', 'b' * 64)
+            run.assert_not_called()
+
+    def test_cleanup_keeps_unobserved_intent_and_denies_late_create(self):
+        fixture = self.fixture()
+        name = self.generation + '-client'
+        self.manifest.create_intent(name)
+        with patch.object(native.subprocess, 'run', return_value=
+                          native.subprocess.CompletedProcess([], 0, stdout=b'')):
+            receipt = fixture.cleanup()
+        self.assertEqual(receipt['unobserved'], [name])
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        self.assertTrue(restarted.read()['revoked'])
+        self.assertIsNone(restarted.read()['containers'][name]['id'])
+        with self.assertRaises(RuntimeError):
+            restarted.create_intent(self.generation + '-source')
+        self.assertFalse(receipt['admission_release_allowed'])
+
+    def test_cleanup_inventory_failure_preserves_tombstone_and_skips_network(self):
+        fixture = self.fixture()
+        name = self.generation + '-source'
+        self.manifest.create_intent(name)
+        with patch.object(native.subprocess, 'run', return_value=
+                          native.subprocess.CompletedProcess([], 1, stdout=b'secret')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'reconciliation Docker query failed'):
+                fixture.cleanup()
+        self.assertEqual(run.call_count, 1)
+        self.assertTrue(self.manifest.read()['revoked'])
+        self.assertIsNone(self.manifest.read()['containers'][name]['id'])
+
+    def test_cleanup_network_failure_never_resets_generation(self):
+        fixture = self.fixture()
+        empty = native.subprocess.CompletedProcess([], 0, stdout=b'')
+        failure = native.subprocess.CalledProcessError(1, ['docker'], stderr=b'secret')
+        with patch.object(native.subprocess, 'run', side_effect=[empty, empty, failure]):
+            with self.assertRaisesRegex(RuntimeError, 'network retirement unresolved') as error:
+                fixture.cleanup()
+        self.assertNotIn('secret', str(error.exception))
+        self.assertTrue(self.manifest.read()['revoked'])
+        with self.assertRaises(RuntimeError):
+            self.fixture()
+
     def test_reconcile_missing_create_is_not_cessation(self):
         name = self.generation + '-source'
         self.manifest.create_intent(name)

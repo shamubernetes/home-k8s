@@ -195,3 +195,65 @@ class GenerationManifest:
         return {'observed': observations,
                 'unobserved': sorted(set(expected['containers']) - set(observations)),
                 'startup_allowed': False, 'cessation_proved': False}
+
+    def retire(self, *, timeout=30):
+        """Retire reconciled exact IDs; retain durable evidence and revocation.
+
+        Removal acknowledgments and an inventory sample do not prove that an
+        already accepted create/start request cannot execute later. Never
+        release native admission or reset an intent from this result.
+        """
+        receipt = self.reconcile(timeout=timeout)
+        failures = []
+        acknowledged = []
+        for name, container_id in sorted(receipt['observed'].items()):
+            try:
+                result = subprocess.run(
+                    ['docker', '--host', self.endpoint, 'rm', '--force', container_id],
+                    capture_output=True, timeout=timeout)
+                if result.returncode:
+                    failures.append(name)
+                else:
+                    acknowledged.append(container_id)
+            except (OSError, subprocess.SubprocessError):
+                failures.append(name)
+        try:
+            result = subprocess.run(
+                ['docker', '--host', self.endpoint, 'ps', '--all', '--no-trunc', '--quiet'],
+                capture_output=True, timeout=timeout)
+            if result.returncode:
+                raise RuntimeError('fixture retirement inventory failed')
+            inventory = result.stdout.decode().splitlines()
+            if (len(inventory) != len(set(inventory))
+                    or any(re.fullmatch(r'[0-9a-f]{64}', value) is None for value in inventory)):
+                raise RuntimeError('fixture retirement inventory ambiguous')
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            raise RuntimeError('fixture retirement inventory unavailable') from None
+        if failures or set(receipt['observed'].values()).intersection(inventory):
+            raise RuntimeError('fixture retirement unresolved')
+        receipt.update(removal_acknowledged=sorted(acknowledged),
+                       observed_ids_absent=True, admission_release_allowed=False)
+        return receipt
+
+
+def main(argv=None):
+    """Explicit persisted-manifest retirement on approved ARC only."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=('reconcile', 'retire'))
+    parser.add_argument('--manifest', required=True)
+    parser.add_argument('--generation', required=True)
+    parser.add_argument('--endpoint', required=True)
+    args = parser.parse_args(argv)
+    if sys.platform != 'linux' or not os.environ.get('RUNNER_NAME', '').startswith('ghar-set-zoo-'):
+        raise RuntimeError('fixture reconciliation requires approved Linux ARC')
+    manifest = GenerationManifest(args.manifest, args.generation, args.endpoint)
+    manifest.read()
+    result = getattr(manifest, args.action)()
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()

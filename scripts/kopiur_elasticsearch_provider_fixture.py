@@ -1,7 +1,7 @@
 """Synthetic native Elasticsearch recovery from real encrypted backup providers.
 
 Run only in the allocated ARC runner. Credentials arrive on stdin. This does
-not qualify production capture, NAS-to-R2 lineage, retention or recovery policy.
+not qualify production capture, recurring replication, retention or recovery policy.
 """
 import configparser
 import hashlib
@@ -63,6 +63,23 @@ def restore_archive(drill, kind, archive):
                       'fresh_restorer': True, 'wrong_password_denied': True}
 
 
+def restore_generation(drill, archive):
+    """Re-encrypt NAS-restored bytes into R2, without another source capture."""
+    generation = uuid.uuid4().hex
+    nas_archive, nas = restore_archive(drill, 'nas', archive)
+    r2_archive, r2 = restore_archive(drill, 'r2', nas_archive)
+    digest = hashlib.sha256(archive).hexdigest()
+    if (nas['archive_sha256'] != digest or r2['archive_sha256'] != digest
+            or hashlib.sha256(r2_archive).hexdigest() != digest):
+        raise RuntimeError('same-generation provider archive lineage differs')
+    return r2_archive, {'generation': generation, 'nas': nas,
+                        'r2': dict(r2, source_nas_snapshot_id=nas['snapshot_id']),
+                        'same_generation_archive_sha256': digest,
+                        'r2_input_is_fresh_nas_restore': True,
+                        'synthetic_archive_lineage_qualified': True,
+                        'production_replication_qualified': False}
+
+
 def validate_identity(fields):
     if (fields['R2_BUCKET'] != 'kopiur-elasticsearch'
             or fields['NAS_SHARE'] != 'kopiur-elasticsearch'
@@ -114,11 +131,11 @@ def exercise_payload(payload, deadline=None):
                        '--mount', 'type=volume,src=' + transport.TOOLS + ',dst=/tools,volume-nocopy',
                        transport.TOOL_IMAGE, 'sh', '-c',
                        'cp /bin/busybox /tools/busybox && /tools/busybox --install -s /tools'])
-        for kind in ('nas', 'r2'):
+        for attempt in range(2):
             drill = transport.Drill('elasticsearch', fields)
             drill.deadline = min(time.monotonic() + 1200, work_deadline)
             try:
-                proof = fixture('elasticsearch', transport=lambda data: restore_archive(drill, kind, data),
+                proof = fixture('elasticsearch', transport=lambda data: restore_generation(drill, data),
                                 deadline=work_deadline)
             finally:
                 drill.cleanup()
@@ -131,8 +148,9 @@ def exercise_payload(payload, deadline=None):
             raise RuntimeError('search tool volume ownership changed')
         transport.run(['docker', 'volume', 'rm', transport.TOOLS], timeout=30)
     return {'app': 'elasticsearch', 'results': results,
-                      'independent_provider_native_fixture_restores': 2,
-                      'production_recovery_accepted': False, 'replication_lineage_qualified': False}
+            'nas_to_r2_native_fixture_restores': 2,
+            'synthetic_archive_lineage_qualified': True,
+            'production_recovery_accepted': False, 'replication_lineage_qualified': False}
 
 
 if __name__ == '__main__':

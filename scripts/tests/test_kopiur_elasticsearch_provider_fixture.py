@@ -133,6 +133,34 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'identifier'):
             provider.restore_archive(drill, 'nas', b'archive')
 
+    def test_generation_r2_input_is_nas_restored_bytes(self):
+        drill = FakeDrill()
+        archive = b'archive'
+        with patch.object(provider, 'restore_archive', side_effect=[
+                (archive, {'snapshot_id': 'nas-id', 'archive_sha256': provider.hashlib.sha256(archive).hexdigest()}),
+                (archive, {'snapshot_id': 'r2-id', 'archive_sha256': provider.hashlib.sha256(archive).hexdigest()})]) as restore:
+            actual, receipt = provider.restore_generation(drill, archive)
+        self.assertEqual(actual, archive)
+        self.assertEqual(restore.call_args_list[1].args, (drill, 'r2', archive))
+        self.assertEqual(receipt['r2']['source_nas_snapshot_id'], 'nas-id')
+        self.assertTrue(receipt['synthetic_archive_lineage_qualified'])
+        self.assertFalse(receipt['production_replication_qualified'])
+
+    def test_generation_rejects_mismatched_provider_digest(self):
+        archive = b'archive'
+        digest = provider.hashlib.sha256(archive).hexdigest()
+        with patch.object(provider, 'restore_archive', side_effect=[
+                (archive, {'snapshot_id': 'nas-id', 'archive_sha256': digest}),
+                (archive, {'snapshot_id': 'r2-id', 'archive_sha256': 'wrong'})]):
+            with self.assertRaisesRegex(RuntimeError, 'lineage differs'):
+                provider.restore_generation(FakeDrill(), archive)
+
+    def test_generation_nas_failure_prevents_r2_creation(self):
+        with patch.object(provider, 'restore_archive', side_effect=RuntimeError('NAS failed')) as restore:
+            with self.assertRaisesRegex(RuntimeError, 'NAS failed'):
+                provider.restore_generation(FakeDrill(), b'archive')
+        self.assertEqual(restore.call_count, 1)
+
     def test_nonsearch_callback_is_rejected_before_runtime(self):
         with self.assertRaises(ValueError):
             provider.fixture('dragonfly', transport=lambda x: x)

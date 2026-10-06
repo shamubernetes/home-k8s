@@ -69,6 +69,19 @@ class ConvexTests(unittest.TestCase):
         self.assertNotIn(key, str(failure.exception))
         self.assertNotIn(secret, str(failure.exception))
 
+    def test_source_identity_is_group_readable_not_world_readable(self):
+        self.drill.auth_secret = 'a' * 64
+        invoke = Mock(return_value=SimpleNamespace(stdout=b'original-admin-key'))
+        responses = [SimpleNamespace(returncode=0, stdout=b'{}'),
+            SimpleNamespace(returncode=0, stdout=b'{"numWritten":1}')]
+        with patch.dict(self.scope, run=invoke):
+            with patch.object(self.drill, 'request', side_effect=responses):
+                with patch.object(self.drill, 'application_state', return_value='state'):
+                    self.drill.healthy('fixture-source-app')
+        command = invoke.call_args.args[-1]
+        self.assertIn('chmod 0640 /config/fixture-identity.json', command)
+        self.assertNotIn('chmod 0644', command)
+
 
 if __name__ == '__main__':
     unittest.main()

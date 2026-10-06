@@ -46,7 +46,8 @@ class ConvexTests(unittest.TestCase):
             with patch.object(self.drill, 'start', return_value='restored') as start:
                 self.assertEqual(self.drill.app('restored-app', 'database', 'config'), 'restored')
         self.assertEqual(invoke.call_count, 2)
-        self.assertNotIn('generate_admin_key.sh', str(invoke.call_args.args))
+        self.assertIn('chown 0:568 /config', invoke.call_args.args[-1])
+        self.assertNotIn('generate_admin_key', ' '.join(invoke.call_args.args))
         env = start.call_args.kwargs['env']
         self.assertEqual(env['INSTANCE_SECRET'], 'a' * 64)
         self.assertEqual(urlparse(env['POSTGRES_URL']).path, '')

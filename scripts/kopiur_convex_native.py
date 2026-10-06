@@ -66,7 +66,7 @@ def contract():
                 '--cap-drop=ALL', '--cap-add=CHOWN', '--security-opt=no-new-privileges:true',
                 '--user', '0:0', '--entrypoint', 'sh',
                 '--mount', 'type=volume,src=' + config + ',dst=/config', scope['PG_IMAGE'],
-                '-ceu', 'chown 0:0 /config; chown -R 0:0 /config; chmod 0775 /config')
+                '-ceu', 'chown 0:568 /config; chown -R 0:568 /config; chmod 0775 /config')
             try:
                 return self.start(name, self.image, network='container:' + database, env=env,
                     mounts=[(config, '/config', 'rw'), (config, '/convex/data', 'rw')], user='0:0')

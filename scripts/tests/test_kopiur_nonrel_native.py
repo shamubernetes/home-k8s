@@ -360,6 +360,66 @@ class ManifestTests(unittest.TestCase):
                 fixture.run('exec', 'b' * 64, 'true')
         run.assert_not_called()
 
+    def test_manifest_admission_recovery_denies_before_journal_or_native_io(self):
+        fixture = self.fixture()
+        for revoked in (False, True):
+            with self.subTest(revoked=revoked):
+                if revoked:
+                    self.manifest.revoke()
+                with patch.object(native.FixtureFence, 'durable_admission') as journal, \
+                        patch.object(fixture, 'http') as http:
+                    with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
+                        fixture.restore_source_admission(9200, {}, self.path, 'source')
+                    journal.assert_not_called()
+                    http.assert_not_called()
+
+    def test_retirement_and_restarted_manifest_never_authorize_admission(self):
+        fixture = self.fixture()
+        with patch.object(native.subprocess, 'run', return_value=
+                          native.subprocess.CompletedProcess([], 0, stdout=b'')):
+            receipt = fixture.cleanup()
+        self.assertFalse(receipt['admission_release_allowed'])
+        fixture.generation_manifest = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        with patch.object(fixture, 'http') as http:
+            with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
+                fixture.restore_source_admission(9200, {}, self.path, 'source')
+            http.assert_not_called()
+
+    def test_legacy_source_recovery_preserves_all_prior_admissions(self):
+        fixture = self.fixture()
+        fixture.generation_manifest = None
+        for write_block in (None, 'false', 'true'):
+            saved = {'index_uuid': 'a' * 22, 'write_block': write_block}
+            settings = {'fixture': {'settings': {'index.uuid': 'a' * 22}}}
+            if write_block is not None:
+                settings['fixture']['settings']['index.blocks.write'] = write_block
+            with self.subTest(write_block=write_block), \
+                    patch.object(native.FixtureFence, 'durable_admission', return_value=json.dumps(saved)), \
+                    patch.object(fixture, 'http', side_effect=[settings, {'acknowledged': True}, settings]) as http:
+                fixture.restore_source_admission(9200, saved, self.path, 'source')
+                self.assertEqual(http.call_args_list[1].args,
+                                 (9200, '/fixture/_settings', 'PUT', {'index.blocks.write': write_block}))
+
+    def test_legacy_source_recovery_journal_mismatch_denies_native_io(self):
+        fixture = self.fixture()
+        fixture.generation_manifest = None
+        with patch.object(native.FixtureFence, 'durable_admission', return_value='{}'), \
+                patch.object(fixture, 'http') as http:
+            with self.assertRaisesRegex(RuntimeError, 'differs from journal'):
+                fixture.restore_source_admission(9200, {'index_uuid': 'a' * 22}, self.path, 'source')
+            http.assert_not_called()
+
+    def test_legacy_source_recovery_replaced_index_denies_settings_put(self):
+        fixture = self.fixture()
+        fixture.generation_manifest = None
+        saved = {'index_uuid': 'a' * 22, 'write_block': None}
+        settings = {'fixture': {'settings': {'index.uuid': 'b' * 22}}}
+        with patch.object(native.FixtureFence, 'durable_admission', return_value=json.dumps(saved)), \
+                patch.object(fixture, 'http', return_value=settings) as http:
+            with self.assertRaisesRegex(RuntimeError, 'index replaced before recovery'):
+                fixture.restore_source_admission(9200, saved, self.path, 'source')
+            self.assertEqual(http.call_count, 1)
+
     def test_revocation_after_server_intent_denies_create_dispatch(self):
         fixture = self.fixture()
         original = self.manifest.create_intent

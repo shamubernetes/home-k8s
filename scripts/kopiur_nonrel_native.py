@@ -186,6 +186,28 @@ class Fixture:
             if state['version'] != 2 or state['revoked']:
                 raise RuntimeError('fixture generation dispatch revoked')
 
+    def restore_source_admission(self, port, saved, journal, source):
+        """Legacy journal recovery only; manifested generations remain closed.
+
+        A live manifest or successful retirement cannot fence an already
+        accepted daemon request. Neither is authority to restore admission.
+        Keep this gate before all native observations and mutations, including
+        callbacks constructed by an owner before durable revocation.
+        """
+        if self.generation_manifest is not None:
+            raise RuntimeError('independent server/client cessation required before admission recovery')
+        persisted = json.loads(FixtureFence.durable_admission(journal, source))
+        if persisted != saved:
+            raise RuntimeError('Elasticsearch durable admission differs from journal')
+        actual = elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
+        if actual['index_uuid'] != saved['index_uuid']:
+            raise RuntimeError('Elasticsearch fixture index replaced before recovery')
+        if self.http(port, '/fixture/_settings', 'PUT',
+                     {'index.blocks.write': saved['write_block']}).get('acknowledged') is not True:
+            raise RuntimeError('Elasticsearch fixture writer resume failed')
+        if elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true')) != saved:
+            raise RuntimeError('Elasticsearch prior fixture admission differs')
+
     def run(self, *args, data=None, timeout=180):
         self.check_dispatch()
         remaining = self.deadline - time.monotonic()
@@ -509,22 +531,8 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             if observed_admission()['write_block'] != 'true':
                 raise RuntimeError('Elasticsearch writer fence was not observed')
 
-        def durable_journal_admission(journal, expected):
-            """The persisted journal must exactly own the state being restored."""
-            persisted = json.loads(FixtureFence.durable_admission(journal, source))
-            if persisted != expected:
-                raise RuntimeError('Elasticsearch durable admission differs from journal')
-
         def restore_admission(saved, journal):
-            durable_journal_admission(journal, saved)
-            actual = elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
-            if actual['index_uuid'] != saved['index_uuid']:
-                raise RuntimeError('Elasticsearch fixture index replaced before recovery')
-            if self.http(port, '/fixture/_settings', 'PUT',
-                         {'index.blocks.write': saved['write_block']}).get('acknowledged') is not True:
-                raise RuntimeError('Elasticsearch fixture writer resume failed')
-            if elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true')) != saved:
-                raise RuntimeError('Elasticsearch prior fixture admission differs')
+            self.restore_source_admission(port, saved, journal, source)
 
         def release():
             restore_admission(prior_admission, journal)

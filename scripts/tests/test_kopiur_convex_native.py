@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
+from urllib.parse import urlparse
 import unittest
 from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -48,6 +49,7 @@ class ConvexTests(unittest.TestCase):
         self.assertNotIn('generate_admin_key.sh', str(invoke.call_args.args))
         env = start.call_args.kwargs['env']
         self.assertEqual(env['INSTANCE_SECRET'], 'a' * 64)
+        self.assertEqual(urlparse(env['POSTGRES_URL']).path, '')
         self.assertFalse(any(key.startswith(('S3_', 'AWS_')) for key in env))
         self.assertEqual(start.call_args.kwargs['network'], 'container:database')
         self.assertEqual(start.call_args.kwargs['user'], '0:0')

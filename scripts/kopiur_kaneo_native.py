@@ -16,14 +16,38 @@ def contract():
         def auth_header(self):
             return 'Authorization: Bearer ' + self.api_key
 
+        def counts(self, container, database=None):
+            database = database or self.databases[0]
+            tables = self.sql(container,
+                "SELECT quote_ident(schemaname) || '.' || quote_ident(tablename) FROM pg_tables "
+                "WHERE schemaname IN ('public','drizzle') ORDER BY schemaname,tablename", database).splitlines()
+            return {table: int(self.sql(container, 'SELECT count(*) FROM ' + table, database)) for table in tables}
+
+        def fingerprints(self, container, database):
+            return {table: hashlib.sha256(self.sql(container,
+                'SELECT row_to_json(t)::text FROM ' + table + ' t ORDER BY row_to_json(t)::text',
+                database).encode()).hexdigest() for table in self.counts(container, database)}
+
         def provision_scoped_backup(self, container, database):
             try:
-                return super().provision_scoped_backup(container, database)
+                result = super().provision_scoped_backup(container, database)
             except RuntimeError:
                 schemas = self.sql(container,
                     "SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' "
                     "AND nspname <> 'information_schema' ORDER BY nspname", database)
                 raise RuntimeError('isolated Kaneo grant rejected; observed schemas=' + json.dumps(schemas.splitlines())) from None
+            self.sql(container, 'CREATE SCHEMA recovery_unqualified AUTHORIZATION app', database)
+            try:
+                rejected = False
+                try:
+                    super().provision_scoped_backup(container, database)
+                except RuntimeError:
+                    rejected = True
+                if not rejected:
+                    raise RuntimeError('unqualified additional schema was accepted')
+            finally:
+                self.sql(container, 'DROP SCHEMA recovery_unqualified', database)
+            return result
 
         def isolated_config(self, raw):
             if len(raw) > 65536:
@@ -99,6 +123,7 @@ def contract():
 
 def fixture():
     from kopiur_native_fixture import exercise
-    return exercise(contract(), 'kaneo', [IMAGE, pocket.HTTP_IMAGE], {
+    result = exercise(contract(), 'kaneo', [IMAGE, pocket.HTTP_IMAGE], {
         'production_oidc_identity_qualified': False, 'production_redis_rgw_qualified': False,
         'bundled_nginx_entrypoint_qualified': False})
+    return result | {'additional_unqualified_schema_rejected': True, 'migration_schema_contents_compared': True}

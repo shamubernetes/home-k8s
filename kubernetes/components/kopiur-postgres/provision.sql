@@ -20,6 +20,8 @@ DECLARE
   role_oid oid;
   application_name text := current_setting('kopiur.application_name');
   allowed_databases text[];
+  allowed_schemas text[] := ARRAY['public'];
+  application_schema text;
   expected_role text;
   ownership_marker text;
 BEGIN
@@ -31,7 +33,7 @@ BEGIN
     WHEN 'prowlarr' THEN allowed_databases := ARRAY['prowlarr_main']; expected_role := 'kopiur_prowlarr';
     WHEN 'atuin' THEN allowed_databases := ARRAY['atuin']; expected_role := 'kopiur_atuin';
     WHEN 'n8n' THEN allowed_databases := ARRAY['n8n']; expected_role := 'kopiur_n8n';
-    WHEN 'kaneo' THEN allowed_databases := ARRAY['kaneo']; expected_role := 'kopiur_kaneo';
+    WHEN 'kaneo' THEN allowed_databases := ARRAY['kaneo']; expected_role := 'kopiur_kaneo'; allowed_schemas := ARRAY['public','drizzle'];
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
     WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
     WHEN 'pocket-id' THEN allowed_databases := ARRAY['pocket_id']; expected_role := 'kopiur_pocket_id';
@@ -55,9 +57,9 @@ BEGIN
     RAISE EXCEPTION 'application database ownership changed';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname NOT LIKE 'pg_%'
-             AND nspname NOT IN ('public','information_schema')) OR
+             AND nspname <> 'information_schema' AND NOT (nspname = ANY(allowed_schemas))) OR
      EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public' AND c.relkind IN ('r','p','S','v','m','f')
+             WHERE n.nspname = ANY(allowed_schemas) AND c.relkind IN ('r','p','S','v','m','f')
              AND pg_get_userbyid(c.relowner) <> application_owner) OR
      EXISTS (SELECT 1 FROM pg_class WHERE relrowsecurity) OR
      EXISTS (SELECT 1 FROM pg_largeobject_metadata) THEN
@@ -90,28 +92,31 @@ BEGIN
     RAISE EXCEPTION 'unsafe future-object write authority';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-             WHERE n.nspname='public' AND p.prosecdef AND
+             WHERE n.nspname = ANY(allowed_schemas) AND p.prosecdef AND
              has_function_privilege(backup_role,p.oid,'EXECUTE')) THEN
     RAISE EXCEPTION 'unqualified security-definer routine';
   END IF;
   EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', backup_role, backup_password);
   EXECUTE format('ALTER ROLE %I SET default_transaction_read_only = on', backup_role);
   EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), backup_role);
-  EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', backup_role);
-  EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %I', backup_role);
-  EXECUTE format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', backup_role);
-  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON TABLES TO %I', application_owner, backup_role);
-  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON SEQUENCES TO %I', application_owner, backup_role);
+  FOREACH application_schema IN ARRAY allowed_schemas LOOP
+    EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', application_schema, backup_role);
+    EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO %I', application_schema, backup_role);
+    EXECUTE format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA %I TO %I', application_schema, backup_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON TABLES TO %I', application_owner, application_schema, backup_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON SEQUENCES TO %I', application_owner, application_schema, backup_role);
+  END LOOP;
   IF has_database_privilege(backup_role, current_database(), 'CREATE') OR
-     has_schema_privilege(backup_role, 'public', 'CREATE') OR
+     EXISTS (SELECT 1 FROM pg_namespace n WHERE n.nspname = ANY(allowed_schemas)
+             AND has_schema_privilege(backup_role, n.oid, 'CREATE')) OR
      EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
+             WHERE n.nspname = ANY(allowed_schemas)
              AND CASE WHEN c.relkind IN ('r','p','v','m','f') THEN
                has_table_privilege(backup_role,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') OR
                has_any_column_privilege(backup_role,c.oid,'INSERT,UPDATE,REFERENCES')
                ELSE false END) OR
      EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
+             WHERE n.nspname = ANY(allowed_schemas)
              -- PostgreSQL may reorder WHERE predicates. CASE guards object types.
              AND CASE WHEN c.relkind='S' THEN has_sequence_privilege(backup_role,c.oid,'UPDATE,USAGE')
                ELSE false END) THEN

@@ -14,11 +14,15 @@ import socket
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 from typing import Any
 import urllib.error
 import urllib.request
 import uuid
+from pathlib import Path
+
+from kopiur_fixture_fence import FixtureFence
 
 IMAGES = {
     'dragonfly': 'ghcr.io/dragonflydb/dragonfly:v2.0.0@sha256:7426fdb31ddcf7bd9499b4205f36ebaa83b26149ba1609a0d5f8f474b3631233',
@@ -334,11 +338,32 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         expected = inventory(port)
         # The add-block API waits for in-flight writes before acknowledging the
         # block. Test the actual writer boundary, not merely a settings flag.
-        fence = self.http(port, '/fixture/_block/write', 'PUT')
-        if (fence.get('acknowledged') is not True
-                or fence.get('shards_acknowledged') is not True
-                or fence.get('indices') != [{'name': 'fixture', 'blocked': True}]):
-            raise RuntimeError('Elasticsearch writer fence was not acknowledged')
+        def block():
+            fence = self.http(port, '/fixture/_block/write', 'PUT')
+            if (fence.get('acknowledged') is not True
+                    or fence.get('shards_acknowledged') is not True
+                    or fence.get('indices') != [{'name': 'fixture', 'blocked': True}]):
+                raise RuntimeError('Elasticsearch writer fence was not acknowledged')
+
+        def release():
+            if self.http(port, '/fixture/_settings', 'PUT',
+                         {'index.blocks.write': None}).get('acknowledged') is not True:
+                raise RuntimeError('Elasticsearch fixture writer resume failed')
+
+        # A fresh journal owner recovers intent left by a lost capture owner.
+        # Only this disposable source/index is ever admitted, not production.
+        with tempfile.TemporaryDirectory(prefix=self.prefix + '-') as directory:
+            journal = Path(directory) / 'fence.json'
+            with FixtureFence(journal, source) as boundary:
+                boundary.acquire(block)
+            with FixtureFence(journal, source) as boundary:
+                if not boundary.recover(release) or boundary.recover(release):
+                    raise RuntimeError('Elasticsearch fixture restart recovery differs')
+            self.http(port, '/fixture/_doc/resumed?refresh=true', 'PUT',
+                      {'title': 'post-restart-write', 'number': 3})
+            self.http(port, '/fixture/_doc/resumed?refresh=true', 'DELETE')
+            with FixtureFence(journal, source) as boundary:
+                boundary.acquire(block)
         denial = self.http(port, '/fixture/_doc/fenced?refresh=true', 'PUT',
                            {'title': 'must-not-enter-capture', 'number': 3}, expect_write_block=True)
         if (denial != {'status': 403, 'error_type': 'cluster_block_exception'}
@@ -405,6 +430,8 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'production_retention_approved': False,
                 'synthetic_security_feature_state_recovered': True,
                 'synthetic_writer_fence_restored_and_released': True,
+                'synthetic_source_fence_journal_recovery_exercised': True,
+                'production_restart_watchdog_qualified': False,
                 'provider_native_fixture_receipt': transport_receipt,
                 'production_consumer_coherence_qualified': False,
                 'security_feature_state_recovery_qualified': False}

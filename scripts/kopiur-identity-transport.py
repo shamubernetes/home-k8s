@@ -335,6 +335,8 @@ def main():
                     "-p", "test_kopiur_elasticsearch_provider_fixture.py", "-v"], timeout=120, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_kopiur_nonrel_native.py", "-v"], timeout=120, check=True)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_kopiur_fixture_fence.py", "-v"], timeout=120, check=True)
     print(json.dumps({'shared_regressions_passed': True}), flush=True)
     # Production is distroless. Supply credential-free static shell tooling from
     # a pinned image in a separate read-only volume. Kopia/rclone remain exactly

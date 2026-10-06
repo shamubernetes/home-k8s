@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 
 from kopiur_fixture_fence import FixtureFence
+from kopiur_fixture_manifest import GenerationManifest, validate_endpoint
 
 IMAGES = {
     'dragonfly': 'ghcr.io/dragonflydb/dragonfly:v2.0.0@sha256:7426fdb31ddcf7bd9499b4205f36ebaa83b26149ba1609a0d5f8f474b3631233',
@@ -141,7 +142,8 @@ def validate_elasticsearch_restore(result):
 
 
 class Fixture:
-    def __init__(self, service, *, docker_endpoint=None, require_explicit_endpoint=False):
+    def __init__(self, service, *, docker_endpoint=None, require_explicit_endpoint=False,
+                 generation_manifest=None):
         if service not in IMAGES:
             raise ValueError('unknown shared-store fixture')
         if not os.environ.get('RUNNER_NAME', '').startswith('ghar-set-zoo-') or sys.platform != 'linux':
@@ -149,19 +151,21 @@ class Fixture:
         if require_explicit_endpoint and docker_endpoint is None:
             raise ValueError('explicit fixture Docker endpoint required')
         if docker_endpoint is not None:
-            if (not isinstance(docker_endpoint, str)
-                    or not docker_endpoint.startswith('unix:///')
-                    or any(c.isspace() or ord(c) < 32 for c in docker_endpoint)
-                    or any(c in docker_endpoint for c in ('?', '#', '%'))
-                    or str(Path(docker_endpoint[7:])) != docker_endpoint[7:]
-                    or '..' in Path(docker_endpoint[7:]).parts
-                    or docker_endpoint.endswith('/')):
-                raise ValueError('canonical absolute Unix Docker endpoint required')
+            validate_endpoint(docker_endpoint)
         # Explicit routing is a prerequisite, not proof of a private daemon or
         # server containment. Legacy fixtures retain their approved ARC endpoint.
         self.docker_endpoint = docker_endpoint
         self.service = service
         self.prefix = 'k8s92-nonrel-' + uuid.uuid4().hex
+        self.generation_manifest = generation_manifest
+        if generation_manifest is not None:
+            if (not isinstance(generation_manifest, GenerationManifest)
+                    or docker_endpoint is None or generation_manifest.endpoint != docker_endpoint):
+                raise ValueError('manifest requires its exact explicit Docker endpoint')
+            state = generation_manifest.read()
+            if state['revoked'] or state['containers']:
+                raise RuntimeError('manifest generation requires reconciliation')
+            self.prefix = generation_manifest.generation
         self.network = self.prefix + '-net'
         self.containers = []
         self.container_ids = {}
@@ -176,7 +180,12 @@ class Fixture:
             return ['docker', *args]
         return ['docker', '--host', self.docker_endpoint, *args]
 
+    def check_dispatch(self):
+        if self.generation_manifest is not None and self.generation_manifest.read()['revoked']:
+            raise RuntimeError('fixture generation dispatch revoked')
+
     def run(self, *args, data=None, timeout=180):
+        self.check_dispatch()
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             raise RuntimeError('native fixture deadline exceeded')
@@ -194,14 +203,21 @@ class Fixture:
         for key, value in (variables or {}).items():
             env[key] = value
             options.extend(('-e', key))
+        operation = None
+        labels = []
+        if self.generation_manifest is not None:
+            operation = self.generation_manifest.create_intent(name)
+            labels = ['--label', 'kopiur.fixture-generation=' + self.prefix,
+                      '--label', 'kopiur.fixture-operation=' + operation]
         command = self.docker_command('create', '--name', name, '--network', self.network,
-                   *extra, *options,
+                   *extra, *options, *labels,
                    IMAGES[self.service], *args)
         # Track exact names even if create partly succeeds, cleanup never prunes.
         self.containers.append(name)
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             raise RuntimeError('native fixture deadline exceeded before create')
+        self.check_dispatch()
         result = subprocess.run(command, env=env, capture_output=True, timeout=min(60, remaining))
         if result.returncode:
             raise RuntimeError('native fixture create failed')
@@ -211,10 +227,16 @@ class Fixture:
         self.container_ids[name] = container_id
         if self.run('inspect', '--format', '{{.Id}}', name).decode().strip() != container_id:
             raise RuntimeError('native fixture container identity changed during create')
+        if self.generation_manifest is not None:
+            self.generation_manifest.register(name, operation, container_id)
         if archive is not None:
             validate_archive(archive)
             self.run('cp', '-a', '-', container_id + ':' + path, data=archive)
+        if self.generation_manifest is not None:
+            self.generation_manifest.start_intent(name, operation, container_id)
         self.run('start', container_id)
+        if self.generation_manifest is not None:
+            self.generation_manifest.started(name, operation, container_id)
         self.host = name
         return name, port
 
@@ -292,15 +314,26 @@ class Fixture:
         if self.client is None:
             self.client = self.prefix + '-client'
             self.containers.append(self.client)
+            operation = None
+            labels = []
+            if self.generation_manifest is not None:
+                operation = self.generation_manifest.create_intent(self.client)
+                labels = ['--label', 'kopiur.fixture-generation=' + self.prefix,
+                          '--label', 'kopiur.fixture-operation=' + operation]
             container_id = self.run('create', '--name', self.client, '--network', self.network,
-                                    '--memory=128m', CLIENT_IMAGE, 'python', '-c',
+                                    '--memory=128m', *labels, CLIENT_IMAGE, 'python', '-c',
                                     'import time;time.sleep(1200)').decode().strip()
             if len(container_id) != 64 or any(c not in '0123456789abcdef' for c in container_id):
                 raise RuntimeError('native client container identity was not established')
             self.container_ids[self.client] = container_id
             if self.run('inspect', '--format', '{{.Id}}', self.client).decode().strip() != container_id:
                 raise RuntimeError('native client container identity changed during create')
+            if self.generation_manifest is not None:
+                self.generation_manifest.register(self.client, operation, container_id)
+                self.generation_manifest.start_intent(self.client, operation, container_id)
             self.run('start', container_id)
+            if self.generation_manifest is not None:
+                self.generation_manifest.started(self.client, operation, container_id)
             self.client_started = True
         if not self.client_started:
             raise RuntimeError('native client startup remains unresolved')

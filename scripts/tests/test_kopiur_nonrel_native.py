@@ -2,6 +2,7 @@
 import io
 import sys
 import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -90,10 +91,209 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(fixture.docker_command('info'), ['docker', 'info'])
 
 
+class ManifestTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.generation = 'k8s92-nonrel-' + 'a' * 32
+        self.endpoint = 'unix:///fixture/generation/docker.sock'
+        self.path = Path(self.directory.name) / 'generation.json'
+        self.manifest = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        self.manifest.initialize()
+
+    def fixture(self):
+        with patch.dict(native.os.environ, {'RUNNER_NAME': 'ghar-set-zoo-fixture'}), \
+                patch.object(native.sys, 'platform', 'linux'):
+            return native.Fixture('elasticsearch', docker_endpoint=self.endpoint,
+                                  require_explicit_endpoint=True, generation_manifest=self.manifest)
+
+    def test_restart_retains_intent_and_denies_duplicate_create(self):
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        self.assertEqual(restarted.read()['containers'][name],
+                         {'operation': operation, 'phase': 'create-intent', 'id': None})
+        with self.assertRaises(RuntimeError):
+            restarted.create_intent(name)
+        with self.assertRaises(RuntimeError):
+            self.fixture()
+        with self.assertRaises(RuntimeError):
+            restarted.initialize()
+
+    def test_durable_identity_and_revocation_never_reset(self):
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        self.manifest.register(name, operation, 'b' * 64)
+        self.manifest.revoke()
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        self.assertTrue(restarted.read()['revoked'])
+        self.assertEqual(restarted.read()['containers'][name]['id'], 'b' * 64)
+        with self.assertRaises(RuntimeError):
+            restarted.start_intent(name, operation, 'b' * 64)
+        with self.assertRaises(RuntimeError):
+            restarted.create_intent(self.generation + '-client')
+
+    def test_registration_rejects_wrong_operation_and_start_identity(self):
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        with self.assertRaises(RuntimeError):
+            self.manifest.register(name, 'b' * 32, 'b' * 64)
+        with self.assertRaises(ValueError):
+            self.manifest.register(name, operation, 'short')
+        self.manifest.register(name, operation, 'b' * 64)
+        with self.assertRaises(RuntimeError):
+            self.manifest.start_intent(name, operation, 'c' * 64)
+        self.manifest.start_intent(name, operation, 'b' * 64)
+        with self.assertRaises(RuntimeError):
+            self.manifest.start_intent(name, operation, 'b' * 64)
+
+    def test_binding_mismatch_denies_restart(self):
+        for generation, endpoint in ((self.generation, 'unix:///other/docker.sock'),
+                                     ('k8s92-nonrel-' + 'b' * 32, self.endpoint)):
+            with self.assertRaises(RuntimeError):
+                native.GenerationManifest(self.path, generation, endpoint).read()
+
+    def test_create_start_only_after_persisted_intents(self):
+        fixture = self.fixture()
+        name = self.generation + '-source'
+        def create(command, **kwargs):
+            self.assertEqual(self.manifest.read()['containers'][name]['phase'], 'create-intent')
+            self.assertIn('kopiur.fixture-operation=' +
+                          self.manifest.read()['containers'][name]['operation'], command)
+            return native.subprocess.CompletedProcess([], 0, stdout=b'b' * 64)
+        def run(*args, **kwargs):
+            if args[0] == 'inspect':
+                return b'b' * 64
+            self.assertEqual(args, ('start', 'b' * 64))
+            self.assertEqual(self.manifest.read()['containers'][name]['phase'], 'start-intent')
+            return b''
+        with patch.object(native.subprocess, 'run', side_effect=create), \
+                patch.object(fixture, 'run', side_effect=run):
+            fixture.create('source', 9200)
+        self.assertEqual(self.manifest.read()['containers'][name]['phase'], 'running')
+
+    def test_lost_create_acknowledgement_retains_intent_without_start(self):
+        fixture = self.fixture()
+        with patch.object(native.subprocess, 'run', side_effect=OSError('ack lost')), \
+                patch.object(fixture, 'run') as run:
+            with self.assertRaises(OSError):
+                fixture.create('source', 9200)
+        run.assert_not_called()
+        self.assertEqual(self.manifest.read()['containers'][self.generation + '-source']['phase'],
+                         'create-intent')
+
+    def test_intent_fsync_failure_denies_dispatch(self):
+        fixture = self.fixture()
+        with patch.object(native.os, 'fsync', side_effect=OSError('fsync failed')), \
+                patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(OSError):
+                fixture.create('source', 9200)
+        run.assert_not_called()
+
+    def test_client_create_start_intents(self):
+        fixture = self.fixture()
+        name = self.generation + '-client'
+        def run(*args, **kwargs):
+            if args[0] in ('create', 'inspect'):
+                self.assertEqual(self.manifest.read()['containers'][name]['phase'], 'create-intent')
+                return b'b' * 64
+            if args[0] == 'start':
+                self.assertEqual(self.manifest.read()['containers'][name]['phase'], 'start-intent')
+                return b''
+            self.assertEqual(self.manifest.read()['containers'][name]['phase'], 'running')
+            return b'{}'
+        with patch.object(fixture, 'run', side_effect=run):
+            fixture.client_request({})
+        self.assertEqual(self.manifest.read()['containers'][name]['id'], 'b' * 64)
+
+    def test_revoked_generation_denies_real_dispatch(self):
+        fixture = self.fixture()
+        self.manifest.revoke()
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.run('exec', 'b' * 64, 'true')
+        run.assert_not_called()
+
+    def test_revocation_after_server_intent_denies_create_dispatch(self):
+        fixture = self.fixture()
+        original = self.manifest.create_intent
+        def intent(name):
+            operation = original(name)
+            self.manifest.revoke()
+            return operation
+        with patch.object(self.manifest, 'create_intent', side_effect=intent), \
+                patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.create('source', 9200)
+        run.assert_not_called()
+
+    def test_duplicate_fields_deny_restart_and_dispatch(self):
+        fixture = self.fixture()
+        state = self.path.read_text()
+        for malformed in (state.replace('"revoked": false', '"revoked": true, "revoked": false'),
+                          state.replace('"containers": {}', '"containers": {}, "containers": {}')):
+            self.path.write_text(malformed)
+            with patch.object(native.subprocess, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'duplicate'):
+                    fixture.run('info')
+            run.assert_not_called()
+            with self.assertRaisesRegex(RuntimeError, 'duplicate'):
+                self.fixture()
+
+    def test_manifest_backed_client_create_ack_loss_denies_retry(self):
+        fixture = self.fixture()
+        with patch.object(native.subprocess, 'run', side_effect=OSError('ack lost')):
+            with self.assertRaises(OSError):
+                fixture.client_request({})
+        self.assertEqual(self.manifest.read()['containers'][self.generation + '-client']['phase'],
+                         'create-intent')
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.client_request({})
+        run.assert_not_called()
+        with self.assertRaises(RuntimeError):
+            self.fixture()
+
+    def test_manifest_backed_server_start_ack_loss_retains_start_intent(self):
+        fixture = self.fixture()
+        responses = [native.subprocess.CompletedProcess([], 0, stdout=b'b' * 64),
+                     native.subprocess.CompletedProcess([], 0, stdout=b'b' * 64),
+                     OSError('start ack lost')]
+        with patch.object(native.subprocess, 'run', side_effect=responses):
+            with self.assertRaises(OSError):
+                fixture.create('source', 9200)
+        self.assertEqual(self.manifest.read()['containers'][self.generation + '-source']['phase'],
+                         'start-intent')
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.create('source', 9200)
+        run.assert_not_called()
+        with self.assertRaises(RuntimeError):
+            self.fixture()
+
+    def test_manifest_backed_client_start_ack_loss_denies_exec(self):
+        fixture = self.fixture()
+        responses = [native.subprocess.CompletedProcess([], 0, stdout=b'b' * 64),
+                     native.subprocess.CompletedProcess([], 0, stdout=b'b' * 64),
+                     OSError('start ack lost')]
+        with patch.object(native.subprocess, 'run', side_effect=responses):
+            with self.assertRaises(OSError):
+                fixture.client_request({})
+        self.assertEqual(self.manifest.read()['containers'][self.generation + '-client']['phase'],
+                         'start-intent')
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                fixture.client_request({})
+        run.assert_not_called()
+        with self.assertRaises(RuntimeError):
+            self.fixture()
+
+
 class ServerStartupTests(unittest.TestCase):
     def fixture(self):
         fixture = native.Fixture.__new__(native.Fixture)
         fixture.docker_endpoint = None
+        fixture.generation_manifest = None
         fixture.service = 'elasticsearch'
         fixture.prefix = 'owned'
         fixture.network = 'owned-network'
@@ -233,6 +433,7 @@ class ServerRetirementTests(unittest.TestCase):
     def fixture(self):
         fixture = native.Fixture.__new__(native.Fixture)
         fixture.docker_endpoint = None
+        fixture.generation_manifest = None
         fixture.containers = ['owned-source']
         fixture.container_ids = {'owned-source': 'a' * 64}
         return fixture

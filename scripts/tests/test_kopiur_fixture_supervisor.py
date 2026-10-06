@@ -13,6 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import kopiur_fixture_supervisor as supervisor
 from kopiur_fixture_supervisor import BoundaryError, FixtureSupervisor
+from kopiur_fixture_controller import FixtureController
 
 
 class KernelBoundaryTests(unittest.TestCase):
@@ -379,6 +380,136 @@ while True:
         state, _ = self.controller._read()
         self.assertEqual(proof['boundary'], state['boundary'])
         self.assertNotEqual(command['boundary'], state['boundary'])
+
+    def make_controller(self, consumers=None):
+        controller = FixtureController(self.controller)
+        state = controller.begin(consumers or {'first': 'native-first'}, 30)
+        return controller, state
+
+    def controller_plan(self, controller, state, consumer, code='pass'):
+        state = controller.stage(state, consumer, [sys.executable, '-c', code])
+        plan_id = state['plans'][-1]['id']
+        child, state = controller.dispatch(state, plan_id)
+        self.children.append(child)
+        return controller.complete(state, plan_id)
+
+    def test_controller_entire_cohort_commit_seals_dispatch_and_survives_restart(self):
+        controller, state = self.make_controller({'first': 'native-first', 'second': 'native-second'})
+        state = self.controller_plan(controller, state, 'first')
+        with self.assertRaisesRegex(BoundaryError, 'entire authoritative'):
+            controller.commit(state)
+        state = self.controller_plan(controller, state, 'second')
+        state = controller.commit(state)
+        restarted = FixtureController(FixtureSupervisor(self.directory, self.root))
+        receipt = restarted.verify_terminal(state)
+        self.assertFalse(receipt['production_recovery_accepted'])
+        self.assertEqual(len(receipt['operations']), 2)
+        with self.assertRaisesRegex(BoundaryError, 'queued start denied'):
+            self.command('raise RuntimeError("after terminal")')
+        self.controller.revoke()
+        with self.assertRaises(BoundaryError):
+            restarted.verify_terminal(state)
+
+    def test_controller_stale_snapshot_cannot_dispatch_queued_plan(self):
+        controller, old = self.make_controller()
+        state = controller.stage(old, 'first', [sys.executable, '-c', 'pass'])
+        with self.assertRaisesRegex(BoundaryError, 'snapshot changed'):
+            controller.dispatch(old, state['plans'][0]['id'])
+        self.assertEqual(self.controller._read()[0]['commands'], [])
+        self.controller.revoke()
+        with self.assertRaises(BoundaryError):
+            controller.dispatch(state, state['plans'][0]['id'])
+        self.assertEqual(self.controller._read()[0]['commands'], [])
+
+    def test_controller_late_native_completion_cannot_publish_stale_snapshot(self):
+        controller, state = self.make_controller()
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'pass'])
+        plan_id = state['plans'][0]['id']
+        child, state = controller.dispatch(state, plan_id)
+        self.children.append(child)
+        original = self.controller.complete
+        def stale_completion(*args, **kwargs):
+            proof = original(*args, **kwargs)
+            controller.stage(state, 'first', [sys.executable, '-c', 'pass'])
+            return proof
+        with patch.object(self.controller, 'complete', side_effect=stale_completion):
+            with self.assertRaisesRegex(BoundaryError, 'snapshot changed'):
+                controller.complete(state, plan_id)
+        self.assertEqual(controller.snapshot()['plans'][0]['stage'], 'running')
+        with self.assertRaises(BoundaryError):
+            controller.commit(controller.snapshot())
+
+    def test_controller_failed_running_acknowledgement_ceases_entire_boundary(self):
+        controller, state = self.make_controller()
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'import time; time.sleep(60)'])
+        original = controller._save
+        def lost_ack(candidate):
+            result = original(candidate)
+            if candidate['plans'][0]['stage'] == 'running':
+                raise OSError('lost running acknowledgement')
+            return result
+        with patch.object(controller, '_save', side_effect=lost_ack):
+            with self.assertRaises(OSError):
+                controller.dispatch(state, state['plans'][0]['id'])
+        for child, _ in self.controller._children.values():
+            self.children.append(child)
+        self.assertEqual(self.controller.verify_cessation()['populated'], 0)
+        restarted = FixtureController(FixtureSupervisor(self.directory, self.root))
+        recovered = restarted.recover()
+        self.assertEqual(recovered['phase'], 'ceased')
+        with self.assertRaises(BoundaryError):
+            restarted.commit(recovered)
+
+    def test_controller_independent_recovery_of_stopped_native_plan(self):
+        controller, state = self.make_controller()
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'import time; time.sleep(60)'])
+        child, state = controller.dispatch(state, state['plans'][0]['id'])
+        self.children.append(child)
+        os.kill(child.pid, signal.SIGSTOP)
+        code = ('from kopiur_fixture_supervisor import FixtureSupervisor; '
+                'from kopiur_fixture_controller import FixtureController; '
+                f'c=FixtureController(FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r})); '
+                'assert c.recover()["phase"] == "ceased"')
+        subprocess.run([sys.executable, '-c', code], check=True, timeout=10,
+                       env={'PYTHONPATH': str(Path(supervisor.__file__).parent)})
+        self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
+        with self.assertRaises(BoundaryError):
+            controller.complete(state, state['plans'][0]['id'])
+
+    def test_controller_rejects_unplanned_native_registration_at_commit(self):
+        controller, state = self.make_controller()
+        state = self.controller_plan(controller, state, 'first')
+        child, extra = self.command('pass')
+        self.controller.complete(extra['operation'])
+        self.assertEqual(child.returncode, 0)
+        with self.assertRaisesRegex(BoundaryError, 'entire authoritative'):
+            controller.commit(state)
+
+    def test_controller_expired_snapshot_never_dispatches_native_plan(self):
+        controller = FixtureController(self.controller)
+        state = controller.begin({'first': 'native-first'}, 0.05)
+        state = controller.stage(state, 'first', [sys.executable, '-c', 'pass'])
+        time.sleep(0.06)
+        with self.assertRaisesRegex(BoundaryError, 'expired'):
+            controller.dispatch(state, state['plans'][0]['id'])
+        self.assertEqual(self.controller._read()[0]['commands'], [])
+        self.assertEqual(controller.recover()['phase'], 'ceased')
+
+    def test_controller_terminal_persistence_failure_cannot_reopen_dispatch(self):
+        controller, state = self.make_controller()
+        state = self.controller_plan(controller, state, 'first')
+        original = controller._save
+        def fail_terminal(candidate):
+            if candidate['phase'] == 'committed':
+                raise OSError('terminal persistence unavailable')
+            return original(candidate)
+        with patch.object(controller, '_save', side_effect=fail_terminal):
+            with self.assertRaises(OSError):
+                controller.commit(state)
+        with self.assertRaisesRegex(BoundaryError, 'queued start denied'):
+            self.command('pass')
+        terminal = controller.commit(state)
+        self.assertFalse(controller.verify_terminal(terminal)['production_recovery_accepted'])
 
     def test_old_generation_is_not_overwritten(self):
         original = self.controller.path.read_bytes()

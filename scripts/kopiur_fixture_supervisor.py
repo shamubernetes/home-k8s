@@ -161,8 +161,8 @@ class FixtureSupervisor:
             raise BoundaryError('absolute executable required')
         with self._locked():
             state, boundary = self._read()
-            if state['revoked']:
-                raise BoundaryError('generation revoked, queued start denied')
+            if state['revoked'] or state.get('sealed', False):
+                raise BoundaryError('revoked generation: queued start denied')
             read_fd, write_fd = os.pipe()
             child = None
             admitted = False

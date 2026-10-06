@@ -197,6 +197,23 @@ class Fixture:
             self.generation_manifest.require_admission(
                 source, self.container_ids[source], admission)
 
+    def block_source_admission(self, port, source, prior_admission):
+        """Use the manifested authority check in the actual native callback."""
+        self.require_source_admission(source, prior_admission)
+        actual = elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
+        if actual['index_uuid'] != prior_admission['index_uuid']:
+            raise RuntimeError('Elasticsearch fixture index replaced')
+        fence = self.http(port, '/fixture/_block/write', 'PUT')
+        if (fence.get('acknowledged') is not True
+                or fence.get('shards_acknowledged') is not True
+                or fence.get('indices') != [{'name': 'fixture', 'blocked': True}]):
+            raise RuntimeError('Elasticsearch writer fence was not acknowledged')
+        actual = elasticsearch_admission(self.http(port, '/fixture/_settings?flat_settings=true'))
+        if actual['index_uuid'] != prior_admission['index_uuid']:
+            raise RuntimeError('Elasticsearch fixture index replaced')
+        if actual['write_block'] != 'true':
+            raise RuntimeError('Elasticsearch writer fence was not observed')
+
     def restore_source_admission(self, port, saved, journal, source):
         """Legacy journal recovery only; manifested generations remain closed.
 
@@ -534,15 +551,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         # The add-block API waits for in-flight writes before acknowledging the
         # block. Test the actual writer boundary, not merely a settings flag.
         def block():
-            self.require_source_admission(source, prior_admission)
-            observed_admission()
-            fence = self.http(port, '/fixture/_block/write', 'PUT')
-            if (fence.get('acknowledged') is not True
-                    or fence.get('shards_acknowledged') is not True
-                    or fence.get('indices') != [{'name': 'fixture', 'blocked': True}]):
-                raise RuntimeError('Elasticsearch writer fence was not acknowledged')
-            if observed_admission()['write_block'] != 'true':
-                raise RuntimeError('Elasticsearch writer fence was not observed')
+            self.block_source_admission(port, source, prior_admission)
 
         def restore_admission(saved, journal):
             self.restore_source_admission(port, saved, journal, source)

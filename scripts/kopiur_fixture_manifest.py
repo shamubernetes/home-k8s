@@ -139,6 +139,9 @@ class GenerationManifest:
             expected = dict(admission, container_id=container_id, index_name='fixture')
             if state['version'] != 2 or state['revoked'] or state['admissions'].get(name) != expected:
                 raise RuntimeError('fixture admission authority denied')
+            # A prior replace can be visible despite a failed directory fsync.
+            # Reassert file and directory durability before native mutation.
+            self.write(state)
 
     def create_intent(self, name):
         if not isinstance(name, str) or re.fullmatch(

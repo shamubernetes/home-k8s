@@ -361,14 +361,7 @@ class ManifestTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_native_source_binding_persists_exact_identity_and_prior_admission(self):
-        fixture = self.fixture()
-        name = self.generation + '-source'
-        operation = self.manifest.create_intent(name)
-        self.manifest.register(name, operation, 'b' * 64)
-        self.manifest.start_intent(name, operation, 'b' * 64)
-        self.manifest.started(name, operation, 'b' * 64)
-        fixture.container_ids[name] = 'b' * 64
-        saved = {'index_uuid': 'a' * 22, 'write_block': None}
+        fixture, name, saved = self.bound_source()
         fixture.bind_source_admission(name, saved)
         restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
         self.assertEqual(restarted.read()['admissions'][name],
@@ -387,6 +380,78 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
                 fixture.restore_source_admission(9200, saved, self.path, name)
             http.assert_not_called()
+
+    def bound_source(self):
+        fixture = self.fixture()
+        name = self.generation + '-source'
+        operation = self.manifest.create_intent(name)
+        self.manifest.register(name, operation, 'b' * 64)
+        self.manifest.start_intent(name, operation, 'b' * 64)
+        self.manifest.started(name, operation, 'b' * 64)
+        fixture.container_ids[name] = 'b' * 64
+        saved = {'index_uuid': 'a' * 22, 'write_block': None}
+        return fixture, name, saved
+
+    def test_binding_fsync_failure_denies_native_block_callback(self):
+        fixture, name, saved = self.bound_source()
+        original_fsync = native.os.fsync
+        for failed_call in (1, 2):
+            count = 0
+            def fsync(fd):
+                nonlocal count
+                count += 1
+                if count == failed_call:
+                    raise OSError('fsync failed')
+                original_fsync(fd)
+            with self.subTest(failed_call=failed_call), \
+                    patch.object(native.os, 'fsync', side_effect=fsync), \
+                    patch.object(fixture, 'http') as http:
+                with self.assertRaises(OSError):
+                    fixture.bind_source_admission(name, saved)
+                # Even a visible post-replace binding cannot dispatch while
+                # renewed authority persistence fails.
+                with patch.object(native.os, 'fsync', side_effect=OSError('fsync failed')):
+                    with self.assertRaises((RuntimeError, OSError)):
+                        fixture.block_source_admission(9200, name, saved)
+                http.assert_not_called()
+
+    def test_native_block_callback_checks_persisted_binding_and_acknowledgement(self):
+        fixture, name, saved = self.bound_source()
+        fixture.bind_source_admission(name, saved)
+        before = {'fixture': {'settings': {'index.uuid': 'a' * 22}}}
+        after = {'fixture': {'settings': {'index.uuid': 'a' * 22, 'index.blocks.write': 'true'}}}
+        acknowledgement = {'acknowledged': True, 'shards_acknowledged': True,
+                           'indices': [{'name': 'fixture', 'blocked': True}]}
+        with patch.object(fixture, 'http', side_effect=[before, acknowledgement, after]) as http:
+            fixture.block_source_admission(9200, name, saved)
+            self.assertEqual(http.call_args_list[1].args, (9200, '/fixture/_block/write', 'PUT'))
+        for observed, response, final in ((before, {}, after),
+                                         (before, acknowledgement, before),
+                                         (before, acknowledgement,
+                                          {'fixture': {'settings': {'index.uuid': 'c' * 22,
+                                                                   'index.blocks.write': 'true'}}}),
+                                         ({'fixture': {'settings': {'index.uuid': 'c' * 22}}},
+                                          acknowledgement, after)):
+            with self.subTest(observed=observed, response=response, final=final), \
+                    patch.object(fixture, 'http', side_effect=[observed, response, final]):
+                with self.assertRaises(RuntimeError):
+                    fixture.block_source_admission(9200, name, saved)
+
+    def test_lost_owner_restarted_callback_keeps_admission_closed(self):
+        fixture, name, saved = self.bound_source()
+        fixture.bind_source_admission(name, saved)
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        restarted.revoke()
+        for handle in (self.manifest, restarted):
+            fixture.generation_manifest = handle
+            with patch.object(fixture, 'http') as http:
+                with self.assertRaises(RuntimeError):
+                    fixture.block_source_admission(9200, name, saved)
+                with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
+                    fixture.restore_source_admission(9200, saved, self.path, name)
+                http.assert_not_called()
+        self.assertEqual(restarted.read()['admissions'][name],
+                         dict(saved, container_id='b' * 64, index_name='fixture'))
 
     def test_source_binding_failure_denies_authority(self):
         fixture = self.fixture()

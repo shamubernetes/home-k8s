@@ -8,6 +8,7 @@ import hashlib
 import io
 import inspect
 import json
+import multiprocessing
 import os
 import secrets
 import socket
@@ -354,14 +355,42 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         # Only this disposable source/index is ever admitted, not production.
         with tempfile.TemporaryDirectory(prefix=self.prefix + '-') as directory:
             journal = Path(directory) / 'fence.json'
-            with FixtureFence(journal, source) as boundary:
-                boundary.acquire(block)
-            with FixtureFence(journal, source) as boundary:
-                if not boundary.recover(release) or boundary.recover(release):
-                    raise RuntimeError('Elasticsearch fixture restart recovery differs')
-            self.http(port, '/fixture/_doc/resumed?refresh=true', 'PUT',
-                      {'title': 'post-restart-write', 'number': 3})
-            self.http(port, '/fixture/_doc/resumed?refresh=true', 'DELETE')
+            for point in ('intent', 'fenced', 'released-before-journal'):
+                def interrupted_capture():
+                    with FixtureFence(journal, source) as boundary:
+                        def interrupted_block():
+                            block()
+                            if point == 'intent':
+                                os._exit(73)
+                        boundary.acquire(interrupted_block)
+                        if point == 'released-before-journal':
+                            def interrupted_release():
+                                release()
+                                os._exit(73)
+                            boundary.recover(interrupted_release)
+                        os._exit(73)
+
+                # Linux ARC only. The child uses the already-created fixture
+                # client and real ES API, then exits without context cleanup.
+                child = multiprocessing.get_context('fork').Process(target=interrupted_capture)
+                child.start()
+                try:
+                    child.join(timeout=min(90, max(0, self.deadline - time.monotonic())))
+                    if child.is_alive() or child.exitcode != 73:
+                        raise RuntimeError('Elasticsearch fixture interruption failed')
+                finally:
+                    if child.is_alive():
+                        child.kill()
+                        child.join(timeout=10)
+                    child.close()
+                with FixtureFence(journal, source) as boundary:
+                    expected_phase = 'intent' if point == 'intent' else 'fenced'
+                    if (boundary.read() != expected_phase or not boundary.recover(release)
+                            or boundary.recover(release)):
+                        raise RuntimeError('Elasticsearch fixture restart recovery differs')
+                self.http(port, '/fixture/_doc/resumed?refresh=true', 'PUT',
+                          {'title': 'post-restart-write', 'number': 3})
+                self.http(port, '/fixture/_doc/resumed?refresh=true', 'DELETE')
             with FixtureFence(journal, source) as boundary:
                 boundary.acquire(block)
         denial = self.http(port, '/fixture/_doc/fenced?refresh=true', 'PUT',
@@ -431,6 +460,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'synthetic_security_feature_state_recovered': True,
                 'synthetic_writer_fence_restored_and_released': True,
                 'synthetic_source_fence_journal_recovery_exercised': True,
+                'synthetic_capture_process_loss_points': ['intent', 'fenced', 'released-before-journal'],
                 'production_restart_watchdog_qualified': False,
                 'provider_native_fixture_receipt': transport_receipt,
                 'production_consumer_coherence_qualified': False,

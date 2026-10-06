@@ -59,6 +59,29 @@ class ConvexTests(unittest.TestCase):
         self.assertEqual(start.call_args.kwargs['network'], 'container:database')
         self.assertEqual(start.call_args.kwargs['user'], '0:0')
 
+    def test_capture_repairs_only_helper_tree_before_native_capture(self):
+        invoke = Mock(return_value=SimpleNamespace(stdout=b''))
+        parent = type(self.drill).__mro__[1]
+        with patch.dict(self.scope, run=invoke):
+            with patch.object(parent, 'capture', return_value='captured') as capture:
+                self.assertEqual(self.drill.capture('database', 'config', ['convex'], check=False), 'captured')
+        command = invoke.call_args.args[-1]
+        self.assertIn('test ! -L /config/.kopiur-postgres', command)
+        self.assertIn('-type l -print -quit', command)
+        self.assertIn('chown -R 568:568 /config/.kopiur-postgres', command)
+        self.assertNotIn('chown -R 568:568 /config;', command)
+        self.assertIn('--network', invoke.call_args.args)
+        self.assertIn('--cap-drop=ALL', invoke.call_args.args)
+        capture.assert_called_once_with('database', 'config', ['convex'], check=False)
+
+    def test_capture_stops_when_helper_ownership_repair_fails(self):
+        parent = type(self.drill).__mro__[1]
+        with patch.dict(self.scope, run=Mock(side_effect=RuntimeError('unsafe helper tree'))):
+            with patch.object(parent, 'capture') as capture:
+                with self.assertRaises(RuntimeError):
+                    self.drill.capture('database', 'config', ['convex'])
+        capture.assert_not_called()
+
     def test_launch_diagnostics_do_not_print_fixture_credentials(self):
         key = 'original-private-fixture-admin-key'
         secret = 'a' * 64

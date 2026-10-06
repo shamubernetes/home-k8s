@@ -31,6 +31,85 @@ class AdmissionTests(unittest.TestCase):
             self.assertRegex(image, r'@sha256:[0-9a-f]{64}$')
 
 
+class ServerRetirementTests(unittest.TestCase):
+    def fixture(self):
+        fixture = native.Fixture.__new__(native.Fixture)
+        fixture.containers = ['owned-source']
+        fixture.container_ids = {'owned-source': 'a' * 64}
+        return fixture
+
+    def test_exact_server_removal_read_back(self):
+        fixture = self.fixture()
+        with patch.object(fixture, 'run', side_effect=[b'a' * 64 + b'\n', b'', b'b' * 64 + b'\n']) as run:
+            proof = fixture.remove('owned-source')
+        self.assertEqual([call.args for call in run.call_args_list], [
+            ('inspect', '--format', '{{.Id}}', 'owned-source'),
+            ('rm', '-fv', 'a' * 64),
+            ('ps', '-a', '--no-trunc', '--format', '{{.ID}}')])
+        self.assertEqual(proof, {'container_id': 'a' * 64, 'daemon_inventory_absent': True,
+                                'production_mutation_cessation_qualified': False})
+        self.assertEqual(fixture.containers, [])
+        self.assertEqual(fixture.container_ids, {})
+
+    def test_replaced_name_never_removed(self):
+        fixture = self.fixture()
+        with patch.object(fixture, 'run', return_value=b'b' * 64) as run:
+            with self.assertRaisesRegex(RuntimeError, 'identity changed'):
+                fixture.remove('owned-source')
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(fixture.containers, ['owned-source'])
+
+    def test_server_still_present_denies_restore_proof(self):
+        fixture = self.fixture()
+        with patch.object(fixture, 'run', side_effect=[b'a' * 64, b'', b'a' * 64 + b'\n']):
+            with self.assertRaisesRegex(RuntimeError, 'remains after removal'):
+                fixture.remove('owned-source')
+        self.assertEqual(fixture.container_ids, {'owned-source': 'a' * 64})
+        self.assertEqual(fixture.containers, ['owned-source'])
+
+    def test_unregistered_server_denied(self):
+        fixture = self.fixture()
+        fixture.container_ids.clear()
+        with patch.object(fixture, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'identity changed'):
+                fixture.remove('owned-source')
+        run.assert_not_called()
+
+    def test_inventory_failure_never_becomes_absence(self):
+        fixture = self.fixture()
+        with patch.object(fixture, 'run', side_effect=[b'a' * 64, b'', RuntimeError('daemon unavailable')]):
+            with self.assertRaisesRegex(RuntimeError, 'daemon unavailable'):
+                fixture.remove('owned-source')
+        self.assertEqual(fixture.container_ids, {'owned-source': 'a' * 64})
+
+
+    def test_lost_removal_acknowledgement_remains_unresolved(self):
+        fixture = self.fixture()
+        with patch.object(fixture, 'run', side_effect=[b'a' * 64, RuntimeError('ack lost')]) as run:
+            with self.assertRaisesRegex(RuntimeError, 'ack lost'):
+                fixture.remove('owned-source')
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(fixture.containers, ['owned-source'])
+
+    def test_cleanup_never_removes_by_replaced_name(self):
+        fixture = self.fixture()
+        fixture.network = 'owned-network'
+        with patch.object(native.subprocess, 'run') as run:
+            fixture.cleanup()
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['docker', 'rm', '-fv', 'a' * 64],
+            ['docker', 'network', 'rm', 'owned-network']])
+        self.assertEqual(fixture.container_ids, {})
+
+    def test_cleanup_missing_identity_never_falls_back_to_name(self):
+        fixture = self.fixture()
+        fixture.container_ids.clear()
+        with patch.object(native.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'lacks immutable'):
+                fixture.cleanup()
+        run.assert_not_called()
+
+
 class ElasticsearchAdmissionTests(unittest.TestCase):
     def test_prior_setting_preserved(self):
         for block in (None, 'false', 'true'):

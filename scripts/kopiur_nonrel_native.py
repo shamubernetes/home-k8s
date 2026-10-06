@@ -150,6 +150,7 @@ class Fixture:
         self.prefix = 'k8s92-nonrel-' + uuid.uuid4().hex
         self.network = self.prefix + '-net'
         self.containers = []
+        self.container_ids = {}
         self.deadline = time.monotonic() + 1200
         self.auth = None
         self.client = None
@@ -184,6 +185,12 @@ class Fixture:
         result = subprocess.run(command, env=env, capture_output=True, timeout=min(60, remaining))
         if result.returncode:
             raise RuntimeError('native fixture create failed')
+        container_id = result.stdout.decode().strip()
+        if len(container_id) != 64 or any(c not in '0123456789abcdef' for c in container_id):
+            raise RuntimeError('native fixture container identity was not established')
+        self.container_ids[name] = container_id
+        if self.run('inspect', '--format', '{{.Id}}', name).decode().strip() != container_id:
+            raise RuntimeError('native fixture container identity changed during create')
         if archive is not None:
             validate_archive(archive)
             self.run('cp', '-a', '-', name + ':' + path, data=archive)
@@ -192,13 +199,32 @@ class Fixture:
         return name, port
 
     def remove(self, name):
-        self.run('rm', '-fv', name)
+        container_id = self.container_ids.get(name)
+        if (name not in self.containers or container_id is None
+                or self.run('inspect', '--format', '{{.Id}}', name).decode().strip() != container_id):
+            raise RuntimeError('native fixture container identity changed before removal')
+        # Docker daemon/server work is not contained by the invoking client's
+        # cgroup. Retire the exact server lifetime and read daemon state back
+        # before any fresh restore can proceed. A name-only rm is not proof.
+        self.run('rm', '-fv', container_id)
+        remaining = self.run('ps', '-a', '--no-trunc', '--format', '{{.ID}}').decode().splitlines()
+        if container_id in remaining:
+            raise RuntimeError('native fixture server lifetime remains after removal')
         self.containers.remove(name)
+        del self.container_ids[name]
+        return {'container_id': container_id, 'daemon_inventory_absent': True,
+                'production_mutation_cessation_qualified': False}
 
     def cleanup(self):
         for name in self.containers:
-            subprocess.run(['docker', 'rm', '-fv', name], capture_output=True, timeout=60, check=True)
+            container_id = self.container_ids.get(name)
+            if container_id is None:
+                raise RuntimeError('native cleanup lacks immutable container identity')
+            # Cleanup has its own bounded deadline but the same identity fence.
+            # Never fall back to deleting a potentially replaced container name.
+            subprocess.run(['docker', 'rm', '-fv', container_id], capture_output=True, timeout=60, check=True)
         self.containers.clear()
+        self.container_ids.clear()
         subprocess.run(['docker', 'network', 'rm', self.network], capture_output=True, timeout=60, check=True)
 
     def ready(self, name, check):
@@ -221,8 +247,12 @@ class Fixture:
         if self.client is None:
             self.client = self.prefix + '-client'
             self.containers.append(self.client)
-            self.run('run', '-d', '--name', self.client, '--network', self.network,
-                     '--memory=128m', CLIENT_IMAGE, 'python', '-c', 'import time;time.sleep(1200)')
+            container_id = self.run('run', '-d', '--name', self.client, '--network', self.network,
+                                    '--memory=128m', CLIENT_IMAGE, 'python', '-c',
+                                    'import time;time.sleep(1200)').decode().strip()
+            if len(container_id) != 64 or any(c not in '0123456789abcdef' for c in container_id):
+                raise RuntimeError('native client container identity was not established')
+            self.container_ids[self.client] = container_id
         code = ('import sys,json,base64,socket,urllib.request,urllib.error\nfrom typing import Any\n'
                 + inspect.getsource(resp_read) + '''
 p=json.load(sys.stdin)
@@ -483,7 +513,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             raise RuntimeError('Elasticsearch security feature state is absent')
         archive = self.run('cp', source + ':/usr/share/elasticsearch/data/snapshot/.', '-')
         digest = validate_archive(archive)
-        self.remove(source)
+        source_retirement = self.remove(source)
         transport_receipt = None
         if transport is not None:
             archive, transport_receipt = transport(archive)
@@ -525,6 +555,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             raise RuntimeError('Elasticsearch original user cannot read restored documents')
         self.auth = 'elastic:' + password
         return {'snapshot_sha256': digest, 'snapshot_uuid': result['uuid'],
+                'source_server_retirement': source_retirement,
                 'documents_mappings_aliases_templates_pipelines_equal': True,
                 'timestamps_tags_alias_query_settings_ilm_equal': True,
                 'restored_shards': shard_count,

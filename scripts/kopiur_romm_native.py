@@ -1,5 +1,6 @@
 """RomM user/JWT/native-tree fixture, not production ROM/NFS/Dragonfly acceptance."""
 import hashlib
+from http.cookies import SimpleCookie
 import json
 import time
 import kopiur_pocket_id_native as pocket
@@ -25,6 +26,29 @@ def contract():
     class RomMDrill(base):
         def auth_header(self):
             return 'Authorization: Bearer ' + self.api_key
+
+        def request(self, container, path, payload=None, authenticated=False, check=True, form=False):
+            extra_headers = ()
+            if payload is not None and not authenticated and getattr(self, 'csrf_token', None):
+                extra_headers = ('Cookie: csrftoken=' + self.csrf_token, 'x-csrftoken: ' + self.csrf_token)
+            return super().request(container, path, payload, authenticated, check, form, extra_headers)
+
+        def bootstrap_csrf(self, container):
+            config = 'url = "http://127.0.0.1:8080/api/heartbeat"\ndump-header = "/dev/stdout"\noutput = "/dev/null"\n'
+            raw = scope['run']('docker', 'run', '--rm', '--read-only', '--cap-drop=ALL',
+                '--security-opt=no-new-privileges:true', '--network', 'container:' + container,
+                '--entrypoint', 'curl', '-i', pocket.HTTP_IMAGE, '-fsS', '--max-time', '20',
+                '--config', '-', stdin=config.encode()).stdout
+            if len(raw) > 65536:
+                raise ValueError('native CSRF headers exceed bound')
+            for line in raw.decode('latin-1').splitlines():
+                if line.lower().startswith('set-cookie:'):
+                    cookie = SimpleCookie()
+                    cookie.load(line.split(':', 1)[1].strip())
+                    if 'csrftoken' in cookie:
+                        self.csrf_token = cookie['csrftoken'].value
+                        return
+            raise ValueError('native CSRF cookie is missing')
 
         def isolated_config(self, raw):
             if len(raw) > 65536:
@@ -77,6 +101,7 @@ def contract():
             else:
                 raise startup_failure(scope, self, container, 'RomM readiness deadline')
             if container.endswith('-source-app'):
+                self.bootstrap_csrf(container)
                 password = 'Fixture1!' + self.password
                 self.request(container, '/api/users', {'username': 'recovery-fixture',
                     'email': 'recovery-fixture@example.invalid', 'password': password, 'role': 'admin'})

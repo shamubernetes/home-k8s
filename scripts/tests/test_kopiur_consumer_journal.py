@@ -85,8 +85,9 @@ class NativeFencingTests(unittest.TestCase):
                      'terminal_operation': uuid.uuid4().hex, 'prior_admission': True}
         with database(self.path) as connection:
             connection.execute('CREATE TABLE fencing(identity TEXT, admission INTEGER, '
-                               'epoch TEXT, generation TEXT, revision INTEGER, operation TEXT, stage TEXT)')
-            connection.execute('INSERT INTO fencing VALUES(?,1,NULL,NULL,0,NULL,?)',
+                               'epoch TEXT, generation TEXT, revision INTEGER, operation TEXT, stage TEXT, '
+                               'plan_identity TEXT, prepared INTEGER)')
+            connection.execute('INSERT INTO fencing VALUES(?,1,NULL,NULL,0,NULL,?,NULL,0)',
                                (self.plan['identity'], 'idle'))
 
     def tearDown(self):
@@ -122,6 +123,9 @@ class NativeFencingTests(unittest.TestCase):
             with self.subTest(command=command), self.assertRaises(InvalidEvidence):
                 self.adapter.apply(self.plan, command)
             self.assertEqual(self.state(), before)
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.prepare_next(self.plan)
+        self.assertEqual(self.state(), before)
 
     def test_equal_revision_does_not_authorize_foreign_ownership(self):
         for token in ('epoch', 'generation', 'operation'):
@@ -151,7 +155,8 @@ class NativeFencingTests(unittest.TestCase):
                         self.assertEqual(self.state(), before)
                     with database(self.path) as connection:
                         connection.execute('UPDATE fencing SET identity=?, admission=?, epoch=?, '
-                                           'generation=?, revision=?, operation=?, stage=?', original)
+                                           'generation=?, revision=?, operation=?, stage=?, '
+                                           'plan_identity=?, prepared=?', original)
 
     def test_resume_requires_exact_barrier_and_preserves_closed_admission(self):
         with self.assertRaises(InvalidEvidence):
@@ -166,6 +171,60 @@ class NativeFencingTests(unittest.TestCase):
             self.adapter.apply(wrong, 'resume')
         self.adapter.apply(self.plan, 'resume')
         self.assertEqual(self.state()[1], 0)
+
+    def test_changed_prior_admission_rejected_at_every_owned_stage(self):
+        self.plan['prior_admission'] = False
+        with database(self.path) as connection:
+            connection.execute('UPDATE fencing SET admission=0')
+        for stage in ('hold', 'fence', 'resume'):
+            self.adapter.apply(self.plan, stage)
+            before = self.state()
+            wrong = dict(self.plan, prior_admission=True)
+            for command in ('hold', 'fence', 'resume'):
+                with self.subTest(stage=stage, command=command), self.assertRaises(InvalidEvidence):
+                    self.adapter.apply(wrong, command)
+                self.assertEqual(self.state(), before)
+            with self.assertRaises(InvalidEvidence):
+                self.adapter.prepare_next(wrong)
+            self.assertEqual(self.state(), before)
+
+    def test_complete_plan_bound_before_terminal_dispatch(self):
+        self.adapter.apply(self.plan, 'hold')
+        before = self.state()
+        for key in ('terminal_operation', 'expected_operation', 'expected_stage'):
+            wrong = dict(self.plan)
+            if key == 'expected_stage':
+                wrong.update(expected_stage='released', expected_operation=uuid.uuid4().hex)
+            else:
+                wrong[key] = uuid.uuid4().hex
+            with self.subTest(key=key), self.assertRaises(InvalidEvidence):
+                self.adapter.apply(wrong, 'fence')
+            self.assertEqual(self.state(), before)
+
+    def test_prepare_lost_ack_and_terminal_retries_preserve_tombstone(self):
+        for command in ('fence', 'resume'):
+            self.adapter.apply(self.plan, command)
+        self.adapter.prepare_next(self.plan)
+        before = self.state()
+        self.adapter.prepare_next(self.plan)
+        for command in ('fence', 'resume'):
+            self.adapter.apply(self.plan, command)
+            self.assertEqual(self.state(), before)
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.apply(self.plan, 'hold')
+        self.assertEqual(self.state(), before)
+        wrong = dict(self.plan, generation=uuid.uuid4().hex)
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.prepare_next(wrong)
+        self.assertEqual(self.state(), before)
+        wrong = dict(self.plan, prior_admission=False)
+        for command in ('fence', 'resume'):
+            with self.assertRaises(InvalidEvidence):
+                self.adapter.apply(wrong, command)
+            self.assertEqual(self.state(), before)
+        with self.assertRaises(InvalidEvidence):
+            self.adapter.prepare_next(wrong)
+        self.assertEqual(self.state(), before)
 
 
 class JournalTests(unittest.TestCase):

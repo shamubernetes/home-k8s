@@ -50,6 +50,16 @@ admission. Cleared next-generation tokens retain revision/operation tombstones,
 and delayed older commands cannot overwrite newer ownership. Resume preserves
 the recorded prior admission, including a prior closed boundary.
 
+Native holds and direct terminal fences now persist the complete canonical plan,
+including prior admission and both operation identities. Every owned retry and
+resume compares that plan, so a changed prior admission cannot reopen a boundary
+that was originally closed. Preparation persists a released tombstone with an
+explicit prepared acknowledgement. Repeated preparation and exact terminal
+retries preserve cleared tokens and admission until newer ownership advances
+the revision. This is a disposable fixture schema change, not a migration of
+production state. ARC regressions cover altered admission and plans, lost
+preparation acknowledgements, and stale commands after newer ownership.
+
 Five ARC regressions exercise terminal retry after release, never-applied hold
 recovery followed by a delayed command against newer ownership, foreign tokens
 at equal predecessor/held/terminal revisions, and exact terminal resume with

@@ -56,7 +56,7 @@ def contract():
             identity = json.loads(self.isolated_config(raw))
             self.api_key = identity['original_fixture_key']
             self.auth_secret = identity['auth_secret']
-            env = {'POSTGRES_URL': 'postgresql://app:' + self.password + '@127.0.0.1:5432/convex?sslmode=disable',
+            env = {'POSTGRES_URL': 'postgresql://app:' + self.password + '@127.0.0.1:5432?sslmode=disable',
                 'INSTANCE_NAME': 'convex', 'INSTANCE_SECRET': self.auth_secret,
                 'CONVEX_CLOUD_ORIGIN': 'http://127.0.0.1:3210',
                 'CONVEX_SITE_ORIGIN': 'http://127.0.0.1:3211',

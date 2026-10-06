@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import subprocess
 import tempfile
@@ -163,6 +164,45 @@ while True:
                     self.fail('abandoned gated launcher did not exit')
                 time.sleep(0.01)
             self.assertFalse(marker.exists())
+
+    def test_new_process_reconciles_admitted_worker_after_supervisor_loss(self):
+        with tempfile.TemporaryDirectory() as public:
+            os.chmod(public, 0o777)
+            marker = Path(public) / 'admitted'
+            pid = os.fork()
+            if pid == 0:
+                child, registration = self.controller.dispatch([sys.executable, '-c',
+                    f'import time; from pathlib import Path; '
+                    f'Path({str(marker)!r}).touch(); time.sleep(60)'])
+                os._exit(73)
+            _, status = os.waitpid(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 73)
+            self.wait_file(marker)
+            _, boundary = self.controller._read()
+            self.assertIn('populated 1', (boundary / 'cgroup.events').read_text())
+            code = ('from kopiur_fixture_supervisor import FixtureSupervisor; '
+                    f's = FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r}); '
+                    's.cease(); assert s.verify_cessation()["populated"] == 0')
+            subprocess.run([sys.executable, '-c', code],
+                           env={'PYTHONPATH': str(Path(supervisor.__file__).parent)},
+                           check=True, timeout=10)
+            self.assertEqual(self.controller.verify_cessation()['populated'], 0)
+
+    def test_independent_revocation_kills_stopped_native_worker(self):
+        with tempfile.TemporaryDirectory() as public:
+            os.chmod(public, 0o777)
+            marker = Path(public) / 'admitted'
+            child, _ = self.command(f'import time; from pathlib import Path; '
+                                   f'Path({str(marker)!r}).touch(); time.sleep(60)')
+            self.wait_file(marker)
+            os.kill(child.pid, signal.SIGSTOP)
+            code = ('from kopiur_fixture_supervisor import FixtureSupervisor; '
+                    f's = FixtureSupervisor({str(self.directory)!r}, {str(self.root)!r}); '
+                    's.cease(); assert s.verify_cessation()["populated"] == 0')
+            subprocess.run([sys.executable, '-c', code],
+                           env={'PYTHONPATH': str(Path(supervisor.__file__).parent)},
+                           check=True, timeout=10)
+            self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
 
     def test_gate_stays_closed_until_registration_directory_fsync(self):
         with tempfile.TemporaryDirectory() as public:

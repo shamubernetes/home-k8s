@@ -341,6 +341,9 @@ def main():
                     "-p", "test_kopiur_consumer_generation.py", "-v"], timeout=120, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_kopiur_consumer_journal.py", "-v"], timeout=120, check=True)
+    # Credential-free kernel boundary qualification uses only a UUID-owned
+    # supervisor on the existing DinD. No controller lock is shortened here.
+    subprocess.run([sys.executable, "scripts/kopiur-cgroup-fixture"], timeout=720, check=True)
     print(json.dumps({'shared_regressions_passed': True}), flush=True)
     # Production is distroless. Supply credential-free static shell tooling from
     # a pinned image in a separate read-only volume. Kopia/rclone remain exactly

@@ -3,8 +3,39 @@
   "execution_card": "t_9b1e7179",
   "whole_application_recovery_accepted": false,
   "encrypted_provider_transport_qualified_by_these_receipts": false,
-  "native_fixture_passed_count": 13,
+  "native_fixture_passed_count": 14,
   "native_fixture_proofs": {
+    "pelican": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37410284543",
+      "candidate": "ca0761f8e7580b79ed60bd99cb553874ea9e9bfc",
+      "job": 112096969562,
+      "runner": "ghar-set-zoo-runner-qlnxq",
+      "pod_uid": "44db9fb7-b4e8-45d2-a906-385bdbfa06b3",
+      "request": "native-pelican-fixture",
+      "regression_suites": 15,
+      "regression_tests": 94,
+      "receipt": {
+        "app": "pelican",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 44,
+        "rows": 255,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 28,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_plugins_and_catalog_qualified": false,
+        "production_wings_game_state_qualified": false,
+        "bundled_caddy_scheduler_entrypoint_qualified": false
+      }
+    },
     "tracearr": {
       "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37408578612",
       "candidate": "2750ca16cca8f8b5590859c80e3f2242e3cd7841",
@@ -386,6 +417,7 @@
     "n8n proof includes inactive workflow and native CLI decryption with the original fixture encryption key.",
     "Kaneo captures public and observed drizzle catalogs and rejects an additional schema. Bundled frontend, Redis, OIDC and RGW are unqualified.",
     "Documenso proof uses a real API-created PDF and the original fixture API token. Production signing, encryption-key use and Redis are unqualified.",
-    "Tracearr restores the original owner session, JWT and cookie keys into a fresh isolated cache. Production server credentials, Redis state and image cache are unqualified."
+    "Tracearr restores the original owner session, JWT and cookie keys into a fresh isolated cache. Production server credentials, Redis state and image cache are unqualified.",
+    "Pelican uses native PHP models to decrypt the original fixture API token and MFA secret with the preserved APP_KEY. Production plugins/catalog, Wings/game-server state and bundled Caddy/scheduler startup are unqualified."
   ]
 }

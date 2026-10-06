@@ -27,7 +27,7 @@ from kopiur_fixture_fence import FixtureFence
 
 IMAGES = {
     'dragonfly': 'ghcr.io/dragonflydb/dragonfly:v2.0.0@sha256:7426fdb31ddcf7bd9499b4205f36ebaa83b26149ba1609a0d5f8f474b3631233',
-    'elasticsearch': 'docker.elastic.co/elasticsearch/elasticsearch:8.19.22@sha256:e98f9c3b09beb2fbb9eaf667d602df3f0e00bd3644138b8458dc17ba1a675595',
+    'elasticsearch': 'docker.elastic.co/elasticsearch/elasticsearch:8.19.23@sha256:4d0724bb8d78d7a2330693623e26ca4d621079d062ecc8a30b3e1fc180ec14c1',
     'rabbitmq-server': 'docker.io/library/rabbitmq:4.2.6-management@sha256:3ab808deef2f6552bc10ede59bdba1437b0d5c778e29d8927c5afbfa2586c22f',
 }
 MAX_ARCHIVE = 192 * 1024 * 1024

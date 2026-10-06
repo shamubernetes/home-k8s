@@ -3,8 +3,39 @@
   "execution_card": "t_9b1e7179",
   "whole_application_recovery_accepted": false,
   "encrypted_provider_transport_qualified_by_these_receipts": false,
-  "native_fixture_passed_count": 12,
+  "native_fixture_passed_count": 13,
   "native_fixture_proofs": {
+    "tracearr": {
+      "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37408578612",
+      "candidate": "2750ca16cca8f8b5590859c80e3f2242e3cd7841",
+      "job": 112091626609,
+      "runner": "ghar-set-zoo-runner-grzhc",
+      "pod_uid": "a52b73c4-2e6f-4f58-826c-87b361e80fa9",
+      "request": "native-tracearr-fixture",
+      "regression_suites": 14,
+      "regression_tests": 89,
+      "receipt": {
+        "app": "tracearr",
+        "native_restore": true,
+        "restored_app_ping": true,
+        "database_count": 1,
+        "tables": 39,
+        "rows": 63,
+        "paired_filetree_bytes_equal": 0,
+        "network": "none-shared-namespace",
+        "native_table_contents_equal": true,
+        "original_fixture_api_key_used": true,
+        "original_fixture_identity_used": true,
+        "application_visible_state_equal": true,
+        "artifact_entries": 16,
+        "producer_removed_before_restore": true,
+        "encrypted_transport_qualified": false,
+        "production_recovery_accepted": false,
+        "production_redis_state_qualified": false,
+        "production_server_credentials_qualified": false,
+        "production_image_cache_qualified": false
+      }
+    },
     "prowlarr": {
       "run_url": "https://github.com/shamubernetes/home-k8s/actions/runs/37380690362",
       "candidate": "423a66d637ce58cd783d050ab7ec0635e7ad4c74",
@@ -354,6 +385,7 @@
     "Home Assistant excludes only the pinned entrypoint stdout symlink, not persistent files. Log-stream recovery is unqualified.",
     "n8n proof includes inactive workflow and native CLI decryption with the original fixture encryption key.",
     "Kaneo captures public and observed drizzle catalogs and rejects an additional schema. Bundled frontend, Redis, OIDC and RGW are unqualified.",
-    "Documenso proof uses a real API-created PDF and the original fixture API token. Production signing, encryption-key use and Redis are unqualified."
+    "Documenso proof uses a real API-created PDF and the original fixture API token. Production signing, encryption-key use and Redis are unqualified.",
+    "Tracearr restores the original owner session, JWT and cookie keys into a fresh isolated cache. Production server credentials, Redis state and image cache are unqualified."
   ]
 }

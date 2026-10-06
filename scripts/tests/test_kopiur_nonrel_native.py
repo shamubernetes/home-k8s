@@ -31,6 +31,29 @@ class AdmissionTests(unittest.TestCase):
             self.assertRegex(image, r'@sha256:[0-9a-f]{64}$')
 
 
+class ElasticsearchRestoreTests(unittest.TestCase):
+    def test_complete_restore(self):
+        self.assertEqual(native.validate_elasticsearch_restore({
+            'snapshot': {'indices': ['fixture'],
+                         'shards': {'total': 1, 'successful': 1, 'failed': 0}}}), 1)
+
+    def test_partial_or_missing_restore_denied(self):
+        for shards in ({}, {'total': 0, 'successful': 0, 'failed': 0},
+                       {'total': 2, 'successful': 1, 'failed': 1},
+                       {'total': 2, 'successful': 1, 'failed': 0},
+                       {'total': True, 'successful': True, 'failed': 0},
+                       {'total': 1, 'successful': 1, 'failed': False}):
+            with self.subTest(shards=shards), self.assertRaises(RuntimeError):
+                native.validate_elasticsearch_restore({'snapshot': {'indices': ['fixture'], 'shards': shards}})
+        with self.assertRaises(RuntimeError):
+            native.validate_elasticsearch_restore({})
+
+    def test_unexpected_indices_denied(self):
+        with self.assertRaises(RuntimeError):
+            native.validate_elasticsearch_restore({'snapshot': {
+                'indices': ['other'], 'shards': {'total': 1, 'successful': 1, 'failed': 0}}})
+
+
 class RespTests(unittest.TestCase):
     def test_binary_bulk(self):
         self.assertEqual(native.resp_read(io.BytesIO(b'$3\r\n\x00\xffx\r\n')), b'\x00\xffx')

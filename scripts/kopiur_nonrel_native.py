@@ -96,6 +96,20 @@ def repository_envelope(data):
     return result.getvalue()
 
 
+def validate_elasticsearch_restore(result):
+    """A completed HTTP request does not prove all native shards recovered."""
+    snapshot = result.get('snapshot', {})
+    shards = snapshot.get('shards', {})
+    total = shards.get('total')
+    if (type(total) is not int or total <= 0
+            or type(shards.get('successful')) is not int
+            or shards['successful'] != total
+            or type(shards.get('failed')) is not int or shards['failed'] != 0
+            or snapshot.get('indices') != ['fixture']):
+        raise RuntimeError('Elasticsearch native restore is incomplete')
+    return total
+
+
 class Fixture:
     def __init__(self, service):
         if service not in IMAGES:
@@ -257,21 +271,37 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         extra = ('--memory=1600m', '--user=elasticsearch')
         source, port = self.create('source', 9200, variables, extra=extra)
         self.ready(source, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
-        mappings = {'properties': {'title': {'type': 'keyword'}, 'number': {'type': 'integer'}}}
+        mappings = {'properties': {'title': {'type': 'keyword'}, 'number': {'type': 'integer'},
+                                   '@timestamp': {'type': 'date'}, 'tags': {'type': 'keyword'}}}
         self.http(port, '/fixture', 'PUT', {'settings': {'number_of_shards': 1, 'number_of_replicas': 0},
                                           'mappings': mappings, 'aliases': {'fixture-alias': {}}})
         for number in (1, 2):
             self.http(port, '/fixture/_doc/' + str(number) + '?refresh=true', 'PUT',
-                      {'title': 'fixture-' + str(number), 'number': number})
+                      {'title': 'fixture-' + str(number), 'number': number,
+                       '@timestamp': '2026-01-0' + str(number) + 'T00:00:00Z',
+                       'tags': ['fixture', 'sample-' + str(number)]})
+        # Synthetic metadata only. Never interpret this fixture policy as an
+        # approved production retention or recovery objective.
+        policy = {'policy': {'phases': {'delete': {'min_age': '30d', 'actions': {'delete': {}}}}}}
+        self.http(port, '/_ilm/policy/fixture-retention', 'PUT', policy)
+        self.http(port, '/fixture/_settings', 'PUT',
+                  {'index.lifecycle.name': 'fixture-retention'})
         self.http(port, '/_index_template/fixture-template', 'PUT',
                   {'index_patterns': ['fixture-*'], 'template': {'mappings': mappings}})
         self.http(port, '/_ingest/pipeline/fixture-pipeline', 'PUT',
                   {'processors': [{'set': {'field': 'fixture', 'value': True}}]})
         reads = ('/fixture/_search?sort=number&size=10', '/fixture/_mapping',
-                 '/fixture/_alias', '/_index_template/fixture-template', '/_ingest/pipeline/fixture-pipeline')
+                 '/fixture/_alias', '/_index_template/fixture-template', '/_ingest/pipeline/fixture-pipeline',
+                 '/fixture/_settings?flat_settings=true', '/_ilm/policy/fixture-retention',
+                 '/fixture-alias/_search?q=tags:sample-2&sort=number&size=10')
         def inventory(listener):
             values = [self.http(listener, path) for path in reads]
             values[0] = [{'_id': hit['_id'], '_source': hit['_source']} for hit in values[0]['hits']['hits']]
+            # Native restore assigns a fresh internal index UUID. Document IDs,
+            # creation timestamp and every other persisted setting must match.
+            values[5]['fixture']['settings'].pop('index.uuid')
+            values[6] = values[6]['fixture-retention']['policy']
+            values[7] = [{'_id': hit['_id'], '_source': hit['_source']} for hit in values[7]['hits']['hits']]
             return values
         expected = inventory(port)
         repo = {'type': 'fs', 'settings': {'location': '/usr/share/elasticsearch/data/snapshot'}}
@@ -287,12 +317,20 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                                      archive=repository_envelope(archive), path='/usr/share/elasticsearch/data')
         self.ready(restored, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
         self.http(port, '/_snapshot/fixture', 'PUT', {'type': 'fs', 'settings': repo['settings'] | {'readonly': True}})
-        self.http(port, '/_snapshot/fixture/generation/_restore?wait_for_completion=true', 'POST',
-                  {'indices': 'fixture', 'include_global_state': True})
-        if inventory(port) != expected:
-            raise RuntimeError('Elasticsearch documents or metadata differ')
+        restore = self.http(port, '/_snapshot/fixture/generation/_restore?wait_for_completion=true', 'POST',
+                            {'indices': 'fixture', 'include_global_state': True})
+        shard_count = validate_elasticsearch_restore(restore)
+        self.ready(restored, lambda: self.http(port, '/_cluster/health/fixture')['status'] == 'green')
+        actual = inventory(port)
+        if actual != expected:
+            mismatches = [reads[i] for i in range(len(reads)) if actual[i] != expected[i]]
+            raise RuntimeError('Elasticsearch documents or metadata differ: ' + ', '.join(mismatches))
         return {'snapshot_sha256': digest, 'snapshot_uuid': result['uuid'],
                 'documents_mappings_aliases_templates_pipelines_equal': True,
+                'timestamps_tags_alias_query_settings_ilm_equal': True,
+                'restored_shards': shard_count,
+                'fixture_retention_policy': policy['policy'],
+                'production_retention_approved': False,
                 'security_feature_state_recovery_qualified': False}
 
     def rabbitmq(self):

@@ -437,6 +437,59 @@ class ManifestTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     fixture.block_source_admission(9200, name, saved)
 
+    def test_callback_durability_renewal_denies_both_fsync_failures(self):
+        fixture, name, saved = self.bound_source()
+        fixture.bind_source_admission(name, saved)
+        original_fsync = native.os.fsync
+        for failed_call in (1, 2):
+            count = 0
+            def fsync(fd):
+                nonlocal count
+                count += 1
+                if count == failed_call:
+                    raise OSError('renewal fsync failed')
+                original_fsync(fd)
+            with self.subTest(failed_call=failed_call), \
+                    patch.object(native.os, 'fsync', side_effect=fsync), \
+                    patch.object(fixture, 'http') as http:
+                with self.assertRaises(OSError):
+                    fixture.block_source_admission(9200, name, saved)
+                self.assertEqual(count, failed_call)
+                http.assert_not_called()
+
+    def test_reconstructed_fixture_revokes_old_source_callback_before_restart_denial(self):
+        fixture, name, saved = self.bound_source()
+        fixture.bind_source_admission(name, saved)
+        before = self.manifest.read()
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        with patch.object(native.sys, 'platform', 'linux'), \
+                patch.dict(native.os.environ, RUNNER_NAME='ghar-set-zoo-test'), \
+                patch.object(native.subprocess, 'run') as run, \
+                patch.object(fixture, 'http') as http:
+            with self.assertRaisesRegex(RuntimeError, 'requires reconciliation'):
+                native.Fixture('elasticsearch', docker_endpoint=self.endpoint,
+                               generation_manifest=restarted)
+            self.assertEqual(restarted.read(), dict(before, revoked=True))
+            with self.assertRaisesRegex(RuntimeError, 'authority denied'):
+                fixture.block_source_admission(9200, name, saved)
+            with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
+                fixture.restore_source_admission(9200, saved, self.path, name)
+            run.assert_not_called()
+            http.assert_not_called()
+
+    def test_restart_revocation_persistence_failure_never_dispatches(self):
+        fixture, name, saved = self.bound_source()
+        fixture.bind_source_admission(name, saved)
+        restarted = native.GenerationManifest(self.path, self.generation, self.endpoint)
+        with patch.object(native.sys, 'platform', 'linux'), \
+                patch.dict(native.os.environ, RUNNER_NAME='ghar-set-zoo-test'), \
+                patch.object(native.os, 'fsync', side_effect=OSError('revocation fsync failed')), \
+                patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(OSError):
+                native.Fixture('elasticsearch', docker_endpoint=self.endpoint,
+                               generation_manifest=restarted)
+            run.assert_not_called()
+
     def test_lost_owner_restarted_callback_keeps_admission_closed(self):
         fixture, name, saved = self.bound_source()
         fixture.bind_source_admission(name, saved)

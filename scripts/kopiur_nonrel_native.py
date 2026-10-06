@@ -164,6 +164,10 @@ class Fixture:
                 raise ValueError('manifest requires its exact explicit Docker endpoint')
             state = generation_manifest.read()
             if state['version'] != 2 or state['revoked'] or state['containers']:
+                # A reconstructed controller must invalidate the old handle,
+                # not merely refuse its own startup. This does not cancel an
+                # already accepted daemon request or permit native recovery.
+                generation_manifest.revoke()
                 raise RuntimeError('manifest generation requires reconciliation')
             self.prefix = generation_manifest.generation
         self.network = self.prefix + '-net'

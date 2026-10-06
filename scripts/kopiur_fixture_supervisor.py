@@ -189,16 +189,23 @@ class FixtureSupervisor:
         watchdog restart only within that same proven boot.
         """
         state, _ = self._read()
-        contract = json.loads((self.directory / 'watchdog.json').read_text())
-        if (contract['generation'] != state['generation']
-                or contract['boundary'] != state['boundary']
-                or type(contract['owner_pid']) is not int or contract['owner_pid'] <= 0
-                or type(contract['deadline_monotonic']) not in (int, float)
-                or not math.isfinite(contract['deadline_monotonic'])
-                or contract['deadline_monotonic'] <= 0
-                or not isinstance(contract['owner_start_ticks'], str)
-                or not contract['owner_start_ticks'].isdigit()):
-            raise BoundaryError('watchdog contract identity changed')
+        try:
+            contract = json.loads((self.directory / 'watchdog.json').read_text())
+            if (contract['generation'] != state['generation']
+                    or contract['boundary'] != state['boundary']
+                    or type(contract['owner_pid']) is not int or contract['owner_pid'] <= 0
+                    or type(contract['deadline_monotonic']) not in (int, float)
+                    or not math.isfinite(contract['deadline_monotonic'])
+                    or contract['deadline_monotonic'] <= 0
+                    or not isinstance(contract['owner_start_ticks'], str)
+                    or not contract['owner_start_ticks'].isdigit()):
+                raise BoundaryError('watchdog contract identity changed')
+        except BaseException:
+            # Cease the independently proven supervisor boundary, never a
+            # contract-supplied boundary. Failed monitoring must not abandon
+            # live workers when its contract is unreadable or invalid.
+            self.watchdog_cease()
+            raise
         pidfd = None
         try:
             try:

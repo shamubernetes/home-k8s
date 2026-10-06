@@ -813,7 +813,8 @@ while True:
         _, boundary = self.controller._read()
         with self.assertRaisesRegex(BoundaryError, 'contract identity changed'):
             self.controller.monitor_watchdog()
-        self.assertEqual((boundary / 'cgroup.freeze').read_text().strip(), '0')
+        self.assertEqual((boundary / 'cgroup.freeze').read_text().strip(), '1')
+        self.controller.verify_watchdog_cessation()
 
 
     def test_watchdog_monitor_pidfd_above_select_descriptor_limit(self):
@@ -828,6 +829,58 @@ while True:
         with patch.object(supervisor.os, 'pidfd_open', side_effect=high_pidfd):
             self.controller.monitor_watchdog()
         self.controller.verify_watchdog_cessation()
+
+    def watchdog_contract_failure_with_paused_owner(self, malformed=False, missing=False):
+        self.controller.admit_watchdog(os.getpid(), 60)
+        with tempfile.TemporaryDirectory() as public:
+            os.chmod(public, 0o777)
+            marker = Path(public) / 'descendant'
+            self.command('import os,time; from pathlib import Path; '
+                         'pid=os.fork(); os._exit(0) if pid else None; os.setsid(); '
+                         f'Path({str(marker)!r}).touch(); time.sleep(60)')
+            self.wait_file(marker)
+            locked = Path(public) / 'locked'
+            owner = os.fork()
+            if owner == 0:
+                with self.controller._locked():
+                    locked.touch()
+                    os.kill(os.getpid(), signal.SIGSTOP)
+                    os._exit(0)
+            try:
+                self.wait_file(locked)
+                _, status = os.waitpid(owner, os.WUNTRACED)
+                self.assertTrue(os.WIFSTOPPED(status))
+                original = Path.read_text
+                contract_path = self.directory / 'watchdog.json'
+                def failing_read(path, *args, **kwargs):
+                    if path == contract_path:
+                        if missing:
+                            return '{}'
+                        if malformed:
+                            return '{'
+                        raise OSError('injected watchdog contract read failure')
+                    return original(path, *args, **kwargs)
+                expected = KeyError if missing else json.JSONDecodeError if malformed else OSError
+                with patch.object(Path, 'read_text', failing_read):
+                    with self.assertRaises(expected):
+                        self.controller.monitor_watchdog()
+                proof = self.controller.verify_watchdog_cessation()
+                self.assertEqual(proof['populated'], 0)
+                self.assertFalse(proof['consumer_admission_restored'])
+                with self.assertRaisesRegex(BoundaryError, 'lock timeout'):
+                    self.controller.revoke()
+            finally:
+                os.kill(owner, signal.SIGKILL)
+                os.waitpid(owner, 0)
+
+    def test_watchdog_contract_read_failure_ceases_paused_owner_descendants(self):
+        self.watchdog_contract_failure_with_paused_owner()
+
+    def test_watchdog_contract_decode_failure_ceases_paused_owner_descendants(self):
+        self.watchdog_contract_failure_with_paused_owner(malformed=True)
+
+    def test_watchdog_contract_missing_fields_ceases_paused_owner_descendants(self):
+        self.watchdog_contract_failure_with_paused_owner(missing=True)
 
     def test_watchdog_monitor_failure_does_not_abandon_native_workers(self):
         self.controller.admit_watchdog(os.getpid(), 60)

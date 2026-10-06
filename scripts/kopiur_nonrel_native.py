@@ -252,7 +252,10 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                      'xpack.ml.enabled': 'false', 'ingest.geoip.downloader.enabled': 'false',
                      'ES_JAVA_OPTS': '-Xms256m -Xmx256m -XX:ActiveProcessorCount=2',
                      'path.repo': '/usr/share/elasticsearch/data/snapshot'}
-        source, port = self.create('source', 9200, variables, extra=('--memory=1600m',))
+        # Docker cp -a misresolves this image's numeric USER 1000:0. Its
+        # named elasticsearch account preserves the same non-root UID/GID.
+        extra = ('--memory=1600m', '--user=elasticsearch')
+        source, port = self.create('source', 9200, variables, extra=extra)
         self.ready(source, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
         mappings = {'properties': {'title': {'type': 'keyword'}, 'number': {'type': 'integer'}}}
         self.http(port, '/fixture', 'PUT', {'settings': {'number_of_shards': 1, 'number_of_replicas': 0},
@@ -280,7 +283,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         archive = self.run('cp', source + ':/usr/share/elasticsearch/data/snapshot/.', '-')
         digest = validate_archive(archive)
         self.remove(source)
-        restored, port = self.create('restore', 9200, variables, extra=('--memory=1600m',),
+        restored, port = self.create('restore', 9200, variables, extra=extra,
                                      archive=repository_envelope(archive), path='/usr/share/elasticsearch/data')
         self.ready(restored, lambda: self.http(port, '/_cluster/health')['status'] in ('yellow', 'green'))
         self.http(port, '/_snapshot/fixture', 'PUT', {'type': 'fs', 'settings': repo['settings'] | {'readonly': True}})

@@ -28,6 +28,7 @@ TOOLS = ""
 CREDENTIAL_FREE_FIXTURES = {
     'native-tracearr-fixture': 'kopiur_tracearr_native',
     'native-pelican-fixture': 'kopiur_pelican_native',
+    'native-firecrawl-fixture': 'kopiur_firecrawl_native',
     'native-convex-fixture': 'kopiur_convex_native',
     'native-romm-fixture': 'kopiur_romm_native',
     'native-documenso-fixture': 'kopiur_documenso_native',

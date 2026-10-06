@@ -41,6 +41,7 @@ BEGIN
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
     WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
     WHEN 'tracearr' THEN allowed_databases := ARRAY['tracearr']; expected_role := 'kopiur_tracearr'; allowed_schemas := ARRAY['public','drizzle'];
+    WHEN 'firecrawl' THEN allowed_databases := ARRAY['firecrawl_nuq']; expected_role := 'kopiur_firecrawl'; allowed_schemas := ARRAY['public','nuq'];
     WHEN 'pocket-id' THEN allowed_databases := ARRAY['pocket_id']; expected_role := 'kopiur_pocket_id';
     -- Deliberately fixture-only. The production HASS database is an opaque vault
     -- binding and cannot be inferred or provisioned through this test contract.

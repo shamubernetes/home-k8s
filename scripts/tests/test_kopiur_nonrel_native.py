@@ -31,6 +31,31 @@ class AdmissionTests(unittest.TestCase):
             self.assertRegex(image, r'@sha256:[0-9a-f]{64}$')
 
 
+class ElasticsearchAdmissionTests(unittest.TestCase):
+    def test_prior_setting_preserved(self):
+        for block in (None, 'false', 'true'):
+            values = {'index.uuid': 'original-index'}
+            if block is not None:
+                values['index.blocks.write'] = block
+            self.assertEqual(native.elasticsearch_admission({'fixture': {'settings': values}}),
+                             {'index_uuid': 'original-index', 'write_block': block})
+
+    def test_incomplete_or_ambiguous_observation_denied(self):
+        for settings in (None, {}, {'alias': {'settings': {'index.uuid': 'original'}}},
+                         {'fixture': None}, {'fixture': {'settings': {}}},
+                         {'fixture': {'settings': {'index.uuid': ''}}},
+                         {'fixture': {'settings': {'index.uuid': True}}},
+                         {'fixture': {}, 'other': {}}):
+            with self.subTest(settings=settings), self.assertRaises(RuntimeError):
+                native.elasticsearch_admission(settings)
+
+    def test_malformed_block_denied(self):
+        for block in (None, True, False, 0, 1, 'TRUE', '', [], {}):
+            with self.subTest(block=block), self.assertRaises(RuntimeError):
+                native.elasticsearch_admission({'fixture': {'settings': {
+                    'index.uuid': 'original', 'index.blocks.write': block}}})
+
+
 class ElasticsearchRestoreTests(unittest.TestCase):
     def test_complete_restore(self):
         self.assertEqual(native.validate_elasticsearch_restore({

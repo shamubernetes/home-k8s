@@ -34,6 +34,28 @@ MAX_ARCHIVE = 192 * 1024 * 1024
 CLIENT_IMAGE = 'docker.io/library/python:3.14.7-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d'
 
 
+def elasticsearch_admission(settings):
+    """Observe exact fixture identity and preserve absent versus false blocks.
+
+    Settings writes lack ownership CAS. This prerequisite does not qualify
+    production fencing or replace a supervised generation boundary.
+    """
+    if not isinstance(settings, dict) or set(settings) != {'fixture'}:
+        raise RuntimeError('exact Elasticsearch fixture index required')
+    entry = settings['fixture']
+    if not isinstance(entry, dict) or not isinstance(entry.get('settings'), dict):
+        raise RuntimeError('Elasticsearch fixture settings absent')
+    values = entry['settings']
+    identity = values.get('index.uuid')
+    if not isinstance(identity, str) or not identity:
+        raise RuntimeError('Elasticsearch fixture index identity absent')
+    block = values.get('index.blocks.write')
+    if block not in (None, 'true', 'false') or (
+            'index.blocks.write' in values and block is None):
+        raise RuntimeError('Elasticsearch fixture admission malformed')
+    return {'index_uuid': identity, 'write_block': block}
+
+
 def validate_archive(data):
     if not data or len(data) > MAX_ARCHIVE:
         raise ValueError('native archive exceeds bound or is empty')
@@ -337,19 +359,35 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             values[7] = [{'_id': hit['_id'], '_source': hit['_source']} for hit in values[7]['hits']['hits']]
             return values
         expected = inventory(port)
+        prior_admission = elasticsearch_admission(
+            self.http(port, '/fixture/_settings?flat_settings=true'))
+
+        def observed_admission():
+            actual = elasticsearch_admission(
+                self.http(port, '/fixture/_settings?flat_settings=true'))
+            if actual['index_uuid'] != prior_admission['index_uuid']:
+                raise RuntimeError('Elasticsearch fixture index replaced')
+            return actual
+
         # The add-block API waits for in-flight writes before acknowledging the
         # block. Test the actual writer boundary, not merely a settings flag.
         def block():
+            observed_admission()
             fence = self.http(port, '/fixture/_block/write', 'PUT')
             if (fence.get('acknowledged') is not True
                     or fence.get('shards_acknowledged') is not True
                     or fence.get('indices') != [{'name': 'fixture', 'blocked': True}]):
                 raise RuntimeError('Elasticsearch writer fence was not acknowledged')
+            if observed_admission()['write_block'] != 'true':
+                raise RuntimeError('Elasticsearch writer fence was not observed')
 
         def release():
+            observed_admission()
             if self.http(port, '/fixture/_settings', 'PUT',
-                         {'index.blocks.write': None}).get('acknowledged') is not True:
+                         {'index.blocks.write': prior_admission['write_block']}).get('acknowledged') is not True:
                 raise RuntimeError('Elasticsearch fixture writer resume failed')
+            if observed_admission() != prior_admission:
+                raise RuntimeError('Elasticsearch prior fixture admission differs')
 
         # A fresh journal owner recovers intent left by a lost capture owner.
         # Only this disposable source/index is ever admitted, not production.

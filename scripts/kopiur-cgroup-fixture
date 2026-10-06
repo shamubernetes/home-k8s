@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Run the credential-free cgroup fixture on an existing trusted ARC DinD."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import uuid
+
+IMAGE = 'docker.io/library/python:3.14.7-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d'
+
+
+def run(argv, **kwargs):
+    return subprocess.run(argv, check=True, timeout=kwargs.pop('timeout', 120), **kwargs)
+
+
+def main():
+    if sys.platform != 'linux' or not os.environ.get('RUNNER_NAME'):
+        raise RuntimeError('assigned existing Linux ARC runner required')
+    nonce = uuid.uuid4().hex
+    name = 'k8s92-cgroup-' + nonce
+    scripts = str(Path(__file__).resolve().parent)
+    run(['docker', 'pull', IMAGE], timeout=600)
+    # Only this trusted supervisor sees the writable cgroup mount. No Docker
+    # socket, provider credentials, production PVCs or network enter it.
+    run(['docker', 'create', '--name', name, '--label', 'k8s92.cgroup.fixture=' + nonce,
+         '--read-only', '--network', 'none', '--privileged', '--cgroupns', 'host',
+         '--tmpfs', '/tmp:rw,nosuid,size=16m',
+         '--mount', 'type=bind,src=/sys/fs/cgroup,dst=/sys/fs/cgroup',
+         '--mount', 'type=bind,src=' + scripts + ',dst=/fixture/scripts,readonly',
+         '--workdir', '/fixture', '-e', 'K8S92_CGROUP_FIXTURE=isolated-arc-only',
+         '-e', 'PYTHONDONTWRITEBYTECODE=1', IMAGE,
+         'python3', '-W', 'error::ResourceWarning', '-m', 'unittest', 'discover',
+         '-s', 'scripts/tests', '-p', 'test_kopiur_fixture_supervisor.py', '-v'])
+    try:
+        run(['docker', 'start', '--attach', name], timeout=120)
+        info = json.loads(subprocess.check_output(['docker', 'inspect', name], text=True))[0]
+        if info['State']['ExitCode'] != 0:
+            raise RuntimeError('kernel fixture failed')
+        print(json.dumps({'kernel_cgroup_fixture_passed': True,
+                          'fixture': name, 'image': info['Image'],
+                          'production_qualified': False}), flush=True)
+    finally:
+        info = json.loads(subprocess.check_output(['docker', 'inspect', name], text=True))[0]
+        if info['Config']['Labels'].get('k8s92.cgroup.fixture') != nonce:
+            raise RuntimeError('fixture ownership changed; cleanup refused')
+        run(['docker', 'rm', '--force', name])
+        remaining = subprocess.check_output(['docker', 'ps', '-a', '--filter',
+                     'label=k8s92.cgroup.fixture=' + nonce, '--format', '{{.ID}}'], text=True)
+        if remaining.strip():
+            raise RuntimeError('owned fixture cleanup unresolved')
+        print(json.dumps({'owned_cgroup_fixture_removed': True}), flush=True)
+
+
+if __name__ == '__main__':
+    main()

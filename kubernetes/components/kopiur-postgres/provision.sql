@@ -39,6 +39,7 @@ BEGIN
     WHEN 'romm' THEN allowed_databases := ARRAY['romm']; expected_role := 'kopiur_romm';
     WHEN 'grafana' THEN allowed_databases := ARRAY['grafana']; expected_role := 'kopiur_grafana';
     WHEN 'gatus' THEN allowed_databases := ARRAY['gatus']; expected_role := 'kopiur_gatus';
+    WHEN 'tracearr' THEN allowed_databases := ARRAY['tracearr']; expected_role := 'kopiur_tracearr'; allowed_schemas := ARRAY['public','drizzle'];
     WHEN 'pocket-id' THEN allowed_databases := ARRAY['pocket_id']; expected_role := 'kopiur_pocket_id';
     -- Deliberately fixture-only. The production HASS database is an opaque vault
     -- binding and cannot be inferred or provisioned through this test contract.
@@ -51,7 +52,7 @@ BEGIN
          WHEN application_name = 'romm' THEN 'games/'
          WHEN application_name = 'pocket-id' THEN 'security/'
          WHEN application_name = 'home-assistant-fixture' THEN 'home-assistant/'
-         WHEN application_name IN ('grafana','gatus') THEN 'observability/' ELSE 'arrs/' END || application_name;
+         WHEN application_name IN ('grafana','gatus','tracearr') THEN 'observability/' ELSE 'arrs/' END || application_name;
   IF NOT current_database() = ANY(allowed_databases) OR backup_role <> expected_role OR
      application_owner !~ '^[a-z][a-z0-9_]{0,62}$' OR
      backup_password !~ '^[a-f0-9]{64}$' OR application_owner = backup_role THEN

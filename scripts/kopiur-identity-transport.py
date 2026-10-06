@@ -26,6 +26,7 @@ IMAGE = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f
 TOOL_IMAGE = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
 TOOLS = ""
 CREDENTIAL_FREE_FIXTURES = {
+    'native-romm-fixture': 'kopiur_romm_native',
     'native-documenso-fixture': 'kopiur_documenso_native',
     'native-kaneo-fixture': 'kopiur_kaneo_native',
     'native-n8n-fixture': 'kopiur_n8n_native',

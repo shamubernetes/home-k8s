@@ -22,7 +22,7 @@ spec:
       - name: ghcr.io/external-secrets/external-secrets
         newName: ghcr.io/external-secrets/external-secrets
         # renovate: datasource=docker depName=ghcr.io/external-secrets/external-secrets
-        newTag: v2.11.0@sha256:66fb710878cbf3eba4a927e35c5d75e29a202c9bab238aad64bfb23b786b962b
+        newTag: v2.12.0@sha256:7a3c4f7e038fa0f86a3172da19b9388f3f4d846e87e9994ee3474c5b72a9330d
   uninstall:
     keepHistory: false
   values:

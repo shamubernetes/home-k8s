@@ -23,7 +23,7 @@ spec:
   values:
     image:
       repository: docker.io/rook/ceph
-      tag: v1.20.8@sha256:d47a748c058a27062306adbe325cb7e8aa4d40514d57ce7ecea8bb0934e97e3f
+      tag: v1.21.0@sha256:2c3a65786d3cc85ba15d7f258461c0bf392c6a6ee19dde8011259b8d34eeedd0
     ceph-csi-operator:
       controllerManager:
         manager:
@@ -32,18 +32,25 @@ spec:
             tag: v1.0.5@sha256:f8f4e990bc9f5a255ba47cdab73909a4a8f9b92086d9743dd8eaed4689228233
     csi:
       cephcsi:
+        repository: quay.io/cephcsi/cephcsi
         tag: v3.17.1@sha256:0b62db8afc9b174619186c87084a8952157daa719415c598603be22b63cc1293
       registrar:
+        repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
         tag: v2.17.0@sha256:f9de845b170155199f2a2a3f9531cf13d78e31235e9db6b6582a8b0db0a50dad
       provisioner:
+        repository: registry.k8s.io/sig-storage/csi-provisioner
         tag: v6.3.0@sha256:a4b0b1a37605b7b04a293e136edf7006ec1786a8eb3f4e5a945f81d667dcc371
       snapshotter:
+        repository: registry.k8s.io/sig-storage/csi-snapshotter
         tag: v8.5.0@sha256:da081c27e8a6d91f36042c1942362d0515ced8d06e18c11b8f893e58c4d6d797
       attacher:
+        repository: registry.k8s.io/sig-storage/csi-attacher
         tag: v4.12.0@sha256:b9dc9a714a484ccdeeb6f86d88d4db9b7a5ecfc5a55da6db3a60bb3fa33c278a
       resizer:
+        repository: registry.k8s.io/sig-storage/csi-resizer
         tag: v2.1.0@sha256:589e525cddef6d768e68da1f0bc9ffd0a24bf3add3dd010648eb7189976fde79
       csiAddons:
+        repository: quay.io/csiaddons/k8s-sidecar
         tag: v0.14.0@sha256:69092d026323307933fba2bed9c57d864f2a92cfd385d644b478442ded0d2886
       cephFSKernelMountOptions: ms_mode=prefer-crc
       enableLiveness: true

@@ -5,7 +5,6 @@ actions-runner-system/ghar-scale-set/arc-maudecode	docker:dind
 actions-runner-system/ghar-scale-set/arc-zoo	docker:dind
 games/minecraft-stoneblock4/app	itzg/mc-backup:latest
 games/minecraft-stoneblock4/app	itzg/minecraft-server:latest
-kube-system/descheduler/app	registry.k8s.io/descheduler/descheduler:v0.36.0
 observability/grafana/app	docker.io/curlimages/curl:8.9.1
 observability/grafana/app	docker.io/grafana/grafana:12.3.1
 observability/grafana/app	quay.io/kiwigrid/k8s-sidecar:2.5.0

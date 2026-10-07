@@ -11,6 +11,19 @@
   branchConcurrentLimit: 0,
   packageRules: [
     {
+      // Rook 1.21 overwrites all seven imageSet entries with blanks despite
+      // correctly rendered CSI pins. Remove only after a verified runtime fix.
+      description: "Rook must preserve the pinned CSI imageSet",
+      matchDatasources: ["docker"],
+      matchFileNames: [
+        "kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml",
+        "kubernetes/apps/rook-ceph/rook-ceph/app/ocirepository.yaml",
+        "kubernetes/apps/rook-ceph/rook-ceph/cluster/ocirepository.yaml",
+      ],
+      matchPackageNames: ["ghcr.io/rook/rook-ceph", "ghcr.io/rook/rook-ceph-cluster", "docker.io/rook/ceph"],
+      allowedVersions: "<1.21.0",
+    },
+    {
       // Remove when the Renovate npm artifact no longer depends on the
       // unpublished Yarn got patch. K8S-63 records exact install failures.
       description: "Renovate 44.131.1 through 44.132.1 have an unresolvable published npm dependency",

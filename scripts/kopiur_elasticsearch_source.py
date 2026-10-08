@@ -5,12 +5,14 @@ Metadata observations do not authorize reading source configuration or keys.
 An independently enforced capture fence and original-source export grant must
 remain live around every operation. ARC fixtures qualify code, not that grant.
 """
+import base64
 import copy
 import hmac
 import json
 import re
 import subprocess
 
+from kopiur_elasticsearch_capture import SnapshotCapture, credentials_from_bytes
 from kopiur_elasticsearch_escrow import (
     EscrowError, _binding, _encoded, _validate_component, capture_export,
 )
@@ -185,3 +187,104 @@ class KubernetesSource:
         return self.export(capture_native=capture_adapter.native,
                            capture_credentials=capture_adapter.credentials,
                            encrypt_export=encrypt_export)
+
+
+class LoopbackSnapshotIO:
+    """Read only the prepared repository through the bound engine's loopback.
+
+    exec_read must independently guard its exact process lifetime. Credentials
+    travel in curl's stdin config, never argv, files, environment or diagnostics.
+    No caller URL, redirect, proxy, write method or alternate port is admitted.
+    """
+    def __init__(self, *, exec_read, repository, snapshot, location):
+        for value in (repository, snapshot):
+            if not isinstance(value, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', value):
+                raise EscrowError('explicit prepared repository and snapshot required')
+        root = '/usr/share/elasticsearch/data/snapshot'
+        if (not isinstance(location, str) or not (location == root or location.startswith(root + '/'))
+                or any(x in ('', '.', '..') for x in location.split('/')[1:])):
+            raise EscrowError('explicit prepared archive location required')
+        self.exec_read, self.location = exec_read, location
+        self.paths = frozenset({'/', '/_security/_authenticate', '/_snapshot/' + repository,
+                               '/_snapshot/' + repository + '/' + snapshot})
+
+    def request(self, path, credentials):
+        if not isinstance(path, str) or path not in self.paths:
+            raise EscrowError('prepared snapshot read path required')
+        credentials = credentials_from_bytes(_encoded(credentials))
+        password = credentials['elastic_password'].replace('\\', '\\\\').replace('"', '\\"')
+        config = ('user = "elastic:' + password + '"\n').encode()
+        try:
+            raw = self.exec_read('curl', '-q', '--silent', '--fail', '--max-time', '60',
+                '--noproxy', '*', '--proto', '=http', '--config', '-',
+                '--url', 'http://127.0.0.1:9200' + path, data=config)
+            def unique(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError('duplicate response key')
+                    result[key] = value
+                return result
+            if not isinstance(raw, bytes) or len(raw) > 8 * 1024 * 1024:
+                raise ValueError('response exceeds bound')
+            value = json.loads(raw, object_pairs_hook=unique)
+            if not isinstance(value, dict):
+                raise ValueError('object response required')
+            return value
+        except EscrowError:
+            raise
+        except Exception:
+            raise EscrowError('bound loopback snapshot read failed') from None
+
+    def read_archive(self, location):
+        if location != self.location:
+            raise EscrowError('prepared archive location changed')
+        return self.exec_read('tar', '-C', location, '-cf', '-', '.')
+
+
+class PreparedSnapshotExport:
+    """Compose original Secret, authenticated native and source escrow capture.
+
+    This only reads an already prepared snapshot. Its UUID and IndexVersion must
+    come from the owned creation response, not a fresh discovery of any snapshot.
+    Export encryption/destination stays explicit and independently authorized.
+    """
+    def __init__(self, source, *, repository, snapshot, location, indices,
+                 snapshot_uuid, snapshot_version):
+        if not isinstance(source, KubernetesSource) or not snapshot_uuid or not snapshot_version:
+            raise EscrowError('original source and prepared snapshot identity required')
+        self.source, self.binding = source, _binding(source.binding)
+        self.io = LoopbackSnapshotIO(exec_read=source.exec_read, repository=repository,
+                                    snapshot=snapshot, location=location)
+        self.adapter = SnapshotCapture(self.binding, guard=self.guard,
+            read_credentials=self.read_credentials, request=self.io.request,
+            read_archive=self.io.read_archive, repository=repository, snapshot=snapshot,
+            location=location, indices=indices, expected_uuid=snapshot_uuid,
+            snapshot_version=snapshot_version)
+
+    def guard(self):
+        if self.source.binding != self.binding:
+            raise EscrowError('prepared source binding changed')
+        return self.source.guard()
+
+    def read_credentials(self):
+        self.guard()
+        raw = self.source.run(['kubectl', 'get', 'secret', 'elasticsearch-secret', '-n', 'database',
+                               '-o', 'jsonpath={.data.ELASTIC_PASSWORD}'])
+        self.guard()
+        try:
+            if not isinstance(raw, bytes) or not raw:
+                raise ValueError('credential bytes absent')
+            decoded = base64.b64decode(raw, validate=True)
+            if base64.b64encode(decoded) != raw:
+                raise ValueError('credential encoding not canonical')
+            value = {'elastic_username': 'elastic', 'elastic_password': decoded.decode()}
+            return _encoded(credentials_from_bytes(_encoded(value)))
+        except (ValueError, TypeError, UnicodeError):
+            raise EscrowError('bound original credential invalid') from None
+
+    def export(self, *, encrypt_export):
+        self.guard()
+        # Source capture compares this exact password with /proc/1/environ before
+        # reading configuration or forwarding any plaintext to encryption.
+        return self.source.export_snapshot(self.adapter, encrypt_export=encrypt_export)

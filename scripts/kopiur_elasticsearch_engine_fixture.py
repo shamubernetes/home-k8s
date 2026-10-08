@@ -10,6 +10,7 @@ import json
 import tarfile
 
 from kopiur_elasticsearch_capture import SnapshotCapture
+from kopiur_elasticsearch_source import LoopbackSnapshotIO
 from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, restore_parts
 from kopiur_elasticsearch_escrow_fixture import configuration_archive, configuration_parts
 from kopiur_elasticsearch_escrow_transport import encode_bundle, decode_bundle
@@ -90,18 +91,41 @@ def prove_capture_revocation(adapter, binding):
     return denied
 
 
+def engine_lifetime(actual):
+    """Bind one running process, not merely a reusable Docker container ID."""
+    try:
+        state = actual['State']
+        if (state['Running'] is not True or type(state['Pid']) is not int or state['Pid'] <= 0
+                or not isinstance(state['StartedAt'], str) or not state['StartedAt']
+                or type(actual['RestartCount']) is not int or actual['RestartCount'] < 0):
+            raise ValueError('running lifetime required')
+        return state['StartedAt'], state['Pid'], actual['RestartCount']
+    except (KeyError, TypeError, ValueError):
+        raise EscrowError('owned synthetic process lifetime incomplete') from None
+
+
+def guarded_engine_read(drill, source_id, guard, *command, data=None):
+    if guard() is not True:
+        raise EscrowError('owned synthetic process authority required')
+    result = drill.run('exec', '-i', source_id, *command, data=data)
+    if guard() is not True:
+        raise EscrowError('owned synthetic process authority required')
+    return result
+
+
 def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snapshot_version):
     """Capture the real owned snapshot with the authenticated production adapter."""
     source_id = drill.registered_id(source)
     image = IMAGES['elasticsearch']
     version = drill.http(9200, '/')['version']['number']
+    lifetime = engine_lifetime(json.loads(drill.run('inspect', '--format', '{{json .}}', source_id)))
 
     def guard():
         drill.check_dispatch()
         actual = json.loads(drill.run('inspect', '--format', '{{json .}}', source_id))
         settings = drill.http(9200, '/fixture/_settings?flat_settings=true')
         if (actual['Id'] != source_id or actual['Name'] != '/' + source
-                or actual['Config']['Image'] != image or not actual['State']['Running']
+                or actual['Config']['Image'] != image or engine_lifetime(actual) != lifetime
                 or settings['fixture']['settings'].get('index.blocks.write') != 'true'
                 or drill.http(9200, '/')['version']['number'] != version):
             raise EscrowError('owned synthetic capture binding changed')
@@ -129,21 +153,15 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
     # absent during recovery: restored bootstrap.password must authenticate it.
     runtime = {'image': image, 'version': version,
                'variables': {k: v for k, v in variables.items() if k != 'ELASTIC_PASSWORD'}}
-    def request(path, value):
-        # Authenticate with the exact credential bytes given to SnapshotCapture,
-        # rather than implicitly borrowing whichever auth the fixture last used.
-        prior = drill.auth
-        try:
-            drill.auth = value['elastic_username'] + ':' + value['elastic_password']
-            return drill.http(9200, path)
-        finally:
-            drill.auth = prior
+    def bound_exec(*command, data=None):
+        return guarded_engine_read(drill, source_id, guard, *command, data=data)
 
+    io_adapter = LoopbackSnapshotIO(exec_read=bound_exec, repository='fixture',
+                                    snapshot='generation', location=DATA_PATH + '/snapshot')
     adapter = SnapshotCapture(binding, guard=guard,
         read_credentials=lambda: _encoded({'elastic_username': 'elastic',
                                            'elastic_password': credentials['elastic']}),
-        request=request,
-        read_archive=lambda location: drill.run('cp', source_id + ':' + location + '/.', '-'),
+        request=io_adapter.request, read_archive=io_adapter.read_archive,
         repository='fixture', snapshot='generation', location=DATA_PATH + '/snapshot',
         indices=['fixture'], expected_uuid=snapshot_uuid, snapshot_version=snapshot_version)
     revocations = prove_capture_revocation(adapter, binding)
@@ -155,6 +173,7 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
                                 runtime=part(_encoded(runtime)), credentials=part(_encoded(credentials)))
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
+                            'concrete_bound_loopback_capture_verified': True,
                             'engine_version': version, 'snapshot_format_version': adapter.snapshot_version,
                             'captured_snapshot_uuid': snapshot_uuid,
                             'revoked_capture_denied': revocations,

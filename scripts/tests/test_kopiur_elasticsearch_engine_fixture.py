@@ -6,7 +6,9 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from kopiur_elasticsearch_engine_fixture import EngineRestore, prove_capture_revocation
+from kopiur_elasticsearch_engine_fixture import (
+    EngineRestore, engine_lifetime, guarded_engine_read, prove_capture_revocation,
+)
 from kopiur_elasticsearch_capture import SnapshotCapture, snapshot_metadata, synthetic_snapshot_archive
 from kopiur_elasticsearch_escrow import CONFIG_FILES, EscrowError, _encoded
 
@@ -43,6 +45,53 @@ class EngineAdapterTests(unittest.TestCase):
         with self.assertRaises(EscrowError):
             self.restore()
         self.engine.drill.run.assert_not_called()
+
+
+class EngineLifetimeTests(unittest.TestCase):
+    def setUp(self):
+        self.actual = {'State': {'Running': True, 'Pid': 123, 'StartedAt': '2026-10-08T00:00:00Z'},
+                       'RestartCount': 0}
+        self.expected = engine_lifetime(self.actual)
+        self.drill = Mock()
+        self.drill.run.return_value = b'private-source-bytes'
+
+    def guard(self):
+        if engine_lifetime(self.actual) != self.expected:
+            raise EscrowError('owned synthetic capture binding changed')
+        return True
+
+    def test_restart_during_exec_denies_returned_bytes(self):
+        for field, value in (('StartedAt', '2026-10-08T00:01:00Z'), ('Pid', 124), ('RestartCount', 1)):
+            self.setUp()
+            def restart(*args, **kwargs):
+                target = self.actual if field == 'RestartCount' else self.actual['State']
+                target[field] = value
+                return b'private-source-bytes'
+            self.drill.run.side_effect = restart
+            with self.subTest(field=field), self.assertRaisesRegex(EscrowError, 'capture binding changed'):
+                guarded_engine_read(self.drill, 'owned-id', self.guard, 'tar', '-cf', '-', '.')
+            self.drill.run.assert_called_once()
+
+    def test_preexisting_restart_denies_exec(self):
+        self.actual['RestartCount'] = 1
+        with self.assertRaises(EscrowError):
+            guarded_engine_read(self.drill, 'owned-id', self.guard, 'curl', data=b'private')
+        self.drill.run.assert_not_called()
+
+    def test_nonaffirmative_authority_denies_before_exec(self):
+        for value in (None, 1, False):
+            with self.subTest(value=value), self.assertRaises(EscrowError):
+                guarded_engine_read(self.drill, 'owned-id', lambda: value, 'curl')
+        self.drill.run.assert_not_called()
+
+    def test_missing_stopped_or_malformed_lifetime_denied(self):
+        for actual in ({}, {'State': {}},
+                       {'State': self.actual['State'] | {'Running': False}, 'RestartCount': 0},
+                       {'State': self.actual['State'] | {'Pid': 0}, 'RestartCount': 0},
+                       {'State': self.actual['State'] | {'Pid': True}, 'RestartCount': 0},
+                       self.actual | {'RestartCount': True}, self.actual | {'RestartCount': -1}):
+            with self.subTest(actual=actual), self.assertRaises(EscrowError):
+                engine_lifetime(actual)
 
 
 class CaptureRevocationTests(unittest.TestCase):

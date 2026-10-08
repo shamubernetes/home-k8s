@@ -230,7 +230,7 @@ class SourceTests(unittest.TestCase):
                           'shards': {'total': 1, 'successful': 1, 'failed': 0}, 'failures': [],
                           'feature_states': [{'feature_name': 'security',
                                               'indices': ['.security-7']}]}]}}
-            return SnapshotCapture(_binding(binding), guard=Mock(return_value=True),
+            return SnapshotCapture(_binding(binding), guard=self.source.guard,
                 read_credentials=Mock(return_value=_encoded({
                     'elastic_username': 'elastic', 'elastic_password': 'synthetic-password'})),
                 request=lambda path, value: routes[path],

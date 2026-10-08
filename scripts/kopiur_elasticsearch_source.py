@@ -105,6 +105,7 @@ class KubernetesSource:
             raise EscrowError('original export authorization and independent capture fence required')
         if self.observe() != self.binding:
             raise EscrowError('source lifetime or credential-provider version changed')
+        return True
 
     def exec_read(self, *command, data=None):
         self.guard()

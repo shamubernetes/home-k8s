@@ -1,17 +1,17 @@
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository
 metadata:
-  name: seerr-nas-smb
+  name: bazarr-nas-smb
 spec:
   backend:
     rclone:
-      remotePath: mnemosyne:kopiur-seerr
+      remotePath: mnemosyne:kopiur-bazarr
       configSecretRef:
-        name: seerr-kopiur-nas
+        name: bazarr-kopiur-nas
       startupTimeout: 2m
   encryption:
     passwordSecretRef:
-      name: seerr-kopiur-nas
+      name: bazarr-kopiur-nas
       key: KOPIA_PASSWORD
   create:
     enabled: true
@@ -50,20 +50,20 @@ spec:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository
 metadata:
-  name: seerr-r2
+  name: bazarr-r2
 spec:
   backend:
     s3:
-      bucket: kopiur-seerr
-      prefix: kopiur/seerr/r2/
+      bucket: kopiur-bazarr
+      prefix: kopiur/bazarr/r2/
       endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
       region: auto
       auth:
         secretRef:
-          name: seerr-kopiur-r2
+          name: bazarr-kopiur-r2
   encryption:
     passwordSecretRef:
-      name: seerr-kopiur-r2
+      name: bazarr-kopiur-r2
       key: KOPIA_PASSWORD
   create:
     enabled: true

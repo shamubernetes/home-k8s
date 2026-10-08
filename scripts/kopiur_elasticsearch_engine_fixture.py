@@ -46,8 +46,8 @@ def capture_engine(drill, source, native, variables, credentials):
     with tarfile.open(fileobj=io.BytesIO(archive), mode='r:') as files:
         members = list(files)
         paths = sorted(member.name.removeprefix('./') for member in members if member.isfile())
-        directories = sorted(member.name.removeprefix('./').rstrip('/') for member in members
-                             if member.isdir() and member.name not in ('.', './'))
+        directories = sorted(member.name.removeprefix('./').rstrip('/') or '.'
+                             for member in members if member.isdir())
     binding = {'generation': drill.prefix.removeprefix('k8s92-nonrel-'),
                'source_uid': source_id, 'source_pod_uid': source_id,
                'engine_image': image, 'runtime_version': version,
@@ -111,7 +111,13 @@ class EngineRestore:
         restored = configuration_parts(self.binding, archive, **{
             k: self.parts[k] for k in ('native', 'runtime', 'credentials')})
         if restored != self.parts:
-            raise EscrowError('engine configuration bytes or metadata differ')
+            differences = {
+                name: {'bytes_equal': restored[name]['data'] == part['data'],
+                       'expected_metadata': [part[k] for k in ('mode', 'uid', 'gid')],
+                       'actual_metadata': [restored[name][k] for k in ('mode', 'uid', 'gid')]}
+                for name, part in self.parts.items() if restored[name] != part
+            }
+            raise EscrowError('engine configuration differs: ' + json.dumps(differences, sort_keys=True))
 
     def prerequisites(self, target, manifest):
         self.drill.start_registered(self.name)

@@ -61,7 +61,8 @@ def _binding(value):
     directories = value.get('config_directories', [])
     if (not isinstance(directories, list) or len(set(directories)) != len(directories)
             or any(not isinstance(p, str) or not p or p.startswith('/')
-                   or any(x in ('', '.', '..') for x in p.split('/')) for p in directories)
+                   or (p != '.' and any(x in ('', '.', '..') for x in p.split('/')))
+                   for p in directories)
             or set(directories) & set(paths)):
         raise EscrowError('configuration directory inventory invalid')
     return copy.deepcopy(value)

@@ -50,7 +50,7 @@ class ConfigurationArchiveTests(unittest.TestCase):
         self.assertEqual(self.decode(configuration_archive(self.binding, self.parts)), self.parts)
 
     def test_empty_directory_inventory_metadata_round_trip(self):
-        self.binding['config_directories'] = ['jvm.options.d', 'empty-certs']
+        self.binding['config_directories'] = ['.', 'jvm.options.d', 'empty-certs']
         for part in self.parts.values():
             part['binding'] = copy.deepcopy(self.binding)
         for path in self.binding['config_directories']:

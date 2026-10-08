@@ -180,18 +180,24 @@ class SnapshotCapture:
                            for i in features[0]['indices'])):
                 raise ValueError('security feature state absent')
             security = set(features[0]['indices'])
-            if (state['snapshot'] != self.snapshot or not isinstance(state['uuid'], str) or not state['uuid']
-                    or self.expected_uuid is not None and state['uuid'] != self.expected_uuid
-                    or state['state'] != 'SUCCESS' or state.get('failures')
-                    or state['include_global_state'] is not True
-                    or state['version'] != self.binding['runtime_version']
-                    or state['metadata'] != snapshot_metadata(self.binding)
-                    or not isinstance(state['indices'], list)
-                    or len(state['indices']) != len(set(state['indices']))
-                    or set(state['indices']) != self.indices | security
-                    or type(shards['total']) is not int or shards['total'] <= 0
-                    or type(shards['successful']) is not int or shards['successful'] != shards['total']
-                    or type(shards['failed']) is not int or shards['failed'] != 0):
-                raise ValueError('native snapshot incomplete')
+            checks = {
+                'snapshot_name': state['snapshot'] == self.snapshot,
+                'snapshot_uuid': isinstance(state['uuid'], str) and bool(state['uuid'])
+                    and (self.expected_uuid is None or state['uuid'] == self.expected_uuid),
+                'successful_snapshot': state['state'] == 'SUCCESS' and not state.get('failures'),
+                'global_state': state['include_global_state'] is True,
+                'runtime_version': state['version'] == self.binding['runtime_version'],
+                'generation_metadata': state['metadata'] == snapshot_metadata(self.binding),
+                'index_inventory': isinstance(state['indices'], list)
+                    and len(state['indices']) == len(set(state['indices']))
+                    and set(state['indices']) == self.indices | security,
+                'shard_inventory': type(shards['total']) is int and shards['total'] > 0
+                    and type(shards['successful']) is int and shards['successful'] == shards['total']
+                    and type(shards['failed']) is int and shards['failed'] == 0,
+            }
+            failed = sorted(key for key, passed in checks.items() if not passed)
+            if failed:
+                # Only fixed validation labels may escape, never API values.
+                raise EscrowError('coherent complete native/security snapshot required: ' + ','.join(failed))
         except (ValueError, KeyError, TypeError):
             raise EscrowError('coherent complete native/security snapshot required') from None

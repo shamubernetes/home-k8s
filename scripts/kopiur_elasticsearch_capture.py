@@ -74,7 +74,7 @@ class SnapshotCapture:
     inventory. Security feature indices must be present in the same snapshot.
     """
     def __init__(self, binding, *, guard, read_credentials, request, read_archive,
-                 repository, snapshot, location, indices, expected_uuid=None):
+                 repository, snapshot, location, indices, expected_uuid=None, snapshot_version=None):
         self.binding = _binding(binding)
         if (any(not isinstance(v, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', v)
                 for v in (repository, snapshot))
@@ -90,6 +90,12 @@ class SnapshotCapture:
         if expected_uuid is not None and (not isinstance(expected_uuid, str)
                 or not re.fullmatch(r'[A-Za-z0-9_-]+', expected_uuid)):
             raise EscrowError('explicit snapshot UUID required')
+        # SnapshotInfo.version is an IndexVersion release, not the engine's
+        # build patch version. Bind it to the creation response when supplied;
+        # still require the authenticated root runtime version independently.
+        self.snapshot_version = self.binding['runtime_version'] if snapshot_version is None else snapshot_version
+        if not isinstance(self.snapshot_version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', self.snapshot_version):
+            raise EscrowError('explicit snapshot format version required')
         self.expected_uuid = expected_uuid
         self.guard, self.read_credentials = guard, read_credentials
         self.request, self.read_archive = request, read_archive
@@ -186,7 +192,7 @@ class SnapshotCapture:
                     and (self.expected_uuid is None or state['uuid'] == self.expected_uuid),
                 'successful_snapshot': state['state'] == 'SUCCESS' and not state.get('failures'),
                 'global_state': state['include_global_state'] is True,
-                'runtime_version': state['version'] == self.binding['runtime_version'],
+                'snapshot_format_version': state['version'] == self.snapshot_version,
                 'generation_metadata': state['metadata'] == snapshot_metadata(self.binding),
                 'index_inventory': isinstance(state['indices'], list)
                     and len(state['indices']) == len(set(state['indices']))

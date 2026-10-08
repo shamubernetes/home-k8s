@@ -65,7 +65,7 @@ def prove_capture_revocation(adapter, binding):
         attempted = SnapshotCapture(binding, guard=guard, read_credentials=read_credentials,
             request=request, read_archive=read_archive, repository=adapter.repository,
             snapshot=adapter.snapshot, location=adapter.location, indices=sorted(adapter.indices),
-            expected_uuid=adapter.expected_uuid)
+            expected_uuid=adapter.expected_uuid, snapshot_version=adapter.snapshot_version)
         if point == 'before-read':
             active = False
         try:
@@ -90,7 +90,7 @@ def prove_capture_revocation(adapter, binding):
     return denied
 
 
-def capture_engine(drill, source, variables, credentials, *, snapshot_uuid):
+def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snapshot_version):
     """Capture the real owned snapshot with the authenticated production adapter."""
     source_id = drill.registered_id(source)
     image = IMAGES['elasticsearch']
@@ -145,7 +145,7 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid):
         request=request,
         read_archive=lambda location: drill.run('cp', source_id + ':' + location + '/.', '-'),
         repository='fixture', snapshot='generation', location=DATA_PATH + '/snapshot',
-        indices=['fixture'], expected_uuid=snapshot_uuid)
+        indices=['fixture'], expected_uuid=snapshot_uuid, snapshot_version=snapshot_version)
     revocations = prove_capture_revocation(adapter, binding)
     native = adapter.native(binding)
     authenticated = json.loads(adapter.credentials(binding)['data'])
@@ -155,6 +155,8 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid):
                                 runtime=part(_encoded(runtime)), credentials=part(_encoded(credentials)))
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
+                            'engine_version': version, 'snapshot_format_version': adapter.snapshot_version,
+                            'captured_snapshot_uuid': snapshot_uuid,
                             'revoked_capture_denied': revocations,
                             'production_capture_accepted': False}
 

@@ -666,7 +666,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             from kopiur_elasticsearch_engine_fixture import capture_engine, provider_recovery
             binding, parts, capture_receipt = capture_engine(self, source, variables,
                                     {'elastic': password, 'fixture-reader': user_password},
-                                    snapshot_uuid=result['uuid'])
+                                    snapshot_uuid=result['uuid'], snapshot_version=result['version'])
             digest = validate_archive(parts['native']['data'])
             source_retirement = self.remove(source)
             receipt = provider_recovery(self, escrow_provider, binding, parts, inventory, expected)

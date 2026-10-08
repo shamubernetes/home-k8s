@@ -52,6 +52,7 @@ class CaptureRevocationTests(unittest.TestCase):
                         'credential_versions': {'owned-synthetic': 'fixture'},
                         'config_paths': sorted(CONFIG_FILES)}
         self.requests = []
+        self.snapshot_version = '8.19.1'
         self.read = Mock(return_value=synthetic_snapshot_archive())
         self.adapter = SnapshotCapture(self.binding, guard=lambda: True,
             read_credentials=lambda: _encoded({'elastic_username': 'elastic', 'elastic_password': 'synthetic'}),
@@ -67,7 +68,7 @@ class CaptureRevocationTests(unittest.TestCase):
                 'settings': {'location': '/usr/share/elasticsearch/data/snapshot'}}},
             '/_snapshot/fixture/generation': {'snapshots': [{
                 'snapshot': 'generation', 'uuid': 'fixture-snapshot', 'state': 'SUCCESS',
-                'include_global_state': True, 'version': '8.19.1',
+                'include_global_state': True, 'version': self.snapshot_version,
                 'metadata': snapshot_metadata(self.binding), 'indices': ['fixture', '.security-7'],
                 'shards': {'total': 2, 'successful': 2, 'failed': 0},
                 'feature_states': [{'feature_name': 'security', 'indices': ['.security-7']}]}]},
@@ -98,6 +99,26 @@ class CaptureRevocationTests(unittest.TestCase):
         self.adapter.expected_uuid = 'fixture-snapshot'
         self.assertEqual(self.adapter.native(self.binding)['data'], synthetic_snapshot_archive())
         self.read.assert_called_once()
+
+    def test_index_format_version_is_independent_of_engine_patch_version(self):
+        self.snapshot_version = '8.19.0'
+        self.adapter.snapshot_version = self.snapshot_version
+        self.assertEqual(self.adapter.native(self.binding)['data'], synthetic_snapshot_archive())
+        self.read.assert_called_once()
+
+    def test_unexpected_snapshot_format_version_denied_before_archive_read(self):
+        self.adapter.snapshot_version = '8.18.0'
+        with self.assertRaisesRegex(EscrowError, '^coherent complete native/security snapshot required: snapshot_format_version$'):
+            self.adapter.native(self.binding)
+        self.read.assert_not_called()
+
+    def test_matching_snapshot_format_never_bypasses_runtime_version(self):
+        self.adapter.binding['runtime_version'] = '8.19.2'
+        self.binding['runtime_version'] = '8.19.2'
+        self.adapter.snapshot_version = self.snapshot_version
+        with self.assertRaisesRegex(EscrowError, '^authenticated native runtime version differs$'):
+            self.adapter.native(self.binding)
+        self.read.assert_not_called()
 
     def test_io_after_revocation_cannot_count_as_proof(self):
         def missing_guard(attempt, binding):

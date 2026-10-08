@@ -102,7 +102,10 @@ class EngineRestore:
         if config != {k: v for k, v in self.parts.items() if k != 'native'}:
             raise EscrowError('engine configuration inputs differ')
         archive = configuration_archive(binding, config)
-        self.drill.run('cp', '-a', '-', target['uid'] + ':' + CONFIG_PATH, data=archive)
+        # Stdin tar extraction with Docker's -a rewrites every member to the
+        # container user. Omit it to preserve numeric owners from our archive.
+        # check_config verifies bytes, modes and UID/GID before the engine boots.
+        self.drill.run('cp', '-', target['uid'] + ':' + CONFIG_PATH, data=archive)
         self.check_config(target)
         return True
 

@@ -9,6 +9,7 @@ import io
 import json
 import tarfile
 
+from kopiur_elasticsearch_capture import SnapshotCapture
 from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, restore_parts
 from kopiur_elasticsearch_escrow_fixture import configuration_archive, configuration_parts
 from kopiur_elasticsearch_escrow_transport import encode_bundle, decode_bundle
@@ -20,8 +21,77 @@ DATA_PATH = '/usr/share/elasticsearch/data'
 EXTRA = ('--memory=1600m', '--user=elasticsearch')
 
 
-def capture_engine(drill, source, native, variables, credentials):
-    """Observe the owned, write-blocked engine around the complete config read."""
+def prove_capture_revocation(adapter, binding):
+    """Deny capture before I/O, after authentication and during archive read.
+
+    All successful operations still use the live engine adapter. These injected
+    authority losses affect only this synthetic attempt, never source admission.
+    """
+    denied = []
+    for point in ('before-read', 'after-authentication', 'after-archive-read'):
+        active = True
+        archive_reads = 0
+        events = []
+
+        def io_event(name):
+            if not active:
+                raise EscrowError('source I/O attempted after synthetic authority revocation')
+            events.append(name)
+
+        def read_credentials():
+            io_event('credentials')
+            return adapter.read_credentials()
+
+        def guard():
+            return active and adapter.guard() is True
+
+        def request(path, credentials):
+            nonlocal active
+            io_event(path)
+            value = adapter.request(path, credentials)
+            if point == 'after-authentication' and path == '/_security/_authenticate':
+                active = False
+            return value
+
+        def read_archive(location):
+            nonlocal active, archive_reads
+            io_event('archive')
+            archive_reads += 1
+            value = adapter.read_archive(location)
+            if point == 'after-archive-read':
+                active = False
+            return value
+
+        attempted = SnapshotCapture(binding, guard=guard, read_credentials=read_credentials,
+            request=request, read_archive=read_archive, repository=adapter.repository,
+            snapshot=adapter.snapshot, location=adapter.location, indices=sorted(adapter.indices),
+            expected_uuid=adapter.expected_uuid)
+        if point == 'before-read':
+            active = False
+        try:
+            attempted.native(binding)
+        except EscrowError as error:
+            # A partial snapshot, failed request or invalid fixture is not proof
+            # of authority-loss handling. Require the exact revoked guard error.
+            if str(error) != 'affirmative live capture fence required':
+                raise
+        else:
+            raise EscrowError('revoked synthetic capture returned source bytes')
+        expected_events = {'before-read': [],
+            'after-authentication': ['credentials', '/_security/_authenticate'],
+            'after-archive-read': ['credentials', '/_security/_authenticate', '/',
+                '/_snapshot/' + adapter.repository,
+                '/_snapshot/' + adapter.repository + '/' + adapter.snapshot, 'archive']}
+        if events != expected_events[point]:
+            raise EscrowError('revoked capture I/O sequence differs')
+        if archive_reads != (1 if point == 'after-archive-read' else 0):
+            raise EscrowError('revoked synthetic capture crossed the archive boundary')
+        denied.append(point)
+    return denied
+
+
+def capture_engine(drill, source, variables, credentials, *, snapshot_uuid):
+    """Capture the real owned snapshot with the authenticated production adapter."""
     source_id = drill.registered_id(source)
     image = IMAGES['elasticsearch']
     version = drill.http(9200, '/')['version']['number']
@@ -59,10 +129,34 @@ def capture_engine(drill, source, native, variables, credentials):
     # absent during recovery: restored bootstrap.password must authenticate it.
     runtime = {'image': image, 'version': version,
                'variables': {k: v for k, v in variables.items() if k != 'ELASTIC_PASSWORD'}}
-    parts = configuration_parts(binding, archive, native=part(native),
+    def request(path, value):
+        # Authenticate with the exact credential bytes given to SnapshotCapture,
+        # rather than implicitly borrowing whichever auth the fixture last used.
+        prior = drill.auth
+        try:
+            drill.auth = value['elastic_username'] + ':' + value['elastic_password']
+            return drill.http(9200, path)
+        finally:
+            drill.auth = prior
+
+    adapter = SnapshotCapture(binding, guard=guard,
+        read_credentials=lambda: _encoded({'elastic_username': 'elastic',
+                                           'elastic_password': credentials['elastic']}),
+        request=request,
+        read_archive=lambda location: drill.run('cp', source_id + ':' + location + '/.', '-'),
+        repository='fixture', snapshot='generation', location=DATA_PATH + '/snapshot',
+        indices=['fixture'], expected_uuid=snapshot_uuid)
+    revocations = prove_capture_revocation(adapter, binding)
+    native = adapter.native(binding)
+    authenticated = json.loads(adapter.credentials(binding)['data'])
+    if authenticated['elastic_password'] != credentials['elastic']:
+        raise EscrowError('authenticated synthetic credential generation differs')
+    parts = configuration_parts(binding, archive, native=native,
                                 runtime=part(_encoded(runtime)), credentials=part(_encoded(credentials)))
     guard()
-    return binding, parts
+    return binding, parts, {'authenticated_snapshot_capture_verified': True,
+                            'revoked_capture_denied': revocations,
+                            'production_capture_accepted': False}
 
 
 class EngineRestore:

@@ -648,33 +648,37 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             raise RuntimeError('Elasticsearch writer boundary was not enforced')
         repo = {'type': 'fs', 'settings': {'location': '/usr/share/elasticsearch/data/snapshot'}}
         self.http(port, '/_snapshot/fixture', 'PUT', repo)
+        from kopiur_elasticsearch_capture import snapshot_metadata
+        metadata = snapshot_metadata({'generation': self.prefix.removeprefix('k8s92-nonrel-'),
+                                      'source_uid': self.registered_id(source),
+                                      'source_pod_uid': self.registered_id(source)})
         result = self.http(port, '/_snapshot/fixture/generation?wait_for_completion=true', 'PUT',
                            {'indices': 'fixture', 'include_global_state': True,
-                            'feature_states': ['security']})['snapshot']
+                            'feature_states': ['security'], 'metadata': metadata})['snapshot']
         if result['state'] != 'SUCCESS' or result['shards']['failed'] != 0 or result.get('failures'):
             raise RuntimeError('Elasticsearch native snapshot is partial')
         if not any(state.get('feature_name') == 'security' and state.get('indices')
                    for state in result.get('feature_states', [])):
             raise RuntimeError('Elasticsearch security feature state is absent')
-        archive = self.run('cp', self.registered_id(source) + ':/usr/share/elasticsearch/data/snapshot/.', '-')
-        digest = validate_archive(archive)
         if escrow_provider is not None and self.generation_manifest is not None:
             raise RuntimeError('escrow provider fixture does not claim generation-controller ownership')
-        escrow = None
         if escrow_provider is not None:
-            from kopiur_elasticsearch_engine_fixture import capture_engine
-            escrow = capture_engine(self, source, archive, variables,
-                                    {'elastic': password, 'fixture-reader': user_password})
-        source_retirement = self.remove(source)
-        if escrow is not None:
-            from kopiur_elasticsearch_engine_fixture import provider_recovery
-            binding, parts = escrow
+            from kopiur_elasticsearch_engine_fixture import capture_engine, provider_recovery
+            binding, parts, capture_receipt = capture_engine(self, source, variables,
+                                    {'elastic': password, 'fixture-reader': user_password},
+                                    snapshot_uuid=result['uuid'])
+            digest = validate_archive(parts['native']['data'])
+            source_retirement = self.remove(source)
             receipt = provider_recovery(self, escrow_provider, binding, parts, inventory, expected)
             return {'snapshot_sha256': digest, 'snapshot_uuid': result['uuid'],
                     'source_server_retirement': source_retirement,
+                    'authenticated_capture': capture_receipt,
                     'escrow_provider_engine_receipt': receipt,
                     'production_consumer_coherence_qualified': False,
                     'security_feature_state_recovery_qualified': False}
+        archive = self.run('cp', self.registered_id(source) + ':/usr/share/elasticsearch/data/snapshot/.', '-')
+        digest = validate_archive(archive)
+        source_retirement = self.remove(source)
         transport_receipt = None
         if transport is not None:
             archive, transport_receipt = transport(archive)

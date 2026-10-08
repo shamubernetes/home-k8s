@@ -74,7 +74,7 @@ class SnapshotCapture:
     inventory. Security feature indices must be present in the same snapshot.
     """
     def __init__(self, binding, *, guard, read_credentials, request, read_archive,
-                 repository, snapshot, location, indices):
+                 repository, snapshot, location, indices, expected_uuid=None):
         self.binding = _binding(binding)
         if (any(not isinstance(v, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', v)
                 for v in (repository, snapshot))
@@ -87,6 +87,10 @@ class SnapshotCapture:
                 or any(not isinstance(i, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*', i) for i in indices)
                 or len(indices) != len(set(indices))):
             raise EscrowError('explicit native snapshot inventory and location required')
+        if expected_uuid is not None and (not isinstance(expected_uuid, str)
+                or not re.fullmatch(r'[A-Za-z0-9_-]+', expected_uuid)):
+            raise EscrowError('explicit snapshot UUID required')
+        self.expected_uuid = expected_uuid
         self.guard, self.read_credentials = guard, read_credentials
         self.request, self.read_archive = request, read_archive
         self.repository, self.snapshot, self.location = repository, snapshot, location
@@ -177,6 +181,7 @@ class SnapshotCapture:
                 raise ValueError('security feature state absent')
             security = set(features[0]['indices'])
             if (state['snapshot'] != self.snapshot or not isinstance(state['uuid'], str) or not state['uuid']
+                    or self.expected_uuid is not None and state['uuid'] != self.expected_uuid
                     or state['state'] != 'SUCCESS' or state.get('failures')
                     or state['include_global_state'] is not True
                     or state['version'] != self.binding['runtime_version']

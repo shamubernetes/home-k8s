@@ -38,9 +38,9 @@ class KubernetesSource:
         self.run = run or self._run
 
     @staticmethod
-    def _run(argv):
+    def _run(argv, *, data=None):
         try:
-            result = subprocess.run(argv, capture_output=True, timeout=120, check=False)
+            result = subprocess.run(argv, input=data, capture_output=True, timeout=120, check=False)
         except (OSError, subprocess.TimeoutExpired):
             raise EscrowError('source read failed or timed out') from None
         if result.returncode:
@@ -106,11 +106,12 @@ class KubernetesSource:
         if self.observe() != self.binding:
             raise EscrowError('source lifetime or credential-provider version changed')
 
-    def exec_read(self, *command):
+    def exec_read(self, *command, data=None):
         self.guard()
-        data = self.run(['kubectl', 'exec', '-n', 'database', 'elasticsearch-0', '-c', 'app', '--', *command])
+        result = self.run(['kubectl', 'exec', '-n', 'database', 'elasticsearch-0',
+                           '-c', 'app', '--stdin', '--', *command], data=data)
         self.guard()
-        return data
+        return result
 
     def capture(self, binding, *, capture_native, capture_credentials):
         """Capture config and effective environment in memory under live authority.
@@ -169,3 +170,17 @@ class KubernetesSource:
             capture=lambda binding: self.capture(binding, capture_native=capture_native,
                                                   capture_credentials=capture_credentials),
             encrypt_export=encrypt_export)
+
+    def export_snapshot(self, capture_adapter, *, encrypt_export):
+        """Capture through an independently authenticated snapshot adapter.
+
+        The adapter must have been constructed for exactly this source binding.
+        Its own guard performs the same export-authority and live-fence checks;
+        binding equality here denies any re-pointed, stale or foreign adapter.
+        """
+        if not isinstance(getattr(capture_adapter, 'binding', None), dict) \
+                or _binding(capture_adapter.binding) != self.binding:
+            raise EscrowError('snapshot capture adapter is not bound to this source')
+        return self.export(capture_native=capture_adapter.native,
+                           capture_credentials=capture_adapter.credentials,
+                           encrypt_export=encrypt_export)

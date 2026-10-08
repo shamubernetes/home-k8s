@@ -333,6 +333,10 @@ def main():
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_kopiur_shared.py", "-v"], timeout=120, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_kopiur_elasticsearch_source.py", "-v"], timeout=120, check=True)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
+                    "-p", "test_kopiur_elasticsearch_capture.py", "-v"], timeout=120, check=True)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_kopiur_elasticsearch_provider_fixture.py", "-v"], timeout=120, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests",
                     "-p", "test_kopiur_nonrel_native.py", "-v"], timeout=120, check=True)

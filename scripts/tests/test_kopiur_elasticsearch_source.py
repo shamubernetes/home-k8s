@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from kopiur_elasticsearch_escrow import CONFIG_FILES, EscrowError
+from kopiur_elasticsearch_escrow import CONFIG_FILES, EscrowError, _binding, _digest, _encoded
 from kopiur_elasticsearch_escrow_fixture import configuration_archive
 from kopiur_elasticsearch_source import KubernetesSource
 
@@ -63,7 +63,7 @@ class SourceTests(unittest.TestCase):
         self.source = KubernetesSource(self.binding, read_version=self.version,
                                       require_authority=self.authority, run=self.remote_read)
 
-    def remote_read(self, argv):
+    def remote_read(self, argv, data=None):
         self.calls.append(argv)
         if argv[1] == 'get':
             value = {'pod': self.pod, 'externalsecret': self.provider, 'secret': self.secret}[argv[2]]
@@ -131,7 +131,7 @@ class SourceTests(unittest.TestCase):
 
     def test_revoked_authority_after_config_exec_denies_export(self):
         old_run = self.source.run
-        def revoked(argv):
+        def revoked(argv, data=None):
             result = old_run(argv)
             if argv[1] == 'exec' and 'tar' in argv:
                 self.authority.return_value = False
@@ -209,6 +209,50 @@ class SourceTests(unittest.TestCase):
             candidate['source_lifetime'][field] = value
             with self.subTest(field=field), self.assertRaises(EscrowError):
                 KubernetesSource(candidate, read_version=self.version, require_authority=self.authority)
+
+    def test_snapshot_adapter_integration_and_foreign_binding_denied(self):
+        from kopiur_elasticsearch_capture import SnapshotCapture, synthetic_snapshot_archive
+        def adapter(foreign=False):
+            binding = self.binding
+            if foreign:
+                binding = dict(binding, generation='f' * 32)
+            routes = {'/_security/_authenticate': {'username': 'elastic', 'roles': ['superuser']},
+                      '/': {'version': {'number': self.binding['runtime_version']}},
+                      '/_snapshot/owned-snapshot': {'owned-snapshot': {
+                          'type': 'fs', 'settings': {'location': '/usr/share/elasticsearch/data/snapshot'}}},
+                      '/_snapshot/owned-snapshot/generation': {'snapshots': [{
+                          'snapshot': 'generation', 'uuid': '9' * 32, 'state': 'SUCCESS',
+                          'include_global_state': True, 'version': self.binding['runtime_version'],
+                          'metadata': {'generation': self.binding['generation'],
+                                       'source_uid': self.binding['source_uid'],
+                                       'source_pod_uid': self.binding['source_pod_uid']},
+                          'indices': ['fixture', '.security-7'],
+                          'shards': {'total': 1, 'successful': 1, 'failed': 0}, 'failures': [],
+                          'feature_states': [{'feature_name': 'security',
+                                              'indices': ['.security-7']}]}]}}
+            return SnapshotCapture(_binding(binding), guard=Mock(return_value=True),
+                read_credentials=Mock(return_value=_encoded({
+                    'elastic_username': 'elastic', 'elastic_password': 'synthetic-password'})),
+                request=lambda path, value: routes[path],
+                read_archive=Mock(return_value=synthetic_snapshot_archive()),
+                repository='owned-snapshot', snapshot='generation',
+                location='/usr/share/elasticsearch/data/snapshot', indices=['fixture'])
+        receipts = []
+        def encrypt_export(manifest, parts):
+            receipt = {'ciphertext': b'boxed', 'object_id': 'synthetic-object',
+                       'manifest_sha256': _digest(_encoded(manifest))}
+            receipts.append(receipt)
+            return receipt
+        # A stale or foreign adapter binding must never reach capture.
+        with self.assertRaises(EscrowError):
+            self.source.export_snapshot(adapter(foreign=True), encrypt_export=encrypt_export)
+        self.assertEqual(receipts, [])
+        self.assertEqual([x[1] for x in self.calls].count('exec'), 0)
+        # A bound adapter forwards its native and credentials adapters directly.
+        result = self.source.export_snapshot(adapter(), encrypt_export=encrypt_export)
+        self.assertEqual([x[1] for x in self.calls].count('exec'), 2)
+        self.assertEqual(result['object_id'], 'synthetic-object')
+        self.assertEqual(len(receipts), 1)
 
 
 if __name__ == '__main__':

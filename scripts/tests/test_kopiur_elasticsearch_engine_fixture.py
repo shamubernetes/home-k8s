@@ -120,6 +120,26 @@ class CaptureRevocationTests(unittest.TestCase):
             self.adapter.native(self.binding)
         self.read.assert_not_called()
 
+    def test_snapshot_release_range_constructor_preserves_exact_value(self):
+        self.snapshot_version = '8.19.0-8.19.1'
+        adapter = SnapshotCapture(self.binding, guard=lambda: True,
+            read_credentials=self.adapter.read_credentials, request=self.request, read_archive=self.read,
+            repository='fixture', snapshot='generation', location=self.adapter.location,
+            indices=['fixture'], snapshot_version=self.snapshot_version)
+        self.assertEqual(adapter.snapshot_version, self.snapshot_version)
+        self.assertEqual(adapter.native(self.binding)['data'], synthetic_snapshot_archive())
+        self.read.assert_called_once()
+
+    def test_malformed_snapshot_release_range_denied_without_io(self):
+        for version in ('8.19.0-', '8.19.0-SECRET', '8.19.0-8.19.1 suffix', '8.19.0\n'):
+            with self.subTest(version=version), self.assertRaisesRegex(EscrowError, 'explicit snapshot format version required'):
+                SnapshotCapture(self.binding, guard=lambda: True,
+                    read_credentials=self.adapter.read_credentials, request=self.request, read_archive=self.read,
+                    repository='fixture', snapshot='generation', location=self.adapter.location,
+                    indices=['fixture'], snapshot_version=version)
+        self.read.assert_not_called()
+        self.assertEqual(self.requests, [])
+
     def test_io_after_revocation_cannot_count_as_proof(self):
         def missing_guard(attempt, binding):
             # Deliberately emulate an adapter that reads before checking authority.

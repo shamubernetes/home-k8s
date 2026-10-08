@@ -94,7 +94,10 @@ class SnapshotCapture:
         # build patch version. Bind it to the creation response when supplied;
         # still require the authenticated root runtime version independently.
         self.snapshot_version = self.binding['runtime_version'] if snapshot_version is None else snapshot_version
-        if not isinstance(self.snapshot_version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', self.snapshot_version):
+        # Upstream IndexVersion.toReleaseVersion emits an exact release or
+        # a lower-upper release range for an unchanged IndexVersion across builds.
+        version_pattern = r'[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+\.[0-9]+\.[0-9]+)?'
+        if not isinstance(self.snapshot_version, str) or not re.fullmatch(version_pattern, self.snapshot_version):
             raise EscrowError('explicit snapshot format version required')
         self.expected_uuid = expected_uuid
         self.guard, self.read_credentials = guard, read_credentials

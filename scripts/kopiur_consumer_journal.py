@@ -184,6 +184,21 @@ class ConsumerJournal:
         state['phase'] = 'held'
         self.save(state, expected)
 
+    def capture_authority(self, epoch, generation, adapters):
+        """Require the live held cohort before and after a capture operation.
+
+        This is isolated journal admission only, not original-source export
+        authorization, production writer cessation or permission to restart.
+        A reopened, revoked or reconstructed generation cannot reuse it.
+        """
+        state = self.current(epoch)
+        if state['phase'] != 'held' or state['generation'] != generation:
+            raise InvalidEvidence('capture requires the exact held consumer generation')
+        self.observe(state, adapters, held=True)
+        if self.current(epoch) != state:
+            raise InvalidEvidence('consumer capture snapshot changed')
+        return True
+
     def publish(self, epoch, ledger, receipt, adapters):
         state = self.current(epoch)
         expected = copy.deepcopy(state)

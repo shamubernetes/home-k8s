@@ -1,0 +1,171 @@
+"""Lifetime-bound capture for the original Kubernetes Elasticsearch source.
+
+No CLI, default authority, production fence or export destination is provided.
+Metadata observations do not authorize reading source configuration or keys.
+An independently enforced capture fence and original-source export grant must
+remain live around every operation. ARC fixtures qualify code, not that grant.
+"""
+import copy
+import hmac
+import json
+import re
+import subprocess
+
+from kopiur_elasticsearch_escrow import (
+    EscrowError, _binding, _encoded, _validate_component, capture_export,
+)
+from kopiur_elasticsearch_escrow_fixture import configuration_parts
+
+
+class KubernetesSource:
+    """Bind Pod, container lifetime and ESO/target Secret versions before capture.
+
+    read_version must observe the authenticated engine version inside the
+    approved boundary. require_authority must check export authorization AND
+    independent all-writer fencing. A current Pod is not a writer fence.
+    """
+    def __init__(self, binding, *, read_version, require_authority, run=None):
+        self.binding = _binding(binding)
+        lifetime = self.binding.get('source_lifetime', {})
+        if (lifetime.get('namespace') != 'database'
+                or lifetime.get('pod') != 'elasticsearch-0' or lifetime.get('container') != 'app'
+                or not re.fullmatch(r'containerd://[0-9a-f]{64}', self.binding['source_uid'])
+                or set(self.binding['credential_versions']) != {
+                    'external-secret-uid', 'external-secret-resource-version', 'external-secret-synced-version',
+                    'target-secret-uid', 'target-secret-resource-version'}):
+            raise EscrowError('exact original Elasticsearch source/provider binding required')
+        self.read_version, self.require_authority = read_version, require_authority
+        self.run = run or self._run
+
+    @staticmethod
+    def _run(argv):
+        try:
+            result = subprocess.run(argv, capture_output=True, timeout=120, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            raise EscrowError('source read failed or timed out') from None
+        if result.returncode:
+            # Exec stderr and timeout buffers may contain source credentials.
+            raise EscrowError('source read failed')
+        return result.stdout
+
+    def get(self, kind, name, *, metadata_only=False):
+        output = 'jsonpath={.metadata}' if metadata_only else 'json'
+        try:
+            return json.loads(self.run(['kubectl', 'get', kind, name, '-n', 'database', '-o', output]))
+        except (ValueError, TypeError, UnicodeError):
+            raise EscrowError('source metadata invalid') from None
+
+    def observe(self):
+        """Read metadata only, never Secret data or source config/key bytes."""
+        try:
+            pod = self.get('pod', 'elasticsearch-0')
+            provider = self.get('externalsecret', 'elasticsearch')
+            secret = self.get('secret', 'elasticsearch-secret', metadata_only=True)
+            meta = pod['metadata']
+            app = next(c for c in pod['spec']['containers'] if c['name'] == 'app')
+            status = next(c for c in pod['status']['containerStatuses'] if c['name'] == 'app')
+            env = app['env']
+            names = [e['name'] for e in env]
+            if len(names) != len(set(names)):
+                raise EscrowError('duplicate declared source environment names')
+            password = next(e for e in env if e['name'] == 'ELASTIC_PASSWORD')
+            provider_meta = provider['metadata']
+            ready = [c for c in provider['status']['conditions'] if c['type'] == 'Ready']
+            owners = [o for o in secret.get('ownerReferences', []) if o.get('controller') is True]
+            if (any(m.get('deletionTimestamp') for m in (meta, provider_meta, secret))
+                    or pod['status']['phase'] != 'Running' or status['ready'] is not True
+                    or password.get('valueFrom') != {'secretKeyRef': {
+                        'name': 'elasticsearch-secret', 'key': 'ELASTIC_PASSWORD'}}
+                    or app.get('envFrom') or app.get('command') or app.get('args')
+                    or len(ready) != 1 or ready[0]['status'] != 'True'
+                    or provider['spec']['target']['name'] != 'elasticsearch-secret'
+                    or provider['spec']['secretStoreRef'] != {
+                        'kind': 'ClusterSecretStore', 'name': 'op-secret-store'}
+                    or len(owners) != 1 or owners[0]['uid'] != provider_meta['uid']
+                    or owners[0]['kind'] != 'ExternalSecret'):
+                raise EscrowError('source/provider not ready or ownership differs')
+            observed = copy.deepcopy(self.binding)
+            observed.update(source_uid=status['containerID'], source_pod_uid=meta['uid'],
+                            engine_image=app['image'], runtime_version=self.read_version())
+            observed['source_lifetime'].update(runtime_image=status['imageID'],
+                restart_count=status['restartCount'], started_at=status['state']['running']['startedAt'])
+            observed['credential_versions'] = {
+                'external-secret-uid': provider_meta['uid'],
+                'external-secret-resource-version': provider_meta['resourceVersion'],
+                'external-secret-synced-version': provider['status']['syncedResourceVersion'],
+                'target-secret-uid': secret['uid'], 'target-secret-resource-version': secret['resourceVersion'],
+            }
+            return _binding(observed)
+        except (KeyError, StopIteration, TypeError, ValueError):
+            raise EscrowError('source lifetime/provider observation incomplete') from None
+
+    def guard(self):
+        expected = copy.deepcopy(self.binding)
+        if self.require_authority(expected) is not True:
+            raise EscrowError('original export authorization and independent capture fence required')
+        if self.observe() != self.binding:
+            raise EscrowError('source lifetime or credential-provider version changed')
+
+    def exec_read(self, *command):
+        self.guard()
+        data = self.run(['kubectl', 'exec', '-n', 'database', 'elasticsearch-0', '-c', 'app', '--', *command])
+        self.guard()
+        return data
+
+    def capture(self, binding, *, capture_native, capture_credentials):
+        """Capture config and effective environment in memory under live authority.
+
+        Native snapshots and exact-version credentials come from separately
+        approved adapters, each returning the existing bound component format.
+        Guard checks cannot cancel already accepted remote operations. The
+        independent capture fence must provide that lifecycle protection.
+        """
+        if _binding(binding) != self.binding:
+            raise EscrowError('capture binding differs')
+        self.guard()
+        native = capture_native(copy.deepcopy(binding))
+        self.guard()
+        _validate_component(binding, 'native', native)
+        credentials = capture_credentials(copy.deepcopy(binding))
+        self.guard()
+        _validate_component(binding, 'credentials', credentials)
+        raw = self.exec_read('cat', '/proc/1/environ')
+        try:
+            if not raw.endswith(b'\0'):
+                raise ValueError('unterminated environment')
+            variables = {}
+            for entry in raw[:-1].split(b'\0'):
+                name, value = entry.decode().split('=', 1)
+                if not name or name in variables:
+                    raise ValueError('invalid environment')
+                variables[name] = value
+        except (ValueError, UnicodeError, TypeError):
+            raise EscrowError('effective source runtime environment invalid') from None
+        if variables.get('ES_PATH_CONF', '/usr/share/elasticsearch/config') != '/usr/share/elasticsearch/config':
+            raise EscrowError('alternate active source configuration root not admitted')
+        try:
+            captured_credentials = json.loads(credentials['data'])
+            password = captured_credentials['elastic_password']
+            if (set(captured_credentials) != {'elastic_username', 'elastic_password'}
+                    or captured_credentials['elastic_username'] != 'elastic'
+                    or not isinstance(password, str) or not password
+                    or not hmac.compare_digest(password.encode(), variables['ELASTIC_PASSWORD'].encode())):
+                raise EscrowError('provider credentials differ from source runtime generation')
+        except (KeyError, ValueError, TypeError, UnicodeError):
+            raise EscrowError('provider/source credential coherence incomplete') from None
+        # Recovery loads the captured keystore, never resets bootstrap.password.
+        variables.pop('ELASTIC_PASSWORD')
+        runtime = {'binding': copy.deepcopy(binding), 'mode': 0o600, 'uid': 1000, 'gid': 1000,
+                   'data': _encoded({'image': binding['engine_image'], 'version': binding['runtime_version'],
+                                     'variables': variables})}
+        archive = self.exec_read('tar', '-C', '/usr/share/elasticsearch/config', '-cf', '-', '.')
+        parts = configuration_parts(binding, archive, native=native, runtime=runtime, credentials=credentials)
+        self.guard()
+        return parts
+
+    def export(self, *, capture_native, capture_credentials, encrypt_export):
+        return capture_export(self.binding, observe=self.observe,
+            require_capture_authority=self.require_authority,
+            capture=lambda binding: self.capture(binding, capture_native=capture_native,
+                                                  capture_credentials=capture_credentials),
+            encrypt_export=encrypt_export)

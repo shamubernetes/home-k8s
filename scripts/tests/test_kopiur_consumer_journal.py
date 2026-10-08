@@ -281,6 +281,26 @@ class JournalTests(unittest.TestCase):
             state['deadline'] = time.time() - 1
             journal.save(state, expected)
 
+    def test_held_capture_authority_checks_live_drained_consumers(self):
+        epoch, _, receipt = self.begin()
+        with ConsumerJournal(self.path, self.source) as journal:
+            self.assertTrue(journal.capture_authority(epoch, receipt['generation'], self.adapters))
+            with self.assertRaises(InvalidEvidence):
+                journal.capture_authority(epoch, 'b' * 32, self.adapters)
+            adapter = next(iter(self.adapters.values()))
+            with database(adapter.path) as connection:
+                connection.execute('UPDATE state SET admission=1')
+            with self.assertRaises(InvalidEvidence):
+                journal.capture_authority(epoch, receipt['generation'], self.adapters)
+
+    def test_capture_authority_revoked_after_watchdog_cannot_replay(self):
+        epoch, _, receipt = self.begin()
+        self.expire()
+        self.assertEqual(self.watchdog().returncode, 0)
+        with ConsumerJournal(self.path, self.source) as journal:
+            with self.assertRaises(InvalidEvidence):
+                journal.capture_authority(epoch, receipt['generation'], self.adapters)
+
     def test_stale_snapshot_cannot_overwrite_revocation_or_same_phase_update(self):
         self.begin()
         with ConsumerJournal(self.path, self.source) as journal:

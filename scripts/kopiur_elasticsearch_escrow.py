@@ -37,8 +37,9 @@ def _encoded(value):
 def _binding(value):
     required = {'generation', 'source_uid', 'source_pod_uid', 'engine_image',
                 'runtime_version', 'credential_versions', 'config_paths'}
-    if (not isinstance(value, dict)
-            or set(value) not in (required, required | {'config_directories'})):
+    optional = {'config_directories', 'source_lifetime'}
+    if (not isinstance(value, dict) or not required <= set(value)
+            or set(value) - required - optional):
         raise EscrowError('complete source binding required')
     if not isinstance(value['generation'], str) or not re.fullmatch('[0-9a-f]{32}', value['generation']):
         raise EscrowError('generation identity invalid')
@@ -65,6 +66,16 @@ def _binding(value):
                    for p in directories)
             or set(directories) & set(paths)):
         raise EscrowError('configuration directory inventory invalid')
+    if 'source_lifetime' in value:
+        lifetime = value['source_lifetime']
+        if (not isinstance(lifetime, dict)
+                or set(lifetime) != {'namespace', 'pod', 'container', 'runtime_image',
+                                     'restart_count', 'started_at'}
+                or any(not isinstance(lifetime[k], str) or not lifetime[k]
+                       for k in set(lifetime) - {'restart_count'})
+                or type(lifetime['restart_count']) is not int or lifetime['restart_count'] < 0
+                or not re.search(r'@sha256:[0-9a-f]{64}$', lifetime['runtime_image'])):
+            raise EscrowError('complete container lifetime required')
     return copy.deepcopy(value)
 
 

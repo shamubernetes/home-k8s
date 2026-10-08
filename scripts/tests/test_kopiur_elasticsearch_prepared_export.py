@@ -1,6 +1,7 @@
 """Prepared original export composition and concrete loopback I/O, ARC only."""
 import base64
 import json
+import secrets
 from pathlib import Path
 import sys
 import unittest
@@ -19,7 +20,8 @@ class LoopbackIOTests(unittest.TestCase):
         self.execute = Mock(return_value=b'{"username":"elastic"}')
         self.io = LoopbackSnapshotIO(exec_read=self.execute, repository='fixture',
             snapshot='generation', location='/usr/share/elasticsearch/data/snapshot')
-        self.credentials = {'elastic_username': 'elastic', 'elastic_password': 'private-"\\-password'}
+        self.credentials = {'elastic_username': 'elastic',
+                            'elastic_password': secrets.token_hex(24) + '"\\:fixture-only'}
 
     def test_exact_service_password_only_on_stdin_and_no_redirect_or_proxy(self):
         self.assertEqual(self.io.request('/_security/_authenticate', self.credentials), {'username': 'elastic'})
@@ -27,7 +29,8 @@ class LoopbackIOTests(unittest.TestCase):
         self.assertEqual(args, ('curl', '-q', '--silent', '--fail', '--max-time', '60',
             '--noproxy', '*', '--proto', '=http', '--config', '-',
             '--url', 'http://127.0.0.1:9200/_security/_authenticate'))
-        self.assertEqual(kwargs['data'], b'user = "elastic:private-\\"\\\\-password"\n')
+        expected = b'user = "elastic:' + self.credentials['elastic_password'][:48].encode() + b'\\"\\\\:fixture-only"\n'
+        self.assertEqual(kwargs['data'], expected)
         self.assertNotIn(self.credentials['elastic_password'], repr(args))
 
     def test_foreign_write_and_query_paths_denied_without_io(self):

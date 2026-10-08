@@ -155,6 +155,8 @@ class KubernetesSource:
                     or not isinstance(password, str) or not password
                     or not hmac.compare_digest(password.encode(), variables['ELASTIC_PASSWORD'].encode())):
                 raise EscrowError('provider credentials differ from source runtime generation')
+        except EscrowError:
+            raise
         except (KeyError, ValueError, TypeError, UnicodeError):
             raise EscrowError('provider/source credential coherence incomplete') from None
         # Recovery loads the captured keystore, never resets bootstrap.password.

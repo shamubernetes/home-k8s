@@ -199,5 +199,7 @@ class SnapshotCapture:
             if failed:
                 # Only fixed validation labels may escape, never API values.
                 raise EscrowError('coherent complete native/security snapshot required: ' + ','.join(failed))
+        except EscrowError:
+            raise
         except (ValueError, KeyError, TypeError):
             raise EscrowError('coherent complete native/security snapshot required') from None

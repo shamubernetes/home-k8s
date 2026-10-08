@@ -90,7 +90,7 @@ class CaptureRevocationTests(unittest.TestCase):
 
     def test_created_snapshot_uuid_is_enforced_before_archive_read(self):
         self.adapter.expected_uuid = 'different-created-snapshot'
-        with self.assertRaisesRegex(EscrowError, 'coherent complete native/security snapshot required'):
+        with self.assertRaisesRegex(EscrowError, '^coherent complete native/security snapshot required: snapshot_uuid$'):
             self.adapter.native(self.binding)
         self.read.assert_not_called()
 

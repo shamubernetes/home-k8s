@@ -16,6 +16,7 @@ import kopiur_fixture_controller as controller_module
 import kopiur_fixture_admission as admission_module
 from kopiur_fixture_supervisor import BoundaryError, FixtureSupervisor
 from kopiur_fixture_controller import FixtureController
+from kopiur_fixture_manifest import GenerationManifest
 from fixture_admission_cases import NativeAdmissionCases
 
 
@@ -384,6 +385,26 @@ while True:
         state, _ = self.controller._read()
         self.assertEqual(proof['boundary'], state['boundary'])
         self.assertNotEqual(command['boundary'], state['boundary'])
+
+    def test_bound_manifest_recovery_ceases_before_manifest_owner_lock(self):
+        manifest = GenerationManifest(self.directory / 'manifest.json',
+                                      'k8s92-nonrel-' + 'a' * 32,
+                                      'unix:///fixture/docker.sock', supervisor=self.controller)
+        manifest.initialize()
+        publisher = FixtureController(self.controller, generation_manifest=manifest)
+        child, _ = self.command('import time; time.sleep(60)')
+        with manifest.transaction():
+            with self.assertRaises(BlockingIOError):
+                publisher.recover()
+            proof = self.controller.verify_watchdog_cessation()
+            self.assertEqual(proof['populated'], 0)
+            self.assertFalse(manifest.read()['revoked'])
+            with self.assertRaisesRegex(RuntimeError, 'lifetime revoked'):
+                manifest.require_dispatch()
+        child.wait(timeout=5)
+        publisher.recover()
+        self.assertTrue(manifest.read()['revoked'])
+        self.assertFalse(self.controller.verify_watchdog_cessation()['consumer_admission_restored'])
 
     def make_controller(self, consumers=None):
         controller = FixtureController(self.controller)

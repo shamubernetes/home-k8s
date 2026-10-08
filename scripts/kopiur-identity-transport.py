@@ -207,11 +207,12 @@ class Drill:
 
 
 def exercise_payload(payload, deadline=None):
-    if payload.get('operation') == 'native-elasticsearch-provider':
+    if payload.get('operation') in ('native-elasticsearch-provider', 'native-elasticsearch-escrow'):
         if set(payload) != {'operation', 'app', 'fields'} or payload['app'] != 'elasticsearch':
             raise ValueError('dedicated Elasticsearch provider request required')
         from kopiur_elasticsearch_provider_fixture import exercise_payload as search_exercise
-        return search_exercise({'app': payload['app'], 'fields': payload['fields']}, deadline=deadline)
+        return search_exercise({'app': payload['app'], 'fields': payload['fields']}, deadline=deadline,
+                               escrow=payload['operation'] == 'native-elasticsearch-escrow')
     app, fields = payload["app"], payload["fields"]
     assert app in APPS and fields["R2_BUCKET"] == "kopiur-" + app
     assert fields["NAS_USERNAME"] == "kp-" + app and fields["NAS_SHARE"] == "kopiur-" + app

@@ -100,7 +100,7 @@ def interrupted(signum, frame):
     raise RuntimeError('search fixture interrupted by signal ' + str(signum))
 
 
-def exercise_payload(payload, deadline=None):
+def exercise_payload(payload, deadline=None, *, escrow=False):
     if sys.platform != 'linux' or not os.environ.get('RUNNER_NAME', '').startswith('ghar-set-zoo-'):
         raise RuntimeError('requires owned ghar-set-zoo ARC runner')
 
@@ -135,8 +135,9 @@ def exercise_payload(payload, deadline=None):
             drill = transport.Drill('elasticsearch', fields)
             drill.deadline = min(time.monotonic() + 1200, work_deadline)
             try:
-                proof = fixture('elasticsearch', transport=lambda data: restore_generation(drill, data),
-                                deadline=work_deadline)
+                proof = (fixture('elasticsearch', escrow_provider=drill, deadline=work_deadline)
+                         if escrow else fixture('elasticsearch',
+                         transport=lambda data: restore_generation(drill, data), deadline=work_deadline))
             finally:
                 drill.cleanup()
             proof['owned_provider_fixture_removed'] = True
@@ -148,6 +149,8 @@ def exercise_payload(payload, deadline=None):
             raise RuntimeError('search tool volume ownership changed')
         transport.run(['docker', 'volume', 'rm', transport.TOOLS], timeout=30)
     return {'app': 'elasticsearch', 'results': results,
+            'operation': 'native-elasticsearch-escrow' if escrow else 'native-elasticsearch-provider',
+            'independent_escrow_provider_engine_restores': 4 if escrow else 0,
             'nas_to_r2_native_fixture_restores': 2,
             'synthetic_archive_lineage_qualified': True,
             'production_recovery_accepted': False, 'replication_lineage_qualified': False}

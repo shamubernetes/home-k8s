@@ -170,6 +170,7 @@ class Fixture:
                 generation_manifest.revoke()
                 raise RuntimeError('manifest generation requires reconciliation')
             self.prefix = generation_manifest.generation
+            generation_manifest.require_dispatch()
         self.network = self.prefix + '-net'
         self.containers = []
         self.container_ids = {}
@@ -186,9 +187,7 @@ class Fixture:
 
     def check_dispatch(self):
         if self.generation_manifest is not None:
-            state = self.generation_manifest.read()
-            if state['version'] != 2 or state['revoked']:
-                raise RuntimeError('fixture generation dispatch revoked')
+            self.generation_manifest.require_dispatch()
 
     def bind_source_admission(self, source, admission):
         """Durably bind the exact source before any native writer mutation."""
@@ -252,7 +251,8 @@ class Fixture:
             raise RuntimeError('native Docker operation failed: ' + args[0])
         return result.stdout
 
-    def create(self, label, port, variables=None, args=(), extra=(), archive=None, path=None):
+    def create(self, label, port, variables=None, args=(), extra=(), archive=None, path=None,
+               start=True):
         name = self.prefix + '-' + label
         env = os.environ.copy()
         options = []
@@ -288,13 +288,18 @@ class Fixture:
         if archive is not None:
             validate_archive(archive)
             self.run('cp', '-a', '-', container_id + ':' + path, data=archive)
+        if start:
+            self.start_registered(name, operation)
+        self.host = name
+        return name, port
+
+    def start_registered(self, name, operation=None):
+        container_id = self.registered_id(name)
         if self.generation_manifest is not None:
             self.generation_manifest.start_intent(name, operation, container_id)
         self.run('start', container_id)
         if self.generation_manifest is not None:
             self.generation_manifest.started(name, operation, container_id)
-        self.host = name
-        return name, port
 
     def remove(self, name):
         container_id = self.container_ids.get(name)
@@ -377,6 +382,7 @@ class Fixture:
         raise RuntimeError('native fixture readiness deadline exceeded')
 
     def client_request(self, payload):
+        self.check_dispatch()
         # Docker internal networks intentionally do not publish ports. The
         # credential-free client joins only this UUID-owned isolated network.
         if self.client is None:
@@ -490,7 +496,7 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
         return {'snapshot_sha256': digest, 'keys_and_stream_pending_equal': True,
                 'ttl_and_acl_recovery_qualified': False}
 
-    def elasticsearch(self, transport=None):
+    def elasticsearch(self, transport=None, *, escrow_provider=None):
         password = secrets.token_hex(24)
         self.auth = 'elastic:' + password
         variables = {'discovery.type': 'single-node', 'xpack.security.enabled': 'true',
@@ -652,7 +658,23 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
             raise RuntimeError('Elasticsearch security feature state is absent')
         archive = self.run('cp', self.registered_id(source) + ':/usr/share/elasticsearch/data/snapshot/.', '-')
         digest = validate_archive(archive)
+        if escrow_provider is not None and self.generation_manifest is not None:
+            raise RuntimeError('escrow provider fixture does not claim generation-controller ownership')
+        escrow = None
+        if escrow_provider is not None:
+            from kopiur_elasticsearch_engine_fixture import capture_engine
+            escrow = capture_engine(self, source, archive, variables,
+                                    {'elastic': password, 'fixture-reader': user_password})
         source_retirement = self.remove(source)
+        if escrow is not None:
+            from kopiur_elasticsearch_engine_fixture import provider_recovery
+            binding, parts = escrow
+            receipt = provider_recovery(self, escrow_provider, binding, parts, inventory, expected)
+            return {'snapshot_sha256': digest, 'snapshot_uuid': result['uuid'],
+                    'source_server_retirement': source_retirement,
+                    'escrow_provider_engine_receipt': receipt,
+                    'production_consumer_coherence_qualified': False,
+                    'security_feature_state_recovery_qualified': False}
         transport_receipt = None
         if transport is not None:
             archive, transport_receipt = transport(archive)
@@ -760,9 +782,11 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                 'stream_and_cluster_recovery_qualified': False}
 
 
-def fixture(service, *, transport=None, deadline=None):
-    if transport is not None and service != 'elasticsearch':
+def fixture(service, *, transport=None, deadline=None, escrow_provider=None):
+    if (transport is not None or escrow_provider is not None) and service != 'elasticsearch':
         raise ValueError('provider callback is restricted to Elasticsearch')
+    if transport is not None and escrow_provider is not None:
+        raise ValueError('choose native archive or complete escrow transport')
     run = Fixture(service)
     if deadline is not None:
         run.deadline = min(run.deadline, deadline)
@@ -771,8 +795,8 @@ def fixture(service, *, transport=None, deadline=None):
         run.run('pull', '--platform', 'linux/amd64', CLIENT_IMAGE, timeout=600)
         run.run('network', 'create', '--internal', run.network)
         method = 'rabbitmq' if service == 'rabbitmq-server' else service
-        proof = (run.elasticsearch(transport) if transport is not None
-                 else getattr(run, method)())
+        proof = (run.elasticsearch(transport, escrow_provider=escrow_provider)
+                 if service == 'elasticsearch' else getattr(run, method)())
     finally:
         run.cleanup()
     return {'app': service, 'image': IMAGES[service], 'native_fixture_recovery': True,

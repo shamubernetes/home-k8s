@@ -17,9 +17,12 @@ from kopiur_fixture_supervisor import BoundaryError, _persist
 
 
 class FixtureController:
-    def __init__(self, supervisor):
+    def __init__(self, supervisor, *, generation_manifest=None):
         self.supervisor = supervisor
         self.path = supervisor.directory / 'controller.json'
+        self.generation_manifest = generation_manifest
+        if generation_manifest is not None:
+            generation_manifest.require_supervisor(supervisor)
 
     def _read(self, native):
         if not self.path.exists():
@@ -225,7 +228,13 @@ class FixtureController:
         # so a lock timeout cannot leave registered workers running. This is
         # client-boundary cessation, never proof about a Docker daemon or native
         # source admission. The permanent tombstone survives reconciliation loss.
+        if self.generation_manifest is not None:
+            self.generation_manifest.require_supervisor(self.supervisor)
         self.supervisor.watchdog_cease()
+        if self.generation_manifest is not None:
+            # Independent cessation precedes BOTH owner locks. A manifest-lock
+            # failure leaves the permanent tombstone denying old native handles.
+            self.generation_manifest.revoke()
         proof = self.supervisor.cease()
         with self.supervisor._locked():
             native, boundary = self.supervisor._read()

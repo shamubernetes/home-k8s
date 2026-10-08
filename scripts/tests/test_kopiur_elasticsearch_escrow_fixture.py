@@ -49,6 +49,25 @@ class ConfigurationArchiveTests(unittest.TestCase):
     def test_exact_bytes_metadata_nested_dependency_and_empty_users_round_trip(self):
         self.assertEqual(self.decode(configuration_archive(self.binding, self.parts)), self.parts)
 
+    def test_empty_directory_inventory_metadata_round_trip(self):
+        self.binding['config_directories'] = ['jvm.options.d', 'empty-certs']
+        for part in self.parts.values():
+            part['binding'] = copy.deepcopy(self.binding)
+        for path in self.binding['config_directories']:
+            self.parts['config-dir/' + path] = {
+                'binding': copy.deepcopy(self.binding), 'data': b'',
+                'mode': 0o750, 'uid': 1000, 'gid': 0,
+            }
+        self.assertEqual(self.decode(configuration_archive(self.binding, self.parts)), self.parts)
+
+        del self.parts['config-dir/empty-certs']
+        with self.assertRaises(EscrowError):
+            configuration_archive(self.binding, self.parts)
+
+    def test_uninventoried_empty_directory_denied(self):
+        with self.assertRaises(EscrowError):
+            self.decode(self.augmented('empty-certs', tarfile.DIRTYPE))
+
     def test_restore_callback_configuration_without_native_is_supported(self):
         configuration = {name: part for name, part in self.parts.items() if name != 'native'}
         self.assertEqual(configuration_archive(self.binding, configuration),

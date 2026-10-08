@@ -11,7 +11,9 @@ import os
 import sys
 import tarfile
 
-from kopiur_elasticsearch_escrow import EscrowError, _binding, _validate_component, _validate_parts
+from kopiur_elasticsearch_escrow import (
+    EscrowError, _binding, _validate_component, _validate_parts, component_names,
+)
 
 
 def capture_configuration(drill, source, binding, *, native, runtime, credentials,
@@ -97,7 +99,14 @@ def configuration_parts(binding, archive, *, native, runtime, credentials):
                 if name in seen:
                     raise EscrowError('duplicate synthetic configuration archive entry')
                 seen.add(name)
-                if member.isdir() and name in parents:
+                if member.isdir() and name in expected.get('config_directories', []):
+                    parts['config-dir/' + name] = {
+                        'binding': copy.deepcopy(expected), 'data': b'',
+                        'mode': member.mode, 'uid': member.uid, 'gid': member.gid,
+                    }
+                    continue
+                if member.isdir() and name in parents and (
+                        'config_directories' not in expected or name == '.'):
                     continue
                 if not member.isfile() or name not in paths:
                     raise EscrowError('unexpected or unsafe synthetic configuration archive entry')
@@ -127,13 +136,19 @@ def configuration_archive(binding, parts):
     Native restore must not start until independent configuration checks pass.
     """
     expected = _binding(binding)
-    names = {'runtime', 'credentials'} | {'config/' + path for path in expected['config_paths']}
+    names = component_names(expected) - {'native'}
     if not isinstance(parts, dict) or set(parts) not in (names, names | {'native'}):
         raise EscrowError('configuration/key/runtime coverage incomplete')
     for name, part in parts.items():
         _validate_component(expected, name, part)
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode='w', format=tarfile.PAX_FORMAT) as target:
+        for path in sorted(expected.get('config_directories', [])):
+            part = parts['config-dir/' + path]
+            member = tarfile.TarInfo(path)
+            member.type = tarfile.DIRTYPE
+            member.mode, member.uid, member.gid = part['mode'], part['uid'], part['gid']
+            target.addfile(member)
         for path in sorted(expected['config_paths']):
             part = parts['config/' + path]
             member = tarfile.TarInfo(path)

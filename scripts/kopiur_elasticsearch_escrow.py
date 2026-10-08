@@ -37,7 +37,8 @@ def _encoded(value):
 def _binding(value):
     required = {'generation', 'source_uid', 'source_pod_uid', 'engine_image',
                 'runtime_version', 'credential_versions', 'config_paths'}
-    if not isinstance(value, dict) or set(value) != required:
+    if (not isinstance(value, dict)
+            or set(value) not in (required, required | {'config_directories'})):
         raise EscrowError('complete source binding required')
     if not isinstance(value['generation'], str) or not re.fullmatch('[0-9a-f]{32}', value['generation']):
         raise EscrowError('generation identity invalid')
@@ -57,11 +58,22 @@ def _binding(value):
                    or any(x in ('', '.', '..') for x in p.split('/')) for p in paths)
             or len(set(paths)) != len(paths) or not CONFIG_FILES <= set(paths)):
         raise EscrowError('complete source-specific configuration dependency inventory required')
+    directories = value.get('config_directories', [])
+    if (not isinstance(directories, list) or len(set(directories)) != len(directories)
+            or any(not isinstance(p, str) or not p or p.startswith('/')
+                   or any(x in ('', '.', '..') for x in p.split('/')) for p in directories)
+            or set(directories) & set(paths)):
+        raise EscrowError('configuration directory inventory invalid')
     return copy.deepcopy(value)
 
 
+def component_names(binding):
+    return ({'native', 'runtime', 'credentials'} | {'config/' + name for name in binding['config_paths']}
+            | {'config-dir/' + name for name in binding.get('config_directories', [])})
+
+
 def _validate_parts(binding, parts):
-    names = {'native', 'runtime', 'credentials'} | {'config/' + name for name in binding['config_paths']}
+    names = component_names(binding)
     if not isinstance(parts, dict) or set(parts) != names:
         raise EscrowError('native/config/keystore/runtime/credential coverage incomplete')
     entries = {}
@@ -75,7 +87,9 @@ def _validate_component(binding, name, part):
             or _binding(part['binding']) != binding):
         raise EscrowError('mixed or stale component binding')
     data = part['data']
-    if not isinstance(data, bytes) or (not data and name not in {'config/users', 'config/users_roles'}):
+    directory = name.startswith('config-dir/')
+    if (not isinstance(data, bytes) or (directory and data != b'')
+            or (not data and not directory and name not in {'config/users', 'config/users_roles'})):
         raise EscrowError('component bytes missing')
     if (type(part['mode']) is not int or not 0 <= part['mode'] <= 0o7777
             or any(type(part[k]) is not int or part[k] < 0 for k in ('uid', 'gid'))):

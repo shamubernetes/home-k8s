@@ -36,13 +36,42 @@ def unique_object(pairs):
 
 
 class GenerationManifest:
-    def __init__(self, path, generation, endpoint):
+    def __init__(self, path, generation, endpoint, *, supervisor=None):
         if not isinstance(generation, str) or re.fullmatch(r'k8s92-nonrel-[0-9a-f]{32}', generation) is None:
             raise ValueError('owned fixture generation required')
         validate_endpoint(endpoint)
         self.path = Path(path)
         self.generation = generation
         self.endpoint = endpoint
+        self.supervisor = supervisor
+
+    def supervisor_binding(self, supervisor, native=None):
+        """Read exact kernel identity independently, without either owner lock."""
+        if native is None:
+            native, _ = supervisor._read()
+        return {'directory': str(supervisor.directory), 'root': native['root'],
+                'generation': native['generation'], 'boundary': native['boundary'],
+                'manifest_generation': self.generation, 'endpoint': self.endpoint}
+
+    def require_supervisor(self, supervisor):
+        state = self.read()
+        if state.get('supervisor') != self.supervisor_binding(supervisor):
+            raise RuntimeError('fixture supervisor lifetime binding changed')
+        return state
+
+    def require_dispatch(self):
+        state = self.read()
+        if state['version'] != 2 or state['revoked']:
+            raise RuntimeError('fixture generation dispatch revoked')
+        if 'supervisor' in state or self.supervisor is not None:
+            if self.supervisor is None:
+                raise RuntimeError('bound fixture requires independent supervisor')
+            native, _ = self.supervisor._read()
+            if state.get('supervisor') != self.supervisor_binding(self.supervisor, native):
+                raise RuntimeError('fixture supervisor lifetime binding changed')
+            if native['revoked'] or self.supervisor._watchdog_revoked(native):
+                raise RuntimeError('fixture supervisor lifetime revoked')
+        return state
 
     @contextmanager
     def transaction(self):
@@ -58,11 +87,23 @@ class GenerationManifest:
         if (not isinstance(state, dict)
                 or type(state.get('version')) is not int or state['version'] not in (1, 2)
                 or set(state) != ({'version', 'generation', 'endpoint', 'revoked', 'containers'}
-                                 | ({'admissions'} if state['version'] == 2 else set()))
+                                 | ({'admissions'} if state['version'] == 2 else set())
+                                 | ({'supervisor'} if 'supervisor' in state else set()))
                 or state['generation'] != self.generation or state['endpoint'] != self.endpoint
                 or type(state['revoked']) is not bool or not isinstance(state['containers'], dict)
                 or not isinstance(state.get('admissions', {}), dict)):
             raise RuntimeError('fixture manifest binding malformed')
+        if 'supervisor' in state:
+            binding = state['supervisor']
+            if (state['version'] != 2 or not isinstance(binding, dict)
+                    or set(binding) != {'directory', 'root', 'generation', 'boundary',
+                                        'manifest_generation', 'endpoint'}
+                    or binding['manifest_generation'] != self.generation
+                    or binding['endpoint'] != self.endpoint
+                    or any(not isinstance(binding[k], str) or not binding[k]
+                           for k in ('directory', 'root', 'generation'))
+                    or not isinstance(binding['boundary'], dict)):
+                raise RuntimeError('fixture supervisor binding malformed')
         for name, item in state['containers'].items():
             if (not isinstance(name, str) or not name.startswith(self.generation + '-')
                     or not isinstance(item, dict) or set(item) != {'operation', 'phase', 'id'}
@@ -104,11 +145,20 @@ class GenerationManifest:
                 os.unlink(name)
 
     def initialize(self):
+        binding = None
+        if self.supervisor is not None:
+            native, _ = self.supervisor._read()
+            binding = self.supervisor_binding(self.supervisor, native)
+            if native['revoked'] or self.supervisor._watchdog_revoked(native):
+                raise RuntimeError('fixture supervisor lifetime revoked')
         with self.transaction():
             if self.path.exists():
                 raise RuntimeError('fixture manifest already exists, reconcile before retry')
-            self.write({'version': 2, 'generation': self.generation, 'endpoint': self.endpoint,
-                        'revoked': False, 'containers': {}, 'admissions': {}})
+            state = {'version': 2, 'generation': self.generation, 'endpoint': self.endpoint,
+                     'revoked': False, 'containers': {}, 'admissions': {}}
+            if binding is not None:
+                state['supervisor'] = binding
+            self.write(state)
 
     def bind_admission(self, name, container_id, admission):
         """Persist source identity and prior admission before a writer mutation.
@@ -122,6 +172,7 @@ class GenerationManifest:
                 or admission['write_block'] not in (None, 'true', 'false')):
             raise ValueError('immutable fixture admission required')
         binding = dict(admission, container_id=container_id, index_name='fixture')
+        self.require_dispatch()
         with self.transaction():
             state = self.read()
             item = state['containers'].get(name)
@@ -134,6 +185,7 @@ class GenerationManifest:
             self.write(state)
 
     def require_admission(self, name, container_id, admission):
+        self.require_dispatch()
         with self.transaction():
             state = self.read()
             expected = dict(admission, container_id=container_id, index_name='fixture')
@@ -144,6 +196,7 @@ class GenerationManifest:
             self.write(state)
 
     def create_intent(self, name):
+        self.require_dispatch()
         if not isinstance(name, str) or re.fullmatch(
                 re.escape(self.generation) + r'-[a-z][a-z0-9-]{0,31}', name) is None:
             raise ValueError('owned fixture container name required')
@@ -157,6 +210,7 @@ class GenerationManifest:
             return operation
 
     def transition(self, name, operation, before, after, container_id):
+        self.require_dispatch()
         if (before, after) not in (('create-intent', 'registered'),
                                    ('registered', 'start-intent'), ('start-intent', 'running')):
             raise ValueError('invalid fixture manifest transition')

@@ -470,7 +470,7 @@ class ManifestTests(unittest.TestCase):
                 native.Fixture('elasticsearch', docker_endpoint=self.endpoint,
                                generation_manifest=restarted)
             self.assertEqual(restarted.read(), dict(before, revoked=True))
-            with self.assertRaisesRegex(RuntimeError, 'authority denied'):
+            with self.assertRaisesRegex(RuntimeError, 'generation dispatch revoked'):
                 fixture.block_source_admission(9200, name, saved)
             with self.assertRaisesRegex(RuntimeError, 'independent server/client cessation'):
                 fixture.restore_source_admission(9200, saved, self.path, name)

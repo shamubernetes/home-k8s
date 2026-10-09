@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: radarr
+spec:
+  interval: 10m
+  # The native startup watchdog is capped at 30m, plus 5m native startup allowance.
+  timeout: 35m
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: radarr
+        patch: |
+          - op: add
+            path: /spec/progressDeadlineSeconds
+            value: 2100
+          # Explicit removal also validates against the existing Helm-owned probe.
+          - op: test
+            path: /spec/template/spec/containers/0/name
+            value: app
+          - op: add
+            path: /spec/template/spec/containers/0/livenessProbe/httpGet
+            value: null
+  values:
+    controllers:
+      radarr:
+        replicas: 1
+        strategy: Recreate
+        containers:
+          app:
+            command: [/usr/bin/catatonit, --, sh, /kopiur/recurring.sh, supervise, /entrypoint.sh]
+            env:
+              # Keep the absolute lease across Pod replacement. Capture excludes this root.
+              QUIESCENCE_STATE_DIR: /config/.kopiur-postgres/coordination
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ping
+                    port: 80
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 210
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet: null
+                  exec:
+                    command: [sh, /kopiur/recurring.sh, liveness]
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+          kopiur-postgres:
+            env:
+              QUIESCENCE_STATE_DIR: /config/.kopiur-postgres/coordination
+    persistence:
+      # All sidecar scripts are peer file mounts, matching the native ARC drill.
+      # A file subPath below a read-only ConfigMap directory creates invalid mountpoints.
+      kopiur-postgres-script:
+        type: configMap
+        name: radarr-kopiur-postgres
+        advancedMounts:
+          radarr:
+            kopiur-postgres:
+            - path: /kopiur/capture.sh
+              subPath: capture.sh
+              readOnly: true
+      kopiur-recurring:
+        type: configMap
+        name: radarr-kopiur-recurring
+        advancedMounts:
+          radarr:
+            app:
+            - path: /kopiur
+              readOnly: true
+            kopiur-postgres:
+            - path: /kopiur/recurring.sh
+              subPath: recurring.sh
+              readOnly: true
+            - path: /kopiur/recurring-capture.sh
+              subPath: recurring-capture.sh
+              readOnly: true

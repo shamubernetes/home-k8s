@@ -37,7 +37,7 @@ def _encoded(value):
 def _binding(value):
     required = {'generation', 'source_uid', 'source_pod_uid', 'engine_image',
                 'runtime_version', 'credential_versions', 'config_paths'}
-    optional = {'config_directories', 'source_lifetime', 'source_catalog'}
+    optional = {'config_directories', 'source_lifetime', 'source_catalog', 'source_queries'}
     if (not isinstance(value, dict) or not required <= set(value)
             or set(value) - required - optional):
         raise EscrowError('complete source binding required')
@@ -79,6 +79,9 @@ def _binding(value):
     if 'source_catalog' in value:
         from kopiur_elasticsearch_catalog import validate_catalog
         validate_catalog(value['source_catalog'], value)
+    if 'source_queries' in value:
+        from kopiur_elasticsearch_queries import validate_queries
+        validate_queries(value['source_queries'], value)
     return copy.deepcopy(value)
 
 

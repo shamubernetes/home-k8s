@@ -210,9 +210,18 @@ class LoopbackSnapshotIO:
     def request(self, path, credentials):
         if not isinstance(path, str) or path not in self.paths:
             raise EscrowError('prepared snapshot read path required')
+        return self._request(path, credentials)
+
+    def _request(self, path, credentials, *, body=None):
         credentials = credentials_from_bytes(_encoded(credentials))
         password = credentials['elastic_password'].replace('\\', '\\\\').replace('"', '\\"')
-        config = ('user = "elastic:' + password + '"\n').encode()
+        config = ('user = "elastic:' + password + '"\n')
+        if body is not None:
+            # Search data can contain private values. Like credentials, it stays
+            # on stdin, never in argv, environment, files or diagnostics.
+            value = _encoded(body).decode().replace('\\', '\\\\').replace('"', '\\"')
+            config += 'request = "GET"\nheader = "Content-Type: application/json"\ndata = "' + value + '"\n'
+        config = config.encode()
         try:
             raw = self.exec_read('curl', '-q', '--silent', '--fail', '--max-time', '60',
                 '--noproxy', '*', '--proto', '=http', '--config', '-',
@@ -300,6 +309,26 @@ class PreparedSnapshotExport:
         value = catalog.capture(credentials)
         self.guard()
         return value
+
+    def capture_queries(self, *, ledger, backend, consumers, contracts):
+        """Prepare explicit complete result digests under the original source guard.
+
+        Caller must first bind a fresh catalog. This does not authorize production
+        application credential reuse, any destination or writer admission.
+        """
+        from kopiur_elasticsearch_catalog import LoopbackCatalogIO, SourceCatalog
+        from kopiur_elasticsearch_queries import LoopbackQueryIO, ConsumerQueries
+        indices = sorted(self.adapter.indices)
+        catalog_io = LoopbackCatalogIO(exec_read=self.source.exec_read, indices=indices)
+        catalog = SourceCatalog(self.binding, ledger=ledger, backend=backend,
+            consumer_indices=consumers, indices=indices, guard=self.guard, request=catalog_io.request)
+        query_io = LoopbackQueryIO(exec_read=self.source.exec_read, indices=indices)
+        prepared = ConsumerQueries(catalog, contracts=contracts, query=query_io.query)
+        self.guard()
+        credentials = self.adapter.authenticated_credentials(self.binding)
+        result = prepared.capture(credentials)
+        self.guard()
+        return result
 
     def export(self, *, encrypt_export):
         self.guard()

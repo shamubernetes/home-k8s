@@ -173,6 +173,8 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
         request=catalog_io.request)
     authenticated = credentials_from_bytes(adapter.credentials(binding)['data'])
     binding['source_catalog'] = catalog.capture(authenticated)
+    queries = prepare_fixture_queries(binding, guard=guard, exec_read=bound_exec)
+    binding['source_queries'] = queries.capture(authenticated)
     # Rebuild the authenticated capture with the now complete escrow binding.
     adapter.binding = copy.deepcopy(binding)
     revocations = prove_capture_revocation(adapter, binding)
@@ -188,9 +190,12 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
                                 runtime=part(_encoded(runtime)), credentials=credential_part)
     if _encoded(catalog.observe(authenticated)) != _encoded(binding['source_catalog']):
         raise EscrowError('source catalog changed across native/configuration capture')
+    if _encoded(queries.capture(authenticated)) != _encoded(binding['source_queries']):
+        raise EscrowError('source query results changed across native/configuration capture')
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
                             'source_catalog_captured': True,
+                            'source_queries_captured': True,
                             'concrete_bound_loopback_capture_verified': True,
                             'engine_version': version, 'snapshot_format_version': adapter.snapshot_version,
                             'captured_snapshot_uuid': snapshot_uuid,
@@ -207,6 +212,25 @@ def fixture_consumer_plan():
                            'backend_contract': 'database/elasticsearch', 'consumer_contracts': [app]}]},
             'backend': 'database/elasticsearch',
             'consumers': [{'application': app, 'store': store, 'indices': ['fixture']}]}
+
+
+def prepare_fixture_queries(binding, *, guard, exec_read):
+    """Use concrete loopback reads; the two query contracts remain synthetic."""
+    from kopiur_elasticsearch_catalog import LoopbackCatalogIO, SourceCatalog
+    from kopiur_elasticsearch_queries import LoopbackQueryIO, ConsumerQueries
+    contract = fixture_consumer_plan()
+    catalog_io = LoopbackCatalogIO(exec_read=exec_read, indices=['fixture'])
+    catalog = SourceCatalog(binding, ledger=contract['ledger'], backend=contract['backend'],
+        consumer_indices=contract['consumers'], indices=['fixture'], guard=guard, request=catalog_io.request)
+    query_io = LoopbackQueryIO(exec_read=exec_read, indices=['fixture'])
+    body = {'query': {'match_all': {}}, 'sort': [{'number': 'asc'}], 'size': 10,
+            'track_total_hits': True, '_source': True}
+    term = copy.deepcopy(body)
+    term['query'] = {'term': {'number': 1}}
+    records = [{k: contract['consumers'][0][k] for k in ('application', 'store')} |
+        {'queries': [{'id': 'complete-fixture', 'index': 'fixture', 'body': body},
+                     {'id': 'selected-number', 'index': 'fixture', 'body': term}]}]
+    return ConsumerQueries(catalog, contracts=records, query=query_io.query)
 
 
 class EngineRestore:
@@ -327,6 +351,10 @@ class EngineRestore:
                 consumer_indices=contract['consumers'], indices=self.plan.selection['indices'],
                 guard=lambda: self.authority(target, self.binding), request=io_adapter.request)
             self.catalog_receipt = catalog.verify_restore(self.binding['source_catalog'], self.credentials)
+            if 'source_queries' in self.binding:
+                queries = prepare_fixture_queries(self.binding,
+                    guard=lambda: self.authority(target, self.binding), exec_read=guarded_read)
+                self.query_receipt = queries.verify_restore(self.binding['source_queries'], self.credentials)
         settings = self.drill.http(9200, '/fixture/_settings?flat_settings=true')
         if settings['fixture']['settings'].get('index.blocks.write') != 'true':
             raise EscrowError('restored synthetic writer fence absent')
@@ -361,6 +389,8 @@ class EngineRestore:
         proof['prepared_restore_plan'] = self.plan.receipt()
         if 'source_catalog' in self.binding:
             proof['source_catalog'] = self.catalog_receipt
+        if 'source_queries' in self.binding:
+            proof['source_queries'] = self.query_receipt
         proof['target_retirement'] = self.drill.remove(self.name)
         return proof
 

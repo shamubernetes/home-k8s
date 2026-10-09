@@ -1,5 +1,6 @@
 """Prepared original export composition and concrete loopback I/O, ARC only."""
 import base64
+import copy
 import json
 import secrets
 from pathlib import Path
@@ -215,6 +216,79 @@ class PreparedExportTests(unittest.TestCase):
         self.assertNotIn('source_catalog', self.prepared.binding)
         self.assertFalse(any('tar' in argv for argv, _ in self.calls))
         self.assertFalse(self.exports)
+
+    def prepare_query_capture(self):
+        contract = fixture_consumer_plan()
+        routes = {'/fixture/_settings?flat_settings=true': {'fixture': {'settings': {'index.uuid': 'original'}}},
+            '/fixture/_mapping': {'fixture': {'mappings': {}}},
+            '/fixture/_alias': {'fixture': {'aliases': {}}},
+            '/fixture/_count': {'count': 1, '_shards': {'total': 1, 'successful': 1, 'failed': 0}},
+            '/fixture/_search?allow_partial_search_results=false': {'timed_out': False,
+                '_shards': {'total': 1, 'successful': 1, 'failed': 0},
+                'hits': {'total': {'value': 1, 'relation': 'eq'}, 'hits': [
+                    {'_index': 'fixture', '_id': 'one', '_source': {'number': 1}, 'sort': [1]}]}}}
+        original = self.source.run
+        def read(argv, data=None):
+            path = argv[-1].removeprefix('http://127.0.0.1:9200')
+            if argv[1] == 'exec' and path in routes:
+                self.calls.append((argv, data))
+                return _encoded(routes[path])
+            return original(argv, data=data)
+        self.source.run = read
+        catalog = self.prepared.capture_catalog(ledger=contract['ledger'], backend=contract['backend'],
+                                               consumers=contract['consumers'])
+        self.binding['source_catalog'] = catalog
+        self.source.binding = copy.deepcopy(self.binding)
+        self.prepared = PreparedSnapshotExport(self.source, repository='fixture', snapshot='generation',
+            location='/usr/share/elasticsearch/data/snapshot', indices=['fixture'],
+            snapshot_uuid='created-uuid', snapshot_version='8.19.0-8.19.1')
+        contracts = [{k: contract['consumers'][0][k] for k in ('application', 'store')} |
+            {'queries': [{'id': 'complete', 'index': 'fixture', 'body': {
+                'query': {'match_all': {}}, 'sort': [{'number': 'asc'}], 'size': 10,
+                'track_total_hits': True, '_source': True}}]}]
+        self.calls = []
+        return contract, contracts
+
+    def test_prepared_original_query_capture_concrete_get_and_no_export(self):
+        contract, contracts = self.prepare_query_capture()
+        value = self.prepared.capture_queries(ledger=contract['ledger'], backend=contract['backend'],
+            consumers=contract['consumers'], contracts=contracts)
+        self.assertEqual(value['results'][0]['count'], 1)
+        searches = [(argv, data) for argv, data in self.calls if argv[-1].endswith('allow_partial_search_results=false')]
+        self.assertEqual(len(searches), 2)
+        self.assertTrue(all(b'request = "GET"' in data for _, data in searches))
+        self.assertNotIn('source_queries', self.source.binding)
+        self.assertFalse(self.exports)
+        self.assertFalse(any('tar' in argv for argv, _ in self.calls))
+
+    def test_prepared_query_authority_denied_before_credentials_or_query_io(self):
+        contract, contracts = self.prepare_query_capture()
+        self.authority.return_value = False
+        with self.assertRaises(EscrowError):
+            self.prepared.capture_queries(ledger=contract['ledger'], backend=contract['backend'],
+                consumers=contract['consumers'], contracts=contracts)
+        self.assertEqual(self.calls, [])
+
+    def test_prepared_query_restart_during_search_denies_returned_bytes(self):
+        contract, contracts = self.prepare_query_capture()
+        original = self.source.run
+        def restart(argv, data=None):
+            value = original(argv, data=data)
+            if argv[-1].endswith('allow_partial_search_results=false'):
+                self.pod['status']['containerStatuses'][0]['restartCount'] += 1
+            return value
+        self.source.run = restart
+        with self.assertRaisesRegex(EscrowError, 'bound consumer query failed'):
+            self.prepared.capture_queries(ledger=contract['ledger'], backend=contract['backend'],
+                consumers=contract['consumers'], contracts=contracts)
+        self.assertEqual(sum(argv[-1].endswith('allow_partial_search_results=false') for argv, _ in self.calls), 1)
+
+    def test_prepared_query_missing_roster_denied_before_source_io(self):
+        contract, contracts = self.prepare_query_capture()
+        with self.assertRaises(EscrowError):
+            self.prepared.capture_queries(ledger=contract['ledger'], backend=contract['backend'],
+                consumers=contract['consumers'], contracts=[])
+        self.assertEqual(self.calls, [])
 
     def test_original_catalog_restart_during_count_read_denies_result(self):
         contract = fixture_consumer_plan()

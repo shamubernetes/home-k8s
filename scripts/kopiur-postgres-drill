@@ -499,6 +499,25 @@ def fixture(app_name="radarr"):
             drill.close()
 
 
+def validate_bazarr_api(response, expected, table, key, sql):
+    if (table, key) not in (("table_shows", "sonarrSeriesId"), ("table_movies", "radarrId")):
+        raise ValueError("unexpected Bazarr API contract")
+    if response["total"] != expected or len(response["data"]) != min(1, expected):
+        raise ValueError("restored API count differs from native data")
+    if expected:
+        record = response["data"][0]
+        identity = record[key]
+        if type(identity) is not int:
+            raise ValueError("restored API record has an invalid identity")
+        query = f'''SELECT json_build_object('title', "title", 'path', "path")
+                    FROM public."{table}" WHERE "{key}"={identity}'''
+        raw = sql(query)
+        if not raw or json.loads(raw) != {field: record[field] for field in ("title", "path")}:
+            raise ValueError("restored API record differs from native data")
+    return {"total": expected, "representative_record_equal": bool(expected),
+            "compared_fields": ["identity", "title", "path"] if expected else []}
+
+
 def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
     """Read a recovered PVC. Write only new, isolated Docker resources."""
     source = Path(source)
@@ -522,6 +541,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
         target = drill.database("restore-db", databases)
         drill.restore(target, bundle, databases)
         counts = {db: drill.counts(target, db) for db in databases}
+        fingerprints = {db: drill.fingerprints(target, db) for db in databases}
         if any(not tables for tables in counts.values()):
             raise ValueError("restored database schema is empty")
         # A valid log database can contain zero rows. Require main-app data only.
@@ -585,9 +605,26 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
             paired_count = len(expected_files)
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
+        api = {}
+        if app_name == "bazarr":
+            target_info = json.loads(run("docker", "inspect", target).stdout)[0]
+            app_info = json.loads(run("docker", "inspect", restored_app).stdout)[0]
+            if target_info["HostConfig"]["NetworkMode"] != "none" or \
+                    app_info["HostConfig"]["NetworkMode"] != "container:" + target_info["Id"] or \
+                    target_info["HostConfig"].get("PortBindings") or app_info["HostConfig"].get("PortBindings"):
+                raise ValueError("restored application is not network isolated")
+            for endpoint, table, key in (("series", "table_shows", "sonarrSeriesId"),
+                                         ("movies", "table_movies", "radarrId")):
+                response = json.loads(run("docker", "exec", restored_app, "curl", "-fsS",
+                    "-H", "X-API-KEY: " + drill.api_key,
+                    f"http://127.0.0.1:{drill.port}/api/{endpoint}?length=1").stdout)
+                expected = counts["bazarr"][table]
+                api[endpoint] = validate_bazarr_api(response, expected, table, key,
+                    lambda query: drill.sql(target, query, "bazarr"))
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
                 "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,
+                "table_counts": counts, "table_fingerprints": fingerprints, "api": api,
                 "network": "none-shared-namespace"}
     finally:
         drill.close()

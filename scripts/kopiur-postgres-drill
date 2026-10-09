@@ -109,11 +109,12 @@ def validate_tree_members(archive, capacity=None):
 
 
 class DockerDrill:
-    def __init__(self, app="radarr", diagnostics=False, config_mib=256, database_mib=512):
+    def __init__(self, app="radarr", diagnostics=False, config_mib=256, database_mib=512, memory_mib=None):
         self.app_name = app
         self.image, self.databases, self.env_prefix, self.port, self.config_file = CONTRACTS[app]
         self.diagnostics = diagnostics
         self.config_mib, self.database_mib = config_mib, database_mib
+        self.memory_mib = memory_mib
         self.prefix = "k8s92-pg-" + uuid.uuid4().hex[:10]
         self.containers = []
         self.volumes = []
@@ -126,6 +127,8 @@ class DockerDrill:
         name = self.prefix + "-" + name
         args = ["docker", "run", "-d", "--name", name, "--network", network,
                 "--label", "home-k8s.kopiur-postgres-drill=true", "--tmpfs", "/tmp:rw,size=268435456"]
+        if self.memory_mib is not None:
+            args += ["--memory", f"{self.memory_mib}m"]
         if image == PG_IMAGE:
             # Disposable databases need no Docker VM disk allocation or persistence.
             args += ["--tmpfs", f"/var/lib/postgresql/data:rw,size={self.database_mib}m"]
@@ -560,7 +563,25 @@ def validate_bazarr_api(response, expected, table, key, sql):
             "compared_fields": ["identity", "title", "path"] if expected else []}
 
 
-def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
+def validate_radarr_api(response, expected, sql):
+    if not isinstance(response, list) or len(response) != expected:
+        raise ValueError("restored Radarr API count differs from native data")
+    records = []
+    for record in response:
+        if type(record.get("id")) is not int or type(record.get("tmdbId")) is not int:
+            raise ValueError("restored Radarr API identity is invalid")
+        records.append({key: record[key] for key in ("id", "tmdbId", "title", "path")})
+    original = json.loads(sql('''SELECT coalesce(json_agg(json_build_object(
+        'id', m."Id", 'tmdbId', mm."TmdbId", 'title', mm."Title", 'path', m."Path")), '[]'::json)
+        FROM "Movies" m JOIN "MovieMetadata" mm ON mm."Id"=m."MovieMetadataId"'''))
+    if sorted(records, key=lambda row: row["id"]) != sorted(original, key=lambda row: row["id"]):
+        raise ValueError("restored Radarr API records differ from native data")
+    encoded = json.dumps(sorted(records, key=lambda row: row["id"]), sort_keys=True).encode()
+    return {"movies": expected, "native_records_equal": len(records),
+            "native_records_sha256": hashlib.sha256(encoded).hexdigest()}
+
+
+def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_mib=None):
     """Read a recovered PVC. Write only new, isolated Docker resources."""
     source = Path(source)
     if source.is_symlink() or not source.is_dir():
@@ -572,7 +593,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
             "format=2" in metadata and
             "consistency=single-db-stable-filetree" in metadata):
         raise ValueError(app_name + " requires the paired stable-filetree recovery contract")
-    drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib)
+    drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib, memory_mib=memory_mib)
     if databases != drill.databases:
         raise ValueError("archive database set does not match the selected application")
     # Reject links before streaming. Never follow restored links into host files.
@@ -648,21 +669,29 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
         api = {}
-        if app_name == "bazarr":
+        if app_name in ("bazarr", "radarr"):
             target_info = json.loads(run("docker", "inspect", target).stdout)[0]
             app_info = json.loads(run("docker", "inspect", restored_app).stdout)[0]
             if target_info["HostConfig"]["NetworkMode"] != "none" or \
                     app_info["HostConfig"]["NetworkMode"] != "container:" + target_info["Id"] or \
                     target_info["HostConfig"].get("PortBindings") or app_info["HostConfig"].get("PortBindings"):
                 raise ValueError("restored application is not network isolated")
-            for endpoint, table, key in (("series", "table_shows", "sonarrSeriesId"),
-                                         ("movies", "table_movies", "radarrId")):
+            endpoints = (("series", "table_shows", "sonarrSeriesId"),
+                         ("movies", "table_movies", "radarrId")) if app_name == "bazarr" else ()
+            for endpoint, table, key in endpoints:
                 response = json.loads(run("docker", "exec", restored_app, "curl", "-fsS",
                     "-H", "X-API-KEY: " + drill.api_key,
                     f"http://127.0.0.1:{drill.port}/api/{endpoint}?length=1").stdout)
                 expected = counts["bazarr"][table]
                 api[endpoint] = validate_bazarr_api(response, expected, table, key,
                     lambda query: drill.sql(target, query, "bazarr"))
+        if app_name == "radarr":
+            curl_config = (f'url = "http://127.0.0.1:{drill.port}/api/v3/movie"\n'
+                           f'header = "X-Api-Key: {drill.api_key}"\n')
+            response = json.loads(run("docker", "exec", "-i", restored_app, "curl", "-fsS", "--config", "-",
+                                      stdin=curl_config.encode()).stdout)
+            api = validate_radarr_api(response, counts["radarr_main"]["Movies"],
+                                      lambda query: drill.sql(target, query, "radarr_main"))
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
                 "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,

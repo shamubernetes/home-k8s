@@ -23,6 +23,7 @@ on:
         - postgres-bazarr
         - postgres-bazarr-original
         - postgres-radarr
+        - postgres-radarr-original
         - postgres-radarr-3d
         - postgres-sonarr
         - postgres-whisparr
@@ -59,7 +60,7 @@ jobs:
         [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
         case "$SUITE" in
           tunarr|deadlines) ;;
-          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-3d|postgres-sonarr|postgres-whisparr) ;;
+          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-sonarr|postgres-whisparr) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
           identities|radarr-transport) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
@@ -278,20 +279,26 @@ jobs:
         PY
 
     - name: PostgreSQL native application recovery fixture
-      if: ${{ startsWith(inputs.suite, 'postgres-') && inputs.suite != 'postgres-bazarr-original' }}
+      if: ${{ startsWith(inputs.suite, 'postgres-') && inputs.suite != 'postgres-bazarr-original' && inputs.suite != 'postgres-radarr-original' }}
       env:
         SUITE: ${{ inputs.suite }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
       run: python3 scripts/kopiur-postgres-drill --fixture --app "${SUITE#postgres-}"
 
-    - name: Bazarr retained original native recovery
-      if: ${{ inputs.suite == 'postgres-bazarr-original' }}
+    - name: Retained original native recovery
+      if: ${{ inputs.suite == 'postgres-bazarr-original' || inputs.suite == 'postgres-radarr-original' }}
       env:
         QUALIFICATION_COMMIT: ${{ inputs.commit }}
+        SUITE: ${{ inputs.suite }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
       run: |
         python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_original.py -v
-        python3 scripts/kopiur-bazarr-original.py --serve
+        python3 -m unittest discover -s scripts/tests -p test_kopiur_radarr_original.py -v
+        if [[ $SUITE == postgres-radarr-original ]]; then
+          python3 scripts/kopiur-bazarr-original.py --serve --app radarr
+        else
+          python3 scripts/kopiur-bazarr-original.py --serve
+        fi
 
     - name: Mixed database native application recovery fixture
       if: ${{ startsWith(inputs.suite, 'mixed-') }}

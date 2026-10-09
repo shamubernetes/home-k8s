@@ -28,15 +28,19 @@ MOVER = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f
 TOOLS = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
 ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
 ORIGINALS = {"nas": "9a623d4c77684a42b970984ce9df7076", "r2": "c889e51bdf7ce94ee2f6b555e546842d"}
+# One coherent production generation, matched through the copiedFrom source manifest.
+RADARR_ORIGINALS = {"nas": "485dc5199b9575fa03551f0e6ffc1030", "r2": "2662d4ed229fd7b7751cebe634a390b1"}
 
 
-def validate_fields(fields):
+def validate_fields(fields, app="bazarr"):
+    if app not in ("bazarr", "radarr"):
+        raise ValueError("unsupported original application")
     required = {"NAS_RCLONE_CONFIG", "NAS_KOPIA_PASSWORD", "R2_KOPIA_PASSWORD",
                 "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"}
     if set(fields) != required or not all(isinstance(v, str) and v for v in fields.values()):
         raise ValueError("invalid dedicated transport payload")
-    if fields["R2_BUCKET"] != "kopiur-bazarr":
-        raise ValueError("destination is not the approved Bazarr bucket")
+    if fields["R2_BUCKET"] != "kopiur-" + app:
+        raise ValueError("destination is not the approved application bucket")
     config = configparser.ConfigParser(interpolation=None)
     try:
         config.read_string(fields["NAS_RCLONE_CONFIG"])
@@ -45,7 +49,7 @@ def validate_fields(fields):
     if config.sections() != ["mnemosyne"]:
         raise ValueError("unexpected NAS remotes")
     actual = dict(config["mnemosyne"])
-    expected = {"type": "smb", "host": "10.100.47.100", "user": "kp-bazarr",
+    expected = {"type": "smb", "host": "10.100.47.100", "user": "kp-" + app,
                 "pass": actual.get("pass"), "domain": "WORKGROUP"}
     if actual != expected or not actual["pass"]:
         raise ValueError("unexpected NAS identity")
@@ -64,13 +68,13 @@ def compare_results(results):
             raise ValueError("native original recovery is incomplete")
 
 
-def extract_original(archive, destination):
+def extract_original(archive, destination, *, database="bazarr", capacity=2 * 1024**3):
     allowed = {".kopiur-postgres/COMPLETE", ".kopiur-postgres/current", ".kopiur-postgres/current/SHA256SUMS"}
-    filenames = ("bazarr.dump", "bazarr.toc", "application-config", "application-state.tar", "filetree.sha256", "metadata")
+    filenames = (database + ".dump", database + ".toc", "application-config", "application-state.tar", "filetree.sha256", "metadata")
     allowed.update(".kopiur-postgres/current/" + name for name in filenames)
     with tarfile.open(archive) as bundle:
         members = bundle.getmembers()
-        if len(members) > len(allowed) or sum(m.size for m in members) > 2 * 1024**3:
+        if len(members) > len(allowed) or sum(m.size for m in members) > capacity:
             raise ValueError("original transfer exceeds existing restore capacity")
         seen = set()
         for member in members:
@@ -83,8 +87,13 @@ def extract_original(archive, destination):
         bundle.extractall(destination, filter="data")
 
 
-def qualify(fields):
-    validate_fields(fields)
+def qualify(fields, app="bazarr"):
+    validate_fields(fields, app)
+    originals = ORIGINALS if app == "bazarr" else RADARR_ORIGINALS
+    if set(originals) != {"nas", "r2"}:
+        raise ValueError("original generation is not retained on both backends")
+    capacity_mib = 2048 if app == "bazarr" else 8192
+    config_mib = 1024 if app == "bazarr" else 7168
     nonce = uuid.uuid4().hex
     tools = "k8s92-bazarr-tools-" + nonce
     containers = []
@@ -95,13 +104,13 @@ def qualify(fields):
             TOOLS, "sh", "-c", "cp /bin/busybox /tools/busybox && /tools/busybox --install -s /tools")
         results = {}
         with tempfile.TemporaryDirectory(prefix="bazarr-original-", dir=os.environ["RUNNER_TEMP"]) as temporary:
-            for kind, snapshot in ORIGINALS.items():
+            for kind, snapshot in originals.items():
                 name = "k8s92-bazarr-original-" + nonce + "-" + kind
                 containers.append(name)
                 run("docker", "run", "-d", "--name", name, "--label", "k8s92.bazarr=" + nonce,
                     "--user", "568:568", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                    "--memory", "2g", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
-                    "--tmpfs", "/work:rw,nosuid,size=2g,uid=568,gid=568,mode=0700",
+                    "--memory", f"{capacity_mib + 1024 if app == 'radarr' else capacity_mib}m", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
+                    "--tmpfs", f"/work:rw,nosuid,size={capacity_mib}m,uid=568,gid=568,mode=0700",
                     "--mount", "type=volume,src=" + tools + ",dst=/tools,readonly,volume-nocopy",
                     "--entrypoint", "/tools/busybox", MOVER, "sleep", "1800")
                 values = {"HOME": "/work", "PATH": "/tools:/usr/local/bin:/usr/bin:/bin", "TMPDIR": "/work/tmp",
@@ -112,14 +121,22 @@ def qualify(fields):
                 body += "\nmkdir /work/tmp\n"
                 if kind == "nas":
                     body += "printf '%s' " + shlex.quote(fields["NAS_RCLONE_CONFIG"]) + " > /work/rclone.conf\n"
-                    backend = "rclone --remote-path=mnemosyne:kopiur-bazarr --rclone-args=--config=/work/rclone.conf"
+                    backend = "rclone --remote-path=mnemosyne:kopiur-" + app + " --rclone-args=--config=/work/rclone.conf"
                 else:
                     body += "export AWS_ACCESS_KEY_ID=" + shlex.quote(fields["R2_ACCESS_KEY_ID"]) + "\n"
                     body += "export AWS_SECRET_ACCESS_KEY=" + shlex.quote(fields["R2_SECRET_ACCESS_KEY"]) + "\n"
-                    backend = "s3 --bucket=kopiur-bazarr --prefix=kopiur/bazarr/r2/ --endpoint=" + ACCOUNT + ".r2.cloudflarestorage.com --region=auto"
+                    backend = "s3 --bucket=kopiur-" + app + " --prefix=kopiur/" + app + "/r2/ --endpoint=" + ACCOUNT + ".r2.cloudflarestorage.com --region=auto"
                 # Read-only connect prevents maintenance, snapshots or repository writes.
                 body += "kopia repository connect " + backend + " --readonly >/dev/null\n"
-                body += "kopia snapshot restore " + snapshot + " /work/restored >/dev/null\n"
+                if app == "bazarr":
+                    body += "kopia snapshot restore " + snapshot + " /work/restored >/dev/null\n"
+                else:
+                    # Restore only the complete paired generation, not the redundant previous archive.
+                    body += "mkdir -p /work/restored/.kopiur-postgres\n"
+                    for entry in ("COMPLETE", "current"):
+                        source_path = snapshot + "/.kopiur-postgres/" + entry
+                        target_path = "/work/restored/.kopiur-postgres/" + entry
+                        body += "kopia snapshot restore " + source_path + " " + target_path + " >/dev/null\n"
                 result = run("docker", "exec", "-i", name, "/tools/busybox", "sh", "-s",
                              stdin=body.encode(), check=False, timeout=900)
                 if result.returncode:
@@ -144,7 +161,8 @@ def qualify(fields):
                         stdout=stream, stderr=subprocess.PIPE, timeout=300)
                 if copied.returncode:
                     raise RuntimeError("original " + kind + " transfer failed")
-                extract_original(archive, source)
+                extract_original(archive, source, database=NATIVE["CONTRACTS"][app][1][0],
+                                 capacity=capacity_mib * 1024 * 1024)
                 archive.unlink()
                 # Destroy the only networked restorer before application boot.
                 run("docker", "rm", "-fv", name)
@@ -152,12 +170,13 @@ def qualify(fields):
                 current = source / ".kopiur-postgres/current"
                 checksum = hashlib.sha256((current / "SHA256SUMS").read_bytes()).hexdigest()
                 metadata = (current / "metadata").read_text().splitlines()
-                proof = NATIVE["restore_pvc"](source, "bazarr", config_mib=1024, database_mib=4096)
+                proof = NATIVE["restore_pvc"](source, app, config_mib=config_mib, database_mib=4096,
+                                            memory_mib=8192 if app == "radarr" else None)
                 proof.update(snapshot_id=snapshot, bundle_checksums_sha256=checksum, metadata=metadata,
                              original_backend_readonly=True, networked_restorer_removed_before_boot=True)
                 results[kind] = proof
         compare_results(results)
-        return {"app": "bazarr", "candidate": os.environ["QUALIFICATION_COMMIT"],
+        return {"app": app, "candidate": os.environ["QUALIFICATION_COMMIT"],
                 "runner": os.environ["RUNNER_NAME"], "results": results,
                 "independent_original_native_recovery": True, "nas_r2_native_data_equal": True,
                 "media_dependency_qualified": False, "legacy_retirement_authorized": False}
@@ -171,17 +190,19 @@ def qualify(fields):
 
 
 def main():
-    if sys.platform != "linux" or not os.environ.get("RUNNER_NAME") or sys.argv[1:] != ["--serve"]:
+    app = "radarr" if sys.argv[1:] == ["--serve", "--app", "radarr"] else "bazarr"
+    valid_arguments = ["--serve", "--app", "radarr"] if app == "radarr" else ["--serve"]
+    if sys.platform != "linux" or not os.environ.get("RUNNER_NAME") or sys.argv[1:] != valid_arguments:
         raise RuntimeError("original recovery requires the assigned ARC dispatch")
     if not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("QUALIFICATION_COMMIT", "")):
         raise ValueError("missing reviewed qualification commit")
-    for image in (MOVER, TOOLS, NATIVE["PG_IMAGE"], NATIVE["CONTRACTS"]["bazarr"][0]):
+    for image in (MOVER, TOOLS, NATIVE["PG_IMAGE"], NATIVE["CONTRACTS"][app][0]):
         run("docker", "pull", "--platform", "linux/amd64", image, timeout=600)
     def interrupted(signum, frame):
         raise RuntimeError("original qualification interrupted")
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
-    directory = Path(os.environ["RUNNER_TEMP"]) / "k8s92-bazarr-original-channel"
+    directory = Path(os.environ["RUNNER_TEMP"]) / ("k8s92-" + app + "-original-channel")
     directory.mkdir(mode=0o700)
     path = str(directory / "socket")
     try:
@@ -202,7 +223,7 @@ def main():
                     data.extend(chunk)
                     if len(data) > 65536 or time.monotonic() > deadline:
                         raise ValueError("transport payload exceeds bounds")
-                receipt = qualify(json.loads(data))
+                receipt = qualify(json.loads(data), app)
                 connection.sendall(json.dumps(receipt).encode())
                 print(json.dumps(receipt), flush=True)
     finally:

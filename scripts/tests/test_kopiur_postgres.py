@@ -209,6 +209,16 @@ class DatabaseStartupTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_capture_mode_matches_the_two_paired_app_contracts(self):
+        for app in NATIVE_APPS:
+            with self.subTest(app=app):
+                drill = MODULE["DockerDrill"](app)
+                with mock.patch.object(drill, "start", return_value="helper") as start, \
+                     mock.patch.dict(drill.capture.__globals__, {"run": mock.Mock(return_value=subprocess.CompletedProcess([], 0))}):
+                    drill.capture("database", "config", drill.databases)
+                expected = "single-db-stable-filetree" if app in ("bazarr", "radarr") else "legacy"
+                self.assertEqual(start.call_args.kwargs["env"]["CAPTURE_MODE"], expected)
+
     def test_xml_database_endpoint_and_credentials_replaced(self):
         drill = MODULE["DockerDrill"]("radarr")
         original = b"<Config><PostgresHost>source</PostgresHost><PostgresHost>duplicate</PostgresHost><PostgresPassword>old</PostgresPassword><ApiKey>old</ApiKey><InstanceName>kept</InstanceName></Config>"
@@ -296,6 +306,17 @@ class BundleTests(unittest.TestCase):
             handle.write("0" * 64 + "  ../outside\n")
         with self.assertRaises(ValueError):
             MODULE["verify_bundle"](self.root)
+
+    def test_radarr_legacy_bundle_rejected_before_docker(self):
+        bundle = self.root / ".kopiur-postgres"
+        bundle.mkdir()
+        (self.root / "current").rename(bundle / "current")
+        (self.root / "COMPLETE").rename(bundle / "COMPLETE")
+        docker = mock.Mock()
+        with mock.patch.dict(MODULE["restore_pvc"].__globals__, {"DockerDrill": docker}):
+            with self.assertRaisesRegex(ValueError, "paired stable-filetree"):
+                MODULE["restore_pvc"](self.root, "radarr")
+        docker.assert_not_called()
 
     def test_bazarr_legacy_bundle_rejected_before_docker(self):
         current = self.root / "current"

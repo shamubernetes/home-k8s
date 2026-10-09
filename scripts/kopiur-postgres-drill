@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
 PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
 RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
+PAIRED_APPS = ("bazarr", "radarr")
 CONTRACTS = {
     "radarr": (RADARR_IMAGE, ["radarr_main"], "RADARR", 7878, "/config/config.xml"),
     "radarr-3d": (RADARR_IMAGE, ["radarr_3d_main"], "RADARR", 7878, "/config/config.xml"),
@@ -322,7 +323,7 @@ class DockerDrill:
                             network="container:" + database, user="568:568",
                             env={"PGHOST": "127.0.0.1", "PGUSER": user,
                                  "PGPASSWORD": password or self.backup_password, "PGDATABASES": " ".join(databases),
-                                 "CAPTURE_MODE": "single-db-stable-filetree" if self.app_name == "bazarr" else "legacy",
+                                 "CAPTURE_MODE": "single-db-stable-filetree" if self.app_name in PAIRED_APPS else "legacy",
                                  "CONFIG_FILE": self.config_file},
                             mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
         result = run("docker", "exec", "-i", helper, "timeout", "600", "sh", "-s", stdin=CAPTURE.read_bytes(), check=False, timeout=610)
@@ -344,7 +345,7 @@ class DockerDrill:
     def reject_filetree_race(self, source, config, holder):
         """Use a real PG table-lock barrier, not a guessed sleep, to force ABA."""
         lock = subprocess.Popen(["docker", "exec", "-i", source, "psql", "-X", "-q", "-U",
-                                 "postgres", "-d", "bazarr", "-v", "ON_ERROR_STOP=1"],
+                                 "postgres", "-d", self.databases[0], "-v", "ON_ERROR_STOP=1"],
                                 stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         lock.stdin.write(b"SET idle_in_transaction_session_timeout='30s'; BEGIN; LOCK TABLE kopiur_fixture IN ACCESS EXCLUSIVE MODE;\n")
         lock.stdin.flush()
@@ -369,7 +370,7 @@ class DockerDrill:
         try:
             for _ in range(200):
                 held = self.sql(source, "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE relation='kopiur_fixture'::regclass"
-                                " AND mode='AccessExclusiveLock' AND granted)", "bazarr")
+                                " AND mode='AccessExclusiveLock' AND granted)", self.databases[0])
                 if held == "t":
                     break
                 time.sleep(0.05)
@@ -431,7 +432,7 @@ def fixture(app_name="radarr"):
             app = drill.app("source-app", source, config)
             drill.healthy(app)
             run("docker", "stop", "-t", "30", app)
-            if app_name == "bazarr":
+            if app_name in PAIRED_APPS:
                 run("docker", "exec", holder, "sh", "-ec",
                     "umask 077; printf native-private-proof > /config/k8s92-private-fixture.bin")
             before = {}
@@ -465,7 +466,7 @@ def fixture(app_name="radarr"):
             for database in drill.databases:
                 value = drill.sql(target, "SELECT value FROM kopiur_fixture WHERE id=1", database, "app")
                 assert value == "native-recovery-proof"
-            if app_name == "bazarr":
+            if app_name in PAIRED_APPS:
                 drill.reject_filetree_race(source, config, helper)
                 drill.capture(source, config, drill.databases)
             assert drill.capture(source, config, drill.databases, password="wrong-fixture-password", check=False) != 0
@@ -481,7 +482,7 @@ def fixture(app_name="radarr"):
             assert drill.capture(source, config, drill.databases, check=False) != 0
             assert run("docker", "exec", helper, "test", "-e", "/config/.kopiur-postgres/COMPLETE", check=False).returncode != 0
             drill.sql(source, f"GRANT SELECT ON kopiur_fixture TO {drill.capture_user}", drill.databases[0])
-            if app_name == "bazarr":
+            if app_name in PAIRED_APPS:
                 # The later CSI view must not replace the paired state generation.
                 (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
@@ -492,7 +493,7 @@ def fixture(app_name="radarr"):
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
                               "dedicated_grant_sql_exercised": True,
                               "future_table_read_and_unrelated_data_write_denial": True,
-                              "filetree_aba_rejected": app_name == "bazarr",
+                              "filetree_aba_rejected": app_name in PAIRED_APPS,
                               "paired_filetree_bytes_equal": recovered.get("paired_filetree_bytes_equal", 0),
                               "network": "none-shared-namespace", "production_data": False}, sort_keys=True))
         finally:
@@ -526,10 +527,10 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096):
     bundle = source / ".kopiur-postgres"
     databases = verify_bundle(bundle)
     metadata = (bundle / "current/metadata").read_text().splitlines()
-    if app_name == "bazarr" and not (
+    if app_name in PAIRED_APPS and not (
             "format=2" in metadata and
             "consistency=single-db-stable-filetree" in metadata):
-        raise ValueError("Bazarr requires the paired stable-filetree recovery contract")
+        raise ValueError(app_name + " requires the paired stable-filetree recovery contract")
     drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib)
     if databases != drill.databases:
         raise ValueError("archive database set does not match the selected application")

@@ -9,7 +9,7 @@ import copy
 import json
 import re
 
-from kopiur_elasticsearch_escrow import EscrowError, _binding, _encoded
+from kopiur_elasticsearch_escrow import EscrowError, _binding, _encoded, _same_binding
 from kopiur_nonrel_native import validate_archive
 
 
@@ -110,7 +110,7 @@ class SnapshotCapture:
         self.indices = set(indices)
 
     def check(self, binding):
-        if _binding(binding) != self.binding:
+        if not _same_binding(binding, self.binding):
             raise EscrowError('authenticated capture binding differs')
         # A guard either raises or returns exactly True, never a truthy receipt.
         if self.guard() is not True:

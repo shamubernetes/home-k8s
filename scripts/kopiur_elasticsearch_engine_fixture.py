@@ -12,7 +12,7 @@ import tarfile
 from kopiur_elasticsearch_capture import SnapshotCapture, credentials_from_bytes
 from kopiur_elasticsearch_source import LoopbackSnapshotIO
 from kopiur_elasticsearch_restore import RestorePlan
-from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, restore_parts
+from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, _same_binding, restore_parts
 from kopiur_elasticsearch_escrow_fixture import configuration_archive, configuration_parts
 from kopiur_elasticsearch_escrow_transport import encode_bundle, decode_bundle
 from kopiur_nonrel_native import IMAGES, repository_envelope, validate_elasticsearch_restore
@@ -165,6 +165,16 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
         request=io_adapter.request, read_archive=io_adapter.read_archive,
         repository='fixture', snapshot='generation', location=DATA_PATH + '/snapshot',
         indices=['fixture'], expected_uuid=snapshot_uuid, snapshot_version=snapshot_version)
+    from kopiur_elasticsearch_catalog import LoopbackCatalogIO, SourceCatalog
+    contract = fixture_consumer_plan()
+    catalog_io = LoopbackCatalogIO(exec_read=bound_exec, indices=['fixture'])
+    catalog = SourceCatalog(binding, ledger=contract['ledger'], backend=contract['backend'],
+        consumer_indices=contract['consumers'], indices=['fixture'], guard=guard,
+        request=catalog_io.request)
+    authenticated = credentials_from_bytes(adapter.credentials(binding)['data'])
+    binding['source_catalog'] = catalog.capture(authenticated)
+    # Rebuild the authenticated capture with the now complete escrow binding.
+    adapter.binding = copy.deepcopy(binding)
     revocations = prove_capture_revocation(adapter, binding)
     native = adapter.native(binding)
     credential_part = adapter.credentials(binding)
@@ -176,8 +186,11 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
     # credential component or a replacement for the captured elastic identity.
     parts = configuration_parts(binding, archive, native=native,
                                 runtime=part(_encoded(runtime)), credentials=credential_part)
+    if _encoded(catalog.observe(authenticated)) != _encoded(binding['source_catalog']):
+        raise EscrowError('source catalog changed across native/configuration capture')
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
+                            'source_catalog_captured': True,
                             'concrete_bound_loopback_capture_verified': True,
                             'engine_version': version, 'snapshot_format_version': adapter.snapshot_version,
                             'captured_snapshot_uuid': snapshot_uuid,
@@ -233,7 +246,7 @@ class EngineRestore:
 
     def authority(self, target, binding):
         self.drill.check_dispatch()
-        if target != self.target or binding != self.binding:
+        if target != self.target or not _same_binding(binding, self.binding):
             return False
         actual = json.loads(self.drill.run('inspect', '--format', '{{json .}}', target['uid']))
         network = json.loads(self.drill.run('network', 'inspect', self.drill.network))[0]
@@ -303,6 +316,17 @@ class EngineRestore:
     def verify(self, target, manifest):
         self.drill.ready(self.name, lambda: self.drill.http(9200, '/_cluster/health/fixture')['status'] == 'green')
         self.check_config(target)
+        if 'source_catalog' in self.binding:
+            from kopiur_elasticsearch_catalog import LoopbackCatalogIO, SourceCatalog
+            def guarded_read(*command, data=None):
+                return guarded_engine_read(self.drill, target['uid'],
+                    lambda: self.authority(target, self.binding), *command, data=data)
+            io_adapter = LoopbackCatalogIO(exec_read=guarded_read, indices=self.plan.selection['indices'])
+            contract = fixture_consumer_plan()
+            catalog = SourceCatalog(self.binding, ledger=contract['ledger'], backend=contract['backend'],
+                consumer_indices=contract['consumers'], indices=self.plan.selection['indices'],
+                guard=lambda: self.authority(target, self.binding), request=io_adapter.request)
+            self.catalog_receipt = catalog.verify_restore(self.binding['source_catalog'], self.credentials)
         settings = self.drill.http(9200, '/fixture/_settings?flat_settings=true')
         if settings['fixture']['settings'].get('index.blocks.write') != 'true':
             raise EscrowError('restored synthetic writer fence absent')
@@ -335,6 +359,8 @@ class EngineRestore:
         proof['original_credential_schema_verified'] = True
         proof['synthetic_consumer_credentials_separate'] = True
         proof['prepared_restore_plan'] = self.plan.receipt()
+        if 'source_catalog' in self.binding:
+            proof['source_catalog'] = self.catalog_receipt
         proof['target_retirement'] = self.drill.remove(self.name)
         return proof
 

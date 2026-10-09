@@ -126,6 +126,12 @@ class RestorePlan:
         if variables.get('path.repo') != location or 'path.repo' not in replay:
             raise EscrowError('captured repository path must match isolated native selection')
         self._consumers = consumer_inventory(ledger, binding, backend, consumers, indices)
+        if 'source_catalog' in binding:
+            catalog = binding['source_catalog']
+            if (catalog['ledger_sha256'] != hashlib.sha256(_encoded(ledger)).hexdigest()
+                    or catalog['consumers'] != self._consumers['records']
+                    or set(catalog['indices']) != set(indices)):
+                raise EscrowError('source catalog differs from prepared consumer coverage')
         self._manifest = copy.deepcopy(manifest)
         self._variables = {k: variables[k] for k in replay}
         self._omit = copy.deepcopy(omit)
@@ -143,7 +149,7 @@ class RestorePlan:
         return copy.deepcopy(self._selection)
 
     def check(self, manifest, parts):
-        if (manifest != self._manifest
+        if (_encoded(manifest) != _encoded(self._manifest)
                 or _validate_parts(_binding(self._manifest['binding']), parts) != self._manifest['entries']):
             raise EscrowError('prepared restore generation changed')
 

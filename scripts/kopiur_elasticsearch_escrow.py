@@ -37,7 +37,7 @@ def _encoded(value):
 def _binding(value):
     required = {'generation', 'source_uid', 'source_pod_uid', 'engine_image',
                 'runtime_version', 'credential_versions', 'config_paths'}
-    optional = {'config_directories', 'source_lifetime'}
+    optional = {'config_directories', 'source_lifetime', 'source_catalog'}
     if (not isinstance(value, dict) or not required <= set(value)
             or set(value) - required - optional):
         raise EscrowError('complete source binding required')
@@ -76,7 +76,16 @@ def _binding(value):
                 or type(lifetime['restart_count']) is not int or lifetime['restart_count'] < 0
                 or not re.search(r'@sha256:[0-9a-f]{64}$', lifetime['runtime_image'])):
             raise EscrowError('complete container lifetime required')
+    if 'source_catalog' in value:
+        from kopiur_elasticsearch_catalog import validate_catalog
+        validate_catalog(value['source_catalog'], value)
     return copy.deepcopy(value)
+
+
+def _same_binding(actual, expected):
+    # Python equality conflates booleans/numbers in catalog metadata. Preserve
+    # their exact JSON types after validating both complete source bindings.
+    return _encoded(_binding(actual)) == _encoded(_binding(expected))
 
 
 def component_names(binding):
@@ -96,7 +105,7 @@ def _validate_parts(binding, parts):
 
 def _validate_component(binding, name, part):
     if (not isinstance(part, dict) or set(part) != {'binding', 'data', 'mode', 'uid', 'gid'}
-            or _binding(part['binding']) != binding):
+            or not _same_binding(part['binding'], binding)):
         raise EscrowError('mixed or stale component binding')
     data = part['data']
     directory = name.startswith('config-dir/')
@@ -111,7 +120,7 @@ def _validate_component(binding, name, part):
 
 
 def _current(expected, observe):
-    if _binding(observe()) != expected:
+    if not _same_binding(observe(), expected):
         raise EscrowError('source identity or runtime/credential version changed')
 
 
@@ -174,7 +183,7 @@ def restore_export(exported, *, binding, target, require_isolated_authority,
     manifest = exported.get('manifest')
     if (not isinstance(manifest, dict) or set(manifest) != {'schema', 'binding', 'entries'}
             or manifest['schema'] != 'k8s92-elasticsearch-escrow/v1'
-            or _binding(manifest['binding']) != expected
+            or not _same_binding(manifest['binding'], expected)
             or exported.get('manifest_sha256') != _digest(_encoded(manifest))
             or not isinstance(exported.get('ciphertext'), bytes)
             or not exported['ciphertext']

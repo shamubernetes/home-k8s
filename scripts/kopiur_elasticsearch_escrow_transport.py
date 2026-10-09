@@ -47,7 +47,7 @@ def decode_bundle(data, expected_manifest):
     try:
         value = json.loads(data, object_pairs_hook=unique_pairs)
         if (not isinstance(value, dict) or set(value) != {'schema', 'manifest', 'parts'}
-                or value['schema'] != SCHEMA or value['manifest'] != expected_manifest
+                or value['schema'] != SCHEMA or _encoded(value['manifest']) != _encoded(expected_manifest)
                 or _encoded(value) != data):
             raise EscrowError('escrow bundle manifest or canonical encoding differs')
         manifest = value['manifest']

@@ -13,6 +13,7 @@ from kopiur_elasticsearch_escrow import EscrowError, _encoded
 from kopiur_elasticsearch_escrow_fixture import configuration_archive
 from kopiur_elasticsearch_source import KubernetesSource, LoopbackSnapshotIO, PreparedSnapshotExport
 from test_kopiur_elasticsearch_source import fixture
+from kopiur_elasticsearch_engine_fixture import fixture_consumer_plan
 
 
 class LoopbackIOTests(unittest.TestCase):
@@ -178,6 +179,59 @@ class PreparedExportTests(unittest.TestCase):
         encrypt.assert_not_called()
         self.assertFalse(any(argv[-6:] == ['tar', '-C', '/usr/share/elasticsearch/config', '-cf', '-', '.']
                              for argv, _ in self.calls))
+
+    def test_original_catalog_capture_requires_authority_before_secret_io(self):
+        self.authority.return_value = False
+        contract = fixture_consumer_plan()
+        with self.assertRaisesRegex(EscrowError, 'original export authorization'):
+            self.prepared.capture_catalog(ledger=contract['ledger'], backend=contract['backend'],
+                                         consumers=contract['consumers'])
+        self.assertEqual(self.calls, [])
+
+    def test_original_catalog_rejects_partial_ledger_before_any_io(self):
+        contract = fixture_consumer_plan()
+        with self.assertRaises(EscrowError):
+            self.prepared.capture_catalog(ledger=contract['ledger'], backend=contract['backend'], consumers=[])
+        self.assertEqual(self.calls, [])
+
+    def test_original_catalog_reads_exact_indices_without_export_or_binding_mutation(self):
+        contract = fixture_consumer_plan()
+        routes = {'/fixture/_settings?flat_settings=true': {'fixture': {'settings': {'index.uuid': 'original'}}},
+            '/fixture/_mapping': {'fixture': {'mappings': {}}},
+            '/fixture/_alias': {'fixture': {'aliases': {}}},
+            '/fixture/_count': {'count': 2, '_shards': {'total': 1, 'successful': 1, 'failed': 0}}}
+        original = self.source.run
+        def read(argv, data=None):
+            path = argv[-1].removeprefix('http://127.0.0.1:9200')
+            if argv[1] == 'exec' and path in routes:
+                self.calls.append((argv, data))
+                return _encoded(routes[path])
+            return original(argv, data=data)
+        self.source.run = read
+        catalog = self.prepared.capture_catalog(ledger=contract['ledger'], backend=contract['backend'],
+                                               consumers=contract['consumers'])
+        self.assertEqual(catalog['indices']['fixture']['count'], 2)
+        self.assertNotIn('source_catalog', self.source.binding)
+        self.assertNotIn('source_catalog', self.prepared.binding)
+        self.assertFalse(any('tar' in argv for argv, _ in self.calls))
+        self.assertFalse(self.exports)
+
+    def test_original_catalog_restart_during_count_read_denies_result(self):
+        contract = fixture_consumer_plan()
+        original = self.source.exec_read
+        def restart(*command, data=None):
+            if command[-1].endswith('/fixture/_count'):
+                self.pod['status']['containerStatuses'][0]['restartCount'] += 1
+                return _encoded({'count': 2, '_shards': {'total': 1, 'successful': 1, 'failed': 0}})
+            if '/fixture/' in command[-1]:
+                suffix = command[-1].split('/fixture/', 1)[1]
+                key = {'_settings?flat_settings=true': 'settings', '_mapping': 'mappings', '_alias': 'aliases'}[suffix]
+                return _encoded({'fixture': {key: {'index.uuid': 'original'} if key == 'settings' else {}}})
+            return original(*command, data=data)
+        self.source.exec_read = restart
+        with self.assertRaisesRegex(EscrowError, 'lifetime or credential-provider version changed'):
+            self.prepared.capture_catalog(ledger=contract['ledger'], backend=contract['backend'],
+                                         consumers=contract['consumers'])
 
     def test_snapshot_creation_identity_required_without_io(self):
         for value in ('', None):

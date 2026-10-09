@@ -14,7 +14,7 @@ import subprocess
 
 from kopiur_elasticsearch_capture import SnapshotCapture, credentials_from_bytes
 from kopiur_elasticsearch_escrow import (
-    EscrowError, _binding, _encoded, _validate_component, capture_export,
+    EscrowError, _binding, _encoded, _same_binding, _validate_component, capture_export,
 )
 from kopiur_elasticsearch_escrow_fixture import configuration_parts
 
@@ -105,7 +105,7 @@ class KubernetesSource:
         expected = copy.deepcopy(self.binding)
         if self.require_authority(expected) is not True:
             raise EscrowError('original export authorization and independent capture fence required')
-        if self.observe() != self.binding:
+        if not _same_binding(self.observe(), self.binding):
             raise EscrowError('source lifetime or credential-provider version changed')
         return True
 
@@ -124,7 +124,7 @@ class KubernetesSource:
         Guard checks cannot cancel already accepted remote operations. The
         independent capture fence must provide that lifecycle protection.
         """
-        if _binding(binding) != self.binding:
+        if not _same_binding(binding, self.binding):
             raise EscrowError('capture binding differs')
         self.guard()
         native = capture_native(copy.deepcopy(binding))
@@ -181,7 +181,7 @@ class KubernetesSource:
         binding equality here denies any re-pointed, stale or foreign adapter.
         """
         if not isinstance(getattr(capture_adapter, 'binding', None), dict) \
-                or _binding(capture_adapter.binding) != self.binding:
+                or not _same_binding(capture_adapter.binding, self.binding):
             raise EscrowError('snapshot capture adapter is not bound to this source')
         return self.export(capture_native=capture_adapter.native,
                            capture_credentials=capture_adapter.credentials,
@@ -262,7 +262,7 @@ class PreparedSnapshotExport:
             snapshot_version=snapshot_version)
 
     def guard(self):
-        if self.source.binding != self.binding:
+        if not _same_binding(self.source.binding, self.binding):
             raise EscrowError('prepared source binding changed')
         return self.source.guard()
 
@@ -281,6 +281,25 @@ class PreparedSnapshotExport:
             return _encoded(credentials_from_bytes(_encoded(value)))
         except (ValueError, TypeError, UnicodeError):
             raise EscrowError('bound original credential invalid') from None
+
+    def capture_catalog(self, *, ledger, backend, consumers):
+        """Read a supplied complete roster, without exporting or mutating source state.
+
+        The original authorization and all-writer fence remain required even for
+        catalog reads. The caller may explicitly bind this catalog into a new
+        source generation before export; this method cannot authorize that step.
+        """
+        from kopiur_elasticsearch_catalog import LoopbackCatalogIO, SourceCatalog
+        io_adapter = LoopbackCatalogIO(exec_read=self.source.exec_read,
+                                       indices=sorted(self.adapter.indices))
+        catalog = SourceCatalog(self.binding, ledger=ledger, backend=backend,
+            consumer_indices=consumers, indices=sorted(self.adapter.indices),
+            guard=self.guard, request=io_adapter.request)
+        self.guard()
+        credentials = self.adapter.authenticated_credentials(self.binding)
+        value = catalog.capture(credentials)
+        self.guard()
+        return value
 
     def export(self, *, encrypt_export):
         self.guard()

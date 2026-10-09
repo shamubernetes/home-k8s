@@ -12,7 +12,7 @@ import sys
 import tarfile
 
 from kopiur_elasticsearch_escrow import (
-    EscrowError, _binding, _validate_component, _validate_parts, component_names,
+    EscrowError, _binding, _same_binding, _validate_component, _validate_parts, component_names,
 )
 
 
@@ -40,7 +40,7 @@ def capture_configuration(drill, source, binding, *, native, runtime, credential
     def guard():
         if require_capture_authority(copy.deepcopy(expected)) is not True:
             raise EscrowError('affirmative capture authority required')
-        if _binding(observe()) != expected:
+        if not _same_binding(observe(), expected):
             raise EscrowError('source identity or runtime/credential version changed')
         if drill.registered_id(source) != expected['source_uid']:
             raise EscrowError('synthetic container identity changed')

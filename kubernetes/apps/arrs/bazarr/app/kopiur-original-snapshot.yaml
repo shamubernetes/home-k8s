@@ -22,3 +22,15 @@ spec:
     name: bazarr-r2
     namespace: arrs
   deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Preserve the first schedule-owned generation's existing R2 copy.
+  name: bazarr-nas-to-r2-copy-e514549cb92cd5b9-33c4c80b
+spec:
+  repository:
+    kind: Repository
+    name: bazarr-r2
+    namespace: arrs
+  deletionPolicy: Retain

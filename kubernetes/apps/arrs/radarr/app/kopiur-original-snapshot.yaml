@@ -33,7 +33,8 @@ spec:
               app.kubernetes.io/name: radarr
               app.kubernetes.io/controller: radarr
           container: app
-          command: [sh, /kopiur-quiesce/quiesce.sh, check, "1791563547", "1320"]
+          # Actual post-export budget is rechecked before any CSI point can be accepted.
+          command: [sh, /kopiur-quiesce/quiesce.sh, check, "1791563547", "660"]
           timeout: 30s
           continueOnFailure: false
       - workloadExec:

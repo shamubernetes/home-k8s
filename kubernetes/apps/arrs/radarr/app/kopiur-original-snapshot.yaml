@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: radarr-k8s92-original
+spec:
+  # Parent enables only after credentials, grants and mover deadlines exist.
+  suspend: false
+  repository:
+    kind: Repository
+    name: radarr-nas-smb
+  identity:
+    username: radarr
+    hostname: arrs
+  sources:
+    - pvc:
+        name: radarr
+      sourcePathOverride: /pvc/radarr
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  hooks:
+    beforeSnapshot:
+      - workloadExec:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: radarr
+              app.kubernetes.io/controller: radarr
+          container: kopiur-postgres
+          command: [timeout, "600", sh, /kopiur/capture.sh]
+          timeout: 11m
+          continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: radarr-k8s92-original
+spec:
+  policyRef:
+    name: radarr-k8s92-original
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

@@ -118,6 +118,17 @@ class MoverDeadlineTests(unittest.TestCase):
                         'op', 'snapshot-delete-batch', namespace, manager), expected)
         self.assertEqual(self.mutated_deadline('op', 'snapshot-delete-batch', 'default'), 172800)
 
+    def test_radarr_original_replication_has_existing_scoped_cap(self):
+        value = 'radarr-k8s92-original-to-r2'
+        self.assertEqual(self.mutated_deadline('snapshot-replication', value), 3600)
+        for arguments in [('snapshot-replication', value, 'default'),
+                          ('snapshot-replication', value, 'media'),
+                          ('snapshot-replication', value, 'arrs', 'volsync'),
+                          ('snapshot-replication', value + '-unrelated'),
+                          ('config', value)]:
+            with self.subTest(arguments=arguments):
+                self.assertEqual(self.mutated_deadline(*arguments), 172800)
+
     def test_existing_coverage_is_preserved(self):
         for key, value in [('config', 'seerr'), ('maintenance', 'profilarr-nas-smb'),
                            ('snapshot-replication', 'seerr-nas-to-r2'),

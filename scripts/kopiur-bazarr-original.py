@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Read the two retained Bazarr originals on ARC, without modifying either backend.
+
+Only dedicated Bazarr transport secrets arrive on the owned Unix socket. No
+source DB credentials, Kubernetes config, public endpoint or artifact upload.
+"""
+import configparser
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import shlex
+import signal
+import socket
+import sys
+import tempfile
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+NATIVE = runpy.run_path(str(ROOT / "scripts/kopiur-postgres-drill"))
+run = NATIVE["run"]
+MOVER = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f1f8bb5d00b791654d79429928e95db54f4b22"
+TOOLS = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
+ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
+ORIGINALS = {"nas": "9a623d4c77684a42b970984ce9df7076", "r2": "c889e51bdf7ce94ee2f6b555e546842d"}
+
+
+def validate_fields(fields):
+    required = {"NAS_RCLONE_CONFIG", "NAS_KOPIA_PASSWORD", "R2_KOPIA_PASSWORD",
+                "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"}
+    if set(fields) != required or not all(isinstance(v, str) and v for v in fields.values()):
+        raise ValueError("invalid dedicated transport payload")
+    if fields["R2_BUCKET"] != "kopiur-bazarr":
+        raise ValueError("destination is not the approved Bazarr bucket")
+    config = configparser.ConfigParser(interpolation=None)
+    try:
+        config.read_string(fields["NAS_RCLONE_CONFIG"])
+    except configparser.Error:
+        raise ValueError("invalid NAS configuration") from None
+    if config.sections() != ["mnemosyne"]:
+        raise ValueError("unexpected NAS remotes")
+    actual = dict(config["mnemosyne"])
+    expected = {"type": "smb", "host": "10.100.47.100", "user": "kp-bazarr",
+                "pass": actual.get("pass"), "domain": "WORKGROUP"}
+    if actual != expected or not actual["pass"]:
+        raise ValueError("unexpected NAS identity")
+
+
+def compare_results(results):
+    left, right = (results[k] for k in ("nas", "r2"))
+    for key in ("bundle_checksums_sha256", "metadata", "table_counts", "table_fingerprints",
+                "api", "paired_filetree_bytes_equal"):
+        if left[key] != right[key]:
+            raise ValueError("independent originals differ: " + key)
+    for result in results.values():
+        if not result["native_restore"] or not result["restored_app_ping"] or \
+                result["network"] != "none-shared-namespace" or \
+                not result["paired_filetree_bytes_equal"]:
+            raise ValueError("native original recovery is incomplete")
+
+
+def qualify(fields):
+    validate_fields(fields)
+    nonce = uuid.uuid4().hex
+    tools = "k8s92-bazarr-tools-" + nonce
+    containers = []
+    run("docker", "volume", "create", "--label", "k8s92.bazarr=" + nonce, tools)
+    try:
+        run("docker", "run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges", "--mount", "type=volume,src=" + tools + ",dst=/tools,volume-nocopy",
+            TOOLS, "sh", "-c", "cp /bin/busybox /tools/busybox && /tools/busybox --install -s /tools")
+        results = {}
+        with tempfile.TemporaryDirectory(prefix="bazarr-original-", dir=os.environ["RUNNER_TEMP"]) as temporary:
+            for kind, snapshot in ORIGINALS.items():
+                name = "k8s92-bazarr-original-" + nonce + "-" + kind
+                containers.append(name)
+                run("docker", "run", "-d", "--name", name, "--label", "k8s92.bazarr=" + nonce,
+                    "--user", "568:568", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                    "--memory", "2g", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
+                    "--tmpfs", "/work:rw,nosuid,size=2g,uid=568,gid=568,mode=0700",
+                    "--mount", "type=volume,src=" + tools + ",dst=/tools,readonly,volume-nocopy",
+                    "--entrypoint", "/tools/busybox", MOVER, "sleep", "1800")
+                values = {"HOME": "/work", "PATH": "/tools:/usr/local/bin:/usr/bin:/bin", "TMPDIR": "/work/tmp",
+                          "KOPIA_PASSWORD": fields["NAS_KOPIA_PASSWORD" if kind == "nas" else "R2_KOPIA_PASSWORD"],
+                          "KOPIA_CONFIG_PATH": "/work/repository.config", "KOPIA_LOG_DIR": "/work/log",
+                          "KOPIA_CACHE_DIRECTORY": "/work/cache", "KOPIA_CHECK_FOR_UPDATES": "false"}
+                body = "set -eu\numask 077\n" + "\n".join("export " + k + "=" + shlex.quote(v) for k, v in values.items())
+                body += "\nmkdir /work/tmp\n"
+                if kind == "nas":
+                    body += "printf '%s' " + shlex.quote(fields["NAS_RCLONE_CONFIG"]) + " > /work/rclone.conf\n"
+                    backend = "rclone --remote-path=mnemosyne:kopiur-bazarr --rclone-args=--config=/work/rclone.conf"
+                else:
+                    body += "export AWS_ACCESS_KEY_ID=" + shlex.quote(fields["R2_ACCESS_KEY_ID"]) + "\n"
+                    body += "export AWS_SECRET_ACCESS_KEY=" + shlex.quote(fields["R2_SECRET_ACCESS_KEY"]) + "\n"
+                    backend = "s3 --bucket=kopiur-bazarr --prefix=kopiur/bazarr/r2/ --endpoint=" + ACCOUNT + ".r2.cloudflarestorage.com --region=auto"
+                # Read-only connect prevents maintenance, snapshots or repository writes.
+                body += "kopia repository connect " + backend + " --readonly >/dev/null\n"
+                body += "kopia snapshot restore " + snapshot + " /work/restored >/dev/null\n"
+                result = run("docker", "exec", "-i", name, "/tools/busybox", "sh", "-s",
+                             stdin=body.encode(), check=False, timeout=900)
+                if result.returncode:
+                    # Never print restored application config or secret-bearing provider logs.
+                    text = result.stderr.decode(errors="replace").lower()
+                    categories = [c for c in ("unknown long flag", "accessdenied", "invalid repository password",
+                                               "out of memory", "no space left on device") if c in text]
+                    raise RuntimeError("original " + kind + " restore failed: " + json.dumps(categories))
+                source = Path(temporary) / kind
+                source.mkdir(mode=0o700)
+                run("docker", "cp", name + ":/work/restored/.kopiur-postgres", str(source), timeout=300)
+                # Destroy the only networked restorer before application boot.
+                run("docker", "rm", "-fv", name)
+                containers.remove(name)
+                current = source / ".kopiur-postgres/current"
+                checksum = hashlib.sha256((current / "SHA256SUMS").read_bytes()).hexdigest()
+                metadata = (current / "metadata").read_text().splitlines()
+                proof = NATIVE["restore_pvc"](source, "bazarr", config_mib=1024, database_mib=4096)
+                proof.update(snapshot_id=snapshot, bundle_checksums_sha256=checksum, metadata=metadata,
+                             original_backend_readonly=True, networked_restorer_removed_before_boot=True)
+                results[kind] = proof
+        compare_results(results)
+        return {"app": "bazarr", "candidate": os.environ["QUALIFICATION_COMMIT"],
+                "runner": os.environ["RUNNER_NAME"], "results": results,
+                "independent_original_native_recovery": True, "nas_r2_native_data_equal": True,
+                "media_dependency_qualified": False, "legacy_retirement_authorized": False}
+    finally:
+        for name in containers:
+            label = run("docker", "inspect", "-f", '{{ index .Config.Labels "k8s92.bazarr" }}', name).stdout.decode().strip()
+            if label != nonce:
+                raise RuntimeError("restorer ownership changed")
+            run("docker", "rm", "-fv", name)
+        run("docker", "volume", "rm", tools)
+
+
+def main():
+    if sys.platform != "linux" or not os.environ.get("RUNNER_NAME") or sys.argv[1:] != ["--serve"]:
+        raise RuntimeError("original recovery requires the assigned ARC dispatch")
+    if not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("QUALIFICATION_COMMIT", "")):
+        raise ValueError("missing reviewed qualification commit")
+    for image in (MOVER, TOOLS, NATIVE["PG_IMAGE"], NATIVE["CONTRACTS"]["bazarr"][0]):
+        run("docker", "pull", "--platform", "linux/amd64", image, timeout=600)
+    def interrupted(signum, frame):
+        raise RuntimeError("original qualification interrupted")
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    directory = Path(os.environ["RUNNER_TEMP"]) / "k8s92-bazarr-original-channel"
+    directory.mkdir(mode=0o700)
+    path = str(directory / "socket")
+    try:
+        with socket.socket(socket.AF_UNIX) as listener:
+            listener.bind(path)
+            os.chmod(path, 0o600)
+            listener.listen(1)
+            listener.settimeout(900)
+            print(json.dumps({"bazarr_original_channel_ready": True, "runner": os.environ["RUNNER_NAME"], "socket": path}), flush=True)
+            with listener.accept()[0] as connection:
+                deadline = time.monotonic() + 30
+                data = bytearray()
+                while True:
+                    connection.settimeout(max(0.01, deadline - time.monotonic()))
+                    chunk = connection.recv(8192)
+                    if not chunk:
+                        break
+                    data.extend(chunk)
+                    if len(data) > 65536 or time.monotonic() > deadline:
+                        raise ValueError("transport payload exceeds bounds")
+                receipt = qualify(json.loads(data))
+                connection.sendall(json.dumps(receipt).encode())
+                print(json.dumps(receipt), flush=True)
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+        directory.rmdir()
+
+
+if __name__ == "__main__":
+    main()

@@ -21,6 +21,7 @@ on:
         - deadlines
         # One native fixture per dispatch, never seven sequential apps in 45 minutes.
         - postgres-bazarr
+        - postgres-bazarr-original
         - postgres-radarr
         - postgres-radarr-3d
         - postgres-sonarr
@@ -57,7 +58,7 @@ jobs:
         [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
         case "$SUITE" in
           tunarr|deadlines) ;;
-          postgres-bazarr|postgres-radarr|postgres-radarr-3d|postgres-sonarr|postgres-whisparr) ;;
+          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-3d|postgres-sonarr|postgres-whisparr) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
           identities) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
@@ -221,7 +222,9 @@ jobs:
       if: ${{ startsWith(inputs.suite, 'postgres-') }}
       env:
         SUITE: ${{ inputs.suite }}
-      run: scripts/validate-app --offline "arrs/${SUITE#postgres-}"
+      run: |
+        app=${SUITE#postgres-}
+        scripts/validate-app --offline "arrs/${app%-original}"
 
     - name: Pull selected database fixture images into ARC DinD
       if: ${{ startsWith(inputs.suite, 'postgres-') || startsWith(inputs.suite, 'mixed-') }}
@@ -241,7 +244,7 @@ jobs:
         suite = os.environ['SUITE']
         if suite.startswith('postgres-'):
             fixture = runpy.run_path('scripts/kopiur-postgres-drill')
-            images = [fixture['PG_IMAGE'], fixture['CONTRACTS'][suite.removeprefix('postgres-')][0]]
+            images = [fixture['PG_IMAGE'], fixture['CONTRACTS'][suite.removeprefix('postgres-').removesuffix('-original')][0]]
         else:
             # Read constants without running the mixed fixture's scratch setup.
             required = {
@@ -268,11 +271,20 @@ jobs:
         PY
 
     - name: PostgreSQL native application recovery fixture
-      if: ${{ startsWith(inputs.suite, 'postgres-') }}
+      if: ${{ startsWith(inputs.suite, 'postgres-') && inputs.suite != 'postgres-bazarr-original' }}
       env:
         SUITE: ${{ inputs.suite }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
       run: python3 scripts/kopiur-postgres-drill --fixture --app "${SUITE#postgres-}"
+
+    - name: Bazarr retained original native recovery
+      if: ${{ inputs.suite == 'postgres-bazarr-original' }}
+      env:
+        QUALIFICATION_COMMIT: ${{ inputs.commit }}
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+      run: |
+        python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_original.py -v
+        python3 scripts/kopiur-bazarr-original.py --serve
 
     - name: Mixed database native application recovery fixture
       if: ${{ startsWith(inputs.suite, 'mixed-') }}

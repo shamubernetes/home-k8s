@@ -36,7 +36,13 @@ class RadarrOriginalTests(unittest.TestCase):
     def test_native_api_compares_every_movie(self):
         records = [{'id': 1, 'tmdbId': 101, 'title': 'Fixture', 'path': '/media/fixture'},
                    {'id': 2, 'tmdbId': 102, 'title': 'Other fixture', 'path': '/media/other'}]
-        sql = lambda query: json.dumps(records)
+        def sql(query):
+            self.assertIn('JOIN "MovieMetadata" mm', query)
+            self.assertIn('mm."Id"=m."MovieMetadataId"', query)
+            self.assertIn('mm."TmdbId"', query)
+            self.assertIn('mm."Title"', query)
+            self.assertIn('m."Path"', query)
+            return json.dumps(records)
         proof = NATIVE['validate_radarr_api'](list(reversed(records)), 2, sql)
         self.assertEqual(proof['movies'], 2)
         self.assertEqual(proof['native_records_equal'], 2)

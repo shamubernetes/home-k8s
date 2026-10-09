@@ -572,8 +572,8 @@ def validate_radarr_api(response, expected, sql):
             raise ValueError("restored Radarr API identity is invalid")
         records.append({key: record[key] for key in ("id", "tmdbId", "title", "path")})
     original = json.loads(sql('''SELECT coalesce(json_agg(json_build_object(
-        'id', "Id", 'tmdbId', "TmdbId", 'title', "Title", 'path', "Path")), '[]'::json)
-        FROM "Movies"'''))
+        'id', m."Id", 'tmdbId', mm."TmdbId", 'title', mm."Title", 'path', m."Path")), '[]'::json)
+        FROM "Movies" m JOIN "MovieMetadata" mm ON mm."Id"=m."MovieMetadataId"'''))
     if sorted(records, key=lambda row: row["id"]) != sorted(original, key=lambda row: row["id"]):
         raise ValueError("restored Radarr API records differ from native data")
     encoded = json.dumps(sorted(records, key=lambda row: row["id"]), sort_keys=True).encode()

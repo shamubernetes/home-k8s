@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotreplication_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: radarr-3d-k8s92-original-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-09T23:44:00Z"
+spec:
+  sourceRef:
+    kind: Repository
+    name: radarr-3d-nas-smb
+  destinationRef:
+    kind: Repository
+    name: radarr-3d-r2
+  # Only one original exists while capture schedules remain suspended.
+  # Suspend this proof lane after the requested copy, before recurring activation.
+  schedule:
+    cron: "0 8 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: radarr-3d
+        hostname: arrs
+        sourcePath: /pvc/radarr-3d
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    none: {}
+  suspend: false

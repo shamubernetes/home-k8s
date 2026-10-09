@@ -19,5 +19,12 @@ resources:
 # Re-enable only with the bounded application-quiescence capture sequence.
 components:
 - ../../../../components/kopiur-postgres
+configMapGenerator:
+- name: radarr-kopiur-quiesce
+  files:
+  - quiesce.sh=./kopiur-quiesce.sh
+  options:
+    disableNameSuffixHash: true
 patches:
 - path: ./kopiur-postgres-patch.yaml
+- path: ./kopiur-quiesce-patch.yaml

@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: radarr
+spec:
+  interval: 10m
+  # The normal five-minute upgrade wait would roll back and restart the old writer.
+  timeout: 35m
+  values:
+    controllers:
+      radarr:
+        strategy: Recreate
+        containers:
+          app:
+            # Absolute expiry restores native startup even after container restarts.
+            command: [/usr/bin/catatonit, --]
+            args: [sh, /kopiur-quiesce/quiesce.sh, start, "1791563547", /entrypoint.sh]
+            env:
+              QUIESCENCE_STATE_DIR: /tmp/kopiur-quiescence
+              QUIESCENCE_UNTIL: "1791563547"
+            probes:
+              # Suppress normal liveness only until bounded startup resumes.
+              # 30-minute wrapper cap plus the existing five-minute startup allowance.
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ping
+                    port: 80
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 210
+    persistence:
+      kopiur-quiesce:
+        type: configMap
+        name: radarr-kopiur-quiesce
+        advancedMounts:
+          radarr:
+            app:
+            - path: /kopiur-quiesce
+              readOnly: true

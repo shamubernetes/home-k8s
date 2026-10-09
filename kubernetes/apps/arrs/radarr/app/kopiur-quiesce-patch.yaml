@@ -7,6 +7,16 @@ spec:
   interval: 10m
   # The normal five-minute upgrade wait would roll back and restart the old writer.
   timeout: 35m
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: Deployment
+          name: radarr
+        patch: |-
+          - op: add
+            path: /spec/progressDeadlineSeconds
+            value: 2100
   values:
     controllers:
       radarr:
@@ -15,10 +25,10 @@ spec:
           app:
             # Absolute expiry restores native startup even after container restarts.
             command: [/usr/bin/catatonit, --]
-            args: [sh, /kopiur-quiesce/quiesce.sh, start, "1791563547", /entrypoint.sh]
+            args: [sh, /kopiur-quiesce/quiesce.sh, start, "1791564866", /entrypoint.sh]
             env:
               QUIESCENCE_STATE_DIR: /tmp/kopiur-quiescence
-              QUIESCENCE_UNTIL: "1791563547"
+              QUIESCENCE_UNTIL: "1791564866"
             probes:
               # Suppress normal liveness only until bounded startup resumes.
               # 30-minute wrapper cap plus the existing five-minute startup allowance.

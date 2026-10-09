@@ -30,10 +30,11 @@ ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
 ORIGINALS = {"nas": "9a623d4c77684a42b970984ce9df7076", "r2": "c889e51bdf7ce94ee2f6b555e546842d"}
 # One coherent production generation, matched through the copiedFrom source manifest.
 RADARR_ORIGINALS = {"nas": "485dc5199b9575fa03551f0e6ffc1030", "r2": "2662d4ed229fd7b7751cebe634a390b1"}
+RADARR_3D_ORIGINALS = {"nas": "4b974fb1e16ad236f02a98a32e7df660", "r2": "5ce5f1e5dfc49c707e15efd19f94ad6f"}
 
 
 def validate_fields(fields, app="bazarr"):
-    if app not in ("bazarr", "radarr"):
+    if app not in ("bazarr", "radarr", "radarr-3d"):
         raise ValueError("unsupported original application")
     required = {"NAS_RCLONE_CONFIG", "NAS_KOPIA_PASSWORD", "R2_KOPIA_PASSWORD",
                 "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"}
@@ -89,11 +90,12 @@ def extract_original(archive, destination, *, database="bazarr", capacity=2 * 10
 
 def qualify(fields, app="bazarr"):
     validate_fields(fields, app)
-    originals = ORIGINALS if app == "bazarr" else RADARR_ORIGINALS
+    originals = {"bazarr": ORIGINALS, "radarr": RADARR_ORIGINALS, "radarr-3d": RADARR_3D_ORIGINALS}[app]
+    database = NATIVE["CONTRACTS"][app][1][0]
     if set(originals) != {"nas", "r2"}:
         raise ValueError("original generation is not retained on both backends")
-    capacity_mib = 2048 if app == "bazarr" else 8192
-    config_mib = 1024 if app == "bazarr" else 7168
+    capacity_mib = 8192 if app == "radarr" else 2048
+    config_mib = 7168 if app == "radarr" else 1024
     nonce = uuid.uuid4().hex
     tools = "k8s92-bazarr-tools-" + nonce
     containers = []
@@ -167,7 +169,7 @@ def qualify(fields, app="bazarr"):
                         stdout=stream, stderr=subprocess.PIPE, timeout=300)
                 if copied.returncode:
                     raise RuntimeError("original " + kind + " transfer failed")
-                extract_original(archive, source, database=NATIVE["CONTRACTS"][app][1][0],
+                extract_original(archive, source, database=database,
                                  capacity=capacity_mib * 1024 * 1024)
                 archive.unlink()
                 # Destroy the only networked restorer before application boot.
@@ -196,9 +198,11 @@ def qualify(fields, app="bazarr"):
 
 
 def main():
-    app = "radarr" if sys.argv[1:] == ["--serve", "--app", "radarr"] else "bazarr"
-    valid_arguments = ["--serve", "--app", "radarr"] if app == "radarr" else ["--serve"]
-    if sys.platform != "linux" or not os.environ.get("RUNNER_NAME") or sys.argv[1:] != valid_arguments:
+    arguments = sys.argv[1:]
+    app = arguments[2] if len(arguments) == 3 and arguments[:2] == ["--serve", "--app"] else "bazarr"
+    valid_arguments = ["--serve"] if app == "bazarr" else ["--serve", "--app", app]
+    if app not in ("bazarr", "radarr", "radarr-3d") or sys.platform != "linux" or \
+            not os.environ.get("RUNNER_NAME") or arguments != valid_arguments:
         raise RuntimeError("original recovery requires the assigned ARC dispatch")
     if not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("QUALIFICATION_COMMIT", "")):
         raise ValueError("missing reviewed qualification commit")

@@ -88,15 +88,42 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(result.stdout, script)
         subprocess.run(["sh", "-n"], input=script, check=True)
 
+    def assert_capture_activation(self, app, policy, schedule, replication):
+        # Only this independently reviewed original production receipt admits
+        # Bazarr activation. Synthetic suites and other apps remain suspended.
+        evidence = policy.get("metadata", {}).get("annotations", {}).get("kopiur.home.arpa/original-native-recovery")
+        if evidence is not None:
+            self.assertEqual(app, "bazarr")
+            self.assertEqual(evidence, "https://github.com/shamubernetes/home-k8s/actions/runs/37919745482")
+        suspended = evidence is None
+        self.assertIs(policy["spec"]["suspend"], suspended)
+        self.assertIs(schedule["spec"]["schedule"]["suspend"], suspended)
+        self.assertIs(replication["spec"]["suspend"], suspended)
+        self.assertEqual(policy["spec"]["defaultDeletionPolicy"], "Retain")
+        self.assertEqual(replication["spec"]["migrate"]["policies"], "none")
+
+    def test_activation_requires_the_exact_original_receipt_and_retains_history(self):
+        directory = REPO / "kubernetes/apps/arrs/bazarr/app"
+        policy, schedule, replication = load_documents(directory / "kopiur-policy.yaml")
+        policy["metadata"]["annotations"] = {"kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/37919745482"}
+        policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = replication["spec"]["suspend"] = False
+        self.assert_capture_activation("bazarr", policy, schedule, replication)
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("radarr", policy, schedule, replication)
+        policy["metadata"]["annotations"]["kopiur.home.arpa/original-native-recovery"] = "synthetic"
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("bazarr", policy, schedule, replication)
+        policy["metadata"]["annotations"] = {}
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("bazarr", policy, schedule, replication)
+
     def test_each_policy_exports_database_before_pvc(self):
         for app in APPS:
             with self.subTest(app=app):
                 directory = REPO / "kubernetes/apps/arrs" / app / "app"
                 policy, schedule, replication = load_documents(directory / "kopiur-policy.yaml")
-                self.assertTrue(policy["spec"]["suspend"])
-                self.assertTrue(schedule["spec"]["schedule"]["suspend"])
+                self.assert_capture_activation(app, policy, schedule, replication)
                 self.assertNotIn("suspend", schedule["spec"])
-                self.assertTrue(replication["spec"]["suspend"])
                 spec = policy["spec"]
                 self.assertEqual(spec["copyMethod"], "Snapshot")
                 self.assertEqual(spec["sources"][0]["pvc"]["name"], app)

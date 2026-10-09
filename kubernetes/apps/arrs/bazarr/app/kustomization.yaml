@@ -14,6 +14,11 @@ resources:
 - ../../../../templates/gatus/guarded
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
+- ./kopiur-policy.yaml
+components:
+- ../../../../components/kopiur-postgres
+patches:
+- path: ./kopiur-postgres-patch.yaml
 configMapGenerator:
 - name: bazarr-scripts
   files:

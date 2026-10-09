@@ -377,6 +377,54 @@ class OriginalResolvedExportTests(unittest.TestCase):
             self.export(encrypt)
         encrypt.assert_called_once()
 
+    def test_original_consumer_adapter_required_before_source_io(self):
+        with self.assertRaisesRegex(EscrowError, 'concrete original consumer authority'):
+            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
+                backend=self.args['backend'], consumer_authority=Mock(),
+                contracts=self.helper.contracts, encrypt_export=Mock())
+        self.assertEqual(self.case.calls, [])
+
+    def test_original_source_authority_denies_concrete_consumer_reads(self):
+        from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
+        consumer = AuthorityTests(); consumer.setUp()
+        self.case.authority.return_value = False
+        with self.assertRaises(EscrowError):
+            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
+                backend=self.args['backend'], consumer_authority=consumer.authority,
+                contracts=self.helper.contracts, encrypt_export=Mock())
+        self.assertEqual(consumer.calls, [])
+        self.assertEqual(self.case.calls, [])
+
+    def test_original_source_revocation_during_consumer_prepare_denies_process_reads(self):
+        from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
+        consumer = AuthorityTests(); consumer.setUp()
+        original = consumer.run_read
+        def revoke(argv, data=None):
+            result = original(argv, data)
+            if argv[:3] == ['kubectl', 'get', 'pods']:
+                self.case.authority.return_value = False
+            return result
+        consumer.authority.run = revoke
+        with self.assertRaises(EscrowError):
+            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
+                backend=self.args['backend'], consumer_authority=consumer.authority,
+                contracts=self.helper.contracts, encrypt_export=Mock())
+        self.assertEqual(consumer.exec_calls(), [])
+        self.assertFalse(any(argv[1] == 'exec' or argv[-1] == 'jsonpath={.data.ELASTIC_PASSWORD}'
+                             for argv, _ in self.case.calls))
+
+    def test_missing_original_consumer_provenance_denies_source_credentials(self):
+        from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
+        consumer = AuthorityTests(); consumer.setUp()
+        consumer.config['config']['Labels'] = {}
+        with self.assertRaisesRegex(EscrowError, 'provenance absent'):
+            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
+                backend=self.args['backend'], consumer_authority=consumer.authority,
+                contracts=self.helper.contracts, encrypt_export=Mock())
+        self.assertEqual(consumer.exec_calls(), [])
+        self.assertFalse(any(argv[1] == 'exec' or argv[-1] == 'jsonpath={.data.ELASTIC_PASSWORD}'
+                             for argv, _ in self.case.calls))
+
     def test_resolved_export_reaches_only_explicit_encrypt_boundary(self):
         encrypt = Mock(side_effect=RuntimeError('PRIVATE'))
         with self.assertRaisesRegex(EscrowError, '^bound consumer capture/export operation failed$'):

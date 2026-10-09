@@ -347,6 +347,29 @@ class PreparedSnapshotExport:
             capture=lambda binding: composed.capture(self.source.configuration),
             encrypt_export=lambda manifest, parts: composed.encrypt(encrypt_export, manifest, parts))
 
+    def export_original_consumers(self, *, ledger, backend, consumer_authority,
+                                  contracts, encrypt_export):
+        """Use concrete complete original release/roster/process authority.
+
+        Startup environment qualification is not an application-loaded config
+        witness or all-writer fence. The original source guard still owns those
+        independent admission/export gates before any consumer process read.
+        """
+        from kopiur_elasticsearch_consumer_authority import ConsumerAuthority
+        if not isinstance(consumer_authority, ConsumerAuthority):
+            raise EscrowError('concrete original consumer authority adapter required')
+        self.guard()
+        consumer_authority = consumer_authority.with_checkpoint(self.guard)
+        selections = consumer_authority.prepare()
+        self.guard()
+        result = self.export_resolved_consumers(ledger=ledger, backend=backend,
+            selections=selections, contracts=contracts,
+            require_consumer_authority=consumer_authority.require, encrypt_export=encrypt_export)
+        self.guard()
+        consumer_authority.require(selections)
+        result['consumer_authority'] = consumer_authority.receipt()
+        return result
+
     def capture_catalog(self, *, ledger, backend, consumers):
         """Read a supplied complete roster, without exporting or mutating source state.
 

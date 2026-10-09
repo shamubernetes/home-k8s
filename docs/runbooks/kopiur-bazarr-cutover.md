@@ -4,7 +4,7 @@ This change extracts Bazarr from PR5424 without deploying its other four apps or
 
 The capture sidecar uses the existing dedicated `kopiur_bazarr` identity provisioned by `arrs/kopiur-backup-identities`. It never receives application or database-administration secrets. Its mounts exclude NFS media, add-ons and scripts. Capture pairs one native PostgreSQL transaction with a complete `/config` archive only when the file-tree inventory stays unchanged. A busy tree fails closed without stopping the app. Bazarr restores must have the format-2 paired file archive; a legacy config-only bundle is rejected before any container starts.
 
-Deployment starts with capture, schedules and replication suspended. Repository initialization and health checks use the previously qualified app-specific SMB share and R2 bucket. No production backup point is accepted by the native synthetic fixture alone.
+Automatic capture, schedules and replication start suspended. A reviewed one-off `Snapshot` can still execute the recipe while its automatic paths remain paused. The `bazarr-k8s92-original` request preserves the resulting point with `Retain` and inherits the established arrs mover deadline. Repository initialization and health checks use the previously qualified app-specific SMB share and R2 bucket. No production backup point is accepted by the native synthetic fixture alone.
 
 ## Activation gates
 

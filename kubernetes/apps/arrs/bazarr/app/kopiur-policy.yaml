@@ -83,6 +83,8 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: bazarr-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-09T11:40:25Z"
 spec:
   sourceRef:
     kind: Repository

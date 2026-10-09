@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: bazarr-kopiur-scoped-grants-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -25,7 +27,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
+        image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         command:
         - sh
         - -ec
@@ -116,6 +118,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: radarr-kopiur-scoped-grants-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -138,7 +142,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
+        image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         command:
         - sh
         - -ec
@@ -229,6 +233,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: radarr-3d-kopiur-scoped-grants-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -251,7 +257,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
+        image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         command:
         - sh
         - -ec
@@ -342,6 +348,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: sonarr-kopiur-scoped-grants-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -364,7 +372,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
+        image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         command:
         - sh
         - -ec
@@ -455,6 +463,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: whisparr-kopiur-scoped-grants-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
   labels:
     k8s92.phase: backup-identities
 spec:
@@ -477,7 +487,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b
+        image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         command:
         - sh
         - -ec

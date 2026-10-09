@@ -109,7 +109,18 @@ def qualify(fields):
                     raise RuntimeError("original " + kind + " restore failed: " + json.dumps(categories))
                 source = Path(temporary) / kind
                 source.mkdir(mode=0o700)
-                run("docker", "cp", name + ":/work/restored/.kopiur-postgres", str(source), timeout=300)
+                probe = run("docker", "exec", name, "/tools/busybox", "sh", "-c",
+                    "test -d /work/restored/.kopiur-postgres && test -f /work/restored/.kopiur-postgres/COMPLETE",
+                    check=False)
+                if probe.returncode:
+                    raise RuntimeError("original " + kind + " lacks the required complete capture bundle at PVC root")
+                copied = run("docker", "cp", name + ":/work/restored/.kopiur-postgres", str(source),
+                             check=False, timeout=300)
+                if copied.returncode:
+                    text = copied.stderr.decode(errors="replace").lower()
+                    categories = [c for c in ("could not find", "permission denied", "lchown", "chmod",
+                                               "read-only file system", "no space left on device", "unexpected eof") if c in text]
+                    raise RuntimeError("original " + kind + " transfer failed: " + json.dumps(categories))
                 # Destroy the only networked restorer before application boot.
                 run("docker", "rm", "-fv", name)
                 containers.remove(name)

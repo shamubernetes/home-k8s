@@ -11,3 +11,16 @@ spec:
   failurePolicy:
     activeDeadlineSeconds: 3600
     backoffLimit: 0
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: bazarr-k8s92-original-retry1
+spec:
+  policyRef:
+    name: bazarr
+  deletionPolicy: Retain
+  # Preserve the first attempt and capture this mover's live diagnostic output.
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

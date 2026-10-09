@@ -2,9 +2,11 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: radarr
+  annotations:
+    kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/37981655593
 spec:
-  # Parent enables only after credentials, grants and mover deadlines exist.
-  suspend: true
+  # Original production NAS/R2 native recovery passed before activation.
+  suspend: false
   repository:
     kind: Repository
     name: radarr-nas-smb
@@ -31,8 +33,9 @@ spec:
             app.kubernetes.io/name: radarr
             app.kubernetes.io/controller: radarr
         container: kopiur-postgres
-        command: [timeout, "600", sh, /kopiur/capture.sh]
-        timeout: 11m
+        command: [sh, /kopiur/recurring-capture.sh]
+        # 120s acknowledgement + 600s capture + 30s escalation, with cleanup.
+        timeout: 13m
         continueOnFailure: false
   mover:
     podSecurityContext:
@@ -52,7 +55,7 @@ spec:
       schedule:
         cron: "45 9 * * 0"
         jitter: 1h
-      capacity: 15Gi
+      capacity: 24Gi
       storageClassName: ceph-block
       parallel: 2
     successExpr: "stats.files > 0 && stats.errors == 0"
@@ -75,6 +78,23 @@ spec:
   failedJobsHistoryLimit: 3
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: radarr-primary
+spec:
+  policyRef:
+    name: radarr
+  schedule:
+    suspend: false
+    # Preserve the incumbent hourly primary cadence, not the draft daily cadence.
+    cron: "${VOLSYNC_SCHEDULE_RADARR}"
+    jitter: 10m
+    runOnCreate: true
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: radarr-nas-to-r2
@@ -86,7 +106,7 @@ spec:
     kind: Repository
     name: radarr-r2
   schedule:
-    cron: "0 8 * * *"
+    cron: "${VOLSYNC_R2_SCHEDULE_RADARR}"
     jitter: 10m
   selection:
     identities:
@@ -98,4 +118,5 @@ spec:
   migrate:
     parallel: 2
     policies: none
-  suspend: true
+  # Preserve every copied point. No pruning is introduced.
+  suspend: false

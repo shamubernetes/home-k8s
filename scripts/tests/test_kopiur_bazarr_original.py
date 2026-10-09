@@ -97,6 +97,34 @@ class OriginalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check(response, 1, "table_shows", "sonarrSeriesId", lambda query: "")
 
+    def test_tmpfs_transfer_has_an_exact_safe_inventory(self):
+        import io
+        import tarfile
+        import tempfile
+        names = [".kopiur-postgres/COMPLETE", ".kopiur-postgres/current", ".kopiur-postgres/current/SHA256SUMS"]
+        names += [".kopiur-postgres/current/" + n for n in ("bazarr.dump", "bazarr.toc", "application-config", "application-state.tar", "filetree.sha256", "metadata")]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "transfer.tar"
+            for bad in (None, "../escape", ".kopiur-postgres/current", "link"):
+                with tarfile.open(archive, "w") as bundle:
+                    for name in names + ([bad] if bad else []):
+                        member = tarfile.TarInfo(name)
+                        if name == ".kopiur-postgres/current":
+                            member.type = tarfile.DIRTYPE
+                        elif name == "link":
+                            member.type = tarfile.SYMTYPE
+                            member.linkname = "/etc/passwd"
+                        else:
+                            member.size = 1
+                        bundle.addfile(member, io.BytesIO(b"x") if member.isfile() else None)
+                if bad:
+                    with self.subTest(bad=bad), self.assertRaises(ValueError):
+                        M["extract_original"](archive, root / "restored")
+                else:
+                    M["extract_original"](archive, root / "restored")
+                    self.assertEqual((root / "restored/.kopiur-postgres/COMPLETE").read_bytes(), b"x")
+
     def test_native_recovery_compares_representative_application_records(self):
         text = (ROOT / "scripts/kopiur-postgres-drill").read_text()
         self.assertIn('"table_fingerprints": fingerprints', text)

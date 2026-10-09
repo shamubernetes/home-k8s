@@ -4,7 +4,7 @@ kind: SnapshotPolicy
 metadata:
   name: radarr-k8s92-original
 spec:
-  # Parent enables only after credentials, grants and mover deadlines exist.
+  # One original capture, guarded by the bounded native-startup pause.
   suspend: false
   repository:
     kind: Repository
@@ -32,9 +32,28 @@ spec:
             matchLabels:
               app.kubernetes.io/name: radarr
               app.kubernetes.io/controller: radarr
+          container: app
+          # Actual post-export budget is rechecked before any CSI point can be accepted.
+          command: [sh, /kopiur-quiesce/quiesce.sh, check, "1791563547", "660"]
+          timeout: 30s
+          continueOnFailure: false
+      - workloadExec:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: radarr
+              app.kubernetes.io/controller: radarr
           container: kopiur-postgres
           command: [timeout, "600", sh, /kopiur/capture.sh]
           timeout: 11m
+          continueOnFailure: false
+      - workloadExec:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: radarr
+              app.kubernetes.io/controller: radarr
+          container: app
+          command: [sh, /kopiur-quiesce/quiesce.sh, check, "1791563547", "660"]
+          timeout: 30s
           continueOnFailure: false
   mover:
     podSecurityContext:
@@ -47,20 +66,7 @@ spec:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: radarr-k8s92-original
-spec:
-  policyRef:
-    name: radarr-k8s92-original
-  deletionPolicy: Retain
-  failurePolicy:
-    activeDeadlineSeconds: 3600
-    backoffLimit: 0
----
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
-apiVersion: kopiur.home-operations.com/v1alpha1
-kind: Snapshot
-metadata:
-  name: radarr-k8s92-original-retry1
+  name: radarr-k8s92-original-paused1
 spec:
   policyRef:
     name: radarr-k8s92-original

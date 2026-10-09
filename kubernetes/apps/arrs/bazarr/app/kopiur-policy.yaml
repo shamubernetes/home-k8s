@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: bazarr
+spec:
+  # Parent enables only after credentials, grants and mover deadlines exist.
+  suspend: true
+  repository:
+    kind: Repository
+    name: bazarr-nas-smb
+  identity:
+    username: bazarr
+    hostname: arrs
+  sources:
+  - pvc:
+      name: bazarr
+    sourcePathOverride: /pvc/bazarr
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+    - ReadWriteOnce
+  # Keep every new recovery point until its retirement policy is accepted.
+  defaultDeletionPolicy: Retain
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: bazarr
+            app.kubernetes.io/controller: bazarr
+        container: kopiur-postgres
+        command: [timeout, "600", sh, /kopiur/capture.sh]
+        timeout: 11m
+        continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: "45 8 * * *"
+        jitter: 30m
+      parallel: 4
+      fileParallelism: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: "45 9 * * 0"
+        jitter: 1h
+      capacity: 2Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: "stats.files > 0 && stats.errors == 0"
+    verifyFilesPercent: 100
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: bazarr-daily
+spec:
+  policyRef:
+    name: bazarr
+  schedule:
+    suspend: true
+    # Preserve the incumbent primary capture cadence when activation is accepted.
+    cron: "${VOLSYNC_SCHEDULE_BAZARR}"
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: bazarr-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: bazarr-nas-smb
+  destinationRef:
+    kind: Repository
+    name: bazarr-r2
+  schedule:
+    cron: "${VOLSYNC_R2_SCHEDULE_BAZARR}"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: bazarr
+        hostname: arrs
+        sourcePath: /pvc/bazarr
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  # No remote pruning before independent recovery and policy acceptance.
+  suspend: true

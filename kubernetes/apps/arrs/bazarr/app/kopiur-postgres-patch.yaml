@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: bazarr
+spec:
+  interval: 10m
+  values:
+    controllers:
+      bazarr:
+        containers:
+          kopiur-postgres:
+            image:
+              repository: docker.io/library/postgres
+              tag: 17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+            command: [sleep, infinity]
+            env:
+              PGHOST: postgres17-rw.database.svc.cluster.local
+              PGPORT: "5432"
+              PGDATABASES: bazarr
+              CAPTURE_MODE: single-db-stable-filetree
+              PGSSLMODE: require
+              CONFIG_FILE: /config/config/config.yaml
+            envFrom:
+            - secretRef:
+                name: bazarr-kopiur-postgres
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: [ALL]}
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 512Mi
+    persistence:
+      kopiur-postgres-script:
+        type: configMap
+        name: bazarr-kopiur-postgres
+        advancedMounts:
+          bazarr:
+            kopiur-postgres:
+            - path: /kopiur
+              readOnly: true
+      media:
+        globalMounts: null
+        advancedMounts:
+          bazarr:
+            app:
+            - path: /media
+      add-ons:
+        globalMounts: null
+        advancedMounts:
+          bazarr:
+            app:
+            - path: /add-ons
+            subcleaner:
+            - path: /add-ons
+      scripts:
+        globalMounts: null
+        advancedMounts:
+          bazarr:
+            app:
+            - path: /scripts

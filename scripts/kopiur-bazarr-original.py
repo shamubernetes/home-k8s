@@ -14,7 +14,9 @@ import runpy
 import shlex
 import signal
 import socket
+import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import uuid
@@ -60,6 +62,25 @@ def compare_results(results):
                 result["network"] != "none-shared-namespace" or \
                 not result["paired_filetree_bytes_equal"]:
             raise ValueError("native original recovery is incomplete")
+
+
+def extract_original(archive, destination):
+    allowed = {".kopiur-postgres/COMPLETE", ".kopiur-postgres/current", ".kopiur-postgres/current/SHA256SUMS"}
+    filenames = ("bazarr.dump", "bazarr.toc", "application-config", "application-state.tar", "filetree.sha256", "metadata")
+    allowed.update(".kopiur-postgres/current/" + name for name in filenames)
+    with tarfile.open(archive) as bundle:
+        members = bundle.getmembers()
+        if len(members) > len(allowed) or sum(m.size for m in members) > 2 * 1024**3:
+            raise ValueError("original transfer exceeds existing restore capacity")
+        seen = set()
+        for member in members:
+            name = member.name.rstrip("/")
+            if name not in allowed or name in seen or not (member.isfile() or member.isdir()):
+                raise ValueError("unexpected original transfer member")
+            seen.add(name)
+        if seen != allowed:
+            raise ValueError("original transfer is incomplete")
+        bundle.extractall(destination, filter="data")
 
 
 def qualify(fields):
@@ -109,7 +130,22 @@ def qualify(fields):
                     raise RuntimeError("original " + kind + " restore failed: " + json.dumps(categories))
                 source = Path(temporary) / kind
                 source.mkdir(mode=0o700)
-                run("docker", "cp", name + ":/work/restored/.kopiur-postgres", str(source), timeout=300)
+                probe = run("docker", "exec", name, "/tools/busybox", "sh", "-c",
+                    "test -d /work/restored/.kopiur-postgres && test -f /work/restored/.kopiur-postgres/COMPLETE",
+                    check=False)
+                if probe.returncode:
+                    raise RuntimeError("original " + kind + " lacks the required complete capture bundle at PVC root")
+                # Docker cp cannot archive a container's tmpfs. Keep the binary
+                # stream entirely inside ARC, not through kubectl or Hermes.
+                archive = source.parent / (kind + ".tar")
+                with archive.open("wb") as stream:
+                    copied = subprocess.run(["docker", "exec", name, "/tools/busybox", "tar",
+                        "-C", "/work/restored", "-cf", "-", ".kopiur-postgres/COMPLETE", ".kopiur-postgres/current"],
+                        stdout=stream, stderr=subprocess.PIPE, timeout=300)
+                if copied.returncode:
+                    raise RuntimeError("original " + kind + " transfer failed")
+                extract_original(archive, source)
+                archive.unlink()
                 # Destroy the only networked restorer before application boot.
                 run("docker", "rm", "-fv", name)
                 containers.remove(name)

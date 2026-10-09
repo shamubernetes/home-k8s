@@ -46,7 +46,8 @@ spec:
         cpu: 25m
         memory: 128Mi
       limits:
-        memory: 512Mi
+        # Native NAS mover was OOMKilled at 512Mi during repository connection.
+        memory: 2Gi
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository

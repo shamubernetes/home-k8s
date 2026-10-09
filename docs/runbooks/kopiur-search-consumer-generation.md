@@ -164,8 +164,10 @@ queries, cross-store reconciliation and release decisions remain required.
 or terminal-prefix selectors through authenticated loopback `_resolve/index`
 reads. It checks the complete reciprocal consumer/store roster before I/O,
 requires two identical fresh expansions, and refuses foreign, duplicate, closed,
-hidden, empty, alias-resolved or data-stream indices. Optional native per-index
-alias metadata does not change the selected physical index names.
+hidden, empty or data-stream indices. Matching alias metadata may refer only
+to already selected physical indices. It cannot add a target or substitute for
+a physical index. Optional native per-index alias metadata does not change the
+selected physical index names.
 
 Each consumer contract binds an immutable release image, source revision,
 effective selector digest and process lifetime. The independent caller guard

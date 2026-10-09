@@ -108,7 +108,7 @@ class IndexResolution:
             raise EscrowError('authenticated native index resolution failed') from None
         self.check()
         if (not isinstance(response, dict) or set(response) != {'indices', 'aliases', 'data_streams'}
-                or response['aliases'] != [] or response['data_streams'] != []
+                or not isinstance(response['aliases'], list) or response['data_streams'] != []
                 or not isinstance(response['indices'], list) or not response['indices']):
             raise EscrowError('physical native index expansion required')
         names = []
@@ -124,6 +124,20 @@ class IndexResolution:
                 raise EscrowError('open exact native application indices required')
             names.append(item['name'])
         qualified_indices(names, 'native expanded indices')
+        # Prefix selectors can also return aliases for the same selected physical
+        # indices. Never let an alias add a target outside that physical expansion.
+        alias_names = []
+        for alias in response['aliases']:
+            if (not isinstance(alias, dict) or set(alias) != {'name', 'indices'}
+                    or not isinstance(alias['name'], str)
+                    or not any(matches(alias['name'], s) for s in contract['selectors'])):
+                raise EscrowError('qualified native alias metadata required')
+            qualified_indices(alias['indices'], 'native alias targets')
+            if not set(alias['indices']) <= set(names) or alias['name'] in names:
+                raise EscrowError('alias cannot widen physical native index selection')
+            alias_names.append(alias['name'])
+        if alias_names:
+            qualified_indices(alias_names, 'native alias names')
         if not set(contract['required_indices']) <= set(names):
             raise EscrowError('required generation/state index absent from native catalog')
         return {'application': contract['application'], 'store': contract['store'],

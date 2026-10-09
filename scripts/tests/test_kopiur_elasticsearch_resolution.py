@@ -119,6 +119,38 @@ class ResolutionTests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(EscrowError):
                 self.resolution.capture(self.credentials)
 
+    def test_matching_alias_metadata_cannot_add_indices(self):
+        path = resolution_path(['ta_*'])
+        self.routes[path]['aliases'] = [{'name': 'ta_current', 'indices': ['ta_video']}]
+        self.routes[path]['indices'][0]['aliases'] = ['ta_current']
+        self.assertEqual(self.resolution.capture(self.credentials)['indices'],
+                         ['cowbell-media-v4', 'cowbell-media-v4-state', 'ta_config', 'ta_video'])
+
+    def test_alias_targets_cannot_widen_selection_or_replace_physical_indices(self):
+        for alias in ({'name': 'ta_current', 'indices': ['foreign']},
+                      {'name': 'ta_current', 'indices': ['ta_unselected']},
+                      {'name': 'ta_current', 'indices': []},
+                      {'name': 'ta_current', 'indices': ['ta_video', 'ta_video']},
+                      {'name': 'ta_current', 'indices': ['.security-7']},
+                      {'name': 'foreign', 'indices': ['ta_video']},
+                      {'name': 'ta_video', 'indices': ['ta_video']},
+                      {'name': 'ta_current', 'indices': ['ta_video'], 'extra': True}):
+            self.setUp()
+            self.routes[resolution_path(['ta_*'])]['aliases'] = [alias]
+            with self.subTest(alias=alias), self.assertRaises(EscrowError):
+                self.resolution.capture(self.credentials)
+        self.setUp()
+        self.routes[resolution_path(['ta_*'])] = native([]) | {
+            'aliases': [{'name': 'ta_current', 'indices': ['ta_video']}]}
+        with self.assertRaises(EscrowError):
+            self.resolution.capture(self.credentials)
+
+    def test_duplicate_alias_names_denied(self):
+        self.routes[resolution_path(['ta_*'])]['aliases'] = [
+            {'name': 'ta_current', 'indices': ['ta_video']}] * 2
+        with self.assertRaises(EscrowError):
+            self.resolution.capture(self.credentials)
+
     def test_external_errors_redacted_including_escrowerror(self):
         for error in (RuntimeError(self.credentials['elastic_password']), EscrowError('PRIVATE')):
             self.resolution.request = Mock(side_effect=error)

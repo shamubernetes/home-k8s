@@ -15,7 +15,8 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
-- ./kopiur-original-snapshot.yaml
+# Failed qualification request receipts are retained in K8S-92 and Git history.
+# Re-enable only with the bounded application-quiescence capture sequence.
 components:
 - ../../../../components/kopiur-postgres
 patches:

@@ -19,6 +19,10 @@ from kopiur_elasticsearch_escrow import EscrowError, _digest, _encoded
 
 IMAGE = 'ghcr.io/thezoo-house/cowbell@sha256:' + 'f51c7a8c7dffc41f4fb1b8dc277f2c0a6fd7fb9fa3c8bb6ce8caff35c30dce3b'
 PYTHON_IMAGE = 'docker.io/bbilly1/tubearchivist@sha256:ba1c846ddd0c6fdd0f040727129d2466e03b7a0c26499223839d450c7586ac09'
+# Exact public runtime base from the original Cowbell release Dockerfile.
+# ARC has no private GHCR pull grant. This qualifies the Bun reader, not the
+# application's loaded configuration or original Cowbell image contents.
+BUN_IMAGE = 'docker.io/oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0'
 SOURCE_FILES = ('web/src/config/runtime.ts', 'web/src/catalog/model.ts', 'web/src/catalog/elasticsearch.ts')
 
 
@@ -91,7 +95,7 @@ class AuthorityTests(unittest.TestCase):
         self.assertFalse(receipt['application_loaded_selection_verified'])
         self.assertFalse(receipt['production_recovery_accepted'])
         self.assertNotIn('processes', receipt)
-        self.assertEqual({c[0][5] for c in self.exec_calls()}, {p['metadata']['name'] for p in self.pods})
+        self.assertEqual({c[0][4] for c in self.exec_calls()}, {p['metadata']['name'] for p in self.pods})
         for _, data in self.exec_calls(): self.assertEqual(json.loads(data), {'variable': 'CATALOG_INDEX_PREFIX'})
 
     def test_no_authority_means_no_metadata_or_process_io(self):
@@ -345,7 +349,7 @@ class NativeProjectionTests(unittest.TestCase):
         self.exercise('python3', PYTHON_IMAGE)
 
     def test_real_bun_proc_reader_with_private_environment(self):
-        self.exercise('bun', IMAGE)
+        self.exercise('bun', BUN_IMAGE)
 
 
 if __name__ == '__main__':

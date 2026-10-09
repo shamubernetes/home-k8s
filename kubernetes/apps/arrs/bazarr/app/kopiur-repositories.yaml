@@ -15,7 +15,7 @@ spec:
       name: bazarr-kopiur-nas
       key: KOPIA_PASSWORD
   create:
-    enabled: false
+    enabled: true
   scheduleDefaults:
     timezone: America/New_York
   deletionProtection:
@@ -67,7 +67,7 @@ spec:
       name: bazarr-kopiur-r2
       key: KOPIA_PASSWORD
   create:
-    enabled: false
+    enabled: true
   scheduleDefaults:
     timezone: America/New_York
   deletionProtection:

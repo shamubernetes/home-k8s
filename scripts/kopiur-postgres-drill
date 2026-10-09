@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
 RADARR_QUIESCE = ROOT / "scripts/kopiur-radarr-quiesce"
+RADARR_RECURRING = ROOT / "scripts/kopiur-radarr-recurring"
 PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
 RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
 PAIRED_APPS = ("bazarr", "radarr")
@@ -181,7 +182,7 @@ class DockerDrill:
             self.sql(container, f'CREATE DATABASE "{database}" OWNER app;')
         return container
 
-    def app(self, name, database, config, *, quiesce_until=None):
+    def app(self, name, database, config, *, quiesce_until=None, recurring_state=None):
         prefix = self.env_prefix
         env = {f"{prefix}__POSTGRES__HOST": "127.0.0.1", f"{prefix}__POSTGRES__PORT": "5432",
                f"{prefix}__POSTGRES__USER": "app", f"{prefix}__POSTGRES__PASSWORD": self.password,
@@ -210,8 +211,21 @@ class DockerDrill:
             quiescence = {"entrypoint": entrypoint[0],
                           "command": ["--", "sh", "-c", RADARR_QUIESCE.read_text(),
                                       "kopiur-quiesce", "start", str(quiesce_until), entrypoint[-1]]}
+        mounts = [(config, "/config", "rw")]
+        if recurring_state is not None:
+            if self.app_name != "radarr" or quiesce_until is not None:
+                raise ValueError("recurring hold is qualified for Radarr only")
+            entrypoint = json.loads(run("docker", "image", "inspect", "--format",
+                                       "{{json .Config.Entrypoint}}", self.image).stdout)
+            if entrypoint != ["/usr/bin/catatonit", "--", "/entrypoint.sh"]:
+                raise ValueError("Radarr native entrypoint differs from reviewed image")
+            env["QUIESCENCE_STATE_DIR"] = "/kopiur-quiescence"
+            mounts.append((recurring_state, "/kopiur-quiescence", "rw"))
+            quiescence = {"entrypoint": entrypoint[0],
+                          "command": ["--", "sh", "-c", RADARR_RECURRING.read_text(),
+                                      "kopiur-recurring", "supervise", entrypoint[-1]]}
         return self.start(name, self.image, network="container:" + database, user="568:568",
-                          env=env, mounts=[(config, "/config", "rw")], **quiescence)
+                          env=env, mounts=mounts, **quiescence)
 
     def check_quiescence(self, container, deadline, minimum=1):
         return run("docker", "exec", "-i", container, "sh", "-s", "check", str(deadline), str(minimum),
@@ -530,7 +544,13 @@ def fixture(app_name="radarr"):
                 (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
             assert recovered["native_restore"] and recovered["restored_app_ping"]
+            recurring = None
+            if app_name == "radarr":
+                import runpy
+                recurring_module = runpy.run_path(str(ROOT / "scripts/kopiur-radarr-recurring-drill.py"))
+                recurring = recurring_module["qualify"](drill, source, config, run, PG_IMAGE)
             print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
+                              "recurring_radarr": recurring,
                               "tables_equal": sum(len(tables) for tables in before.values()),
                               "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,

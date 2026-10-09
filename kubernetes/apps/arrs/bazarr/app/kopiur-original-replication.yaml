@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotreplication_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: bazarr-k8s92-original-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-09T09:17:42Z"
+spec:
+  sourceRef:
+    kind: Repository
+    name: bazarr-nas-smb
+  destinationRef:
+    kind: Repository
+    name: bazarr-r2
+  # Temporary original-recovery qualification pass. Suspend after the requested run.
+  # Inherit the already approved cadence, not a new production policy.
+  schedule:
+    cron: "${VOLSYNC_R2_SCHEDULE_BAZARR}"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: bazarr
+        hostname: arrs
+        sourcePath: /pvc/bazarr
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  suspend: false

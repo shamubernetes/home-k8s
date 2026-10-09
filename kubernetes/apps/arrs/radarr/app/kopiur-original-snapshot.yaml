@@ -10,7 +10,8 @@ spec:
     kind: Repository
     name: radarr-nas-smb
   identity:
-    username: radarr
+    # Kopiur rejects a second policy sharing the recurring recipe's identity.
+    username: radarr-k8s92-original
     hostname: arrs
   sources:
     - pvc:

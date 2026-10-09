@@ -148,12 +148,9 @@ class KubernetesSource:
         if variables.get('ES_PATH_CONF', '/usr/share/elasticsearch/config') != '/usr/share/elasticsearch/config':
             raise EscrowError('alternate active source configuration root not admitted')
         try:
-            captured_credentials = json.loads(credentials['data'])
+            captured_credentials = credentials_from_bytes(credentials['data'])
             password = captured_credentials['elastic_password']
-            if (set(captured_credentials) != {'elastic_username', 'elastic_password'}
-                    or captured_credentials['elastic_username'] != 'elastic'
-                    or not isinstance(password, str) or not password
-                    or not hmac.compare_digest(password.encode(), variables['ELASTIC_PASSWORD'].encode())):
+            if not hmac.compare_digest(password.encode(), variables['ELASTIC_PASSWORD'].encode()):
                 raise EscrowError('provider credentials differ from source runtime generation')
         except EscrowError:
             raise

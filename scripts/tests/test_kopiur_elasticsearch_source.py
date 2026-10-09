@@ -164,6 +164,21 @@ class SourceTests(unittest.TestCase):
             self.capture()
         self.native.assert_not_called()
 
+    def test_ambiguous_original_credentials_never_reach_configuration_or_encryption(self):
+        raw = _encoded(json.loads(self.parts['credentials']['data']))
+        # A final valid value must not hide a duplicate field earlier in JSON.
+        duplicate = b'{"elastic_username":"other",' + raw[1:]
+        for data in (duplicate, raw + b'\n', raw + raw, b'[]', b'\xff'):
+            self.setUp()
+            self.parts['credentials']['data'] = data
+            encrypt = Mock()
+            with self.subTest(data_type=type(data).__name__), self.assertRaisesRegex(
+                    EscrowError, '^exact-service credentials invalid$'):
+                self.source.export(capture_native=self.native, capture_credentials=self.credentials,
+                                   encrypt_export=encrypt)
+            encrypt.assert_not_called()
+            self.assertFalse(any('tar' in x for x in self.calls))
+
     def test_rotated_provider_password_not_loaded_by_source_is_denied(self):
         self.parts['credentials']['data'] = json.dumps({'elastic_username': 'elastic',
                                                      'elastic_password': 'rotated-password'}).encode()

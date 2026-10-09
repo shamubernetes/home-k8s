@@ -1,6 +1,7 @@
 """Adapter ordering regressions. Real engine acceptance runs separately on ARC."""
 import copy
 from pathlib import Path
+import secrets
 import sys
 import unittest
 from unittest.mock import Mock, patch
@@ -11,6 +12,103 @@ from kopiur_elasticsearch_engine_fixture import (
 )
 from kopiur_elasticsearch_capture import SnapshotCapture, snapshot_metadata, synthetic_snapshot_archive
 from kopiur_elasticsearch_escrow import CONFIG_FILES, EscrowError, _encoded
+from kopiur_nonrel_native import IMAGES
+
+
+class OriginalCredentialRestoreTests(unittest.TestCase):
+    def setUp(self):
+        self.drill = Mock()
+        self.drill.create.return_value = ('owned-target', 9200)
+        self.drill.registered_id.return_value = 'a' * 64
+        self.credentials = {'elastic_username': 'elastic', 'elastic_password': secrets.token_hex(24)}
+        self.consumer = {'username': 'fixture-reader', 'password': secrets.token_hex(24)}
+        self.runtime = {'image': IMAGES['elasticsearch'], 'version': '8.19.23',
+                        'variables': {'discovery.type': 'single-node'}}
+        self.manifest = {'binding': {'runtime_version': '8.19.23'}}
+        self.parts = {'runtime': {'data': _encoded(self.runtime)},
+                      'credentials': {'data': _encoded(self.credentials)}}
+
+    def engine(self):
+        return EngineRestore(self.drill, 'nas', self.manifest, self.parts, Mock(), [],
+                             consumer_credentials=self.consumer)
+
+    def test_exact_original_schema_without_fixture_password_creates_stopped_target(self):
+        engine = self.engine()
+        self.assertEqual(engine.credentials, self.credentials)
+        self.assertNotIn('fixture-reader', engine.credentials)
+        self.assertEqual(engine.consumer_credentials, self.consumer)
+        self.consumer['password'] = 'changed-after-construction'
+        self.assertNotEqual(engine.consumer_credentials, self.consumer)
+        self.assertIs(self.drill.create.call_args.kwargs['start'], False)
+        self.assertNotIn('ELASTIC_PASSWORD', self.drill.create.call_args.args[2])
+        self.drill.start_registered.assert_not_called()
+
+    def test_legacy_fixture_credential_map_cannot_substitute_for_original_schema(self):
+        self.parts['credentials']['data'] = _encoded({
+            'elastic': self.credentials['elastic_password'], 'fixture-reader': self.consumer['password']})
+        with self.assertRaisesRegex(EscrowError, '^exact-service credentials invalid$'):
+            self.engine()
+        self.drill.create.assert_not_called()
+
+    def test_ambiguous_or_malformed_credentials_denied_before_docker_io(self):
+        raw = self.parts['credentials']['data']
+        for data in (raw + b'\n', raw + raw, b'[]', b'\xff',
+                     raw[:-1] + b',"elastic_username":"other"}'):
+            with self.subTest(data_type=type(data).__name__):
+                self.parts['credentials']['data'] = data
+                with self.assertRaisesRegex(EscrowError, '^exact-service credentials invalid$'):
+                    self.engine()
+        self.drill.create.assert_not_called()
+        self.drill.run.assert_not_called()
+
+    def test_bootstrap_password_regeneration_denied_before_target_creation(self):
+        self.runtime['variables']['ELASTIC_PASSWORD'] = self.credentials['elastic_password']
+        self.parts['runtime']['data'] = _encoded(self.runtime)
+        with self.assertRaisesRegex(EscrowError, '^synthetic escrow runtime invalid$'):
+            self.engine()
+        self.drill.create.assert_not_called()
+
+    def test_missing_foreign_or_reused_consumer_identity_denied_before_target_creation(self):
+        for consumer in (None, {}, {'username': 'elastic', 'password': secrets.token_hex(24)},
+                         self.consumer | {'password': ''}, self.consumer | {'extra': 'unapproved'},
+                         self.consumer | {'password': self.credentials['elastic_password']},
+                         self.consumer | {'password': 'invalid\ncredential'}):
+            self.consumer = consumer
+            with self.assertRaisesRegex(EscrowError, '^separate synthetic consumer credentials required$'):
+                self.engine()
+        self.drill.create.assert_not_called()
+
+    def test_prerequisites_authenticate_captured_password_without_resetting_keystore(self):
+        engine = self.engine()
+        engine.check_config = Mock()
+        self.drill.http.side_effect = [{'username': 'elastic'}, {'version': {'number': '8.19.23'}}]
+        self.drill.run.side_effect = [b'bootstrap.password\n', _encoded({
+            'Image': self.runtime['image'], 'Env': ['discovery.type=single-node']})]
+        checks = engine.prerequisites(engine.target, self.manifest)
+        self.assertTrue(all(value is True for value in checks.values()))
+        self.assertEqual(self.drill.auth, 'elastic:' + self.credentials['elastic_password'])
+        self.assertEqual(self.drill.run.call_args_list[0].args[-1], 'list')
+        self.assertEqual(self.drill.run.call_count, 2)
+
+    def test_consumer_query_uses_separate_native_identity_then_returns_to_captured_auth(self):
+        engine = self.engine()
+        engine.check_config = Mock()
+        engine.expected = [[], {}, {}, {}]
+        engine.inventory.return_value = engine.expected
+        self.drill.http.side_effect = [
+            {'fixture': {'settings': {'index.blocks.write': 'true'}}}, {'acknowledged': True},
+            {'fixture-reader': {'cluster': [], 'indices': [{'names': ['fixture'], 'privileges': ['read']}]}},
+            {'username': 'fixture-reader', 'roles': ['fixture-reader']}, {'hits': {'hits': []}}]
+        observed = []
+        values = iter(self.drill.http.side_effect)
+        def request(*args):
+            observed.append(self.drill.auth)
+            return next(values)
+        self.drill.http.side_effect = request
+        checks = engine.verify(engine.target, self.manifest)
+        self.assertTrue(all(value is True for value in checks.values()))
+        self.assertEqual(observed[-2:], ['fixture-reader:' + self.consumer['password']] * 2)
+        self.assertEqual(self.drill.auth, 'elastic:' + self.credentials['elastic_password'])
 
 
 class EngineAdapterTests(unittest.TestCase):

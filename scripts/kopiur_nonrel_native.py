@@ -669,7 +669,8 @@ print(json.dumps(result,default=lambda x:{'__binary__':base64.b64encode(x).decod
                                     snapshot_uuid=result['uuid'], snapshot_version=result['version'])
             digest = validate_archive(parts['native']['data'])
             source_retirement = self.remove(source)
-            receipt = provider_recovery(self, escrow_provider, binding, parts, inventory, expected)
+            receipt = provider_recovery(self, escrow_provider, binding, parts, inventory, expected,
+                consumer_credentials={'username': 'fixture-reader', 'password': user_password})
             return {'snapshot_sha256': digest, 'snapshot_uuid': result['uuid'],
                     'source_server_retirement': source_retirement,
                     'authenticated_capture': capture_receipt,

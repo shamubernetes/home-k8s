@@ -9,7 +9,7 @@ import io
 import json
 import tarfile
 
-from kopiur_elasticsearch_capture import SnapshotCapture
+from kopiur_elasticsearch_capture import SnapshotCapture, credentials_from_bytes
 from kopiur_elasticsearch_source import LoopbackSnapshotIO
 from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, restore_parts
 from kopiur_elasticsearch_escrow_fixture import configuration_archive, configuration_parts
@@ -166,11 +166,15 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
         indices=['fixture'], expected_uuid=snapshot_uuid, snapshot_version=snapshot_version)
     revocations = prove_capture_revocation(adapter, binding)
     native = adapter.native(binding)
-    authenticated = json.loads(adapter.credentials(binding)['data'])
+    credential_part = adapter.credentials(binding)
+    authenticated = credentials_from_bytes(credential_part['data'])
     if authenticated['elastic_password'] != credentials['elastic']:
         raise EscrowError('authenticated synthetic credential generation differs')
+    # Keep the exact-service capture schema through the encrypted bundle. The
+    # synthetic reader password is a separate verifier input, never an original
+    # credential component or a replacement for the captured elastic identity.
     parts = configuration_parts(binding, archive, native=native,
-                                runtime=part(_encoded(runtime)), credentials=part(_encoded(credentials)))
+                                runtime=part(_encoded(runtime)), credentials=credential_part)
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
                             'concrete_bound_loopback_capture_verified': True,
@@ -182,20 +186,27 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
 
 class EngineRestore:
     """Own one immutable stopped target, configure before its first start."""
-    def __init__(self, drill, backend, manifest, parts, inventory, expected):
+    def __init__(self, drill, backend, manifest, parts, inventory, expected, *, consumer_credentials):
         self.drill, self.manifest, self.parts = drill, manifest, parts
         self.inventory, self.expected = inventory, expected
         self.binding = manifest['binding']
         runtime = json.loads(parts['runtime']['data'])
-        self.credentials = json.loads(parts['credentials']['data'])
+        self.credentials = credentials_from_bytes(parts['credentials']['data'])
         if (set(runtime) != {'image', 'version', 'variables'}
                 or runtime['image'] != IMAGES['elasticsearch']
                 or runtime['version'] != self.binding['runtime_version']
                 or not isinstance(runtime['variables'], dict)
-                or set(self.credentials) != {'elastic', 'fixture-reader'}
-                or any(not isinstance(v, str) or not v for v in self.credentials.values())
                 or 'ELASTIC_PASSWORD' in runtime['variables']):
-            raise EscrowError('synthetic escrow runtime or credentials invalid')
+            raise EscrowError('synthetic escrow runtime invalid')
+        if (not isinstance(consumer_credentials, dict)
+                or set(consumer_credentials) != {'username', 'password'}
+                or consumer_credentials['username'] != 'fixture-reader'
+                or not isinstance(consumer_credentials['password'], str)
+                or not consumer_credentials['password']
+                or any(ord(c) < 32 or ord(c) == 127 for c in consumer_credentials['password'])
+                or consumer_credentials['password'] == self.credentials['elastic_password']):
+            raise EscrowError('separate synthetic consumer credentials required')
+        self.consumer_credentials = copy.deepcopy(consumer_credentials)
         self.runtime = runtime
         self.name, _ = drill.create('restore-' + backend, 9200, runtime['variables'], extra=EXTRA, start=False)
         self.target = {'uid': drill.registered_id(self.name), 'isolated': True}
@@ -239,7 +250,7 @@ class EngineRestore:
 
     def prerequisites(self, target, manifest):
         self.drill.start_registered(self.name)
-        self.drill.auth = 'elastic:' + self.credentials['elastic']
+        self.drill.auth = self.credentials['elastic_username'] + ':' + self.credentials['elastic_password']
         self.drill.ready(self.name, lambda: self.drill.http(9200, '/_cluster/health')['status'] in ('yellow', 'green'))
         self.check_config(target)
         keys = self.drill.run('exec', target['uid'], '/usr/share/elasticsearch/bin/elasticsearch-keystore', 'list')
@@ -281,13 +292,13 @@ class EngineRestore:
                 or role['indices'][0].get('names') != ['fixture']
                 or role['indices'][0].get('privileges') != ['read']):
             raise EscrowError('restored native security role differs')
-        self.drill.auth = 'fixture-reader:' + self.credentials['fixture-reader']
+        self.drill.auth = self.consumer_credentials['username'] + ':' + self.consumer_credentials['password']
         identity = self.drill.http(9200, '/_security/_authenticate')
         hits = self.drill.http(9200, '/fixture/_search?sort=number&size=10')['hits']['hits']
         if (identity.get('username') != 'fixture-reader' or identity.get('roles') != ['fixture-reader']
                 or [{'_id': h['_id'], '_source': h['_source']} for h in hits] != self.expected[0]):
             raise EscrowError('restored consumer authentication or query differs')
-        self.drill.auth = 'elastic:' + self.credentials['elastic']
+        self.drill.auth = self.credentials['elastic_username'] + ':' + self.credentials['elastic_password']
         return {k: True for k in CHECKS}
 
     def exercise(self):
@@ -297,11 +308,13 @@ class EngineRestore:
                               restore_native=self.native, verify=self.verify)
         proof['restored_shards'] = self.shards
         proof['restored_bootstrap_keystore_used'] = True
+        proof['original_credential_schema_verified'] = True
+        proof['synthetic_consumer_credentials_separate'] = True
         proof['target_retirement'] = self.drill.remove(self.name)
         return proof
 
 
-def provider_recovery(drill, provider, binding, parts, inventory, expected):
+def provider_recovery(drill, provider, binding, parts, inventory, expected, *, consumer_credentials):
     """Boot independently from NAS and R2, never use captured originals at restore."""
     from kopiur_elasticsearch_provider_fixture import restore_archive, validate_identity
     if provider.app != 'elasticsearch':
@@ -314,7 +327,8 @@ def provider_recovery(drill, provider, binding, parts, inventory, expected):
     for backend in ('nas', 'r2'):
         data, receipts[backend] = restore_archive(provider, backend, data)
         restored = decode_bundle(data, manifest)
-        engine = EngineRestore(drill, backend, manifest, restored, inventory, expected)
+        engine = EngineRestore(drill, backend, manifest, restored, inventory, expected,
+                               consumer_credentials=consumer_credentials)
         proofs[backend] = engine.exercise()
     receipts['r2']['source_nas_snapshot_id'] = receipts['nas']['snapshot_id']
     return {'provider': receipts, 'engines': proofs, 'manifest_sha256': proofs['nas']['manifest_sha256'],

@@ -197,6 +197,10 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
         raise EscrowError('synthetic native selection differs from complete consumer roster')
     binding['source_catalog'] = catalog.capture(authenticated)
     queries = prepare_fixture_queries(binding, guard=guard, exec_read=bound_exec)
+    from kopiur_elasticsearch_consumer_plan import preflight_consumer_export
+    preflight = preflight_consumer_export(binding, ledger=contract['ledger'],
+        backend=contract['backend'], selections=selection_contracts,
+        contracts=queries.contracts, indices=['fixture'])
     binding['source_queries'] = queries.capture(authenticated)
     # Rebuild the authenticated capture with the now complete escrow binding.
     adapter.binding = copy.deepcopy(binding)
@@ -237,6 +241,7 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
                             'source_backed_native_resolution_verified': True,
                             'selection_contracts_sha256': resolved['selection_contracts_sha256'],
                             'source_queries_captured': True,
+                            'consumer_plan_preflight': preflight,
                             'consumer_bound_capture_composed': True,
                             'selected_synthetic_process_variables_verified': True,
                             'concrete_bound_loopback_capture_verified': True,

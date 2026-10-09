@@ -355,9 +355,10 @@ class PreparedSnapshotExport:
         witness or all-writer fence. The original source guard still owns those
         independent admission/export gates before any consumer process read.
         """
-        from kopiur_elasticsearch_consumer_authority import ConsumerAuthority
-        if not isinstance(consumer_authority, ConsumerAuthority):
-            raise EscrowError('concrete original consumer authority adapter required')
+        from kopiur_elasticsearch_consumer_plan import preflight_original_export
+        preflight_original_export(self.binding, ledger=ledger, backend=backend,
+            consumer_authority=consumer_authority, contracts=contracts,
+            indices=sorted(self.adapter.indices))
         self.guard()
         consumer_authority = consumer_authority.with_checkpoint(self.guard)
         selections = consumer_authority.prepare()

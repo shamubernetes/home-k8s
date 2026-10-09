@@ -384,14 +384,54 @@ class OriginalResolvedExportTests(unittest.TestCase):
                 contracts=self.helper.contracts, encrypt_export=Mock())
         self.assertEqual(self.case.calls, [])
 
+    def original_args(self, consumer):
+        from test_kopiur_elasticsearch_consumer_plan import bound_test_evidence, coverage
+        ledger, queries, indices = coverage(consumer.authority.plans)
+        binding = bound_test_evidence(self.case.prepared.binding, ledger, queries, indices)
+        self.case.prepared.binding = binding
+        self.case.source.binding = copy.deepcopy(binding)
+        self.case.prepared.adapter.binding = copy.deepcopy(binding)
+        self.case.prepared.adapter.indices = set(indices)
+        return {'ledger': ledger, 'backend': self.args['backend'],
+                'consumer_authority': consumer.authority, 'contracts': queries}
+
+    def test_bound_query_body_mismatch_denied_before_all_original_reads(self):
+        from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
+        consumer = AuthorityTests(); consumer.setUp()
+        args = self.original_args(consumer)
+        args['contracts'][0]['queries'][0]['body']['size'] = 9
+        with self.assertRaisesRegex(EscrowError, 'query contracts differ from bound evidence'):
+            self.case.prepared.export_original_consumers(**args, encrypt_export=Mock())
+        self.assertEqual(consumer.calls, [])
+        self.assertEqual(self.case.calls, [])
+
+    def test_bound_catalog_mismatch_denied_before_all_original_reads(self):
+        from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
+        consumer = AuthorityTests(); consumer.setUp()
+        args = self.original_args(consumer)
+        args['ledger']['observation'] = 'different-reviewed-ledger'
+        with self.assertRaisesRegex(EscrowError, 'catalog differs from bound evidence'):
+            self.case.prepared.export_original_consumers(**args, encrypt_export=Mock())
+        self.assertEqual(consumer.calls, [])
+        self.assertEqual(self.case.calls, [])
+
+    def test_missing_bound_original_evidence_denied_before_all_reads(self):
+        from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
+        consumer = AuthorityTests(); consumer.setUp()
+        args = self.original_args(consumer)
+        self.case.prepared.binding.pop('source_queries')
+        with self.assertRaisesRegex(EscrowError, 'complete bound original catalog and query evidence'):
+            self.case.prepared.export_original_consumers(**args, encrypt_export=Mock())
+        self.assertEqual(consumer.calls, [])
+        self.assertEqual(self.case.calls, [])
+
     def test_original_source_authority_denies_concrete_consumer_reads(self):
         from test_kopiur_elasticsearch_consumer_authority import AuthorityTests
         consumer = AuthorityTests(); consumer.setUp()
         self.case.authority.return_value = False
         with self.assertRaises(EscrowError):
-            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
-                backend=self.args['backend'], consumer_authority=consumer.authority,
-                contracts=self.helper.contracts, encrypt_export=Mock())
+            self.case.prepared.export_original_consumers(**self.original_args(consumer),
+                encrypt_export=Mock())
         self.assertEqual(consumer.calls, [])
         self.assertEqual(self.case.calls, [])
 
@@ -406,9 +446,8 @@ class OriginalResolvedExportTests(unittest.TestCase):
             return result
         consumer.authority.run = revoke
         with self.assertRaises(EscrowError):
-            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
-                backend=self.args['backend'], consumer_authority=consumer.authority,
-                contracts=self.helper.contracts, encrypt_export=Mock())
+            self.case.prepared.export_original_consumers(**self.original_args(consumer),
+                encrypt_export=Mock())
         self.assertEqual(consumer.exec_calls(), [])
         self.assertFalse(any(argv[1] == 'exec' or argv[-1] == 'jsonpath={.data.ELASTIC_PASSWORD}'
                              for argv, _ in self.case.calls))
@@ -418,9 +457,8 @@ class OriginalResolvedExportTests(unittest.TestCase):
         consumer = AuthorityTests(); consumer.setUp()
         consumer.config['config']['Labels'] = {}
         with self.assertRaisesRegex(EscrowError, 'provenance absent'):
-            self.case.prepared.export_original_consumers(ledger=self.args['ledger'],
-                backend=self.args['backend'], consumer_authority=consumer.authority,
-                contracts=self.helper.contracts, encrypt_export=Mock())
+            self.case.prepared.export_original_consumers(**self.original_args(consumer),
+                encrypt_export=Mock())
         self.assertEqual(consumer.exec_calls(), [])
         self.assertFalse(any(argv[1] == 'exec' or argv[-1] == 'jsonpath={.data.ELASTIC_PASSWORD}'
                              for argv, _ in self.case.calls))

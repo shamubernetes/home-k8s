@@ -1,0 +1,112 @@
+{
+  "schema": "k8s92-reviewed-original-consumer-releases/v1",
+  "consumers": [
+    {
+      "application": "media/tubearchivist",
+      "store": "elasticsearch-indices:media/tubearchivist",
+      "image": "docker.io/bbilly1/tubearchivist@sha256:ba1c846ddd0c6fdd0f040727129d2466e03b7a0c26499223839d450c7586ac09",
+      "declared_image": "bbilly1/tubearchivist:v0.5.12@sha256:ba1c846ddd0c6fdd0f040727129d2466e03b7a0c26499223839d450c7586ac09",
+      "source_url": "https://github.com/tubearchivist/tubearchivist",
+      "source_revision": "1f480944013a406b9e4d28725f529564c43afc3b",
+      "source_files": {
+        "docker_assets/run.sh": "0ec3c184265a2130b1ab444fe7b8068a54c792a353b2a22e900401e53b6452fa",
+        "docker_assets/beat_auto_spawn.sh": "b87b04c1ec9e94e03d740fa4674c2d67c84c6c5ba9826e8030c79f11779608e9",
+        "docker_assets/backend_start.py": "ba3dfb1e0de9c92b60b4a79c328221c98bf0ce5550e38585f5c76f452fffd3f4",
+        "backend/appsettings/index_mapping.json": "daa13ee8c636fcdaa064a75696f0508c9424babbfa4ec54f8eec60faf57c3d30",
+        "backend/appsettings/src/index_setup.py": "83f913056cc5dcd66d33ba3286c6f50fe5c296695859474192f213aaa355230c",
+        "backend/common/src/env_settings.py": "075a053b1630c9886e92ed3de09d639486de7154ab68b95996a7500998c07e4b",
+        "backend/common/src/es_connect.py": "b69bd1b886a0a88c73b838907101c886cd71366742c328a650cb90dede14d568",
+        "backend/common/src/index_generic.py": "ec1573a19ac1ca4bbf889f8edef31efaecf9e214d8b09cb307488a88a8519676",
+        "backend/common/src/searching.py": "f949269b055c97b65b1975ab2504605d3a5df31d9a94508b15818724094121f5",
+        "backend/config/settings.py": "922b5a2bc6a86ee51ef96303e367b8e5ef85d03c5f661f8d9b671d5eed50c1d6"
+      },
+      "selection": {
+        "selectors": [
+          "ta_*"
+        ],
+        "required_indices": [
+          "ta_config",
+          "ta_channel",
+          "ta_video",
+          "ta_download",
+          "ta_playlist",
+          "ta_subtitle",
+          "ta_comment"
+        ]
+      },
+      "source_witness": {
+        "image": "docker.io/bbilly1/tubearchivist@sha256:ba1c846ddd0c6fdd0f040727129d2466e03b7a0c26499223839d450c7586ac09",
+        "source_url": "https://github.com/tubearchivist/tubearchivist",
+        "source_revision": "1f480944013a406b9e4d28725f529564c43afc3b",
+        "files": [
+          {
+            "source": "docker_assets/run.sh",
+            "artifact": "app/run.sh",
+            "sha256": "0ec3c184265a2130b1ab444fe7b8068a54c792a353b2a22e900401e53b6452fa"
+          },
+          {
+            "source": "docker_assets/beat_auto_spawn.sh",
+            "artifact": "app/beat_auto_spawn.sh",
+            "sha256": "b87b04c1ec9e94e03d740fa4674c2d67c84c6c5ba9826e8030c79f11779608e9"
+          },
+          {
+            "source": "docker_assets/backend_start.py",
+            "artifact": "app/backend_start.py",
+            "sha256": "ba3dfb1e0de9c92b60b4a79c328221c98bf0ce5550e38585f5c76f452fffd3f4"
+          },
+          {
+            "source": "backend/appsettings/index_mapping.json",
+            "artifact": "app/appsettings/index_mapping.json",
+            "sha256": "daa13ee8c636fcdaa064a75696f0508c9424babbfa4ec54f8eec60faf57c3d30"
+          },
+          {
+            "source": "backend/appsettings/src/index_setup.py",
+            "artifact": "app/appsettings/src/index_setup.py",
+            "sha256": "83f913056cc5dcd66d33ba3286c6f50fe5c296695859474192f213aaa355230c"
+          },
+          {
+            "source": "backend/common/src/env_settings.py",
+            "artifact": "app/common/src/env_settings.py",
+            "sha256": "075a053b1630c9886e92ed3de09d639486de7154ab68b95996a7500998c07e4b"
+          },
+          {
+            "source": "backend/common/src/es_connect.py",
+            "artifact": "app/common/src/es_connect.py",
+            "sha256": "b69bd1b886a0a88c73b838907101c886cd71366742c328a650cb90dede14d568"
+          },
+          {
+            "source": "backend/common/src/index_generic.py",
+            "artifact": "app/common/src/index_generic.py",
+            "sha256": "ec1573a19ac1ca4bbf889f8edef31efaecf9e214d8b09cb307488a88a8519676"
+          },
+          {
+            "source": "backend/common/src/searching.py",
+            "artifact": "app/common/src/searching.py",
+            "sha256": "f949269b055c97b65b1975ab2504605d3a5df31d9a94508b15818724094121f5"
+          },
+          {
+            "source": "backend/config/settings.py",
+            "artifact": "app/config/settings.py",
+            "sha256": "922b5a2bc6a86ee51ef96303e367b8e5ef85d03c5f661f8d9b671d5eed50c1d6"
+          }
+        ]
+      }
+    },
+    {
+      "application": "services/zoo-cowbell",
+      "store": "elasticsearch-indices:services/zoo-cowbell",
+      "image": "ghcr.io/thezoo-house/cowbell@sha256:f51c7a8c7dffc41f4fb1b8dc277f2c0a6fd7fb9fa3c8bb6ce8caff35c30dce3b",
+      "declared_image": "ghcr.io/thezoo-house/cowbell@sha256:f51c7a8c7dffc41f4fb1b8dc277f2c0a6fd7fb9fa3c8bb6ce8caff35c30dce3b",
+      "source_url": "https://github.com/TheZoo-House/cowbell",
+      "source_revision": "5117b1ed3af159b63517de001997ccd827d100b4",
+      "source_files": {
+        "web/src/catalog/model.ts": "4eeb8891e12c4e724a35f48c40019e2b907ce0b537519f03015911b03cd5d7cc",
+        "web/src/catalog/elasticsearch.ts": "75c9c81b38ee39c4cbd06b219cffe21f1ead8e57af7d2392a1a6da6f716204c4",
+        "web/src/config/runtime.ts": "e52c2dd5f21e65d058f827f07d0a23dfc0dcee5daba1b968ab75d398d7f23e48"
+      },
+      "selection": {
+        "default_prefix": "cowbell-media-v4"
+      }
+    }
+  ]
+}

@@ -23,6 +23,7 @@ from pathlib import Path
 UTC = dt.timezone.utc
 DEFAULT_DURATION = dt.timedelta(hours=4)
 MAX_DURATION = dt.timedelta(hours=24)
+RECOVERY_MAX_DURATION = dt.timedelta(minutes=30)
 MANAGED_BY = "home-k8s cluster-maintenance"
 COMMENT_PREFIX = "cluster-maintenance: "
 EXCLUDED_ALERTS = {"Watchdog", "InfoInhibitor"}
@@ -879,7 +880,35 @@ def expire_silence(cluster, silence_id):
     )
 
 
-def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=None):
+def validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts=None):
+    if not recovery_alerts:
+        if recovery_plan:
+            raise MaintenanceError("recovery plan requires exact recovery alerts")
+        return
+    validate_persisted_alert_selectors(recovery_alerts, "recoveryActiveAlerts")
+    plan = urllib.parse.urlsplit(recovery_plan or "")
+    parts = plan.path.split("/")
+    if (plan.scheme != "https" or plan.netloc != "github.com"
+            or len(parts) != 5 or parts[1:4] != ["shamubernetes", "home-k8s", "pull"]
+            or not parts[4].isascii() or not parts[4].isdigit() or int(parts[4]) < 1
+            or plan.query or plan.fragment):
+        raise MaintenanceError("recovery requires an exact home-k8s protected rollback PR URL")
+    if duration > RECOVERY_MAX_DURATION:
+        raise MaintenanceError("recovery maintenance duration must not exceed 30m")
+    for selector in recovery_alerts:
+        if "severity" in selector:
+            raise MaintenanceError("recovery selectors must identify incidents independently of severity")
+        if selector["alertname"] in EXCLUDED_ALERTS:
+            raise MaintenanceError("recovery cannot admit heartbeat/helper alerts")
+        if any(all(selector.get(k) == v for k, v in baseline.items())
+               for baseline in (allowed_alerts or [])):
+            raise MaintenanceError("recovery alerts cannot also be admitted as baselines")
+
+
+def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=None,
+          recovery_alerts=None, recovery_plan=None):
+    recovery_alerts = recovery_alerts or []
+    validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts)
     with begin_lock() as lock:
         lock.assert_healthy()
         peers = cluster.require_healthy()
@@ -905,9 +934,25 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             raise MaintenanceError(
                 f"an owned maintenance silence is already active ({ids}); renew or end it explicitly"
             )
-        blockers, allowed = unsilenced_blockers(
-            cluster, allowed_alerts, include_suppressed=bool(approved)
+        # Recovery is admission-only. End/repair still require incident clearance.
+        if recovery_alerts:
+            for member, alerts in cluster.all_alerts():
+                for selector in recovery_alerts:
+                    matching = [alert for alert in alerts
+                                if alert_matches_selector(alert, selector)]
+                    if not matching or any(alert.get("labels", {}).get("severity")
+                                           not in {"warning", "critical"} for alert in matching):
+                        raise MaintenanceError(
+                            f"recovery selector must match an active warning/critical alert "
+                            f"on {member.name}: {selector}"
+                        )
+                    if any(alert_matches_selector(alert, baseline) for alert in matching
+                           for baseline in (allowed_alerts or [])):
+                        raise MaintenanceError("recovery alerts cannot also be admitted as baselines")
+        blockers, _ = unsilenced_blockers(
+            cluster, [*(allowed_alerts or []), *recovery_alerts], include_suppressed=True
         )
+        _, allowed = unsilenced_blockers(cluster, allowed_alerts, include_suppressed=True)
         if blockers:
             names = ", ".join(item["alertname"] for item in blockers)
             raise MaintenanceError(
@@ -946,11 +991,15 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             "coveredAlertNames": covered,
             "excludedAlerts": excluded,
             "allowedBaselineAlerts": allowed,
+            "recoveryActiveAlerts": recovery_alerts,
+            "recoveryPlan": recovery_plan,
             "independentMaintenance": concurrent,
         }
 
 
-def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None, independent_silences=None):
+def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None,
+                      independent_silences=None, recovery_alerts=None, recovery_plan=None):
+    validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts)
     if load_state(required=False):
         raise MaintenanceError(
             f"maintenance state already exists at {state_path()}; end or repair it explicitly"
@@ -958,7 +1007,8 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
     notice_id = status_api.begin_notice(reason) if status_api else None
     silence_id = None
     try:
-        result = begin(cluster, reason, duration, allowed_alerts, independent_silences)
+        result = begin(cluster, reason, duration, allowed_alerts, independent_silences,
+                       recovery_alerts, recovery_plan)
         silence_id = result["silenceId"]
         write_state(
             {
@@ -968,6 +1018,8 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
                 "startedAt": result["startsAt"],
                 "endsAt": result["endsAt"],
                 "allowedActiveAlerts": allowed_alerts or [],
+                "recoveryActiveAlerts": recovery_alerts or [],
+                "recoveryPlan": recovery_plan,
                 "independentMaintenance": result["independentMaintenance"],
             }
         )
@@ -1027,6 +1079,8 @@ def renew(cluster, silence_id, duration):
 
 def coordinated_renew(cluster, silence_id, duration):
     state = load_state()
+    validate_recovery(state.get("recoveryActiveAlerts"), state.get("recoveryPlan"),
+                      duration, state.get("allowedActiveAlerts"))
     if state.get("silenceId") != silence_id:
         raise MaintenanceError(
             f"maintenance state belongs to silence {state.get('silenceId')}, not {silence_id}"
@@ -1050,7 +1104,7 @@ def end(cluster, silence_id):
     }
 
 
-def post_maintenance_blockers(cluster, allowed_alerts=None):
+def post_maintenance_blockers(cluster, allowed_alerts=None, required_clearance=None):
     cluster.require_healthy()
     blockers = {}
     for member, alerts in cluster.all_alerts():
@@ -1059,7 +1113,13 @@ def post_maintenance_blockers(cluster, allowed_alerts=None):
             alertname = labels.get("alertname", "unknown")
             if alertname in EXCLUDED_ALERTS or labels.get("severity") not in {"warning", "critical"}:
                 continue
-            if any(alert_matches_selector(alert, selector) for selector in (allowed_alerts or [])):
+            # A severity escalation must not turn the incident into a baseline.
+            recovery_incident = any(
+                alert_matches_selector(alert, {k: v for k, v in selector.items() if k != "severity"})
+                for selector in (required_clearance or [])
+            )
+            if not recovery_incident and any(alert_matches_selector(alert, selector)
+                                             for selector in (allowed_alerts or [])):
                 continue
             key = json.dumps(labels, sort_keys=True)
             blockers.setdefault(key, {"members": [], **compact_alert(alert)})["members"].append(
@@ -1083,7 +1143,10 @@ def coordinated_end(cluster, silence_id, status_api=None):
     allowed_active_alerts = validate_persisted_alert_selectors(
         state.get("allowedActiveAlerts", []), "allowedActiveAlerts"
     )
-    post_maintenance_blockers(cluster, allowed_active_alerts)
+    recovery_alerts = validate_persisted_alert_selectors(
+        state.get("recoveryActiveAlerts", []), "recoveryActiveAlerts"
+    )
+    post_maintenance_blockers(cluster, allowed_active_alerts, recovery_alerts)
     current = status(cluster, silence_id)
     if current["state"] == "active":
         result = end(cluster, silence_id)
@@ -1171,9 +1234,13 @@ def coordinated_repair(cluster, silence_id, allowed_alerts=None, status_api=None
         state.get("allowedRepairAlerts", []), "allowedRepairAlerts"
     )
     repair_alerts = [*persisted_repair_alerts, *(allowed_alerts or [])]
+    recovery_alerts = validate_persisted_alert_selectors(
+        state.get("recoveryActiveAlerts", []), "recoveryActiveAlerts"
+    )
     post_maintenance_blockers(
         cluster,
         [*persisted_active_alerts, *repair_alerts],
+        recovery_alerts,
     )
     state_changed = False
     if repair_alerts != persisted_repair_alerts:
@@ -1377,6 +1444,15 @@ def build_parser():
               "verified not to overlap this operation; repeat for every concurrent window; "
               "requires a separate MAINTENANCE_STATE_FILE and never modifies those windows"),
     )
+    begin_parser.add_argument(
+        "--recover-active-alert", action="append", type=parse_alert_selector, default=[],
+        metavar="LABEL=VALUE,...",
+        help=("admit an exact current incident only to execute the reviewed rollback; "
+              "requires --recovery-plan and duration <=30m; end still requires clearance"),
+    )
+    begin_parser.add_argument(
+        "--recovery-plan", help="exact protected home-k8s rollback PR URL",
+    )
     renew_parser = subparsers.add_parser("renew", help="extend an active owned silence")
     renew_parser.add_argument("--id", required=True, help="exact maintenance silence ID")
     renew_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
@@ -1417,6 +1493,8 @@ def main():
                     args.allow_active_alert,
                     StatusApi() if args.public_status else None,
                     args.independent_silence,
+                    args.recover_active_alert,
+                    args.recovery_plan,
                 )
             elif args.command == "renew":
                 result = coordinated_renew(cluster, args.id, args.duration)

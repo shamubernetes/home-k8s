@@ -33,6 +33,29 @@ class RadarrOriginalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ORIGINAL['validate_fields'](self.fields(), 'unrelated')
 
+    def test_radarr_3d_rejects_main_radarr_transport(self):
+        fields = self.fields()
+        fields['R2_BUCKET'] = 'kopiur-radarr-3d'
+        fields['NAS_RCLONE_CONFIG'] = fields['NAS_RCLONE_CONFIG'].replace('kp-radarr', 'kp-radarr-3d')
+        ORIGINAL['validate_fields'](fields, 'radarr-3d')
+        with self.assertRaises(ValueError):
+            ORIGINAL['validate_fields'](self.fields(), 'radarr-3d')
+        with self.assertRaises(ValueError):
+            ORIGINAL['validate_fields'](fields, 'radarr')
+        self.assertEqual(NATIVE['CONTRACTS']['radarr-3d'][1], ['radarr_3d_main'])
+        self.assertEqual(ORIGINAL['RADARR_3D_ORIGINALS'], {
+            'nas': '4b974fb1e16ad236f02a98a32e7df660',
+            'r2': '5ce5f1e5dfc49c707e15efd19f94ad6f'})
+        self.assertTrue(set(ORIGINAL['RADARR_3D_ORIGINALS'].values()).isdisjoint(
+            ORIGINAL['RADARR_ORIGINALS'].values()))
+
+    def test_empty_native_movie_catalog(self):
+        proof = NATIVE['validate_radarr_api']([], 0, lambda query: '[]')
+        self.assertEqual(proof['movies'], 0)
+        self.assertEqual(proof['native_records_equal'], 0)
+        with self.assertRaises(ValueError):
+            NATIVE['validate_radarr_api']([], 1, lambda query: '[]')
+
     def test_native_api_compares_every_movie(self):
         records = [{'id': 1, 'tmdbId': 101, 'title': 'Fixture', 'path': '/media/fixture'},
                    {'id': 2, 'tmdbId': 102, 'title': 'Other fixture', 'path': '/media/other'}]

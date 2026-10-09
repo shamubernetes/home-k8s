@@ -689,7 +689,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
         api = {}
-        if app_name in ("bazarr", "radarr"):
+        if app_name in ("bazarr", "radarr", "radarr-3d"):
             target_info = json.loads(run("docker", "inspect", target).stdout)[0]
             app_info = json.loads(run("docker", "inspect", restored_app).stdout)[0]
             if target_info["HostConfig"]["NetworkMode"] != "none" or \
@@ -705,13 +705,14 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
                 expected = counts["bazarr"][table]
                 api[endpoint] = validate_bazarr_api(response, expected, table, key,
                     lambda query: drill.sql(target, query, "bazarr"))
-        if app_name == "radarr":
+        if app_name in ("radarr", "radarr-3d"):
             curl_config = (f'url = "http://127.0.0.1:{drill.port}/api/v3/movie"\n'
                            f'header = "X-Api-Key: {drill.api_key}"\n')
             response = json.loads(run("docker", "exec", "-i", restored_app, "curl", "-fsS", "--config", "-",
                                       stdin=curl_config.encode()).stdout)
-            api = validate_radarr_api(response, counts["radarr_main"]["Movies"],
-                                      lambda query: drill.sql(target, query, "radarr_main"))
+            database = databases[0]
+            api = validate_radarr_api(response, counts[database]["Movies"],
+                                      lambda query: drill.sql(target, query, database))
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
                 "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,

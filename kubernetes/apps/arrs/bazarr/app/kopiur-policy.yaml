@@ -3,9 +3,11 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: bazarr
+  annotations:
+    kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/37919745482
 spec:
-  # Parent enables only after credentials, grants and mover deadlines exist.
-  suspend: true
+  # Original native NAS/R2 recovery passed on ARC before recurring activation.
+  suspend: false
   repository:
     kind: Repository
     name: bazarr-nas-smb
@@ -68,7 +70,7 @@ spec:
   policyRef:
     name: bazarr
   schedule:
-    suspend: true
+    suspend: false
     # Preserve the incumbent primary capture cadence when activation is accepted.
     cron: "${VOLSYNC_SCHEDULE_BAZARR}"
     jitter: 10m
@@ -102,4 +104,4 @@ spec:
     parallel: 2
     policies: none
   # No remote pruning before independent recovery and policy acceptance.
-  suspend: true
+  suspend: false

@@ -5,7 +5,7 @@ metadata:
 spec:
   backend:
     rclone:
-      remotePath: mnemosyne:Backups/kopiur/kometa-smb
+      remotePath: mnemosyne:kopiur-kometa
       configSecretRef:
         name: kometa-kopiur-nas
       startupTimeout: 2m
@@ -61,7 +61,7 @@ metadata:
 spec:
   backend:
     s3:
-      bucket: storage-backup
+      bucket: kopiur-kometa
       prefix: kopiur/kometa/r2/
       endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
       region: auto

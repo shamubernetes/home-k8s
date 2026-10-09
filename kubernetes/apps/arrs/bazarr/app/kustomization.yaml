@@ -12,7 +12,18 @@ resources:
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
+- ./externalsecret-kopiur.yaml
+- ./kopiur-repositories.yaml
+- ./kopiur-policy.yaml
+- ./kopiur-postgres-grants.yaml
+components:
+- ../../../../components/kopiur-postgres
+patches:
+- path: ./kopiur-postgres-patch.yaml
 configMapGenerator:
+- name: bazarr-kopiur-grants
+  files:
+  - provision.sql=./kopiur-postgres-grants.sql
 - name: bazarr-scripts
   files:
   - post-process.sh=./scripts/post-process.sh

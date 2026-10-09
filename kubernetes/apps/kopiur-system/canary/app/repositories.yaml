@@ -47,7 +47,7 @@ metadata:
 spec:
   backend:
     rclone:
-      remotePath: mnemosyne:Backups/kopiur/canary-smb
+      remotePath: mnemosyne:kopiur-canary
       configSecretRef:
         name: kopiur-nas-repository
       startupTimeout: 2m
@@ -96,7 +96,7 @@ metadata:
 spec:
   backend:
     s3:
-      bucket: storage-backup
+      bucket: kopiur-canary
       prefix: kopiur/canary/r2/
       endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
       region: auto

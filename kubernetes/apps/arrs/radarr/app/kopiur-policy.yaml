@@ -98,6 +98,9 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: radarr-nas-to-r2
+  annotations:
+    # First active reconcile preceded the first schedule-owned NAS point.
+    kopiur.home-operations.com/run-requested: "2026-10-09T22:14:00Z"
 spec:
   sourceRef:
     kind: Repository

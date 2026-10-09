@@ -12,6 +12,12 @@ Dispatch `recovery-verify.yaml` from trusted `main` with `suite=postgres-bazarr-
 
 Acceptance requires identical paired-file checksums, native table counts and content fingerprints between the independent originals. The restored series and movies APIs must match native counts and a representative record's ID, title and path. Application files and credentials stay in owned temporary storage and are removed at completion. Receipts contain only hashes, counts, capture metadata and snapshot IDs. The shared Media store remains outside this proof, and this verifier never authorizes legacy retirement.
 
+## Original recovery evidence
+
+ARC run `37918714636` at candidate `77a6b565aac1434bd2a438dc58f396189419d296` independently restored the retained NAS and R2 IDs above. Both native PostgreSQL restores contain 17 tables and 410,279 rows, with identical per-table content fingerprints. Both Bazarr images booted without an external network interface. The restored APIs returned 665 series and 3,783 movies, with matching representative native identities, titles and paths. The 5,324-file restored tree matched the paired archive, except the config matched the deliberate isolated endpoint and credential rewrite. Both bundle checksum inventories have SHA-256 `1a47ebe71fa411a4f0da3f5e71fff17b2715114e2f132af75c92cff5a378da1c`.
+
+The original capture ran from `2026-10-09T09:13:36Z` to `2026-10-09T09:14:03Z` with PostgreSQL 17.11. The networked repository reader was removed before each native app boot. Docker cannot copy this container's direct tmpfs mount with `docker cp`; the verifier transfers its exact allowlisted bundle through a runner-local tar stream instead. No binary stream crosses kubectl or Hermes. No original snapshot was replaced or pruned.
+
 ## Activation gates
 
 1. Verify dedicated ExternalSecrets, existing read-only role authority, controller exec RBAC, mover admission deadlines and UID568 staging access.

@@ -235,6 +235,7 @@ class PreparedExportTests(unittest.TestCase):
                 return _encoded(routes[path])
             return original(argv, data=data)
         self.source.run = read
+        self.query_routes = routes
         catalog = self.prepared.capture_catalog(ledger=contract['ledger'], backend=contract['backend'],
                                                consumers=contract['consumers'])
         self.binding['source_catalog'] = catalog

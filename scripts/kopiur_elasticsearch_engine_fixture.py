@@ -177,25 +177,41 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
     binding['source_queries'] = queries.capture(authenticated)
     # Rebuild the authenticated capture with the now complete escrow binding.
     adapter.binding = copy.deepcopy(binding)
+    queries = prepare_fixture_queries(binding, guard=guard, exec_read=bound_exec)
+    from kopiur_elasticsearch_export import ConsumerBoundCapture
+    composed = ConsumerBoundCapture(binding, snapshot=adapter, queries=queries)
     revocations = prove_capture_revocation(adapter, binding)
-    native = adapter.native(binding)
-    credential_part = adapter.credentials(binding)
-    authenticated = credentials_from_bytes(credential_part['data'])
-    if authenticated['elastic_password'] != credentials['elastic']:
-        raise EscrowError('authenticated synthetic credential generation differs')
-    # Keep the exact-service capture schema through the encrypted bundle. The
-    # synthetic reader password is a separate verifier input, never an original
-    # credential component or a replacement for the captured elastic identity.
-    parts = configuration_parts(binding, archive, native=native,
-                                runtime=part(_encoded(runtime)), credentials=credential_part)
-    if _encoded(catalog.observe(authenticated)) != _encoded(binding['source_catalog']):
-        raise EscrowError('source catalog changed across native/configuration capture')
-    if _encoded(queries.capture(authenticated)) != _encoded(binding['source_queries']):
-        raise EscrowError('source query results changed across native/configuration capture')
+
+    def read_configuration(expected, native, credential_part, checkpoint):
+        authenticated = credentials_from_bytes(credential_part['data'])
+        if authenticated['elastic_password'] != credentials['elastic']:
+            raise EscrowError('authenticated synthetic credential generation differs')
+        checkpoint()
+        raw = bound_exec('cat', '/proc/1/environ')
+        checkpoint()
+        try:
+            if not raw.endswith(b'\0'):
+                raise ValueError('unterminated runtime')
+            entries = [entry.decode().split('=', 1) for entry in raw[:-1].split(b'\0')]
+            effective = dict(entries)
+            if len(effective) != len(entries) or any(effective.get(k) != v for k, v in variables.items()):
+                raise ValueError('effective runtime differs')
+        except (ValueError, UnicodeError, TypeError):
+            raise EscrowError('owned synthetic effective runtime differs') from None
+        # Read config again in this composed capture, never reuse the earlier
+        # inventory tar as if it were observed after the native capture phase.
+        archive = drill.run('cp', source_id + ':' + CONFIG_PATH + '/.', '-')
+        checkpoint()
+        return configuration_parts(expected, archive, native=native,
+                                   runtime=part(_encoded(runtime)), credentials=credential_part)
+
+    parts = composed.capture(read_configuration)
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
                             'source_catalog_captured': True,
                             'source_queries_captured': True,
+                            'consumer_bound_capture_composed': True,
+                            'selected_synthetic_process_variables_verified': True,
                             'concrete_bound_loopback_capture_verified': True,
                             'engine_version': version, 'snapshot_format_version': adapter.snapshot_version,
                             'captured_snapshot_uuid': snapshot_uuid,

@@ -133,7 +133,23 @@ class KubernetesSource:
         credentials = capture_credentials(copy.deepcopy(binding))
         self.guard()
         _validate_component(binding, 'credentials', credentials)
+        return self.configuration(binding, native, credentials, self.guard)
+
+    def configuration(self, binding, native, credentials, checkpoint):
+        """Read effective runtime and configuration under an explicit checkpoint."""
+        if not _same_binding(binding, self.binding):
+            raise EscrowError('capture binding differs')
+        for name, part in (('native', native), ('credentials', credentials)):
+            _validate_component(binding, name, part)
+
+        def check():
+            self.guard()
+            if checkpoint() is not True:
+                raise EscrowError('affirmative configuration capture checkpoint required')
+
+        check()
         raw = self.exec_read('cat', '/proc/1/environ')
+        check()
         try:
             if not raw.endswith(b'\0'):
                 raise ValueError('unterminated environment')
@@ -162,11 +178,14 @@ class KubernetesSource:
                    'data': _encoded({'image': binding['engine_image'], 'version': binding['runtime_version'],
                                      'variables': variables})}
         archive = self.exec_read('tar', '-C', '/usr/share/elasticsearch/config', '-cf', '-', '.')
+        check()
         parts = configuration_parts(binding, archive, native=native, runtime=runtime, credentials=credentials)
         self.guard()
         return parts
 
     def export(self, *, capture_native, capture_credentials, encrypt_export):
+        if 'source_catalog' in self.binding or 'source_queries' in self.binding:
+            raise EscrowError('explicit bound consumer export contracts required')
         return capture_export(self.binding, observe=self.observe,
             require_capture_authority=self.require_authority,
             capture=lambda binding: self.capture(binding, capture_native=capture_native,
@@ -330,8 +349,33 @@ class PreparedSnapshotExport:
         self.guard()
         return result
 
+    def prepare_consumers(self, *, ledger, backend, consumers, contracts):
+        """Compose a previously bound catalog/query roster without source I/O."""
+        from kopiur_elasticsearch_catalog import LoopbackCatalogIO, SourceCatalog
+        from kopiur_elasticsearch_queries import LoopbackQueryIO, ConsumerQueries
+        from kopiur_elasticsearch_export import ConsumerBoundCapture
+        indices = sorted(self.adapter.indices)
+        catalog_io = LoopbackCatalogIO(exec_read=self.source.exec_read, indices=indices)
+        catalog = SourceCatalog(self.binding, ledger=ledger, backend=backend,
+            consumer_indices=consumers, indices=indices, guard=self.guard, request=catalog_io.request)
+        query_io = LoopbackQueryIO(exec_read=self.source.exec_read, indices=indices)
+        queries = ConsumerQueries(catalog, contracts=contracts, query=query_io.query)
+        return ConsumerBoundCapture(self.binding, snapshot=self.adapter, queries=queries)
+
+    def export_consumers(self, *, ledger, backend, consumers, contracts, encrypt_export):
+        """Revalidate explicit consumer evidence across escrow and encryption."""
+        composed = self.prepare_consumers(ledger=ledger, backend=backend,
+                                         consumers=consumers, contracts=contracts)
+        self.guard()
+        return capture_export(self.binding, observe=self.source.observe,
+            require_capture_authority=self.source.require_authority,
+            capture=lambda binding: composed.capture(self.source.configuration),
+            encrypt_export=lambda manifest, parts: composed.encrypt(encrypt_export, manifest, parts))
+
     def export(self, *, encrypt_export):
         self.guard()
+        if 'source_catalog' in self.binding or 'source_queries' in self.binding:
+            raise EscrowError('explicit bound consumer export contracts required')
         # Source capture compares this exact password with /proc/1/environ before
         # reading configuration or forwarding any plaintext to encryption.
         return self.source.export_snapshot(self.adapter, encrypt_export=encrypt_export)

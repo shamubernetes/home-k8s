@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotreplication_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: radarr-k8s92-original-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-09T17:19:00Z"
+spec:
+  sourceRef:
+    kind: Repository
+    name: radarr-nas-smb
+  destinationRef:
+    kind: Repository
+    name: radarr-r2
+  # Copy only the retained original identity, not the suspended recurring lane.
+  # Reuse the existing lane's cadence and suspend after the requested proof pass.
+  schedule:
+    cron: "0 8 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+        - username: radarr-k8s92-original
+          hostname: arrs
+          sourcePath: /pvc/radarr
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    none: {}
+  suspend: false

@@ -524,6 +524,101 @@ class ClusterMaintenanceTest(unittest.TestCase):
         self.assertEqual(self.alertmanager.posts, [])
         self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
 
+    def recovery_args(self):
+        return ["begin", "--reason", "recover failed Radarr qualification", "--duration", "30m",
+                "--recovery-plan", "https://github.com/shamubernetes/home-k8s/pull/5640",
+                "--recover-active-alert",
+                "alertname=KopiurSnapshotFailed,namespace=arrs,name=radarr-k8s92-original"]
+
+    def test_recovery_admission_is_not_an_end_or_repair_baseline(self):
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
+                                    name="radarr-k8s92-original")
+        output = json.loads(self.run_command(*self.recovery_args()).stdout)
+        state = json.loads(Path(self.tmpdir.name, "maintenance.json").read_text())
+        self.assertEqual(state["allowedActiveAlerts"], [])
+        self.assertEqual(output["allowedBaselineAlerts"], [])
+        self.assertEqual(len(state["recoveryActiveAlerts"]), 1)
+        self.run_command("end", "--id", output["silenceId"], expected=1)
+        self.assertEqual(self.alertmanager.deletes, [])
+        self.alertmanager.silences[output["silenceId"]]["status"] = {"state": "expired"}
+        self.run_command("repair", "--id", output["silenceId"], expected=1)
+        for selector in ["alertname=KopiurSnapshotFailed,namespace=arrs,name=radarr-k8s92-original",
+                         "alertname=KopiurSnapshotFailed,namespace=arrs"]:
+            self.run_command("repair", "--id", output["silenceId"],
+                             "--allow-active-alert", selector, expected=1)
+        state["allowedRepairAlerts"] = [{"alertname": "KopiurSnapshotFailed", "namespace": "arrs"}]
+        state_file = Path(self.tmpdir.name, "maintenance.json")
+        state_file.write_text(json.dumps(state))
+        self.run_command("repair", "--id", output["silenceId"], expected=1)
+        state["allowedActiveAlerts"] = state["allowedRepairAlerts"]
+        state_file.write_text(json.dumps(state))
+        self.run_command("end", "--id", output["silenceId"], expected=1)
+        self.assertTrue(state_file.exists())
+        self.alertmanager.alerts.clear()
+        self.run_command("end", "--id", output["silenceId"])
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_recovery_rejects_severity_and_preserves_escalation_clearance(self):
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
+                                    name="radarr-k8s92-original")
+        args = self.recovery_args()
+        args[-1] += ",severity=warning"
+        self.run_command(*args, expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+        output = json.loads(self.run_command(*self.recovery_args()).stdout)
+        self.alertmanager.silences[output["silenceId"]]["status"] = {"state": "expired"}
+        state_file = Path(self.tmpdir.name, "maintenance.json")
+        state = json.loads(state_file.read_text())
+        state["recoveryActiveAlerts"][0]["severity"] = "warning"
+        state["allowedActiveAlerts"] = [{"alertname": "KopiurSnapshotFailed", "namespace": "arrs"}]
+        state_file.write_text(json.dumps(state))
+        self.alertmanager.alerts[0]["labels"]["severity"] = "critical"
+        self.run_command("repair", "--id", output["silenceId"], "--allow-active-alert",
+                         "alertname=KopiurSnapshotFailed,namespace=arrs", expected=1)
+        self.run_command("end", "--id", output["silenceId"], expected=1)
+        self.assertTrue(state_file.exists())
+
+    def test_recovery_requires_exact_plan_and_short_begin_and_renew(self):
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
+                                    name="radarr-k8s92-original")
+        args = self.recovery_args()
+        for value in ["", "https://example.test/pull/5640", "https://github.com/shamubernetes/home-k8s/pull/0"]:
+            bad = list(args)
+            bad[bad.index("--recovery-plan") + 1] = value
+            self.run_command(*bad, expected=1)
+        bad = list(args)
+        bad[bad.index("--duration") + 1] = "31m"
+        self.run_command(*bad, expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+        output = json.loads(self.run_command(*args).stdout)
+        posts = len(self.alertmanager.posts)
+        self.run_command("renew", "--id", output["silenceId"], "--duration", "31m", expected=1)
+        self.assertEqual(len(self.alertmanager.posts), posts)
+        self.run_command("renew", "--id", output["silenceId"], "--duration", "30m")
+
+    def test_recovery_rejects_other_alerts_and_wrong_or_missing_target(self):
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
+                                    name="radarr-k8s92-original-retry1")
+        self.run_command(*self.recovery_args(), expected=1)
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
+                                    name="radarr-k8s92-original")
+        self.run_command(*self.recovery_args(), expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+
+    def test_recovery_rejects_baseline_overlap(self):
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
+                                    name="radarr-k8s92-original")
+        self.run_command(*self.recovery_args(), "--allow-active-alert",
+                         "alertname=KopiurSnapshotFailed,namespace=arrs", expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+
+    def test_routine_begin_checks_separately_silenced_alerts(self):
+        self.alertmanager.add_alert("CephHealthError", severity="critical",
+                                    silenced_by=["other-silence"], namespace="rook-ceph")
+        self.alertmanager.alerts[0]["status"]["state"] = "suppressed"
+        self.run_command("begin", "--reason", "routine", expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+
     def test_begin_allows_one_exact_known_baseline_alert(self):
         self.alertmanager.add_alert(
             "SmartDeviceInterfaceSlow",

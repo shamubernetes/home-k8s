@@ -15,7 +15,7 @@ from unittest import mock
 from test_kopiur_sqlite_cohort import load_documents, REPO
 
 MODULE = runpy.run_path(str(REPO / "scripts/kopiur-postgres-drill"))
-APPS = ("bazarr",)
+APPS = ("bazarr", "radarr")
 NATIVE_APPS = ("radarr", "radarr-3d", "sonarr", "bazarr", "whisparr")
 
 
@@ -91,16 +91,25 @@ class ManifestTests(unittest.TestCase):
         subprocess.run(["sh", "-n"], input=script, check=True)
 
     def assert_capture_activation(self, app, policy, schedule, replication):
-        # Only this independently reviewed original production receipt admits
-        # Bazarr activation. Synthetic suites and other apps remain suspended.
+        # Each named original production receipt admits only its own app.
+        # Synthetic suites and every other application remain suspended.
         evidence = policy.get("metadata", {}).get("annotations", {}).get("kopiur.home.arpa/original-native-recovery")
         if evidence is not None:
-            self.assertEqual(app, "bazarr")
-            self.assertEqual(evidence, "https://github.com/shamubernetes/home-k8s/actions/runs/37919745482")
+            original_receipts = {
+                "bazarr": "https://github.com/shamubernetes/home-k8s/actions/runs/37919745482",
+                "radarr": "https://github.com/shamubernetes/home-k8s/actions/runs/37981655593",
+            }
+            self.assertIn(app, original_receipts)
+            self.assertEqual(evidence, original_receipts[app])
         suspended = evidence is None
         self.assertIs(policy["spec"]["suspend"], suspended)
         self.assertIs(schedule["spec"]["schedule"]["suspend"], suspended)
-        self.assertIs(replication["spec"]["suspend"], suspended)
+        staged_r2 = replication.get("metadata", {}).get("annotations", {}).get(
+            "kopiur.home.arpa/awaiting-first-scheduled-point") == "true"
+        if staged_r2:
+            self.assertEqual(app, "radarr")
+            self.assertFalse(suspended)
+        self.assertIs(replication["spec"]["suspend"], suspended or staged_r2)
         self.assertEqual(policy["spec"]["defaultDeletionPolicy"], "Retain")
         self.assertEqual(replication["spec"]["migrate"]["policies"], "none")
 
@@ -119,6 +128,21 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.assert_capture_activation("bazarr", policy, schedule, replication)
 
+    def test_radarr_admits_only_original_recovery_with_safe_r2_staging(self):
+        directory = REPO / "kubernetes/apps/arrs/radarr/app"
+        policy, schedule, replication = load_documents(directory / "kopiur-policy.yaml")
+        policy["metadata"]["annotations"] = {
+            "kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/37981655593"}
+        policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = False
+        replication["metadata"]["annotations"] = {"kopiur.home.arpa/awaiting-first-scheduled-point": "true"}
+        replication["spec"]["suspend"] = True
+        self.assert_capture_activation("radarr", policy, schedule, replication)
+        replication["metadata"]["annotations"] = {}
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("radarr", policy, schedule, replication)
+        replication["spec"]["suspend"] = False
+        self.assert_capture_activation("radarr", policy, schedule, replication)
+
     def test_each_policy_exports_database_before_pvc(self):
         for app in APPS:
             with self.subTest(app=app):
@@ -132,7 +156,9 @@ class ManifestTests(unittest.TestCase):
                 hook = spec["hooks"]["beforeSnapshot"][0]["workloadExec"]
                 self.assertEqual(hook["container"], "kopiur-postgres")
                 self.assertFalse(hook["continueOnFailure"])
-                self.assertEqual(hook["command"], ["timeout", "600", "sh", "/kopiur/capture.sh"])
+                active_radarr = app == "radarr" and not policy["spec"]["suspend"]
+                expected = ["sh", "/kopiur/recurring-capture.sh"] if active_radarr else ["timeout", "600", "sh", "/kopiur/capture.sh"]
+                self.assertEqual(hook["command"], expected)
                 self.assertEqual(spec["verification"]["successExpr"], "stats.files > 0 && stats.errors == 0")
 
     def test_sidecar_is_dedicated_and_matches_fixture(self):
@@ -152,14 +178,28 @@ class ManifestTests(unittest.TestCase):
                 self.assertEqual(app_image["repository"] + ":" + app_image["tag"], image)
                 self.assertEqual(sidecar["env"]["PGDATABASES"].split(), databases)
                 self.assertEqual(sidecar["env"]["CONFIG_FILE"], config)
-                if app == "bazarr":
-                    self.assertEqual(sidecar["env"]["CAPTURE_MODE"], "single-db-stable-filetree")
+                self.assertEqual(sidecar["env"]["CAPTURE_MODE"], "single-db-stable-filetree")
                 self.assertEqual(sidecar["envFrom"], [{"secretRef": {"name": app + "-kopiur-postgres"}}])
                 self.assertEqual(sidecar["env"]["PGHOST"], "postgres17-rw.database.svc.cluster.local")
                 self.assertTrue(sidecar["securityContext"]["readOnlyRootFilesystem"])
                 self.assertNotIn("globalMounts", values["persistence"]["media"])
                 cm = next(d for d in docs if d["kind"] == "ConfigMap" and "capture.sh" in d.get("data", {}))
                 self.assertEqual(cm["data"]["capture.sh"], MODULE["CAPTURE"].read_text())
+                if app == "radarr":
+                    policy, _, _ = load_documents(directory / "kopiur-policy.yaml")
+                    if not policy["spec"]["suspend"]:
+                        recurring = next(d for d in docs if d["kind"] == "ConfigMap" and
+                                         d["metadata"]["name"] == "radarr-kopiur-recurring")
+                        self.assertEqual(recurring["data"]["recurring.sh"],
+                                         MODULE["RADARR_RECURRING"].read_text())
+                        self.assertEqual(recurring["data"]["recurring-capture.sh"],
+                                         (REPO / "scripts/kopiur-radarr-recurring-capture").read_text())
+                        state = "/config/.kopiur-postgres/coordination"
+                        self.assertEqual(controller["containers"]["app"]["env"]["QUIESCENCE_STATE_DIR"], state)
+                        self.assertEqual(sidecar["env"]["QUIESCENCE_STATE_DIR"], state)
+                        self.assertEqual(controller["containers"]["app"]["command"],
+                                         ["/usr/bin/catatonit", "--", "sh", "/kopiur/recurring.sh", "supervise", "/entrypoint.sh"])
+                        self.assertEqual(controller["containers"]["app"]["probes"]["readiness"]["spec"]["httpGet"]["path"], "/ping")
                 secrets = load_documents(directory / "externalsecret-kopiur.yaml")
                 for secret in secrets:
                     self.assertEqual(secret["spec"]["dataFrom"], [{"extract": {"key": "kopiur-" + app}}])

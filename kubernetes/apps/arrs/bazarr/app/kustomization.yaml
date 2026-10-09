@@ -12,6 +12,8 @@ resources:
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
+- ./externalsecret-kopiur.yaml
+- ./kopiur-repositories.yaml
 configMapGenerator:
 - name: bazarr-scripts
   files:

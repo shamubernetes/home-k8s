@@ -3,6 +3,7 @@ import copy
 import io
 import json
 import os
+import platform
 from pathlib import Path
 import subprocess
 import signal
@@ -10,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import urllib.request
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -222,6 +224,28 @@ class WitnessTests(unittest.TestCase):
 class NativeWitnessTests(unittest.TestCase):
     def test_actual_immutable_image_and_exact_public_source_commit(self):
         with tempfile.TemporaryDirectory(prefix='k8s92-source-witness-') as checkout:
+            self.assertEqual(platform.machine(), 'x86_64', 'qualified existing ARC architecture required')
+            # Isolated tooling, exact repo-pinned version and independently read
+            # upstream release-asset digest. No Mise candidate hooks, credentials,
+            # global installation or modified trusted workflow are involved.
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            url = ('https://github.com/google/go-containerregistry/releases/download/v0.22.1/'
+                   'go-containerregistry_Linux_x86_64.tar.gz')
+            with opener.open(url, timeout=30) as response:
+                payload = response.read(32 * 1024 * 1024 + 1)
+            self.assertLessEqual(len(payload), 32 * 1024 * 1024)
+            self.assertEqual(_digest(payload), '0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0')
+            with tarfile.open(fileobj=io.BytesIO(payload), mode='r:gz') as tools:
+                matches = [m for m in tools.getmembers() if m.name == 'crane']
+                self.assertEqual(len(matches), 1)
+                member = matches[0]
+                self.assertTrue(member.isfile())
+                self.assertLessEqual(member.size, 64 * 1024 * 1024)
+                stream = tools.extractfile(member)
+                self.assertIsNotNone(stream)
+                if stream is None: self.fail('pinned crane payload missing')
+                binary = Path(checkout) / 'crane'
+                binary.write_bytes(stream.read()); binary.chmod(0o700)
             def git(*args):
                 result = subprocess.run(['git', '-C', checkout, *args], capture_output=True, timeout=180)
                 self.assertEqual(result.returncode, 0, 'public source checkout failed')
@@ -230,7 +254,8 @@ class NativeWitnessTests(unittest.TestCase):
             p = plan(); p['source_checkout'] = checkout; p['source_files'] = copy.deepcopy(REVIEWED_DIGESTS)
             for item in p['source_witness']['files']: item['sha256'] = REVIEWED_DIGESTS[item['source']]
             authority = ConsumerAuthority([p], require_authority=lambda _: True)
-            receipt = authority.release(p)
+            with patch.dict(os.environ, {'PATH': checkout + os.pathsep + os.environ['PATH']}):
+                receipt = authority.release(p)
             self.assertEqual(receipt['source_evidence'], 'selected-artifact-bytes')
             self.assertEqual(receipt['source_witness_sha256'], _digest(_encoded(p['source_witness'])))
             # This is public artifact qualification, no original process/export grant.

@@ -66,7 +66,7 @@ spec:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: radarr-k8s92-original-paused1
+  name: radarr-k8s92-original-paused2
 spec:
   policyRef:
     name: radarr-k8s92-original

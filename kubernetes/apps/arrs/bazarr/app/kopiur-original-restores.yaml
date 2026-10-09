@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/restore_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: bazarr-k8s92-original-nas
+spec:
+  source:
+    snapshotRef:
+      name: bazarr-k8s92-original-retry2
+  target:
+    pvc:
+      name: bazarr-k8s92-original-nas
+      capacity: 2Gi
+      storageClassName: ceph-block
+      accessModes:
+      - ReadWriteOnce
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: bazarr-k8s92-original-r2
+spec:
+  source:
+    snapshotRef:
+      name: bazarr-k8s92-original-to-r2-copy-c889e51bdf7ce94e-3c969d17
+  target:
+    pvc:
+      name: bazarr-k8s92-original-r2
+      capacity: 2Gi
+      storageClassName: ceph-block
+      accessModes:
+      - ReadWriteOnce
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

@@ -2,38 +2,23 @@
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: bazarr-k8s92-original
-spec:
-  policyRef:
-    name: bazarr
-  deletionPolicy: Retain
-  # Match the existing arrs Kopiur admission cap, not a new retention/RPO policy.
-  failurePolicy:
-    activeDeadlineSeconds: 3600
-    backoffLimit: 0
----
-apiVersion: kopiur.home-operations.com/v1alpha1
-kind: Snapshot
-metadata:
-  name: bazarr-k8s92-original-retry1
-spec:
-  policyRef:
-    name: bazarr
-  deletionPolicy: Retain
-  # Preserve the first attempt and capture this mover's live diagnostic output.
-  failurePolicy:
-    activeDeadlineSeconds: 3600
-    backoffLimit: 0
----
-apiVersion: kopiur.home-operations.com/v1alpha1
-kind: Snapshot
-metadata:
   name: bazarr-k8s92-original-retry2
 spec:
   policyRef:
     name: bazarr
   deletionPolicy: Retain
-  # Retry with the evidenced NAS mover memory repair; retain prior attempts.
+  # Successful original capture. Failed request receipts remain in the task evidence.
   failurePolicy:
     activeDeadlineSeconds: 3600
     backoffLimit: 0
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: bazarr-k8s92-original-to-r2-copy-c889e51bdf7ce94e-3c969d17
+spec:
+  repository:
+    kind: Repository
+    name: bazarr-r2
+    namespace: arrs
+  deletionPolicy: Retain

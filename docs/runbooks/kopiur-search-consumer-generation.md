@@ -128,6 +128,36 @@ creating a second search acceptance lane or modifying a product repository.
 Their client drain, durable admission boundary, and PostgreSQL/search
 reconciliation are not proved by the standalone Elasticsearch fixture.
 
+## Source-bound restore preparation
+
+`scripts/kopiur_elasticsearch_restore.py` validates the entire supplied
+escrow manifest and each component before the fixture adapter creates a target.
+Runtime image/version must match the source binding. Every captured environment
+variable needs an explicit unchanged replay decision or a reason for omission.
+Preparation refuses bootstrap password replay and configuration-root overrides.
+It preserves original credential, keystore and configuration bytes.
+
+Native restore requires exact repository, snapshot, location and application
+index names. Wildcards and hidden index selectors are refused. Security uses
+the native security feature state; global state remains included. The selected
+repository location must equal the captured runtime's replayed `path.repo`.
+
+The supplied authoritative ledger must identify every search consumer for that
+backend. Both directions of each application/store dependency must agree, and
+all ledger IDs must be unique, including stores outside the selected backend.
+Explicit per-consumer index names must cover the complete restore selection.
+Two consumers may share an index, but neither consumer may be omitted. The
+receipt hashes the source binding, supplied ledger and exact consumer records.
+This binds declarations, not their authority or a fresh source catalog.
+
+The engine fixture supplies only its synthetic reader ledger. Unit cases use
+original consumer identities with synthetic catalogs to reject missing
+TubeArchivist/Cowbell coverage. Neither is the original production ledger or
+an application-level recovery result. Preparation receipts keep consumer query
+verification and production acceptance false. Real fixture engine checks remain
+a separate gate. Original capture authority, consumer drain, catalog selection,
+queries, cross-store reconciliation and release decisions remain required.
+
 ## Production watchdog design requiring review
 
 Before any production fencing, review this ordering against the original

@@ -10,7 +10,7 @@ from unittest.mock import Mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from kopiur_elasticsearch_escrow import EscrowError, _encoded, _validate_parts
 from kopiur_elasticsearch_restore import RestorePlan
-from kopiur_elasticsearch_engine_fixture import EngineRestore
+from kopiur_elasticsearch_engine_fixture import EngineRestore, fixture_consumer_plan
 from elasticsearch_restore_cases import restore_inputs
 
 
@@ -19,7 +19,7 @@ class RestorePlanTests(unittest.TestCase):
         self.manifest, self.parts, self.runtime, self.credentials = restore_inputs()
         self.choices = {'replay': list(self.runtime['variables']), 'omit': {}, 'repository': 'fixture',
                         'snapshot': 'generation', 'location': '/usr/share/elasticsearch/data/snapshot',
-                        'indices': ['fixture']}
+                        'indices': ['fixture'], **fixture_consumer_plan()}
 
     def plan(self):
         return RestorePlan(self.manifest, self.parts, **self.choices)
@@ -33,8 +33,11 @@ class RestorePlanTests(unittest.TestCase):
         self.assertEqual(plan.runtime, self.runtime)
         self.assertEqual(plan.native_request(), {'indices': 'fixture', 'include_global_state': True,
                                                 'feature_states': ['security']})
-        self.assertEqual(plan.receipt(), {'generation': 'a' * 32, 'runtime_replayed_count': 7,
+        receipt = plan.receipt()
+        self.assertRegex(receipt.pop('consumer_inventory_sha256'), r'^[0-9a-f]{64}$')
+        self.assertEqual(receipt, {'generation': 'a' * 32, 'runtime_replayed_count': 7,
             'runtime_omitted_count': 0, 'native_index_count': 1,
+            'consumer_contract_count': 1, 'consumer_queries_verified': False,
             'production_acceptance': False, 'source_admission_released': False})
         self.assertNotIn(self.credentials['elastic_password'], json.dumps(plan.receipt()))
 
@@ -142,6 +145,106 @@ class RestorePlanTests(unittest.TestCase):
         self.manifest['entries'] = _validate_parts(self.manifest['binding'], self.parts)
         with self.assertRaisesRegex(EscrowError, 'exact-service credentials invalid'):
             self.plan()
+
+    def shared_search(self):
+        # Original consumer identities, synthetic catalog only. This is not a
+        # current production catalog or acceptance of either application.
+        roster = [('media/tubearchivist', 'ta_synthetic'), ('services/zoo-cowbell', 'cowbell_synthetic')]
+        stores, apps, records = [], [], []
+        for app, index in roster:
+            name = 'elasticsearch-indices:' + app
+            stores.append({'id': name, 'kind': 'external_elasticsearch_indices',
+                           'backend_contract': 'database/elasticsearch', 'consumer_contracts': [app]})
+            apps.append({'id': app, 'state_dependencies': [name]})
+            records.append({'application': app, 'store': name, 'indices': [index]})
+        self.choices.update(ledger={'applications': apps, 'physical_stores': stores},
+                            consumers=records, indices=[i for _, i in roster])
+
+    def test_shared_search_requires_both_declared_original_consumers(self):
+        self.shared_search()
+        plan = self.plan()
+        receipt = plan.receipt()
+        self.assertEqual(receipt['consumer_contract_count'], 2)
+        self.assertRegex(receipt['consumer_inventory_sha256'], r'^[0-9a-f]{64}$')
+        self.assertFalse(receipt['consumer_queries_verified'])
+        self.assertFalse(receipt['production_acceptance'])
+        self.assertEqual(plan.native_request()['indices'], 'ta_synthetic,cowbell_synthetic')
+
+    def test_missing_foreign_duplicate_or_incomplete_consumer_coverage_denied(self):
+        for mutation in ('missing', 'foreign', 'duplicate', 'incomplete', 'wildcard', 'empty'):
+            self.shared_search()
+            records = self.choices['consumers']
+            if mutation == 'missing':
+                records.pop()
+            elif mutation == 'foreign':
+                records[1]['application'] = 'fixture/foreign'
+            elif mutation == 'duplicate':
+                records.append(copy.deepcopy(records[0]))
+            elif mutation == 'incomplete':
+                records[1]['indices'] = ['ta_synthetic']
+            elif mutation == 'wildcard':
+                records[1]['indices'] = ['cowbell_*']
+            else:
+                records[1]['indices'] = []
+            with self.subTest(mutation=mutation), self.assertRaises(EscrowError):
+                self.plan()
+
+    def test_shared_index_requires_each_consumer_without_forcing_disjointness(self):
+        self.shared_search()
+        self.choices['indices'] = ['ta_synthetic']
+        self.choices['consumers'][1]['indices'] = ['ta_synthetic']
+        self.assertEqual(self.plan().receipt()['consumer_contract_count'], 2)
+        self.choices['consumers'].pop()
+        with self.assertRaises(EscrowError):
+            self.plan()
+
+    def test_asymmetric_duplicate_or_malformed_ledger_refused(self):
+        for mutation in ('reverse', 'forward', 'duplicate_store', 'conflicting_backend',
+                         'conflicting_kind', 'duplicate_app', 'duplicate_contract',
+                         'no_stores', 'bad_dependencies', 'bad_app', 'bad_store', 'nonserializable'):
+            self.shared_search()
+            ledger = self.choices['ledger']
+            if mutation == 'reverse':
+                ledger['applications'].append({'id': 'fixture/undeclared',
+                    'state_dependencies': [ledger['physical_stores'][0]['id']]})
+            elif mutation == 'forward':
+                ledger['applications'][0]['state_dependencies'] = []
+            elif mutation == 'duplicate_store':
+                ledger['physical_stores'].append(copy.deepcopy(ledger['physical_stores'][0]))
+            elif mutation in ('conflicting_backend', 'conflicting_kind'):
+                duplicate = copy.deepcopy(ledger['physical_stores'][0])
+                duplicate['backend_contract' if mutation == 'conflicting_backend' else 'kind'] = 'other'
+                ledger['physical_stores'].append(duplicate)
+            elif mutation == 'duplicate_app':
+                ledger['applications'].append(copy.deepcopy(ledger['applications'][0]))
+            elif mutation == 'duplicate_contract':
+                ledger['physical_stores'][0]['consumer_contracts'] *= 2
+            elif mutation == 'no_stores':
+                ledger['physical_stores'] = []
+            elif mutation == 'bad_dependencies':
+                ledger['applications'][1]['state_dependencies'] = [None]
+            elif mutation == 'bad_app':
+                ledger['applications'].append(None)
+            elif mutation == 'nonserializable':
+                ledger['unrelated_policy'] = {object()}
+            else:
+                ledger['physical_stores'].append(None)
+            with self.subTest(mutation=mutation), self.assertRaises(EscrowError):
+                self.plan()
+
+    def test_inventory_receipt_bound_to_source_generation_and_ledger(self):
+        self.shared_search()
+        first = self.plan().receipt()['consumer_inventory_sha256']
+        ledger = self.choices['ledger']
+        ledger['physical_stores'][0]['selection'] = 'unresolved until authorized catalog read'
+        second = self.plan().receipt()['consumer_inventory_sha256']
+        self.assertNotEqual(first, second)
+        binding = self.manifest['binding']
+        binding['generation'] = 'f' * 32
+        for part in self.parts.values():
+            part['binding'] = copy.deepcopy(binding)
+        self.manifest['entries'] = _validate_parts(binding, self.parts)
+        self.assertNotEqual(second, self.plan().receipt()['consumer_inventory_sha256'])
 
 
 if __name__ == '__main__':

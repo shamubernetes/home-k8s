@@ -185,6 +185,17 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
                             'production_capture_accepted': False}
 
 
+def fixture_consumer_plan():
+    """Synthetic reader contract, never a substitute for the original ledger."""
+    store = 'elasticsearch-indices:fixture/reader'
+    app = 'fixture/reader'
+    return {'ledger': {'applications': [{'id': app, 'state_dependencies': [store]}],
+                       'physical_stores': [{'id': store, 'kind': 'external_elasticsearch_indices',
+                           'backend_contract': 'database/elasticsearch', 'consumer_contracts': [app]}]},
+            'backend': 'database/elasticsearch',
+            'consumers': [{'application': app, 'store': store, 'indices': ['fixture']}]}
+
+
 class EngineRestore:
     """Own one immutable stopped target, configure before its first start."""
     def __init__(self, drill, backend, manifest, parts, inventory, expected, *, consumer_credentials):
@@ -214,7 +225,7 @@ class EngineRestore:
             replay=['discovery.type', 'xpack.security.enabled', 'xpack.security.http.ssl.enabled',
                     'xpack.ml.enabled', 'ingest.geoip.downloader.enabled', 'ES_JAVA_OPTS', 'path.repo'],
             omit={}, repository='fixture', snapshot='generation',
-            location=DATA_PATH + '/snapshot', indices=['fixture'])
+            location=DATA_PATH + '/snapshot', indices=['fixture'], **fixture_consumer_plan())
         self.runtime = self.plan.runtime
         self.name, _ = drill.create('restore-' + backend, 9200, runtime['variables'], extra=EXTRA, start=False)
         self.target = {'uid': drill.registered_id(self.name), 'isolated': True}

@@ -27,4 +27,4 @@ spec:
   migrate:
     parallel: 2
     policies: none
-  suspend: false
+  suspend: true

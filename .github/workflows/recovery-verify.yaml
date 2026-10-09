@@ -29,6 +29,7 @@ on:
         - mixed-grimmory
         - mixed-tubearchivist
         - identities
+        - radarr-transport
 
 permissions:
   contents: read
@@ -60,7 +61,7 @@ jobs:
           tunarr|deadlines) ;;
           postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-3d|postgres-sonarr|postgres-whisparr) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
-          identities) ;;
+          identities|radarr-transport) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
         esac
         # GitHub can resolve fork objects by SHA. Require an actual branch tip
@@ -109,7 +110,7 @@ jobs:
         flux2 = "2.9.5"
         TOML
             ;;
-          mixed-*|identities)
+          mixed-*|identities|radarr-transport)
             cat > "$RUNNER_TEMP/recovery-tools/mise.toml" <<'TOML'
         [tools]
         python = "3.14.7"
@@ -160,7 +161,7 @@ jobs:
           tunarr) tools=(python3 node yq kubectl helm jq flux) ;;
           deadlines) tools=(python3 yq kyverno) ;;
           postgres-*) tools=(python3 yq kustomize kubectl helm jq flux) ;;
-          mixed-*|identities) tools=(python3) ;;
+          mixed-*|identities|radarr-transport) tools=(python3) ;;
           *) exit 1 ;;
         esac
         for tool in "${tools[@]}"; do
@@ -213,6 +214,12 @@ jobs:
     - name: Real backend identity and encryption qualification
       if: ${{ inputs.suite == 'identities' }}
       run: python3 scripts/kopiur-identity-transport.py --serve
+
+    - name: Dedicated Radarr transport qualification
+      if: ${{ inputs.suite == 'radarr-transport' }}
+      run: |
+        python3 -m unittest discover -s scripts/tests -p test_kopiur_radarr_transport.py -v
+        python3 scripts/kopiur-radarr-transport.py --serve
 
     - name: PostgreSQL manifest and unit regressions
       if: ${{ startsWith(inputs.suite, 'postgres-') }}

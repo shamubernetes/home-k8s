@@ -27,7 +27,7 @@ spec:
       failureThreshold: 3
       onFailure: Degrade
   maintenance:
-    enabled: true
+    enabled: false
     schedule:
       quick:
         cron: "20 */6 * * *"
@@ -79,7 +79,7 @@ spec:
       failureThreshold: 3
       onFailure: Degrade
   maintenance:
-    enabled: true
+    enabled: false
     schedule:
       quick:
         cron: "35 */6 * * *"

@@ -158,6 +158,31 @@ verification and production acceptance false. Real fixture engine checks remain
 a separate gate. Original capture authority, consumer drain, catalog selection,
 queries, cross-store reconciliation and release decisions remain required.
 
+## Source-backed native index expansion
+
+`scripts/kopiur_elasticsearch_resolution.py` expands explicitly supplied exact
+or terminal-prefix selectors through authenticated loopback `_resolve/index`
+reads. It checks the complete reciprocal consumer/store roster before I/O,
+requires two identical fresh expansions, and refuses foreign, duplicate, closed,
+hidden, empty, alias-resolved or data-stream indices. Optional native per-index
+alias metadata does not change the selected physical index names.
+
+Each consumer contract binds an immutable release image, source revision,
+effective selector digest and process lifetime. The independent caller guard
+must qualify those observations, plus the original engine guard, around every
+read. Hashes and deployment defaults alone do not establish that evidence.
+Exact selectors require explicit generation/state coverage. TubeArchivist's
+`ta_*` expansion and Cowbell's media and state indices remain separate contracts.
+
+`PreparedSnapshotExport.export_resolved_consumers` refuses a prepared snapshot
+that omits any expanded index. It repeats resolution before and after native,
+configuration and encryption phases. Checkpoints validate consumer authority
+before credential/authentication I/O, including revocation after initial capture.
+The isolated engine fixture exercises the concrete API on its own synthetic
+reader and retains false production acceptance. Original effective-process
+selection, coherent fencing, application queries and native production recovery
+remain required.
+
 ## Production watchdog design requiring review
 
 Before any production fencing, review this ordering against the original

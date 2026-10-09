@@ -310,6 +310,43 @@ class PreparedSnapshotExport:
         except (ValueError, TypeError, UnicodeError):
             raise EscrowError('bound original credential invalid') from None
 
+    def capture_resolution(self, *, ledger, backend, selections, require_consumer_authority):
+        """Revalidate explicit release/runtime selections against fresh native names.
+
+        The caller's consumer guard must check all supplied release/process
+        lifetimes, independently of the original Elasticsearch source guard.
+        No deployment default or source-file name substitutes for that evidence.
+        """
+        from kopiur_elasticsearch_resolution import IndexResolution, LoopbackResolutionIO
+        def guard(contracts):
+            self.guard()
+            authorized = require_consumer_authority(contracts)
+            self.guard()
+            return authorized is True
+        io_adapter = LoopbackResolutionIO(exec_read=self.source.exec_read, contracts=selections)
+        resolution = IndexResolution(self.binding, ledger=ledger, backend=backend,
+            contracts=selections, guard=guard, request=io_adapter.request)
+        resolution.check()
+        credentials = self.adapter.authenticated_credentials(self.binding)
+        result = resolution.capture(credentials)
+        if set(result['indices']) != set(self.adapter.indices):
+            raise EscrowError('prepared snapshot differs from fresh complete native expansion')
+        return resolution, result
+
+    def export_resolved_consumers(self, *, ledger, backend, selections, contracts,
+                                  require_consumer_authority, encrypt_export):
+        """Hold native expansion current through every escrow/export checkpoint."""
+        resolution, expected = self.capture_resolution(ledger=ledger, backend=backend,
+            selections=selections, require_consumer_authority=require_consumer_authority)
+        composed = self.prepare_consumers(ledger=ledger, backend=backend,
+            consumers=expected['consumers'], contracts=contracts)
+        composed.selection_check = lambda: resolution.revalidate(expected,
+            lambda: self.adapter.authenticated_credentials(self.binding))
+        return capture_export(self.binding, observe=self.source.observe,
+            require_capture_authority=self.source.require_authority,
+            capture=lambda binding: composed.capture(self.source.configuration),
+            encrypt_export=lambda manifest, parts: composed.encrypt(encrypt_export, manifest, parts))
+
     def capture_catalog(self, *, ledger, backend, consumers):
         """Read a supplied complete roster, without exporting or mutating source state.
 

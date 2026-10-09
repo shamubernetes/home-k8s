@@ -13,7 +13,7 @@ from kopiur_elasticsearch_escrow import EscrowError, _binding, _encoded, _same_b
 
 class ConsumerBoundCapture:
     """Keep one caller-qualified roster coherent across every capture phase."""
-    def __init__(self, binding, *, snapshot, queries):
+    def __init__(self, binding, *, snapshot, queries, selection_check=None):
         self.binding = _binding(binding)
         if (not isinstance(snapshot, SnapshotCapture) or not isinstance(queries, ConsumerQueries)
                 or not isinstance(queries.catalog, SourceCatalog)
@@ -25,8 +25,11 @@ class ConsumerBoundCapture:
         if _encoded(self.expected['contracts']) != _encoded(contract_digests(queries.contracts)):
             raise EscrowError('prepared consumer query contracts differ')
         self.snapshot, self.queries = snapshot, queries
+        self.selection_check = selection_check
 
     def checkpoint(self):
+        if self.selection_check is not None and self.selection_check() is not True:
+            raise EscrowError('affirmative native consumer selection checkpoint required')
         # The authenticated adapter rechecks independent authority and lifetime
         # around credential I/O. ConsumerQueries brackets both result passes with
         # fresh catalog reads and guards. No metadata comparison grants authority.
@@ -36,6 +39,8 @@ class ConsumerBoundCapture:
         if _encoded(actual) != _encoded(self.expected):
             raise EscrowError('bound consumer evidence changed across capture/export')
         self.snapshot.check(self.binding)
+        if self.selection_check is not None and self.selection_check() is not True:
+            raise EscrowError('affirmative native consumer selection checkpoint required')
         return True
 
     def call(self, operation, *args):

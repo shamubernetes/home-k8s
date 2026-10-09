@@ -12,7 +12,7 @@ import tarfile
 from kopiur_elasticsearch_capture import SnapshotCapture, credentials_from_bytes
 from kopiur_elasticsearch_source import LoopbackSnapshotIO
 from kopiur_elasticsearch_restore import RestorePlan
-from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, _same_binding, restore_parts
+from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _digest, _encoded, _same_binding, restore_parts
 from kopiur_elasticsearch_escrow_fixture import configuration_archive, configuration_parts
 from kopiur_elasticsearch_escrow_transport import encode_bundle, decode_bundle
 from kopiur_nonrel_native import IMAGES, repository_envelope, validate_elasticsearch_restore
@@ -172,6 +172,29 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
         consumer_indices=contract['consumers'], indices=['fixture'], guard=guard,
         request=catalog_io.request)
     authenticated = credentials_from_bytes(adapter.credentials(binding)['data'])
+    from kopiur_elasticsearch_resolution import IndexResolution, LoopbackResolutionIO
+    selectors, required = ['fixture*'], ['fixture']
+    selection_contracts = [{'application': 'fixture/reader',
+        'store': 'elasticsearch-indices:fixture/reader', 'selectors': selectors,
+        'required_indices': required, 'release': {'image': image,
+            'source_revision': drill.http(9200, '/')['version']['build_hash']},
+        'runtime': {'pod_uid': source_id, 'container_id': source_id,
+            'started_at': lifetime[0], 'restart_count': lifetime[2],
+            'selection_sha256': _digest(_encoded({
+                'selectors': selectors, 'required_indices': required}))}}]
+    def selection_guard(contracts):
+        guard()
+        if (_encoded(contracts) != _encoded(selection_contracts)
+                or drill.http(9200, '/')['version']['build_hash']
+                   != selection_contracts[0]['release']['source_revision']):
+            raise EscrowError('synthetic source-backed release/selection changed')
+        return True
+    resolution_io = LoopbackResolutionIO(exec_read=bound_exec, contracts=selection_contracts)
+    resolution = IndexResolution(binding, ledger=contract['ledger'], backend=contract['backend'],
+        contracts=selection_contracts, guard=selection_guard, request=resolution_io.request)
+    resolved = resolution.capture(authenticated)
+    if resolved['consumers'] != contract['consumers'] or resolved['indices'] != ['fixture']:
+        raise EscrowError('synthetic native selection differs from complete consumer roster')
     binding['source_catalog'] = catalog.capture(authenticated)
     queries = prepare_fixture_queries(binding, guard=guard, exec_read=bound_exec)
     binding['source_queries'] = queries.capture(authenticated)
@@ -179,7 +202,9 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
     adapter.binding = copy.deepcopy(binding)
     queries = prepare_fixture_queries(binding, guard=guard, exec_read=bound_exec)
     from kopiur_elasticsearch_export import ConsumerBoundCapture
-    composed = ConsumerBoundCapture(binding, snapshot=adapter, queries=queries)
+    composed = ConsumerBoundCapture(binding, snapshot=adapter, queries=queries,
+        selection_check=lambda: resolution.revalidate(resolved,
+            lambda: adapter.authenticated_credentials(binding)))
     revocations = prove_capture_revocation(adapter, binding)
 
     def read_configuration(expected, native, credential_part, checkpoint):
@@ -209,6 +234,8 @@ def capture_engine(drill, source, variables, credentials, *, snapshot_uuid, snap
     guard()
     return binding, parts, {'authenticated_snapshot_capture_verified': True,
                             'source_catalog_captured': True,
+                            'source_backed_native_resolution_verified': True,
+                            'selection_contracts_sha256': resolved['selection_contracts_sha256'],
                             'source_queries_captured': True,
                             'consumer_bound_capture_composed': True,
                             'selected_synthetic_process_variables_verified': True,

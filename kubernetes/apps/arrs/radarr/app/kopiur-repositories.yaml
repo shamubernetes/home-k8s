@@ -45,7 +45,8 @@ spec:
         cpu: 25m
         memory: 128Mi
       limits:
-        memory: 512Mi
+        # Native NAS connection OOMKilled Kopia/rclone at the former 512Mi limit.
+        memory: 2Gi
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository

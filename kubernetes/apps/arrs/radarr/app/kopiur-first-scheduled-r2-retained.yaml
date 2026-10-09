@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt the existing replicated copy without replacing its UID or manifest.
+  name: radarr-nas-to-r2-copy-2f42569353b1edff-3b2d7560
+spec:
+  repository:
+    kind: Repository
+    name: radarr-r2
+    namespace: arrs
+  deletionPolicy: Retain

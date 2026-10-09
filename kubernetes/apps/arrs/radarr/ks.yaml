@@ -25,7 +25,7 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
-      # Paired capture retains current while writing pending, alongside live config.
-      VOLSYNC_CAPACITY: 20Gi
+      # Measured paired state occupies 18.3Gi. Expand without deleting recovery bytes.
+      VOLSYNC_CAPACITY: 24Gi
       VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_RADARR}"
       VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_RADARR}"

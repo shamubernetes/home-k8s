@@ -395,14 +395,14 @@ class DatabaseStartupTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
-    def test_capture_mode_matches_the_two_paired_app_contracts(self):
+    def test_capture_mode_matches_the_paired_app_contracts(self):
         for app in NATIVE_APPS:
             with self.subTest(app=app):
                 drill = MODULE["DockerDrill"](app)
                 with mock.patch.object(drill, "start", return_value="helper") as start, \
                      mock.patch.dict(drill.capture.__globals__, {"run": mock.Mock(return_value=subprocess.CompletedProcess([], 0))}):
                     drill.capture("database", "config", drill.databases)
-                expected = "single-db-stable-filetree" if app in ("bazarr", "radarr") else "legacy"
+                expected = "single-db-stable-filetree" if app in ("bazarr", "radarr", "radarr-3d") else "legacy"
                 self.assertEqual(start.call_args.kwargs["env"]["CAPTURE_MODE"], expected)
 
     def test_xml_database_endpoint_and_credentials_replaced(self):

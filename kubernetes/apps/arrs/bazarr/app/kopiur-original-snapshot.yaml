@@ -24,3 +24,16 @@ spec:
   failurePolicy:
     activeDeadlineSeconds: 3600
     backoffLimit: 0
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: bazarr-k8s92-original-retry2
+spec:
+  policyRef:
+    name: bazarr
+  deletionPolicy: Retain
+  # Retry with the evidenced NAS mover memory repair; retain prior attempts.
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

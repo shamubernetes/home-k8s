@@ -64,6 +64,20 @@ def credentials_from_bytes(data):
         raise EscrowError('exact-service credentials invalid') from None
 
 
+def validate_snapshot_selection(repository, snapshot, location, indices):
+    if (any(not isinstance(v, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', v)
+            for v in (repository, snapshot))
+            or not isinstance(location, str)
+            or not location.startswith('/usr/share/elasticsearch/data/snapshot')
+            or location != '/usr/share/elasticsearch/data/snapshot'
+            and not location.startswith('/usr/share/elasticsearch/data/snapshot/')
+            or any(x in ('', '.', '..') for x in location.split('/')[1:])
+            or not isinstance(indices, list) or not indices
+            or any(not isinstance(i, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*', i) for i in indices)
+            or len(indices) != len(set(indices))):
+        raise EscrowError('explicit native snapshot inventory and location required')
+
+
 class SnapshotCapture:
     """Authenticate and bind snapshot metadata around the native archive read.
 
@@ -76,17 +90,7 @@ class SnapshotCapture:
     def __init__(self, binding, *, guard, read_credentials, request, read_archive,
                  repository, snapshot, location, indices, expected_uuid=None, snapshot_version=None):
         self.binding = _binding(binding)
-        if (any(not isinstance(v, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', v)
-                for v in (repository, snapshot))
-                or not isinstance(location, str)
-                or not location.startswith('/usr/share/elasticsearch/data/snapshot')
-                or location != '/usr/share/elasticsearch/data/snapshot'
-                and not location.startswith('/usr/share/elasticsearch/data/snapshot/')
-                or any(x in ('', '.', '..') for x in location.split('/')[1:])
-                or not isinstance(indices, list) or not indices
-                or any(not isinstance(i, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*', i) for i in indices)
-                or len(indices) != len(set(indices))):
-            raise EscrowError('explicit native snapshot inventory and location required')
+        validate_snapshot_selection(repository, snapshot, location, indices)
         if expected_uuid is not None and (not isinstance(expected_uuid, str)
                 or not re.fullmatch(r'[A-Za-z0-9_-]+', expected_uuid)):
             raise EscrowError('explicit snapshot UUID required')

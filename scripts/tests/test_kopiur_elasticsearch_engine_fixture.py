@@ -13,6 +13,7 @@ from kopiur_elasticsearch_engine_fixture import (
 from kopiur_elasticsearch_capture import SnapshotCapture, snapshot_metadata, synthetic_snapshot_archive
 from kopiur_elasticsearch_escrow import CONFIG_FILES, EscrowError, _encoded
 from kopiur_nonrel_native import IMAGES
+from elasticsearch_restore_cases import restore_inputs
 
 
 class OriginalCredentialRestoreTests(unittest.TestCase):
@@ -20,13 +21,8 @@ class OriginalCredentialRestoreTests(unittest.TestCase):
         self.drill = Mock()
         self.drill.create.return_value = ('owned-target', 9200)
         self.drill.registered_id.return_value = 'a' * 64
-        self.credentials = {'elastic_username': 'elastic', 'elastic_password': secrets.token_hex(24)}
+        self.manifest, self.parts, self.runtime, self.credentials = restore_inputs()
         self.consumer = {'username': 'fixture-reader', 'password': secrets.token_hex(24)}
-        self.runtime = {'image': IMAGES['elasticsearch'], 'version': '8.19.23',
-                        'variables': {'discovery.type': 'single-node'}}
-        self.manifest = {'binding': {'runtime_version': '8.19.23'}}
-        self.parts = {'runtime': {'data': _encoded(self.runtime)},
-                      'credentials': {'data': _encoded(self.credentials)}}
 
     def engine(self):
         return EngineRestore(self.drill, 'nas', self.manifest, self.parts, Mock(), [],
@@ -83,7 +79,8 @@ class OriginalCredentialRestoreTests(unittest.TestCase):
         engine.check_config = Mock()
         self.drill.http.side_effect = [{'username': 'elastic'}, {'version': {'number': '8.19.23'}}]
         self.drill.run.side_effect = [b'bootstrap.password\n', _encoded({
-            'Image': self.runtime['image'], 'Env': ['discovery.type=single-node']})]
+            'Image': self.runtime['image'],
+            'Env': [k + '=' + v for k, v in self.runtime['variables'].items()]})]
         checks = engine.prerequisites(engine.target, self.manifest)
         self.assertTrue(all(value is True for value in checks.values()))
         self.assertEqual(self.drill.auth, 'elastic:' + self.credentials['elastic_password'])
@@ -115,6 +112,8 @@ class EngineAdapterTests(unittest.TestCase):
     def setUp(self):
         self.engine = EngineRestore.__new__(EngineRestore)
         self.engine.drill = Mock()
+        self.engine.plan = Mock()
+        self.engine.manifest = Mock()
         self.engine.binding = {'generation': 'synthetic'}
         self.engine.parts = {'native': {'data': b'native'}, 'runtime': {'data': b'runtime'}}
         self.engine.check_config = Mock()

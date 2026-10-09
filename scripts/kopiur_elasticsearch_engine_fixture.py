@@ -11,6 +11,7 @@ import tarfile
 
 from kopiur_elasticsearch_capture import SnapshotCapture, credentials_from_bytes
 from kopiur_elasticsearch_source import LoopbackSnapshotIO
+from kopiur_elasticsearch_restore import RestorePlan
 from kopiur_elasticsearch_escrow import CHECKS, EscrowError, _encoded, restore_parts
 from kopiur_elasticsearch_escrow_fixture import configuration_archive, configuration_parts
 from kopiur_elasticsearch_escrow_transport import encode_bundle, decode_bundle
@@ -207,7 +208,14 @@ class EngineRestore:
                 or consumer_credentials['password'] == self.credentials['elastic_password']):
             raise EscrowError('separate synthetic consumer credentials required')
         self.consumer_credentials = copy.deepcopy(consumer_credentials)
-        self.runtime = runtime
+        # Only this fixture caller chooses synthetic runtime dispositions.
+        # Original recovery callers must review every captured variable.
+        self.plan = RestorePlan(manifest, parts,
+            replay=['discovery.type', 'xpack.security.enabled', 'xpack.security.http.ssl.enabled',
+                    'xpack.ml.enabled', 'ingest.geoip.downloader.enabled', 'ES_JAVA_OPTS', 'path.repo'],
+            omit={}, repository='fixture', snapshot='generation',
+            location=DATA_PATH + '/snapshot', indices=['fixture'])
+        self.runtime = self.plan.runtime
         self.name, _ = drill.create('restore-' + backend, 9200, runtime['variables'], extra=EXTRA, start=False)
         self.target = {'uid': drill.registered_id(self.name), 'isolated': True}
         self.shards = None
@@ -225,6 +233,7 @@ class EngineRestore:
                 and set(actual['NetworkSettings']['Networks']) <= {self.drill.network})
 
     def configuration(self, target, binding, config):
+        self.plan.check(self.manifest, self.parts)
         if config != {k: v for k, v in self.parts.items() if k != 'native'}:
             raise EscrowError('engine configuration inputs differ')
         archive = configuration_archive(binding, config)
@@ -249,6 +258,7 @@ class EngineRestore:
             raise EscrowError('engine configuration differs: ' + json.dumps(differences, sort_keys=True))
 
     def prerequisites(self, target, manifest):
+        self.plan.check(manifest, self.parts)
         self.drill.start_registered(self.name)
         self.drill.auth = self.credentials['elastic_username'] + ':' + self.credentials['elastic_password']
         self.drill.ready(self.name, lambda: self.drill.http(9200, '/_cluster/health')['status'] in ('yellow', 'green'))
@@ -265,14 +275,17 @@ class EngineRestore:
         return {k: True for k in ('config_metadata', 'keystore_load', 'credential_authentication', 'runtime_identity')}
 
     def native(self, target, binding, part):
+        self.plan.check(self.manifest, self.parts)
         if part != self.parts['native']:
             raise EscrowError('engine native input differs')
         self.drill.run('cp', '-a', '-', target['uid'] + ':' + DATA_PATH,
                        data=repository_envelope(part['data']))
-        self.drill.http(9200, '/_snapshot/fixture', 'PUT',
-                        {'type': 'fs', 'settings': {'location': DATA_PATH + '/snapshot', 'readonly': True}})
-        result = self.drill.http(9200, '/_snapshot/fixture/generation/_restore?wait_for_completion=true', 'POST',
-                                {'indices': 'fixture', 'include_global_state': True, 'feature_states': ['security']})
+        selection = self.plan.selection
+        path = '/_snapshot/' + selection['repository']
+        self.drill.http(9200, path, 'PUT',
+                        {'type': 'fs', 'settings': {'location': selection['location'], 'readonly': True}})
+        result = self.drill.http(9200, path + '/' + selection['snapshot']
+                                + '/_restore?wait_for_completion=true', 'POST', self.plan.native_request())
         self.shards = validate_elasticsearch_restore(result)
         return True
 
@@ -310,6 +323,7 @@ class EngineRestore:
         proof['restored_bootstrap_keystore_used'] = True
         proof['original_credential_schema_verified'] = True
         proof['synthetic_consumer_credentials_separate'] = True
+        proof['prepared_restore_plan'] = self.plan.receipt()
         proof['target_retirement'] = self.drill.remove(self.name)
         return proof
 

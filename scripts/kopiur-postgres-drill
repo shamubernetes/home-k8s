@@ -21,6 +21,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
+RADARR_QUIESCE = ROOT / "scripts/kopiur-radarr-quiesce"
 PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
 RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
 PAIRED_APPS = ("bazarr", "radarr")
@@ -121,7 +122,7 @@ class DockerDrill:
         self.capture_user = "kopiur_" + app.replace("-", "_")
         self.api_key = secrets.token_hex(16)
 
-    def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None):
+    def start(self, name, image, *, network="none", env=None, mounts=(), command=(), user=None, entrypoint=None):
         name = self.prefix + "-" + name
         args = ["docker", "run", "-d", "--name", name, "--network", network,
                 "--label", "home-k8s.kopiur-postgres-drill=true", "--tmpfs", "/tmp:rw,size=268435456"]
@@ -134,6 +135,8 @@ class DockerDrill:
             args += ["--platform", "linux/amd64"]
         if user:
             args += ["--user", user]
+        if entrypoint:
+            args += ["--entrypoint", entrypoint]
         process_env = os.environ.copy()
         for key, value in (env or {}).items():
             process_env[key] = value
@@ -175,7 +178,7 @@ class DockerDrill:
             self.sql(container, f'CREATE DATABASE "{database}" OWNER app;')
         return container
 
-    def app(self, name, database, config):
+    def app(self, name, database, config, *, quiesce_until=None):
         prefix = self.env_prefix
         env = {f"{prefix}__POSTGRES__HOST": "127.0.0.1", f"{prefix}__POSTGRES__PORT": "5432",
                f"{prefix}__POSTGRES__USER": "app", f"{prefix}__POSTGRES__PASSWORD": self.password,
@@ -192,8 +195,24 @@ class DockerDrill:
             env = {"POSTGRES_ENABLED": "true", "POSTGRES_DATABASE": self.databases[0],
                    "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": "5432", "POSTGRES_USERNAME": "app",
                    "POSTGRES_PASSWORD": self.password, "BAZARR__API_KEY": self.api_key}
+        quiescence = {}
+        if quiesce_until is not None:
+            if self.app_name != "radarr":
+                raise ValueError("quiescence is qualified for Radarr only")
+            entrypoint = json.loads(run("docker", "image", "inspect", "--format",
+                                        "{{json .Config.Entrypoint}}", self.image).stdout)
+            if entrypoint != ["/usr/bin/catatonit", "--", "/entrypoint.sh"]:
+                raise ValueError("Radarr native entrypoint differs from reviewed image")
+            env["QUIESCENCE_STATE_DIR"] = "/tmp/kopiur-quiescence"
+            quiescence = {"entrypoint": entrypoint[0],
+                          "command": ["--", "sh", "-c", RADARR_QUIESCE.read_text(),
+                                      "kopiur-quiesce", "start", str(quiesce_until), entrypoint[-1]]}
         return self.start(name, self.image, network="container:" + database, user="568:568",
-                          env=env, mounts=[(config, "/config", "rw")])
+                          env=env, mounts=[(config, "/config", "rw")], **quiescence)
+
+    def check_quiescence(self, container, deadline, minimum=1):
+        return run("docker", "exec", "-i", container, "sh", "-s", "check", str(deadline), str(minimum),
+                   stdin=RADARR_QUIESCE.read_bytes(), check=False).returncode == 0
 
     def isolated_config(self, data):
         """Rewrite only a working copy. Never expose source DB/API credentials."""
@@ -447,8 +466,29 @@ def fixture(app_name="radarr"):
                 else:
                     drill.provision_bazarr_backup(source)
                 before[database] = drill.counts(source, database)
+            held_app = None
+            if app_name == "radarr":
+                assert run("docker", "inspect", "-f", "{{.State.Running}}", app).stdout.strip() == b"false"
+                # A shorter fixture deadline exercises the same fixed 30-minute
+                # maximum. It is not a production capture/retention policy.
+                hold_until = int(time.time()) + 60
+                held_app = drill.app("quiescent-app", source, config, quiesce_until=hold_until)
+                for _ in range(20):
+                    if drill.check_quiescence(held_app, hold_until, minimum=10):
+                        break
+                    time.sleep(0.2)
+                else:
+                    raise RuntimeError("Radarr did not enter the bounded startup hold")
+                assert run("docker", "exec", held_app, "curl", "-fsS", "--max-time", "2",
+                           f"http://127.0.0.1:{drill.port}/ping", check=False).returncode != 0
             drill.capture(source, config, drill.databases)
             helper = drill.containers[-1]
+            if held_app:
+                assert drill.check_quiescence(held_app, hold_until), "application resumed before coherent capture completed"
+                drill.healthy(held_app)
+                assert int(time.time()) >= hold_until, "native Radarr resumed before the fixed expiry"
+                assert not drill.check_quiescence(held_app, hold_until), "capture guard accepted a resumed application"
+                run("docker", "stop", "-t", "30", held_app)
             bundle = base / "bundle"
             run("docker", "cp", helper + ":/config/.kopiur-postgres", str(bundle))
             assert verify_bundle(bundle) == drill.databases
@@ -492,6 +532,7 @@ def fixture(app_name="radarr"):
                               "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
                               "dedicated_grant_sql_exercised": True,
+                              "bounded_radarr_pause_and_native_resume": held_app is not None,
                               "future_table_read_and_unrelated_data_write_denial": True,
                               "filetree_aba_rejected": app_name in PAIRED_APPS,
                               "paired_filetree_bytes_equal": recovered.get("paired_filetree_bytes_equal", 0),

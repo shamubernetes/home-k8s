@@ -2,11 +2,13 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import runpy
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -162,6 +164,123 @@ class ManifestTests(unittest.TestCase):
                 for secret in secrets:
                     self.assertEqual(secret["spec"]["dataFrom"], [{"extract": {"key": "kopiur-" + app}}])
                 self.assertNotIn("SUPER", json.dumps(secrets))
+
+
+class RadarrQuiescenceTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="radarr-hold-")
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name)
+        self.state = self.base / "state"
+        self.env = dict(os.environ, QUIESCENCE_STATE_DIR=str(self.state))
+        self.script = str(MODULE["RADARR_QUIESCE"])
+        self.command = ["sh", "-c", 'printf resumed > "$1"', "entrypoint", str(self.base / "resumed")]
+
+    def call(self, mode, deadline, *args):
+        return subprocess.run(["sh", self.script, mode, str(deadline), *map(str, args)],
+                              env=self.env, capture_output=True, timeout=10)
+
+    def active(self, deadline):
+        self.state.mkdir(exist_ok=True)
+        (self.state / "active").write_text(str(deadline) + "\n")
+
+    def test_deadline_is_absolute_and_expiry_restores_native_command(self):
+        deadline = int(time.time()) + 3
+        process = subprocess.Popen(["sh", self.script, "start", str(deadline), *self.command],
+                                   env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        try:
+            for _ in range(40):
+                if (self.state / "active").exists():
+                    break
+                time.sleep(0.025)
+            self.assertFalse((self.base / "resumed").exists())
+            self.assertEqual(self.call("check", deadline, 1).returncode, 0)
+            self.assertEqual(process.wait(timeout=6), 0)
+            self.assertEqual((self.base / "resumed").read_text(), "resumed")
+            self.assertFalse((self.state / "active").exists())
+            self.assertNotEqual(self.call("check", deadline, 1).returncode, 0)
+            # A container restart reuses the same expiry, never another 30 minutes.
+            self.assertEqual(self.call("start", deadline, *self.command).returncode, 0)
+            self.assertFalse((self.state / "active").exists())
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=3)
+            if process.stderr is not None:
+                process.stderr.close()
+
+    def test_invalid_expired_or_overlong_holds_restore_service(self):
+        now = int(time.time())
+        for deadline in ("", "bad", "01", "1" * 100, now - 1, now + 1801):
+            with self.subTest(deadline=deadline):
+                self.assertEqual(self.call("start", deadline, *self.command).returncode, 0)
+                self.assertEqual((self.base / "resumed").read_text(), "resumed")
+                self.assertFalse((self.state / "active").exists())
+
+    def test_capture_guard_checks_remaining_budget_and_exact_deadline(self):
+        deadline = int(time.time()) + 60
+        self.active(deadline)
+        self.assertEqual(self.call("check", deadline, 30).returncode, 0)
+        for value, minimum in ((deadline, 61), (deadline + 1, 1), (deadline, "01"),
+                               (deadline, 0), (deadline, 1801), ("bad", 1)):
+            with self.subTest(value=value, minimum=minimum):
+                self.assertNotEqual(self.call("check", value, minimum).returncode, 0)
+        (self.state / "active").unlink()
+        self.assertNotEqual(self.call("check", deadline, 1).returncode, 0)
+
+    def test_symlinked_state_never_admits_capture_or_blocks_resume(self):
+        deadline = int(time.time()) + 60
+        outside = self.base / "outside"
+        outside.mkdir()
+        self.state.symlink_to(outside, target_is_directory=True)
+        self.assertNotEqual(self.call("check", deadline, 1).returncode, 0)
+        self.assertEqual(self.call("start", deadline, *self.command).returncode, 0)
+        self.assertEqual(list(outside.iterdir()), [])
+        self.state.unlink()
+        self.state.mkdir()
+        destination = outside / "untouched"
+        destination.write_text("keep")
+        for name in ("active", "pending"):
+            marker = self.state / name
+            marker.symlink_to(destination)
+            self.assertNotEqual(self.call("check", deadline, 1).returncode, 0)
+            self.assertEqual(self.call("start", deadline, *self.command).returncode, 0)
+            self.assertEqual(destination.read_text(), "keep")
+            marker.unlink(missing_ok=True)
+
+    def test_invalid_restart_clears_prior_valid_pause_evidence(self):
+        deadline = int(time.time()) + 60
+        self.active(deadline)
+        self.assertEqual(self.call("check", deadline, 1).returncode, 0)
+        self.assertEqual(self.call("start", "bad", *self.command).returncode, 0)
+        self.assertEqual((self.base / "resumed").read_text(), "resumed")
+        self.assertNotEqual(self.call("check", deadline, 1).returncode, 0)
+
+    def test_special_marker_objects_are_rejected_without_blocking(self):
+        deadline = int(time.time()) + 60
+        self.state.mkdir()
+        for name in ("active", "pending"):
+            marker = self.state / name
+            os.mkfifo(marker)
+            self.assertNotEqual(self.call("check", deadline, 1).returncode, 0)
+            self.assertEqual(self.call("start", deadline, *self.command).returncode, 0)
+            marker.unlink(missing_ok=True)
+
+    def test_active_directory_rejects_capture_but_restores_service(self):
+        deadline = int(time.time()) + 60
+        self.state.mkdir()
+        (self.state / "active").mkdir()
+        for expiry in (deadline, int(time.time()) - 1):
+            self.assertEqual(self.call("start", expiry, *self.command).returncode, 0)
+            self.assertEqual((self.base / "resumed").read_text(), "resumed")
+            self.assertNotEqual(self.call("check", expiry, 1).returncode, 0)
+
+    def test_runtime_shell_survives_flux_substitution(self):
+        script = Path(self.script).read_bytes()
+        subprocess.run(["sh", "-n"], input=script, check=True)
+        result = subprocess.run(["flux", "envsubst", "--strict"], input=script,
+                                capture_output=True, check=True)
+        self.assertEqual(result.stdout, script)
 
 
 class DatabaseStartupTests(unittest.TestCase):

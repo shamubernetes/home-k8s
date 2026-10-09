@@ -15,6 +15,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-original-snapshot.yaml
 components:
 - ../../../../components/kopiur-postgres
 patches:

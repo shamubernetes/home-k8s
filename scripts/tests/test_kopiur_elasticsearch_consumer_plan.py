@@ -44,7 +44,8 @@ def bound_test_evidence(binding, ledger, queries, indices):
         key=lambda r: (r['application'], r['store']))
     catalog = {'schema': CATALOG_SCHEMA, 'source': {k: binding[k] for k in IDENTITY},
         'ledger_sha256': _digest(_encoded(ledger)), 'consumers': consumers,
-        'indices': {i: {'settings': {}, 'mappings': {}, 'aliases': {}, 'count': 0} for i in indices}}
+        'indices': {i: {'settings': {'index.uuid': 'synthetic-' + i},
+                        'mappings': {}, 'aliases': {}, 'count': 0} for i in indices}}
     ordered = query_records(queries, catalog)
     binding['source_catalog'] = catalog
     binding['source_queries'] = {'schema': QUERY_SCHEMA, 'catalog_sha256': _digest(_encoded(catalog)),

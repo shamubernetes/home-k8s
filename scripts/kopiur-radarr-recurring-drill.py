@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Qualify recurring Radarr stop/capture/resume on the owned network-none ARC fixture."""
 from pathlib import Path
+import os
 import sys
+import tempfile
 import time
 import uuid
 
@@ -11,7 +13,7 @@ DRIVER = ROOT / "scripts/kopiur-radarr-recurring-capture"
 CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
 
 
-def qualify(drill, source, config, run, pg_image):
+def qualify(drill, source, config, run, pg_image, restore_pvc):
     run(sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "scripts/tests"),
         "-p", "test_kopiur_radarr_recurring.py", "-v")
     state = drill.config_volume("recurring-state")
@@ -56,6 +58,19 @@ def qualify(drill, source, config, run, pg_image):
                "cd /config/.kopiur-postgres/current; sha256sum -c SHA256SUMS >/dev/null").returncode == 0
     drill.healthy(app)
     first_seconds = round(time.monotonic() - started, 2)
+    # Exercise the newly captured generation after normal native startup has
+    # resumed. Mutable later PVC bytes must never replace the paired archive.
+    scratch = Path(os.environ.get("RUNNER_TEMP", str(Path.home() / ".hermes/cache/scratch")))
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="recurring-paired-", dir=scratch) as temporary:
+        copied = Path(temporary) / "config"
+        run("docker", "cp", helper + ":/config", str(copied))
+        (copied / "config.xml").write_bytes(b"later-unpaired-state")
+        (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
+        restored = restore_pvc(copied, "radarr", config_mib=256, database_mib=512)
+        assert restored["native_restore"] and restored["restored_app_ping"]
+        assert restored["table_counts"]["radarr_main"]["kopiur_fixture"] == 1
+        assert restored["paired_filetree_bytes_equal"] > 0
 
     # Database rejection releases the writer even though no COMPLETE is accepted.
     failed = run("docker", "exec", "-e", "PGPORT=1", helper,
@@ -84,4 +99,5 @@ def qualify(drill, source, config, run, pg_image):
     return {"status": "passed", "production_data": False, "native_capture_seconds": first_seconds,
             "native_writer_stopped": True, "current_bundle_checksums": True,
             "overlap_rejected": True, "failure_resumed": True, "expiry_resumed": True,
-            "restart_preserved_absolute_hold": True, "network": "none-shared-namespace"}
+            "restart_preserved_absolute_hold": True, "paired_generation_native_restore": True,
+            "later_unpaired_state_rejected": True, "network": "none-shared-namespace"}

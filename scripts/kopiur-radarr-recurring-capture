@@ -1,10 +1,10 @@
 #!/bin/sh
 # App-local recurring capture. No controller credentials or cross-container signals.
 set -eu
-state=${QUIESCENCE_STATE_DIR:-/kopiur-quiescence}
-helper=${QUIESCENCE_HELPER:-/kopiur/recurring.sh}
-[ "${CAPTURE_MODE:-}" = single-db-stable-filetree ] || exit 1
-[ "${PGDATABASES:-}" = radarr_main ] || exit 1
+state=$(printenv QUIESCENCE_STATE_DIR || printf /kopiur-quiescence)
+helper=$(printenv QUIESCENCE_HELPER || printf /kopiur/recurring.sh)
+[ "$(printenv CAPTURE_MODE || true)" = single-db-stable-filetree ] || exit 1
+[ "$(printenv PGDATABASES || true)" = radarr_main ] || exit 1
 [ -d "$state" ] && [ ! -L "$state" ] || exit 1
 [ ! -L "$state/client-lock" ] || exit 1
 if [ -e "$state/client-lock" ]; then

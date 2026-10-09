@@ -32,6 +32,13 @@ class RecurringTests(unittest.TestCase):
         return subprocess.run(["sh", str(SCRIPT), *args], env={**os.environ, "QUIESCENCE_STATE_DIR": str(self.state)},
                               capture_output=True, timeout=3).returncode
 
+    def test_runtime_shell_survives_flux_substitution(self):
+        for script in (SCRIPT, ROOT / "scripts/kopiur-radarr-recurring-capture"):
+            data = script.read_bytes()
+            result = subprocess.run(["flux", "envsubst", "--strict"], input=data, capture_output=True, check=True)
+            self.assertEqual(result.stdout, data)
+            subprocess.run(["sh", "-n"], input=data, check=True)
+
     def test_matching_current_hold(self):
         self.assertEqual(self.call("check", "720"), 0)
 

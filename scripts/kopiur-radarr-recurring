@@ -2,7 +2,7 @@
 # Radarr owns its child process group. The exporter only requests a bounded hold.
 set -eu
 umask 077
-state=${QUIESCENCE_STATE_DIR:-/kopiur-quiescence}
+state=$(printenv QUIESCENCE_STATE_DIR || printf /kopiur-quiescence)
 max_hold=1800
 valid_number() {
   case "$1" in ''|0*|*[!0-9]*|???????????*) return 1 ;; esac
@@ -39,7 +39,7 @@ case "$1" in
     [ "$#" -gt 0 ]
     mkdir -p "$state"
     valid_state || exit 1
-    # A Pod/container replacement must preserve an accepted CSI hold. Keep the
+    # A Pod/container replacement must preserve an accepted capture hold. Keep the
     # original absolute expiry, never extend it or start a new native writer.
     rm -f "$state/active"
     if read_request; then
@@ -114,10 +114,13 @@ case "$1" in
     valid_state || exit 1
     [ -f "$state/boot" ] && [ ! -e "$state/request" ] && [ ! -e "$state/active" ] || exit 1
     generation=$(cat "$state/boot")
-    token=${2:-$(tr -d '-' </proc/sys/kernel/random/uuid)}
+    token=$(tr -d '-' </proc/sys/kernel/random/uuid)
+    [ "$#" -lt 2 ] || token=$2
     case "$token" in ''|*[!a-f0-9]*|?????????????????????????????????*) exit 1 ;; esac
-    hold=${3:-$max_hold}
-    minimum=${4:-1320}
+    hold=$max_hold
+    minimum=1320
+    [ "$#" -lt 3 ] || hold=$3
+    [ "$#" -lt 4 ] || minimum=$4
     valid_number "$hold" && valid_number "$minimum" || exit 1
     [ "$hold" -le "$max_hold" ] && [ "$minimum" -le "$hold" ] || exit 1
     deadline=$(($(date +%s) + hold))
@@ -145,7 +148,7 @@ case "$1" in
       IFS=' ' read -r owner_generation owner_token owner_deadline extra <"$state/capture-owner" || exit 1
       [ -z "$extra" ] && valid_number "$owner_deadline" || exit 1
       [ "$owner_generation" = "$(cat "$state/boot")" ] || exit 0
-      [ -z "${2:-}" ] || [ "$owner_token" = "$2" ] || exit 0
+      [ "$#" -lt 2 ] || [ "$owner_token" = "$2" ] || exit 0
       if cmp -s "$state/request" "$state/capture-owner"; then rm -f "$state/request"; fi
       rm -f "$state/capture-owner"
     fi

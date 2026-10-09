@@ -548,7 +548,7 @@ def fixture(app_name="radarr"):
             if app_name == "radarr":
                 import runpy
                 recurring_module = runpy.run_path(str(ROOT / "scripts/kopiur-radarr-recurring-drill.py"))
-                recurring = recurring_module["qualify"](drill, source, config, run, PG_IMAGE)
+                recurring = recurring_module["qualify"](drill, source, config, run, PG_IMAGE, restore_pvc)
             print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
                               "recurring_radarr": recurring,
                               "tables_equal": sum(len(tables) for tables in before.values()),

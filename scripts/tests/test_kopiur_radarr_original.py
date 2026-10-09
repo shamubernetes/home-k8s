@@ -58,6 +58,16 @@ class RadarrOriginalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             NATIVE['validate_radarr_api']([records[0], records[0]], 2, sql)
 
+    def test_radarr_reader_bounds_local_cache_without_writes(self):
+        source = (ROOT / 'scripts/kopiur-bazarr-original.py').read_text()
+        self.assertIn('cache = "" if app == "bazarr" else', source)
+        for option in ('content-cache-size-mb=64', 'content-cache-size-limit-mb=128',
+                       'metadata-cache-size-mb=64', 'metadata-cache-size-limit-mb=128',
+                       'content-min-sweep-age=0s', 'metadata-min-sweep-age=0s'):
+            self.assertIn('--' + option, source)
+        self.assertIn('backend + cache + " --readonly >/dev/null', source)
+        self.assertNotIn('kopia cache set', source)
+
     def test_transfer_allowlist_is_radarr_specific_and_capacity_bound(self):
         names = ['.kopiur-postgres/COMPLETE', '.kopiur-postgres/current',
                  '.kopiur-postgres/current/SHA256SUMS']

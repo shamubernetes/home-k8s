@@ -127,7 +127,13 @@ def qualify(fields, app="bazarr"):
                     body += "export AWS_SECRET_ACCESS_KEY=" + shlex.quote(fields["R2_SECRET_ACCESS_KEY"]) + "\n"
                     backend = "s3 --bucket=kopiur-" + app + " --prefix=kopiur/" + app + "/r2/ --endpoint=" + ACCOUNT + ".r2.cloudflarestorage.com --region=auto"
                 # Read-only connect prevents maintenance, snapshots or repository writes.
-                body += "kopia repository connect " + backend + " --readonly >/dev/null\n"
+                # The Radarr bundle and Kopia's default cache compete for
+                # the same 8Gi tmpfs. Bound only this reader's local cache.
+                cache = "" if app == "bazarr" else (
+                    " --content-cache-size-mb=64 --content-cache-size-limit-mb=128"
+                    " --metadata-cache-size-mb=64 --metadata-cache-size-limit-mb=128"
+                    " --content-min-sweep-age=0s --metadata-min-sweep-age=0s")
+                body += "kopia repository connect " + backend + cache + " --readonly >/dev/null\n"
                 if app == "bazarr":
                     body += "kopia snapshot restore " + snapshot + " /work/restored >/dev/null\n"
                 else:

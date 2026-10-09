@@ -9,9 +9,12 @@ import copy
 import json
 import re
 import subprocess
+import sys
+from pathlib import Path
 
 from kopiur_elasticsearch_escrow import EscrowError, _digest, _encoded
 from kopiur_elasticsearch_resolution import validate_contracts
+from kopiur_elasticsearch_source_witness import validate_witness
 
 
 PROFILES = {
@@ -122,7 +125,8 @@ class ConsumerAuthority:
 
     Plans are reviewed inputs: application/store, declared_image, runtime image, source URL,
     revision, checkout, source_files {relative path: sha256}, selectors,
-    required_indices, expected_selection and default_selection. Missing OCI provenance fails closed.
+    required_indices, expected_selection and default_selection. Without OCI labels,
+    only a complete reviewed source_witness may qualify selected TubeArchivist bytes.
     The original source capture grant must explicitly include these process reads.
     """
     def __init__(self, plans, *, require_authority, run=None):
@@ -134,7 +138,7 @@ class ConsumerAuthority:
         if not isinstance(plans, list) or not plans:
             raise EscrowError('reviewed original consumer plans required')
         for plan in plans:
-            if (not isinstance(plan, dict) or set(plan) != {'application', 'store', 'image', 'declared_image',
+            if (not isinstance(plan, dict) or set(plan) - {'source_witness'} != {'application', 'store', 'image', 'declared_image',
                     'source_url', 'source_revision', 'source_checkout', 'source_files',
                     'selectors', 'required_indices', 'expected_selection', 'default_selection'}
                     or not isinstance(plan['application'], str)
@@ -156,6 +160,8 @@ class ConsumerAuthority:
                         or any(x in ('', '.', '..') for x in path.split('/'))
                         or not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest)):
                     raise EscrowError('reviewed consumer source-file binding invalid')
+            if 'source_witness' in plan:
+                validate_witness(plan)
             if PROFILES[plan['application']]['variable'] is None and plan['expected_selection'] is not None:
                 raise EscrowError('fixed-source consumer cannot supply environment selection')
             if plan['expected_selection'] is not None and not isinstance(plan['expected_selection'], str):
@@ -232,17 +238,33 @@ class ConsumerAuthority:
     def release(self, plan):
         config = self._read(['crane', 'config', plan['image']])
         labels = config.get('config', {}).get('Labels', {})
-        if (not isinstance(labels, dict)
-                or labels.get('org.opencontainers.image.source') != plan['source_url']
-                or labels.get('org.opencontainers.image.revision') != plan['source_revision']):
+        if labels is None:
+            labels = {}
+        labelled = (isinstance(labels, dict)
+                    and labels.get('org.opencontainers.image.source') == plan['source_url']
+                    and labels.get('org.opencontainers.image.revision') == plan['source_revision'])
+        witness = validate_witness(plan) if 'source_witness' in plan else None
+        if (not isinstance(labels, dict) or any(k in labels and labels[k] != plan[field]
+                for k, field in [('org.opencontainers.image.source', 'source_url'),
+                                  ('org.opencontainers.image.revision', 'source_revision')])
+                or not labelled and witness is None):
             raise EscrowError('immutable consumer image source provenance absent or different')
         for path, digest in plan['source_files'].items():
             data = self._raw_read(['git', '-C', plan['source_checkout'], 'show',
                                   plan['source_revision'] + ':' + path])
             if _digest(data) != digest:
                 raise EscrowError('reviewed consumer source bytes differ')
-        return {key: copy.deepcopy(plan[key]) for key in
-                ('image', 'declared_image', 'source_url', 'source_revision', 'source_files')}
+        if witness is not None:
+            observed = self._read([sys.executable, str(Path(__file__).with_name(
+                'kopiur_elasticsearch_source_witness.py')), '--image', plan['image']])
+            if _encoded(observed) != _encoded(witness):
+                raise EscrowError('immutable artifact source bytes differ from reviewed witness')
+        result = {key: copy.deepcopy(plan[key]) for key in
+                  ('image', 'declared_image', 'source_url', 'source_revision', 'source_files')}
+        result['source_evidence'] = ('selected-artifact-bytes' if witness is not None else 'oci-labels')
+        if witness is not None:
+            result['source_witness_sha256'] = _digest(_encoded(plan['source_witness']))
+        return result
 
     def roster(self, plan):
         profile = PROFILES[plan['application']]

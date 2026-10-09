@@ -19,6 +19,16 @@ APPS = ("bazarr", "radarr")
 NATIVE_APPS = ("radarr", "radarr-3d", "sonarr", "bazarr", "whisparr")
 
 
+def capture_resources(directory):
+    docs = load_documents(directory / "kopiur-policy.yaml")
+    by_identity = {(doc["kind"], doc["metadata"]["name"]): doc for doc in docs}
+    app = directory.parent.name
+    schedule_name = app + ("-primary" if ("SnapshotSchedule", app + "-primary") in by_identity else "-daily")
+    return (by_identity[("SnapshotPolicy", app)],
+            by_identity[("SnapshotSchedule", schedule_name)],
+            by_identity[("SnapshotReplication", app + "-nas-to-r2")])
+
+
 class ManifestTests(unittest.TestCase):
     def test_all_postgres_transports_use_dedicated_identities(self):
         for app in APPS:
@@ -115,7 +125,7 @@ class ManifestTests(unittest.TestCase):
 
     def test_activation_requires_the_exact_original_receipt_and_retains_history(self):
         directory = REPO / "kubernetes/apps/arrs/bazarr/app"
-        policy, schedule, replication = load_documents(directory / "kopiur-policy.yaml")
+        policy, schedule, replication = capture_resources(directory)
         policy["metadata"]["annotations"] = {"kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/37919745482"}
         policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = replication["spec"]["suspend"] = False
         self.assert_capture_activation("bazarr", policy, schedule, replication)
@@ -130,7 +140,7 @@ class ManifestTests(unittest.TestCase):
 
     def test_radarr_admits_only_original_recovery_with_safe_r2_staging(self):
         directory = REPO / "kubernetes/apps/arrs/radarr/app"
-        policy, schedule, replication = load_documents(directory / "kopiur-policy.yaml")
+        policy, schedule, replication = capture_resources(directory)
         policy["metadata"]["annotations"] = {
             "kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/37981655593"}
         policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = False
@@ -143,11 +153,27 @@ class ManifestTests(unittest.TestCase):
         replication["spec"]["suspend"] = False
         self.assert_capture_activation("radarr", policy, schedule, replication)
 
+    def test_radarr_primary_preserves_incumbent_cadence_and_inactive_history(self):
+        directory = REPO / "kubernetes/apps/arrs/radarr/app"
+        docs = load_documents(directory / "kopiur-policy.yaml")
+        schedules = {doc["metadata"]["name"]: doc for doc in docs if doc["kind"] == "SnapshotSchedule"}
+        self.assertEqual(set(schedules), {"radarr-daily", "radarr-primary"})
+        self.assertTrue(schedules["radarr-daily"]["spec"]["schedule"]["suspend"])
+        primary = schedules["radarr-primary"]["spec"]["schedule"]
+        self.assertFalse(primary["suspend"])
+        self.assertEqual(primary["cron"], "${VOLSYNC_SCHEDULE_RADARR}")
+        self.assertTrue(primary["runOnCreate"])
+        self.assertEqual(primary["concurrencyPolicy"], "Forbid")
+        policy, _, replication = capture_resources(directory)
+        self.assertEqual(replication["spec"]["schedule"]["cron"], "${VOLSYNC_R2_SCHEDULE_RADARR}")
+        self.assertEqual(policy["spec"]["verification"]["deep"]["capacity"], "24Gi")
+        self.assertEqual(policy["spec"]["hooks"]["beforeSnapshot"][0]["workloadExec"]["timeout"], "13m")
+
     def test_each_policy_exports_database_before_pvc(self):
         for app in APPS:
             with self.subTest(app=app):
                 directory = REPO / "kubernetes/apps/arrs" / app / "app"
-                policy, schedule, replication = load_documents(directory / "kopiur-policy.yaml")
+                policy, schedule, replication = capture_resources(directory)
                 self.assert_capture_activation(app, policy, schedule, replication)
                 self.assertNotIn("suspend", schedule["spec"])
                 spec = policy["spec"]
@@ -186,7 +212,7 @@ class ManifestTests(unittest.TestCase):
                 cm = next(d for d in docs if d["kind"] == "ConfigMap" and "capture.sh" in d.get("data", {}))
                 self.assertEqual(cm["data"]["capture.sh"], MODULE["CAPTURE"].read_text())
                 if app == "radarr":
-                    policy, _, _ = load_documents(directory / "kopiur-policy.yaml")
+                    policy, _, _ = capture_resources(directory)
                     if not policy["spec"]["suspend"]:
                         recurring = next(d for d in docs if d["kind"] == "ConfigMap" and
                                          d["metadata"]["name"] == "radarr-kopiur-recurring")
@@ -251,7 +277,8 @@ class RadarrQuiescenceTests(unittest.TestCase):
 
     def test_invalid_expired_or_overlong_holds_restore_service(self):
         now = int(time.time())
-        for deadline in ("", "bad", "01", "1" * 100, now - 1, now + 1801):
+        # Stay outside the hold bound even if earlier invalid cases cross a second.
+        for deadline in ("", "bad", "01", "1" * 100, now - 1, now + 1900):
             with self.subTest(deadline=deadline):
                 self.assertEqual(self.call("start", deadline, *self.command).returncode, 0)
                 self.assertEqual((self.base / "resumed").read_text(), "resumed")

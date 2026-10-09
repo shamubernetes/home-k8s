@@ -29,7 +29,7 @@ spec:
           bootstrap-oauth:
             image:
               repository: docker.io/library/busybox
-              tag: latest@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+              tag: latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
             command:
             - /bin/sh
             - -c
@@ -112,7 +112,7 @@ spec:
           ollama:
             image:
               repository: docker.io/ollama/ollama
-              tag: 0.35.1@sha256:292ee7945dfc3d5840a181f3ab86fedb1e66703e02c8af98b50f4da56b7e278c
+              tag: 0.40.1@sha256:69f27594d8127cb43db1edcafa5e2d3cd8f88bdbc54a2cf3ceb11b8d138a24b1
             env:
               HOME: /tmp
               OLLAMA_HOST: 0.0.0.0:11434

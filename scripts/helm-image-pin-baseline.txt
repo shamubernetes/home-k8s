@@ -5,14 +5,11 @@ actions-runner-system/ghar-scale-set/arc-maudecode	docker:dind
 actions-runner-system/ghar-scale-set/arc-zoo	docker:dind
 games/minecraft-stoneblock4/app	itzg/mc-backup:latest
 games/minecraft-stoneblock4/app	itzg/minecraft-server:latest
-kube-system/descheduler/app	registry.k8s.io/descheduler/descheduler:v0.36.0
 observability/grafana/app	docker.io/curlimages/curl:8.9.1
 observability/grafana/app	docker.io/grafana/grafana:12.3.1
 observability/grafana/app	quay.io/kiwigrid/k8s-sidecar:2.5.0
 observability/kuberhealthy/app	docker.io/kuberhealthy/kuberhealthy:v2.8.0-rc2
 observability/smartctl-exporter/app	quay.io/prometheuscommunity/smartctl-exporter:v0.14.0
-op/onepassword-connect/app	1password/connect-api:1.8.2
-op/onepassword-connect/app	1password/connect-sync:1.8.2
 services/plane/app	busybox
 services/plane/app	makeplane/admin-commercial:v2.6.3
 services/plane/app	makeplane/backend-commercial:v2.6.3

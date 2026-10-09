@@ -16,5 +16,6 @@ resources:
 - ./kaneo/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./pelican/ks.yaml
+- ./rustdesk/ks.yaml
 - ./static-webserver/ks.yaml
 - ./zoo-operator/ks.yaml

@@ -1,0 +1,153 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app rustdesk
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: rustdesk
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      rustdesk:
+        # One Pod keeps both servers on the same RWO identity volume.
+        strategy: Recreate
+        initContainers:
+          wait-relay-dns:
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.38.0@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
+            command: [sh, -ec]
+            # hbbs resolves the advertised relay only at startup. A first install
+            # can race external-dns and silently discard an unresolved hostname.
+            args:
+            - |
+              for attempt in $(seq 1 120); do
+                if nslookup rustdesk.${HOME_DOMAIN}; then exit 0; fi
+                sleep 2
+              done
+              echo "Relay DNS did not become available" >&2
+              exit 1
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: [ALL]}
+            resources:
+              requests:
+                cpu: 5m
+                memory: 8Mi
+              limits:
+                memory: 32Mi
+        containers:
+          hbbs:
+            image: &image
+              repository: docker.io/rustdesk/rustdesk-server
+              tag: 1.1.16@sha256:8ecdab65deb7c84652a626380e31d11a8f1fbafd97916d57f95c20628f943c00
+            command: [hbbs]
+            args: ["-r", "rustdesk.${HOME_DOMAIN}:21117", "-k", "_"]
+            workingDir: /data
+            env: &env
+              HOME: /data
+            probes:
+              liveness: &hbbsProbe
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 21116
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 3
+              readiness: *hbbsProbe
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 21116
+                  periodSeconds: 5
+                  failureThreshold: 60
+            securityContext: &security
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: [ALL]}
+            resources: &resources
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 256Mi
+          hbbr:
+            image: *image
+            command: [hbbr]
+            # '_' loads hbbs' persisted key and rejects a different client key.
+            args: ["-k", "_"]
+            workingDir: /data
+            env: *env
+            probes:
+              liveness: &hbbrProbe
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 21117
+                  periodSeconds: 10
+                  timeoutSeconds: 2
+                  failureThreshold: 3
+              readiness: *hbbrProbe
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 21117
+                  periodSeconds: 5
+                  # Allow startup and persisted identity loading to settle.
+                  failureThreshold: 72
+            securityContext: *security
+            resources: *resources
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: rustdesk
+        type: LoadBalancer
+        # BGP advertises only the node with the endpoint, preserving client IPs.
+        # L2 election alone cannot reliably serve externalTrafficPolicy Local.
+        loadBalancerClass: io.cilium/bgp-control-plane
+        externalTrafficPolicy: Local
+        annotations:
+          io.cilium/lb-ipam-ips: "${IPAM_IP_RUSTDESK}"
+          external-dns.alpha.kubernetes.io/hostname: "rustdesk.${HOME_DOMAIN}"
+          external-dns.alpha.kubernetes.io/target: "${IPAM_IP_RUSTDESK}"
+        ports:
+          nat:
+            port: 21115
+          registration:
+            primary: true
+            port: 21116
+          registration-udp:
+            port: 21116
+            protocol: UDP
+          relay:
+            port: 21117
+    persistence:
+      data:
+        existingClaim: *app
+        globalMounts:
+        - path: /data

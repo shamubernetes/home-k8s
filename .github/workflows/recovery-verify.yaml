@@ -51,7 +51,8 @@ jobs:
     name: Verify recovery
     if: ${{ github.repository == 'shamubernetes/home-k8s' && github.ref == 'refs/heads/main' }}
     runs-on: ["ghar-set-zoo"]
-    timeout-minutes: 45
+    # Two original Whisparr readers are bounded at 30m each, plus native boot/cleanup.
+    timeout-minutes: ${{ inputs.suite == 'postgres-whisparr-original' && 75 || 45 }}
     defaults:
       run:
         shell: bash

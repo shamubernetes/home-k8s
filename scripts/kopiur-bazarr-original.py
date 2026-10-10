@@ -126,6 +126,9 @@ def qualify(fields, app="bazarr"):
             "--security-opt", "no-new-privileges", "--mount", "type=volume,src=" + tools + ",dst=/tools,volume-nocopy",
             TOOLS, "sh", "-c", "cp /bin/busybox /tools/busybox && /tools/busybox --install -s /tools")
         results = {}
+        # The original Whisparr NAS bundle exceeded the small-reader 900s limit.
+        # Bound only its read-only restore; production capture/hold is unchanged.
+        reader_timeout = 1800 if app == "whisparr" else 900
         with tempfile.TemporaryDirectory(prefix="bazarr-original-", dir=os.environ["RUNNER_TEMP"]) as temporary:
             for kind, snapshot in originals.items():
                 name = "k8s92-bazarr-original-" + nonce + "-" + kind
@@ -135,7 +138,7 @@ def qualify(fields, app="bazarr"):
                     "--memory", f"{capacity_mib + 1024 if large_app else capacity_mib}m", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
                     "--tmpfs", f"/work:rw,nosuid,size={capacity_mib}m,uid=568,gid=568,mode=0700",
                     "--mount", "type=volume,src=" + tools + ",dst=/tools,readonly,volume-nocopy",
-                    "--entrypoint", "/tools/busybox", MOVER, "sleep", "1800")
+                    "--entrypoint", "/tools/busybox", MOVER, "sleep", str(reader_timeout + 600) if app == "whisparr" else "1800")
                 values = {"HOME": "/work", "PATH": "/tools:/usr/local/bin:/usr/bin:/bin", "TMPDIR": "/work/tmp",
                           "KOPIA_PASSWORD": fields["NAS_KOPIA_PASSWORD" if kind == "nas" else "R2_KOPIA_PASSWORD"],
                           "KOPIA_CONFIG_PATH": "/work/repository.config", "KOPIA_LOG_DIR": "/work/log",
@@ -167,7 +170,7 @@ def qualify(fields, app="bazarr"):
                         target_path = "/work/restored/.kopiur-postgres/" + entry
                         body += "kopia snapshot restore " + source_path + " " + target_path + " >/dev/null\n"
                 result = run("docker", "exec", "-i", name, "/tools/busybox", "sh", "-s",
-                             stdin=body.encode(), check=False, timeout=900)
+                             stdin=body.encode(), check=False, timeout=reader_timeout)
                 if result.returncode:
                     # Never print restored application config or secret-bearing provider logs.
                     text = result.stderr.decode(errors="replace").lower()

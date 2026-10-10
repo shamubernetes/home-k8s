@@ -16,7 +16,7 @@ CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
 def qualify(drill, source, config, run, pg_image, restore_pvc):
     run(sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "scripts/tests"),
         "-p", "test_kopiur_radarr_recurring.py", "-v")
-    driver = ROOT / "scripts/kopiur-sonarr-recurring-capture" if drill.app_name == "sonarr" else DRIVER
+    driver = ROOT / ("scripts/kopiur-" + drill.app_name + "-recurring-capture") if drill.app_name in ("sonarr", "whisparr") else DRIVER
     state = drill.config_volume("recurring-state")
     app = drill.app("recurring-app", source, config, recurring_state=state)
     drill.healthy(app)
@@ -27,9 +27,9 @@ def qualify(drill, source, config, run, pg_image, restore_pvc):
                                  (driver, "/kopiur/recurring-capture.sh", "ro"),
                                  (CAPTURE, "/kopiur/capture.sh", "ro")],
                          env={"PGHOST": "127.0.0.1", "PGPORT": "5432", "PGUSER": drill.capture_user,
-                              "PGPASSWORD": drill.backup_password, "PGDATABASES": drill.databases[0],
+                              "PGPASSWORD": drill.backup_password, "PGDATABASES": " ".join(drill.databases),
                               "PGSSLMODE": "disable", "CONFIG_FILE": "/config/config.xml",
-                              "CAPTURE_MODE": "single-db-stable-filetree"}, command=["sleep", "infinity"])
+                              "CAPTURE_MODE": "quiesced-whisparr-stable-filetree" if drill.app_name == "whisparr" else "single-db-stable-filetree"}, command=["sleep", "infinity"])
 
     def control(*args, check=True):
         return run("docker", "exec", helper, "sh", "/kopiur/recurring.sh", *args, check=check)
@@ -42,7 +42,7 @@ def qualify(drill, source, config, run, pg_image, restore_pvc):
         # Read only comm names, never credential-bearing argv or app logs.
         raw = run("docker", "exec", app, "sh", "-ec",
                   'for file in /proc/[0-9]*/comm; do cat "$file" 2>/dev/null || true; done').stdout.decode().splitlines()
-        return sum(name.lower() in ("radarr", "sonarr", "dotnet", "ffprobe", "ffmpeg") for name in raw)
+        return sum(name.lower() in ("radarr", "sonarr", "whisparr", "dotnet", "ffprobe", "ffmpeg") for name in raw)
 
     assert writers() > 0, "native process inventory did not identify Radarr"
     control("acquire")
@@ -72,6 +72,8 @@ def qualify(drill, source, config, run, pg_image, restore_pvc):
         assert restored["native_restore"] and restored["restored_app_ping"]
         assert restored["table_counts"][drill.databases[0]]["kopiur_fixture"] == 1
         assert restored["paired_filetree_bytes_equal"] > 0
+        if drill.app_name == "whisparr":
+            assert restored["database_count"] == 2 and restored["api"]["native_records_equal"] == 1
 
     # Database rejection releases the writer even though no COMPLETE is accepted.
     failed = run("docker", "exec", "-e", "PGPORT=1", helper,

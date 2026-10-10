@@ -75,6 +75,7 @@ class WhisparrTests(unittest.TestCase):
         drill.capture_state = 'fixture-state'
         run = mock.Mock(return_value=subprocess.CompletedProcess([], 0, b'', b''))
         with mock.patch.object(drill, 'start', return_value='helper'), \
+                mock.patch.object(drill, 'healthy') as healthy, \
                 mock.patch.object(drill, 'counts', side_effect=RuntimeError('baseline failed')) as counts, \
                 mock.patch.dict(drill.capture.__globals__, {'run': run}):
             self.assertEqual(drill.capture('db', 'config', drill.databases), 0)
@@ -84,6 +85,7 @@ class WhisparrTests(unittest.TestCase):
                 drill.capture('db', 'config', drill.databases, baseline=True)
             calls = [call.args[-1] for call in run.call_args_list]
             self.assertEqual(calls, ['acquire', 'release'])
+            self.assertEqual(healthy.call_count, 2)
 
     def test_legacy_whisparr_cannot_reach_disposable_database(self):
         with tempfile.TemporaryDirectory() as temporary:

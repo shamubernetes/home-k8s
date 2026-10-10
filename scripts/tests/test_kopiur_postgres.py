@@ -444,6 +444,7 @@ class ConfigTests(unittest.TestCase):
                 drill.capture_state = "fixture-state"
                 with mock.patch.object(drill, "start", return_value="helper") as start, \
                      mock.patch.object(drill, "counts", return_value={}), \
+                     mock.patch.object(drill, "healthy"), \
                      mock.patch.dict(drill.capture.__globals__, {"run": mock.Mock(return_value=subprocess.CompletedProcess([], 0))}):
                     drill.capture("database", "config", drill.databases)
                 expected = "quiesced-whisparr-stable-filetree" if app == "whisparr" else "single-db-stable-filetree"

@@ -379,6 +379,8 @@ class DockerDrill:
         finally:
             if self.app_name == "whisparr":
                 run("docker", "exec", helper, "sh", "/kopiur/recurring.sh", "release")
+                # Acknowledgment removal is asynchronous. Do not race the next acquire.
+                self.healthy(self.prefix + "-capture-supervisor")
         if check and result.returncode:
             raise RuntimeError("fixture capture failed: " + result.stderr.decode().replace(self.backup_password, "[redacted]"))
         return result.returncode

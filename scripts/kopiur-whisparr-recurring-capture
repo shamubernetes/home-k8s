@@ -19,7 +19,11 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 sh "$helper" acquire "$token"
-timeout --kill-after=30 600 sh /kopiur/capture.sh
+# Production MediaCover payload is 12861551441 bytes. Observed 18.3MB/s
+# needs about 703s for file bytes alone, beyond the old 600s fixture budget.
+# Preserve the qualified 1800s absolute hold; require 960s before 900s capture.
+sh "$helper" check 960
+timeout --kill-after=30 900 sh /kopiur/capture.sh
 (cd /config/.kopiur-postgres/current && sha256sum -c SHA256SUMS >/dev/null)
 sh "$helper" check 1
 printf 'Whisparr recurring native paired generation complete\n'

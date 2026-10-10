@@ -65,6 +65,10 @@ class WhisparrTests(unittest.TestCase):
         self.assertIn('sh /kopiur/recurring.sh check 1', tail)
         self.assertLess(tail.index('check 1'), tail.index('COMPLETE.tmp'))
         driver = MODULE['ROOT'] / 'scripts/kopiur-whisparr-recurring-capture'
+        self.assertIn('sh "$helper" check 960', driver.read_text())
+        self.assertIn('timeout --kill-after=30 900 sh /kopiur/capture.sh', driver.read_text())
+        self.assertLess(driver.read_text().index('sh "$helper" check 960'),
+                        driver.read_text().index('timeout --kill-after'))
         subprocess.run(['sh', '-n', str(driver)], check=True)
         substituted = subprocess.run(['flux', 'envsubst', '--strict'], input=driver.read_bytes(),
                                      capture_output=True, check=True)

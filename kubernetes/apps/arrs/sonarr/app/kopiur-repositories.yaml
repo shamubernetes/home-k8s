@@ -45,7 +45,8 @@ spec:
         cpu: 25m
         memory: 128Mi
       limits:
-        memory: 512Mi
+        # Original mover Pod OOMKilled at 512Mi; preserve the established NAS peer budget.
+        memory: 2Gi
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository

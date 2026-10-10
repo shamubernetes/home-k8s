@@ -18,6 +18,7 @@ resources:
 - ./kopiur-original-snapshot.yaml
 - ./kopiur-original-snapshot-bounded.yaml
 - ./kopiur-original-snapshot-observed.yaml
+- ./kopiur-original-snapshot-sized.yaml
 components:
 - ../../../../components/kopiur-postgres
 patches:

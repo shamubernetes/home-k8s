@@ -15,7 +15,7 @@ from unittest import mock
 from test_kopiur_sqlite_cohort import load_documents, REPO
 
 MODULE = runpy.run_path(str(REPO / "scripts/kopiur-postgres-drill"))
-APPS = ("bazarr", "radarr")
+APPS = ("bazarr", "radarr", "radarr-3d")
 NATIVE_APPS = ("radarr", "radarr-3d", "sonarr", "bazarr", "whisparr")
 
 
@@ -108,6 +108,7 @@ class ManifestTests(unittest.TestCase):
             original_receipts = {
                 "bazarr": "https://github.com/shamubernetes/home-k8s/actions/runs/37919745482",
                 "radarr": "https://github.com/shamubernetes/home-k8s/actions/runs/37981655593",
+                "radarr-3d": "https://github.com/shamubernetes/home-k8s/actions/runs/38007145735",
             }
             self.assertIn(app, original_receipts)
             self.assertEqual(evidence, original_receipts[app])
@@ -117,7 +118,7 @@ class ManifestTests(unittest.TestCase):
         staged_r2 = replication.get("metadata", {}).get("annotations", {}).get(
             "kopiur.home.arpa/awaiting-first-scheduled-point") == "true"
         if staged_r2:
-            self.assertEqual(app, "radarr")
+            self.assertIn(app, ("radarr", "radarr-3d"))
             self.assertFalse(suspended)
         self.assertIs(replication["spec"]["suspend"], suspended or staged_r2)
         self.assertEqual(policy["spec"]["defaultDeletionPolicy"], "Retain")
@@ -152,6 +153,22 @@ class ManifestTests(unittest.TestCase):
             self.assert_capture_activation("radarr", policy, schedule, replication)
         replication["spec"]["suspend"] = False
         self.assert_capture_activation("radarr", policy, schedule, replication)
+
+    def test_radarr_3d_receipt_never_admits_main_radarr(self):
+        directory = REPO / "kubernetes/apps/arrs/radarr-3d/app"
+        policy, schedule, replication = capture_resources(directory)
+        policy["metadata"]["annotations"] = {
+            "kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/38007145735"}
+        policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = False
+        replication["metadata"]["annotations"] = {"kopiur.home.arpa/awaiting-first-scheduled-point": "true"}
+        replication["spec"]["suspend"] = True
+        self.assert_capture_activation("radarr-3d", policy, schedule, replication)
+        for unrelated in ("radarr", "bazarr", "sonarr", "whisparr"):
+            with self.subTest(app=unrelated), self.assertRaises(AssertionError):
+                self.assert_capture_activation(unrelated, policy, schedule, replication)
+        policy["metadata"]["annotations"]["kopiur.home.arpa/original-native-recovery"] = "synthetic"
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("radarr-3d", policy, schedule, replication)
 
     def test_radarr_primary_preserves_incumbent_cadence_and_inactive_history(self):
         directory = REPO / "kubernetes/apps/arrs/radarr/app"

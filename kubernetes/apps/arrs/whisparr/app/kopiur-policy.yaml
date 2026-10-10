@@ -2,9 +2,11 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: whisparr
+  annotations:
+    kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/38035330767
 spec:
-  # Parent enables only after credentials, grants and mover deadlines exist.
-  suspend: true
+  # Independent original production NAS/R2 native recovery passed before activation.
+  suspend: false
   repository:
     kind: Repository
     name: whisparr-nas-smb
@@ -76,9 +78,28 @@ spec:
   failedJobsHistoryLimit: 3
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: whisparr-primary
+spec:
+  policyRef:
+    name: whisparr
+  schedule:
+    suspend: false
+    # Preserve incumbent primary cadence; keep draft daily lane suspended.
+    cron: "${VOLSYNC_SCHEDULE_WHISPARR}"
+    jitter: 10m
+    runOnCreate: true
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: whisparr-nas-to-r2
+  annotations:
+    kopiur.home.arpa/awaiting-first-scheduled-point: "true"
 spec:
   sourceRef:
     kind: Repository
@@ -87,7 +108,7 @@ spec:
     kind: Repository
     name: whisparr-r2
   schedule:
-    cron: "0 8 * * *"
+    cron: "${VOLSYNC_R2_SCHEDULE_WHISPARR}"
     jitter: 10m
   selection:
     identities:

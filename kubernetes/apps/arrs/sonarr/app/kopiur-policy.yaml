@@ -31,8 +31,9 @@ spec:
             app.kubernetes.io/name: sonarr
             app.kubernetes.io/controller: sonarr
         container: kopiur-postgres
-        command: [timeout, "600", sh, /kopiur/capture.sh]
-        timeout: 11m
+        command: [sh, /kopiur/recurring-capture.sh]
+        # Existing bounded protocol: 120s acknowledgement, 600s capture, 30s escalation.
+        timeout: 13m
         continueOnFailure: false
   mover:
     podSecurityContext:

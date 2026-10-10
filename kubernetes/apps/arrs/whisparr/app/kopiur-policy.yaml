@@ -26,7 +26,8 @@ spec:
     - ReadWriteOnce
   defaultDeletionPolicy: Retain
   files:
-    # Keep the complete current paired generation and every application file.
+    # Keep COMPLETE/current; the paired archive contains every application file.
+    # recurring-capture.sh owns the ordered native root .kopiaignore whitelist.
     # The helper's prior bundle is redundant and removed at the next capture.
     # Preserve Kopiur's default excludes because an explicit list replaces them.
     ignoreRules:

@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ${APP}
+spec:
+  interval: 10m
+  values:
+    controllers:
+      whisparr:
+        containers:
+          kopiur-postgres:
+            image:
+              repository: docker.io/library/postgres
+              tag: 17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+            command: [sleep, infinity]
+            env:
+              PGHOST: postgres17-rw.database.svc.cluster.local
+              PGPORT: "5432"
+              PGDATABASES: whisparrv3_main whisparrv3_logs
+              CAPTURE_MODE: quiesced-whisparr-stable-filetree
+              PGSSLMODE: require
+              CONFIG_FILE: /config/config.xml
+            envFrom:
+            - secretRef:
+                name: whisparr-kopiur-postgres
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: [ALL]}
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 512Mi
+    persistence:
+      kopiur-postgres-script:
+        type: configMap
+        name: whisparr-kopiur-postgres
+        advancedMounts:
+          whisparr:
+            kopiur-postgres:
+            - path: /kopiur
+              readOnly: true
+      media:
+        globalMounts: null
+        advancedMounts:
+          whisparr:
+            app:
+            - path: /media

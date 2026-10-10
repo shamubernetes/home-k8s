@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+# Adopt only existing succeeded copies. Preserve their UIDs, manifests, and status.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-25e4d419a11d3829-ce4869e0
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-4464f4f343a5c39b-3ae0814b
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-48a879788c3d0045-0737e282
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-5da793d1e0121539-9992d69f
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-893a82d368d45326-74435e3d
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-9245ec1ca1e85e5d-74206126
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-c2535dad02d707a3-2d89c419
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-c7cdc4cfa5906052-482d5bf2
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain

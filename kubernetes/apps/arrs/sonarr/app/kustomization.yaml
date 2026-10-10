@@ -20,3 +20,11 @@ components:
 - ../../../../components/kopiur-postgres
 patches:
 - path: ./kopiur-postgres-patch.yaml
+- path: ./kopiur-recurring-runtime-patch.yaml
+configMapGenerator:
+- name: sonarr-kopiur-recurring
+  files:
+  - recurring.sh=./recurring.sh
+  - recurring-capture.sh=./recurring-capture.sh
+generatorOptions:
+  disableNameSuffixHash: true

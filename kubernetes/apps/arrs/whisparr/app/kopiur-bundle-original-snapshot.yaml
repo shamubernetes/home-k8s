@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-k8s92-bundle-original-20261010
+spec:
+  # The reviewed bundle-only helper is deployed and its source/API verified first.
+  description: K8S-92 retained production paired-bundle recovery point
+  policyRef:
+    name: whisparr
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

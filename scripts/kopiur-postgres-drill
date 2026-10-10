@@ -25,7 +25,7 @@ RADARR_QUIESCE = ROOT / "scripts/kopiur-radarr-quiesce"
 RADARR_RECURRING = ROOT / "scripts/kopiur-radarr-recurring"
 PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
 RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
-PAIRED_APPS = ("bazarr", "radarr", "radarr-3d", "sonarr")
+PAIRED_APPS = ("bazarr", "radarr", "radarr-3d", "sonarr", "whisparr")
 CONTRACTS = {
     "radarr": (RADARR_IMAGE, ["radarr_main"], "RADARR", 7878, "/config/config.xml"),
     "radarr-3d": (RADARR_IMAGE, ["radarr_3d_main"], "RADARR", 7878, "/config/config.xml"),
@@ -69,9 +69,12 @@ def verify_bundle(root):
     if not databases or len(set(databases)) != len(databases):
         raise ValueError("missing or duplicate database inventory")
     required = {"application-config", "metadata"}
-    coherent = "format=2" in metadata and "consistency=single-db-stable-filetree" in metadata
+    whisparr = "consistency=quiesced-whisparr-stable-filetree" in metadata
+    coherent = "format=2" in metadata and ("consistency=single-db-stable-filetree" in metadata or whisparr)
     if coherent:
-        if len(databases) != 1:
+        if whisparr and databases != ["whisparrv3_main", "whisparrv3_logs"]:
+            raise ValueError("quiesced bundle has an unexpected database inventory")
+        if not whisparr and len(databases) != 1:
             raise ValueError("coherent bundle contains multiple databases")
         required.update(("application-state.tar", "filetree.sha256"))
     for database in databases:
@@ -213,8 +216,8 @@ class DockerDrill:
                                       "kopiur-quiesce", "start", str(quiesce_until), entrypoint[-1]]}
         mounts = [(config, "/config", "rw")]
         if recurring_state is not None:
-            if self.app_name not in ("radarr", "sonarr") or quiesce_until is not None:
-                raise ValueError("recurring hold is qualified for Radarr and Sonarr only")
+            if self.app_name not in ("radarr", "sonarr", "whisparr") or quiesce_until is not None:
+                raise ValueError("recurring hold is not qualified for this application")
             entrypoint = json.loads(run("docker", "image", "inspect", "--format",
                                        "{{json .Config.Entrypoint}}", self.image).stdout)
             if entrypoint != ["/usr/bin/catatonit", "--", "/entrypoint.sh"]:
@@ -353,16 +356,31 @@ class DockerDrill:
                      stdin=b"SELECT * FROM isolated_data", check=False)
         assert denied.returncode and b"permission denied" in denied.stderr, "backup read unrelated data"
 
-    def capture(self, database, config, databases, *, password=None, user=None, check=True):
+    def capture(self, database, config, databases, *, password=None, user=None, check=True, baseline=False):
+        mounts = [(config, "/config", "rw")]
+        if self.app_name == "whisparr":
+            mounts += [(self.capture_state, "/kopiur-quiescence", "rw"),
+                       (RADARR_RECURRING, "/kopiur/recurring.sh", "ro")]
         user = user or self.capture_user
         helper = self.start("capture-" + uuid.uuid4().hex[:6], PG_IMAGE,
                             network="container:" + database, user="568:568",
                             env={"PGHOST": "127.0.0.1", "PGUSER": user,
                                  "PGPASSWORD": password or self.backup_password, "PGDATABASES": " ".join(databases),
-                                 "CAPTURE_MODE": "single-db-stable-filetree" if self.app_name in PAIRED_APPS else "legacy",
+                                 "CAPTURE_MODE": "quiesced-whisparr-stable-filetree" if self.app_name == "whisparr" else
+                                 "single-db-stable-filetree" if self.app_name in PAIRED_APPS else "legacy",
                                  "CONFIG_FILE": self.config_file},
-                            mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
-        result = run("docker", "exec", "-i", helper, "timeout", "600", "sh", "-s", stdin=CAPTURE.read_bytes(), check=False, timeout=610)
+                            mounts=mounts, command=["sleep", "infinity"])
+        if self.app_name == "whisparr":
+            run("docker", "exec", helper, "sh", "/kopiur/recurring.sh", "acquire")
+        try:
+            if baseline:
+                self.captured_counts = {db: self.counts(database, db) for db in self.databases}
+            result = run("docker", "exec", "-i", helper, "timeout", "600", "sh", "-s", stdin=CAPTURE.read_bytes(), check=False, timeout=610)
+        finally:
+            if self.app_name == "whisparr":
+                run("docker", "exec", helper, "sh", "/kopiur/recurring.sh", "release")
+                # Acknowledgment removal is asynchronous. Do not race the next acquire.
+                self.healthy(self.prefix + "-capture-supervisor")
         if check and result.returncode:
             raise RuntimeError("fixture capture failed: " + result.stderr.decode().replace(self.backup_password, "[redacted]"))
         return result.returncode
@@ -455,6 +473,9 @@ class DockerDrill:
 
 
 def fixture(app_name="radarr"):
+    if app_name == "whisparr":
+        run(os.sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "scripts/tests"),
+            "-p", "test_kopiur_whisparr.py", "-v")
     drill = DockerDrill(app_name, diagnostics=True)
     scratch = Path.home() / ".hermes/cache/scratch"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -472,6 +493,15 @@ def fixture(app_name="radarr"):
                 run("docker", "exec", holder, "sh", "-ec",
                     "umask 077; printf native-private-proof > /config/k8s92-private-fixture.bin")
             before = {}
+            if app_name == "whisparr":
+                drill.sql(source, '''INSERT INTO "MovieMetadata"
+                    ("ForeignId", "MetadataSource", "Images", "Title", "OriginalLanguage",
+                     "Status", "Runtime", "Recommendations", "ItemType", "Year", "Ratings")
+                    VALUES ('native-fixture-identity', 0, '[]', 'Native fixture', 1, 0, 1, '[]', 0, 2026, '{}');
+                    INSERT INTO "Movies" ("Path", "Monitored", "QualityProfileId", "MovieMetadataId")
+                    SELECT '/media/native-fixture', false, (SELECT min("Id") FROM "QualityProfiles"), "Id"
+                    FROM "MovieMetadata" WHERE "ForeignId"='native-fixture-identity';
+                    ''', drill.databases[0], "app")
             for database in drill.databases:
                 # Require actual application migrations before adding synthetic markers.
                 native = drill.counts(source, database)
@@ -484,6 +514,11 @@ def fixture(app_name="radarr"):
                     drill.provision_bazarr_backup(source)
                 before[database] = drill.counts(source, database)
             held_app = None
+            if app_name == "whisparr":
+                drill.capture_state = drill.config_volume("capture-state")
+                held_app = drill.app("capture-supervisor", source, config, recurring_state=drill.capture_state)
+                drill.healthy(held_app)
+                held_app = None
             if app_name == "radarr":
                 assert run("docker", "inspect", "-f", "{{.State.Running}}", app).stdout.strip() == b"false"
                 # A shorter fixture deadline exercises the same fixed 30-minute
@@ -498,7 +533,9 @@ def fixture(app_name="radarr"):
                     raise RuntimeError("Radarr did not enter the bounded startup hold")
                 assert run("docker", "exec", held_app, "curl", "-fsS", "--max-time", "2",
                            f"http://127.0.0.1:{drill.port}/ping", check=False).returncode != 0
-            drill.capture(source, config, drill.databases)
+            drill.capture(source, config, drill.databases, baseline=app_name == "whisparr")
+            if app_name == "whisparr":
+                before = drill.captured_counts
             helper = drill.containers[-1]
             if held_app:
                 assert drill.check_quiescence(held_app, hold_until), "application resumed before coherent capture completed"
@@ -544,14 +581,19 @@ def fixture(app_name="radarr"):
                 (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
             recovered = restore_pvc(copied, app_name, config_mib=256, database_mib=512)
             assert recovered["native_restore"] and recovered["restored_app_ping"]
+            if app_name == "whisparr":
+                assert recovered["api"]["native_records_equal"] == 1
             recurring = None
-            if app_name in ("radarr", "sonarr"):
+            if app_name in ("radarr", "sonarr", "whisparr"):
+                if app_name == "whisparr":
+                    run("docker", "stop", "-t", "30", drill.prefix + "-capture-supervisor")
                 import runpy
                 recurring_module = runpy.run_path(str(ROOT / "scripts/kopiur-radarr-recurring-drill.py"))
                 recurring = recurring_module["qualify"](drill, source, config, run, PG_IMAGE, restore_pvc)
             print(json.dumps({"fixture": app_name + "-native-pg-plus-config", "status": "passed", "databases": len(before),
                               "recurring_radarr": recurring if app_name == "radarr" else None,
                               "recurring_sonarr": recurring if app_name == "sonarr" else None,
+                              "recurring_whisparr": recurring if app_name == "whisparr" else None,
                               "tables_equal": sum(len(tables) for tables in before.values()),
                               "rows_equal": sum(sum(tables.values()) for tables in before.values()), "restored_app_ping": True, "restored_fixture_read": True,
                               "stale_success_rejected": True, "superuser_rejected": True, "restore_pvc_drill": True,
@@ -585,14 +627,15 @@ def validate_bazarr_api(response, expected, table, key, sql):
 
 
 def validate_radarr_api(response, expected, sql, *, app="radarr"):
-    if app not in ("radarr", "sonarr"):
+    if app not in ("radarr", "sonarr", "whisparr"):
         raise ValueError("unsupported native catalog application")
-    id_key, count_key = ("tvdbId", "series") if app == "sonarr" else ("tmdbId", "movies")
+    id_key, count_key = ("tvdbId", "series") if app == "sonarr" else ("foreignId", "movies") if app == "whisparr" else ("tmdbId", "movies")
+    id_type = str if app == "whisparr" else int
     if not isinstance(response, list) or len(response) != expected:
         raise ValueError("restored native application API count differs from native data")
     records = []
     for record in response:
-        if type(record.get("id")) is not int or type(record.get(id_key)) is not int:
+        if type(record.get("id")) is not int or type(record.get(id_key)) is not id_type:
             raise ValueError("restored native API identity is invalid")
         records.append({key: record[key] for key in ("id", id_key, "title", "path")})
     query = '''SELECT coalesce(json_agg(json_build_object(
@@ -602,6 +645,8 @@ def validate_radarr_api(response, expected, sql, *, app="radarr"):
         query = '''SELECT coalesce(json_agg(json_build_object(
             'id', "Id", 'tvdbId', "TvdbId", 'title', "Title", 'path', "Path")), '[]'::json)
             FROM "Series"'''
+    if app == "whisparr":
+        query = query.replace('\'tmdbId\', mm."TmdbId"', '\'foreignId\', mm."ForeignId"')
     original = json.loads(sql(query))
     if sorted(records, key=lambda row: row["id"]) != sorted(original, key=lambda row: row["id"]):
         raise ValueError("restored native application API records differ from native data")
@@ -620,7 +665,8 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
     metadata = (bundle / "current/metadata").read_text().splitlines()
     if app_name in PAIRED_APPS and not (
             "format=2" in metadata and
-            "consistency=single-db-stable-filetree" in metadata):
+            ("consistency=quiesced-whisparr-stable-filetree" if app_name == "whisparr" else
+             "consistency=single-db-stable-filetree") in metadata):
         raise ValueError(app_name + " requires the paired stable-filetree recovery contract")
     drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib, memory_mib=memory_mib)
     if databases != drill.databases:
@@ -698,7 +744,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
         api = {}
-        if app_name in ("bazarr", "radarr", "radarr-3d", "sonarr"):
+        if app_name in PAIRED_APPS:
             target_info = json.loads(run("docker", "inspect", target).stdout)[0]
             app_info = json.loads(run("docker", "inspect", restored_app).stdout)[0]
             if target_info["HostConfig"]["NetworkMode"] != "none" or \
@@ -714,7 +760,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
                 expected = counts["bazarr"][table]
                 api[endpoint] = validate_bazarr_api(response, expected, table, key,
                     lambda query: drill.sql(target, query, "bazarr"))
-        if app_name in ("radarr", "radarr-3d", "sonarr"):
+        if app_name in ("radarr", "radarr-3d", "sonarr", "whisparr"):
             endpoint = "series" if app_name == "sonarr" else "movie"
             curl_config = (f'url = "http://127.0.0.1:{drill.port}/api/v3/{endpoint}"\n'
                            f'header = "X-Api-Key: {drill.api_key}"\n')
@@ -724,7 +770,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
             table = "Series" if app_name == "sonarr" else "Movies"
             api = validate_radarr_api(response, counts[database][table],
                                       lambda query: drill.sql(target, query, database),
-                                      app="sonarr" if app_name == "sonarr" else "radarr")
+                                      app=app_name if app_name in ("sonarr", "whisparr") else "radarr")
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
                 "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,

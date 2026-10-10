@@ -37,6 +37,13 @@ case "$capture_mode" in
     coherent=true
     printf 'format=2\nstarted_at=%s\nconsistency=single-db-stable-filetree\n' "$started" >"$root/pending/metadata"
     ;;
+  quiesced-whisparr-stable-filetree)
+    [ "$PGDATABASES" = "whisparrv3_main whisparrv3_logs" ] || exit 1
+    # Cross-database archives require the native writer to remain stopped.
+    sh /kopiur/recurring.sh check 660
+    coherent=true
+    printf 'format=2\nstarted_at=%s\nconsistency=quiesced-whisparr-stable-filetree\n' "$started" >"$root/pending/metadata"
+    ;;
   legacy)
     printf 'format=1\nstarted_at=%s\nconsistency=per-database-snapshot-before-pvc\n' "$started" >"$root/pending/metadata"
     ;;
@@ -97,6 +104,9 @@ if "$coherent"; then
   (cd "$root/pending" && sha256sum ./*.dump ./*.toc application-config application-state.tar filetree.sha256 metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
 else
   (cd "$root/pending" && sha256sum ./*.dump ./*.toc application-config metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
+fi
+if [ "$capture_mode" = quiesced-whisparr-stable-filetree ]; then
+  sh /kopiur/recurring.sh check 1
 fi
 sync -f "$root/pending"
 if [ -d "$root/current" ]; then mv "$root/current" "$root/previous"; fi

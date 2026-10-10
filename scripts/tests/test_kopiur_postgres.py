@@ -441,10 +441,13 @@ class ConfigTests(unittest.TestCase):
         for app in NATIVE_APPS:
             with self.subTest(app=app):
                 drill = MODULE["DockerDrill"](app)
+                drill.capture_state = "fixture-state"
                 with mock.patch.object(drill, "start", return_value="helper") as start, \
+                     mock.patch.object(drill, "counts", return_value={}), \
+                     mock.patch.object(drill, "healthy"), \
                      mock.patch.dict(drill.capture.__globals__, {"run": mock.Mock(return_value=subprocess.CompletedProcess([], 0))}):
                     drill.capture("database", "config", drill.databases)
-                expected = "single-db-stable-filetree" if app in ("bazarr", "radarr", "radarr-3d", "sonarr") else "legacy"
+                expected = "quiesced-whisparr-stable-filetree" if app == "whisparr" else "single-db-stable-filetree"
                 self.assertEqual(start.call_args.kwargs["env"]["CAPTURE_MODE"], expected)
 
     def test_xml_database_endpoint_and_credentials_replaced(self):
@@ -574,7 +577,7 @@ class BundleTests(unittest.TestCase):
         bundle.mkdir()
         (self.root / "current").rename(bundle / "current")
         (self.root / "COMPLETE").rename(bundle / "COMPLETE")
-        with self.assertRaisesRegex(ValueError, "does not match"):
+        with self.assertRaisesRegex(ValueError, "paired stable-filetree"):
             MODULE["restore_pvc"](self.root, "whisparr")
 
 

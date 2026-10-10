@@ -132,6 +132,15 @@ class OriginalTests(unittest.TestCase):
         self.assertIn('restored API record differs from native data', text)
         self.assertIn('target_info["HostConfig"]["NetworkMode"] != "none"', text)
 
+    def test_whisparr_original_reader_budget_is_scoped_and_bounded(self):
+        text = SCRIPT.read_text()
+        workflow = (ROOT / ".github/workflows/recovery-verify.yaml").read_text()
+        self.assertIn('reader_timeout = 1800 if app == "whisparr" else 900', text)
+        self.assertIn('str(reader_timeout + 600) if app == "whisparr" else "1800"', text)
+        self.assertIn("stdin=body.encode(), check=False, timeout=reader_timeout)", text)
+        self.assertIn("inputs.suite == 'postgres-whisparr-original' && 75 || 45", workflow)
+        self.assertIn("--readonly >/dev/null", text)
+
     def test_whisparr_original_ids_are_exact_distinct_and_do_not_change_other_apps(self):
         from unittest import mock
         with mock.patch.dict(M["os"].environ, {"ORIGINAL_NAS_SNAPSHOT": "a" * 32, "ORIGINAL_R2_SNAPSHOT": "b" * 32}):

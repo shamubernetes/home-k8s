@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt the existing original-proof child without replacing its UID or manifest.
+  name: whisparr-k8s92-original-to-r2-copy-95d4a5b373d969b5-00e1bfc8
+spec:
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs
+  deletionPolicy: Retain

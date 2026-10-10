@@ -28,4 +28,4 @@ spec:
     policies: none
   pruning:
     none: {}
-  suspend: false
+  suspend: true

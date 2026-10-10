@@ -27,6 +27,7 @@ on:
         - postgres-radarr-3d
         - postgres-radarr-3d-original
         - postgres-sonarr
+        - postgres-sonarr-original
         - postgres-whisparr
         - mixed-grimmory
         - mixed-tubearchivist
@@ -61,7 +62,7 @@ jobs:
         [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
         case "$SUITE" in
           tunarr|deadlines) ;;
-          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-whisparr) ;;
+          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-sonarr-original|postgres-whisparr) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
           identities|radarr-transport) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
@@ -296,7 +297,7 @@ jobs:
         python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_original.py -v
         python3 -m unittest discover -s scripts/tests -p test_kopiur_radarr_original.py -v
         case "$SUITE" in
-          postgres-radarr-original|postgres-radarr-3d-original)
+          postgres-radarr-original|postgres-radarr-3d-original|postgres-sonarr-original)
             app=${SUITE#postgres-}
             python3 scripts/kopiur-bazarr-original.py --serve --app "${app%-original}"
             ;;

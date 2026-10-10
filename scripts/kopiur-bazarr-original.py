@@ -31,10 +31,11 @@ ORIGINALS = {"nas": "9a623d4c77684a42b970984ce9df7076", "r2": "c889e51bdf7ce94ee
 # One coherent production generation, matched through the copiedFrom source manifest.
 RADARR_ORIGINALS = {"nas": "485dc5199b9575fa03551f0e6ffc1030", "r2": "2662d4ed229fd7b7751cebe634a390b1"}
 RADARR_3D_ORIGINALS = {"nas": "4b974fb1e16ad236f02a98a32e7df660", "r2": "5ce5f1e5dfc49c707e15efd19f94ad6f"}
+SONARR_ORIGINALS = {"nas": "fae589bd0c33f21731c9ef5f0ee6c4fa", "r2": "0b4d52a245eb24cc6421d0e96d4b2f20"}
 
 
 def validate_fields(fields, app="bazarr"):
-    if app not in ("bazarr", "radarr", "radarr-3d"):
+    if app not in ("bazarr", "radarr", "radarr-3d", "sonarr"):
         raise ValueError("unsupported original application")
     required = {"NAS_RCLONE_CONFIG", "NAS_KOPIA_PASSWORD", "R2_KOPIA_PASSWORD",
                 "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"}
@@ -90,12 +91,13 @@ def extract_original(archive, destination, *, database="bazarr", capacity=2 * 10
 
 def qualify(fields, app="bazarr"):
     validate_fields(fields, app)
-    originals = {"bazarr": ORIGINALS, "radarr": RADARR_ORIGINALS, "radarr-3d": RADARR_3D_ORIGINALS}[app]
+    originals = {"bazarr": ORIGINALS, "radarr": RADARR_ORIGINALS, "radarr-3d": RADARR_3D_ORIGINALS, "sonarr": SONARR_ORIGINALS}[app]
     database = NATIVE["CONTRACTS"][app][1][0]
     if set(originals) != {"nas", "r2"}:
         raise ValueError("original generation is not retained on both backends")
-    capacity_mib = 8192 if app == "radarr" else 2048
-    config_mib = 7168 if app == "radarr" else 1024
+    large_app = app in ("radarr", "sonarr")
+    capacity_mib = 8192 if large_app else 2048
+    config_mib = 7168 if large_app else 1024
     nonce = uuid.uuid4().hex
     tools = "k8s92-bazarr-tools-" + nonce
     containers = []
@@ -111,7 +113,7 @@ def qualify(fields, app="bazarr"):
                 containers.append(name)
                 run("docker", "run", "-d", "--name", name, "--label", "k8s92.bazarr=" + nonce,
                     "--user", "568:568", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                    "--memory", f"{capacity_mib + 1024 if app == 'radarr' else capacity_mib}m", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
+                    "--memory", f"{capacity_mib + 1024 if large_app else capacity_mib}m", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
                     "--tmpfs", f"/work:rw,nosuid,size={capacity_mib}m,uid=568,gid=568,mode=0700",
                     "--mount", "type=volume,src=" + tools + ",dst=/tools,readonly,volume-nocopy",
                     "--entrypoint", "/tools/busybox", MOVER, "sleep", "1800")
@@ -179,7 +181,7 @@ def qualify(fields, app="bazarr"):
                 checksum = hashlib.sha256((current / "SHA256SUMS").read_bytes()).hexdigest()
                 metadata = (current / "metadata").read_text().splitlines()
                 proof = NATIVE["restore_pvc"](source, app, config_mib=config_mib, database_mib=4096,
-                                            memory_mib=8192 if app == "radarr" else None)
+                                            memory_mib=8192 if large_app else None)
                 proof.update(snapshot_id=snapshot, bundle_checksums_sha256=checksum, metadata=metadata,
                              original_backend_readonly=True, networked_restorer_removed_before_boot=True)
                 results[kind] = proof
@@ -201,7 +203,7 @@ def main():
     arguments = sys.argv[1:]
     app = arguments[2] if len(arguments) == 3 and arguments[:2] == ["--serve", "--app"] else "bazarr"
     valid_arguments = ["--serve"] if app == "bazarr" else ["--serve", "--app", app]
-    if app not in ("bazarr", "radarr", "radarr-3d") or sys.platform != "linux" or \
+    if app not in ("bazarr", "radarr", "radarr-3d", "sonarr") or sys.platform != "linux" or \
             not os.environ.get("RUNNER_NAME") or arguments != valid_arguments:
         raise RuntimeError("original recovery requires the assigned ARC dispatch")
     if not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("QUALIFICATION_COMMIT", "")):

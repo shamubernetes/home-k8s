@@ -49,6 +49,23 @@ class RadarrOriginalTests(unittest.TestCase):
         self.assertTrue(set(ORIGINAL['RADARR_3D_ORIGINALS'].values()).isdisjoint(
             ORIGINAL['RADARR_ORIGINALS'].values()))
 
+    def test_sonarr_rejects_every_other_application_transport(self):
+        fields = self.fields()
+        fields['R2_BUCKET'] = 'kopiur-sonarr'
+        fields['NAS_RCLONE_CONFIG'] = fields['NAS_RCLONE_CONFIG'].replace('kp-radarr', 'kp-sonarr')
+        ORIGINAL['validate_fields'](fields, 'sonarr')
+        for other in ('bazarr', 'radarr', 'radarr-3d'):
+            with self.subTest(other=other), self.assertRaises(ValueError):
+                ORIGINAL['validate_fields'](fields, other)
+        with self.assertRaises(ValueError):
+            ORIGINAL['validate_fields'](self.fields(), 'sonarr')
+        self.assertEqual(NATIVE['CONTRACTS']['sonarr'][1], ['sonarr_main'])
+        self.assertEqual(ORIGINAL['SONARR_ORIGINALS'], {
+            'nas': 'fae589bd0c33f21731c9ef5f0ee6c4fa',
+            'r2': '0b4d52a245eb24cc6421d0e96d4b2f20'})
+        self.assertTrue(set(ORIGINAL['SONARR_ORIGINALS'].values()).isdisjoint(
+            ORIGINAL['RADARR_ORIGINALS'].values()))
+
     def test_sonarr_native_api_compares_every_series(self):
         records = [{'id': 1, 'tvdbId': 101, 'title': 'Fixture', 'path': '/media/fixture'},
                    {'id': 2, 'tvdbId': 102, 'title': 'Other fixture', 'path': '/media/other'}]

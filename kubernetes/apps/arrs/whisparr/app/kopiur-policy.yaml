@@ -34,8 +34,9 @@ spec:
             app.kubernetes.io/controller: whisparr
         container: kopiur-postgres
         command: [sh, /kopiur/recurring-capture.sh]
-        # 120s acknowledgement + 900s measured-size capture + 30s escalation.
-        timeout: 18m
+        # 120s acknowledgement + 1200s capture + 180s hashing/escalation.
+        # Keep the independent native watchdog at its qualified absolute 1800s.
+        timeout: 25m
         continueOnFailure: false
   mover:
     podSecurityContext:

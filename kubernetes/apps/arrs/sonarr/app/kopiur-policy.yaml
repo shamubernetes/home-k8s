@@ -2,9 +2,11 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: sonarr
+  annotations:
+    kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/38018173473
 spec:
-  # Staged until independent original production NAS/R2 native recovery passes.
-  suspend: true
+  # Independent original production NAS/R2 native recovery passed before activation.
+  suspend: false
   repository:
     kind: Repository
     name: sonarr-nas-smb
@@ -76,9 +78,28 @@ spec:
   failedJobsHistoryLimit: 3
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: sonarr-primary
+spec:
+  policyRef:
+    name: sonarr
+  schedule:
+    suspend: false
+    # Preserve incumbent primary cadence; keep draft daily lane suspended.
+    cron: "${VOLSYNC_SCHEDULE_SONARR}"
+    jitter: 10m
+    runOnCreate: true
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: sonarr-nas-to-r2
+  annotations:
+    kopiur.home.arpa/awaiting-first-scheduled-point: "true"
 spec:
   sourceRef:
     kind: Repository

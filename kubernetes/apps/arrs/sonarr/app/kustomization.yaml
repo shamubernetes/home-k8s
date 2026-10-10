@@ -20,6 +20,7 @@ resources:
 - ./kopiur-original-snapshot-observed.yaml
 - ./kopiur-original-snapshot-sized.yaml
 - ./kopiur-original-replication.yaml
+- ./kopiur-original-r2-retained.yaml
 components:
 - ../../../../components/kopiur-postgres
 patches:

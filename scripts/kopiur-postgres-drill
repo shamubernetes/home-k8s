@@ -25,7 +25,7 @@ RADARR_QUIESCE = ROOT / "scripts/kopiur-radarr-quiesce"
 RADARR_RECURRING = ROOT / "scripts/kopiur-radarr-recurring"
 PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
 RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
-PAIRED_APPS = ("bazarr", "radarr", "radarr-3d")
+PAIRED_APPS = ("bazarr", "radarr", "radarr-3d", "sonarr")
 CONTRACTS = {
     "radarr": (RADARR_IMAGE, ["radarr_main"], "RADARR", 7878, "/config/config.xml"),
     "radarr-3d": (RADARR_IMAGE, ["radarr_3d_main"], "RADARR", 7878, "/config/config.xml"),

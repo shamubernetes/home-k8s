@@ -30,6 +30,10 @@ def capture_resources(directory):
 
 
 class ManifestTests(unittest.TestCase):
+    def test_sonarr_fixture_requires_paired_single_database_capture(self):
+        self.assertIn("sonarr", MODULE["PAIRED_APPS"])
+        self.assertEqual(MODULE["CONTRACTS"]["sonarr"][1], ["sonarr_main"])
+
     def test_all_postgres_transports_use_dedicated_identities(self):
         for app in APPS:
             with self.subTest(app=app):
@@ -419,7 +423,7 @@ class ConfigTests(unittest.TestCase):
                 with mock.patch.object(drill, "start", return_value="helper") as start, \
                      mock.patch.dict(drill.capture.__globals__, {"run": mock.Mock(return_value=subprocess.CompletedProcess([], 0))}):
                     drill.capture("database", "config", drill.databases)
-                expected = "single-db-stable-filetree" if app in ("bazarr", "radarr", "radarr-3d") else "legacy"
+                expected = "single-db-stable-filetree" if app in ("bazarr", "radarr", "radarr-3d", "sonarr") else "legacy"
                 self.assertEqual(start.call_args.kwargs["env"]["CAPTURE_MODE"], expected)
 
     def test_xml_database_endpoint_and_credentials_replaced(self):
@@ -521,25 +525,27 @@ class BundleTests(unittest.TestCase):
                 MODULE["restore_pvc"](self.root, "radarr")
         docker.assert_not_called()
 
-    def test_bazarr_legacy_bundle_rejected_before_docker(self):
-        current = self.root / "current"
-        for path in tuple(current.iterdir()):
-            if path.name.startswith("radarr_main"):
-                path.rename(current / path.name.replace("radarr_main", "bazarr"))
-        metadata = current / "metadata"
-        metadata.write_text(metadata.read_text().replace("radarr_main", "bazarr"))
-        artifacts = [p for p in current.iterdir() if p.name != "SHA256SUMS"]
-        (current / "SHA256SUMS").write_text("".join(
-            hashlib.sha256(p.read_bytes()).hexdigest() + "  " + p.name + "\n"
-            for p in artifacts))
-        bundle = self.root / ".kopiur-postgres"
-        bundle.mkdir()
-        current.rename(bundle / "current")
-        (self.root / "COMPLETE").rename(bundle / "COMPLETE")
-        with mock.patch.dict(MODULE["restore_pvc"].__globals__, {"DockerDrill": mock.Mock()}) as patched:
-            with self.assertRaisesRegex(ValueError, "paired stable-filetree"):
-                MODULE["restore_pvc"](self.root, "bazarr")
-            patched["DockerDrill"].assert_not_called()
+    def test_paired_app_legacy_bundles_rejected_before_docker(self):
+        for app in ("bazarr", "sonarr"):
+            with self.subTest(app=app), tempfile.TemporaryDirectory(dir=self.root) as temporary:
+                source = Path(temporary)
+                current = source / ".kopiur-postgres/current"
+                current.mkdir(parents=True)
+                database = MODULE["CONTRACTS"][app][1][0]
+                for path in (self.root / "current").iterdir():
+                    if path.name != "SHA256SUMS":
+                        (current / path.name.replace("radarr_main", database)).write_bytes(
+                            path.read_bytes().replace(b"radarr_main", database.encode()))
+                artifacts = list(current.iterdir())
+                (current / "SHA256SUMS").write_text("".join(
+                    hashlib.sha256(p.read_bytes()).hexdigest() + "  " + p.name + "\n"
+                    for p in artifacts))
+                (current.parent / "COMPLETE").write_text("complete\n")
+                docker = mock.Mock()
+                with mock.patch.dict(MODULE["restore_pvc"].__globals__, {"DockerDrill": docker}):
+                    with self.assertRaisesRegex(ValueError, "paired stable-filetree"):
+                        MODULE["restore_pvc"](source, app)
+                docker.assert_not_called()
 
     def test_mismatched_application_rejected_before_docker(self):
         # A valid checksum inventory is not permission to restore an arbitrary DB name.
@@ -548,7 +554,7 @@ class BundleTests(unittest.TestCase):
         (self.root / "current").rename(bundle / "current")
         (self.root / "COMPLETE").rename(bundle / "COMPLETE")
         with self.assertRaisesRegex(ValueError, "does not match"):
-            MODULE["restore_pvc"](self.root, "sonarr")
+            MODULE["restore_pvc"](self.root, "whisparr")
 
 
 if __name__ == "__main__":

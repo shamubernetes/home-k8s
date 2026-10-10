@@ -2,8 +2,10 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -11,6 +13,76 @@ from test_kopiur_postgres import MODULE
 
 
 class WhisparrTests(unittest.TestCase):
+    def configure_bundle_ignore(self, config, mode='install'):
+        driver = MODULE['ROOT'] / 'scripts/kopiur-whisparr-recurring-capture'
+        script = driver.read_text().split('state=$(printenv', 1)[0]
+        # Exercise the same function on macOS, where stat uses different flags.
+        if sys.platform == 'darwin':
+            script = script.replace('stat -c %h', 'stat -f %l')
+        return subprocess.run(['sh', '-c', script + '\nconfigure_bundle_ignore "$1" "$2"',
+                               'install-test', str(config), mode], capture_output=True)
+
+    def test_native_ignore_is_owned_ordered_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary)
+            self.assertEqual(self.configure_bundle_ignore(config).returncode, 0)
+            ignore = config / '.kopiaignore'
+            expected = ('# Kopiur Whisparr paired native recovery bundle.\n'
+                        '/*\n!/.kopiur-postgres\n/.kopiur-postgres/*\n'
+                        '!/.kopiur-postgres/COMPLETE\n!/.kopiur-postgres/current\n')
+            self.assertEqual(ignore.read_text(), expected)
+            before = ignore.stat()
+            self.assertEqual(before.st_nlink, 1)
+            self.assertEqual(before.st_mode & 0o777, 0o600)
+            self.assertEqual(self.configure_bundle_ignore(config).returncode, 0)
+            self.assertEqual(ignore.stat().st_ino, before.st_ino)
+            self.assertEqual(ignore.read_text(), expected)
+            self.assertEqual(list(config.glob('.kopiur-ignore.*')), [])
+            script = (MODULE['ROOT'] / 'scripts/kopiur-whisparr-recurring-capture').read_text()
+            self.assertLess(script.index('configure_bundle_ignore /config'), script.index('sh "$helper" acquire'))
+
+    def test_native_ignore_collisions_fail_without_replacement(self):
+        for kind in ('unknown', 'symlink', 'dangling', 'hardlink', 'directory', 'fifo'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                config = Path(temporary)
+                ignore = config / '.kopiaignore'
+                target = config / 'target'
+                target.write_bytes(b'user-owned rules\n')
+                if kind == 'unknown':
+                    ignore.write_bytes(b'user-owned rules\n')
+                elif kind in ('symlink', 'dangling'):
+                    ignore.symlink_to(target if kind == 'symlink' else config / 'missing')
+                elif kind == 'hardlink':
+                    self.assertEqual(self.configure_bundle_ignore(config).returncode, 0)
+                    target.unlink()
+                    os.link(ignore, target)
+                elif kind == 'directory':
+                    ignore.mkdir()
+                else:
+                    os.mkfifo(ignore)
+                before = ignore.lstat()
+                original = ignore.read_bytes() if kind in ('unknown', 'hardlink') else None
+                for mode in ('install', 'remove'):
+                    self.assertNotEqual(self.configure_bundle_ignore(config, mode).returncode, 0)
+                    self.assertEqual(ignore.lstat().st_ino, before.st_ino)
+                    self.assertEqual(ignore.lstat().st_mode, before.st_mode)
+                    if original is not None:
+                        self.assertEqual(ignore.read_bytes(), original)
+                    self.assertEqual(list(config.glob('.kopiur-ignore.*')), [])
+
+    def test_native_ignore_rollback_removes_only_owned_filter(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary)
+            untouched = config / 'config.xml'
+            untouched.write_bytes(b'original application data')
+            self.assertEqual(self.configure_bundle_ignore(config).returncode, 0)
+            self.assertEqual(self.configure_bundle_ignore(config, 'remove').returncode, 0)
+            self.assertFalse((config / '.kopiaignore').exists())
+            self.assertEqual(untouched.read_bytes(), b'original application data')
+            self.assertEqual(self.configure_bundle_ignore(config, 'remove').returncode, 0)
+            self.assertEqual(list(config.glob('.kopiur-ignore.*')), [])
+            self.assertNotEqual(self.configure_bundle_ignore(config, 'typo').returncode, 0)
+
     def test_bundle_requires_exact_ordered_two_database_inventory(self):
         for databases, accepted in ((['whisparrv3_main', 'whisparrv3_logs'], True),
                                     (['whisparrv3_main'], False),

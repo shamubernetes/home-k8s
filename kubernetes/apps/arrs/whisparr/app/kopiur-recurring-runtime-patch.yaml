@@ -64,6 +64,9 @@ spec:
                   failureThreshold: 3
           kopiur-postgres:
             env:
+              # Rollback: set false, wait for capture and verify .kopiaignore absent,
+              # then revert the helper. Unknown user rules always fail closed.
+              KOPIUR_BUNDLE_ONLY: "true"
               QUIESCENCE_STATE_DIR: /config/.kopiur-postgres/coordination
     persistence:
       # All sidecar scripts are peer file mounts, matching the native ARC drill.

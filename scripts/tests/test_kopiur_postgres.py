@@ -181,6 +181,12 @@ class ManifestTests(unittest.TestCase):
             "kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/38018173473"}
         policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = False
         replication["metadata"]["annotations"] = {"kopiur.home.arpa/awaiting-first-scheduled-point": "true"}
+        replication["spec"]["suspend"] = True
+        self.assert_capture_activation("sonarr", policy, schedule, replication)
+        replication["spec"]["suspend"] = False
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("sonarr", policy, schedule, replication)
+        replication["metadata"]["annotations"] = {}
         self.assert_capture_activation("sonarr", policy, schedule, replication)
         for unrelated in ("bazarr", "radarr", "radarr-3d", "whisparr"):
             with self.subTest(app=unrelated), self.assertRaises(AssertionError):

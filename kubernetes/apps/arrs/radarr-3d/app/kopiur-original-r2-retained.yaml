@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt only the existing copied original; preserve UID and repository manifest.
+  name: radarr-3d-k8s92-original-to-r2-copy-5ce5f1e5dfc49c70-7e2c3007
+spec:
+  repository:
+    kind: Repository
+    name: radarr-3d-r2
+    namespace: arrs
+  deletionPolicy: Retain

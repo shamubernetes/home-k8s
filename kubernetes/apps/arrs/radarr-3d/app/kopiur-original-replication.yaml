@@ -12,8 +12,7 @@ spec:
   destinationRef:
     kind: Repository
     name: radarr-3d-r2
-  # Only one original exists while capture schedules remain suspended.
-  # Suspend this proof lane after the requested copy, before recurring activation.
+  # Original copy succeeded with no failures or pruning; keep proof lane suspended.
   schedule:
     cron: "0 8 * * *"
     jitter: 10m
@@ -29,4 +28,4 @@ spec:
     policies: none
   pruning:
     none: {}
-  suspend: false
+  suspend: true

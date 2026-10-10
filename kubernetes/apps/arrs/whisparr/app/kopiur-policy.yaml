@@ -58,7 +58,9 @@ spec:
         jitter: 1h
       capacity: 45Gi
       storageClassName: ceph-block
-      parallel: 2
+      # Use Kopia's native restore default for the 100k-file production tree.
+      # Two workers missed the admitted 3600s deadline; keep that cap unchanged.
+      parallel: 8
     successExpr: "stats.files > 0 && stats.errors == 0"
     verifyFilesPercent: 100
 ---

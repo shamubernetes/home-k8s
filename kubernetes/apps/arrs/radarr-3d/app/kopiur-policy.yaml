@@ -2,9 +2,11 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: radarr-3d
+  annotations:
+    kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/38007145735
 spec:
-  # Parent enables only after credentials, grants and mover deadlines exist.
-  suspend: true
+  # Independent original production NAS/R2 native recovery passed before activation.
+  suspend: false
   repository:
     kind: Repository
     name: radarr-3d-nas-smb
@@ -75,9 +77,28 @@ spec:
   failedJobsHistoryLimit: 3
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: radarr-3d-primary
+spec:
+  policyRef:
+    name: radarr-3d
+  schedule:
+    suspend: false
+    # Preserve the incumbent primary cadence; keep the draft daily lane suspended.
+    cron: "${VOLSYNC_SCHEDULE_RADARR_3D}"
+    jitter: 10m
+    runOnCreate: true
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: radarr-3d-nas-to-r2
+  annotations:
+    kopiur.home.arpa/awaiting-first-scheduled-point: "true"
 spec:
   sourceRef:
     kind: Repository
@@ -86,7 +107,7 @@ spec:
     kind: Repository
     name: radarr-3d-r2
   schedule:
-    cron: "0 8 * * *"
+    cron: "${VOLSYNC_R2_SCHEDULE_RADARR_3D}"
     jitter: 10m
   selection:
     identities:
@@ -98,5 +119,7 @@ spec:
   migrate:
     parallel: 2
     policies: none
-  # Independent original NAS/R2 recovery must pass before recurring replication.
+  pruning:
+    none: {}
+  # Enable after the first actual primary-schedule capture succeeds.
   suspend: true

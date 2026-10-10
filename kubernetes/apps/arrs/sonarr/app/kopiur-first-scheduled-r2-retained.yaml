@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt this existing scheduled-point copy; preserve its UID and manifest.
+  name: sonarr-nas-to-r2-copy-a49d7f9974ee521c-2de579b9
+spec:
+  repository:
+    kind: Repository
+    name: sonarr-r2
+    namespace: arrs
+  deletionPolicy: Retain

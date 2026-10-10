@@ -21,6 +21,7 @@ resources:
 - ./kopiur-original-snapshot-sized.yaml
 - ./kopiur-original-replication.yaml
 - ./kopiur-original-r2-retained.yaml
+- ./kopiur-first-scheduled-r2-retained.yaml
 components:
 - ../../../../components/kopiur-postgres
 patches:

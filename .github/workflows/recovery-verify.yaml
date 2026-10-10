@@ -29,10 +29,19 @@ on:
         - postgres-sonarr
         - postgres-sonarr-original
         - postgres-whisparr
+        - postgres-whisparr-original
         - mixed-grimmory
         - mixed-tubearchivist
         - identities
         - radarr-transport
+      nas_snapshot:
+        description: "Exact original NAS manifest, required only for Whisparr original proof"
+        type: string
+        default: ""
+      r2_snapshot:
+        description: "Exact copied R2 manifest, required only for Whisparr original proof"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -57,12 +66,19 @@ jobs:
       env:
         COMMIT: ${{ inputs.commit }}
         SUITE: ${{ inputs.suite }}
+        NAS_SNAPSHOT: ${{ inputs.nas_snapshot }}
+        R2_SNAPSHOT: ${{ inputs.r2_snapshot }}
       run: |
         set -euo pipefail
+        if [[ $SUITE == postgres-whisparr-original ]]; then
+          [[ $NAS_SNAPSHOT =~ ^[0-9a-f]{32}$ && $R2_SNAPSHOT =~ ^[0-9a-f]{32}$ && $NAS_SNAPSHOT != "$R2_SNAPSHOT" ]] || exit 1
+        else
+          [[ -z $NAS_SNAPSHOT && -z $R2_SNAPSHOT ]] || exit 1
+        fi
         [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
         case "$SUITE" in
           tunarr|deadlines) ;;
-          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-sonarr-original|postgres-whisparr) ;;
+          postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-sonarr-original|postgres-whisparr|postgres-whisparr-original) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
           identities|radarr-transport) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
@@ -291,13 +307,15 @@ jobs:
       if: ${{ startsWith(inputs.suite, 'postgres-') && endsWith(inputs.suite, '-original') }}
       env:
         QUALIFICATION_COMMIT: ${{ inputs.commit }}
+        ORIGINAL_NAS_SNAPSHOT: ${{ inputs.nas_snapshot }}
+        ORIGINAL_R2_SNAPSHOT: ${{ inputs.r2_snapshot }}
         SUITE: ${{ inputs.suite }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
       run: |
         python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_original.py -v
         python3 -m unittest discover -s scripts/tests -p test_kopiur_radarr_original.py -v
         case "$SUITE" in
-          postgres-radarr-original|postgres-radarr-3d-original|postgres-sonarr-original)
+          postgres-radarr-original|postgres-radarr-3d-original|postgres-sonarr-original|postgres-whisparr-original)
             app=${SUITE#postgres-}
             python3 scripts/kopiur-bazarr-original.py --serve --app "${app%-original}"
             ;;

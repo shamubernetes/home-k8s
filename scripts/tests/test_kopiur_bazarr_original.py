@@ -132,6 +132,50 @@ class OriginalTests(unittest.TestCase):
         self.assertIn('restored API record differs from native data', text)
         self.assertIn('target_info["HostConfig"]["NetworkMode"] != "none"', text)
 
+    def test_whisparr_original_ids_are_exact_distinct_and_do_not_change_other_apps(self):
+        from unittest import mock
+        with mock.patch.dict(M["os"].environ, {"ORIGINAL_NAS_SNAPSHOT": "a" * 32, "ORIGINAL_R2_SNAPSHOT": "b" * 32}):
+            self.assertEqual(M["originals_for"]("whisparr"), {"nas": "a" * 32, "r2": "b" * 32})
+            self.assertEqual(M["originals_for"]("bazarr"), M["ORIGINALS"])
+            for value in ("", "b" * 31, "B" * 32, "a" * 32, "../escape"):
+                with mock.patch.dict(M["os"].environ, {"ORIGINAL_R2_SNAPSHOT": value}), self.assertRaises(ValueError):
+                    M["originals_for"]("whisparr")
+        fields = self.fields()
+        fields["R2_BUCKET"] = "kopiur-whisparr"
+        fields["NAS_RCLONE_CONFIG"] = fields["NAS_RCLONE_CONFIG"].replace("kp-bazarr", "kp-whisparr")
+        M["validate_fields"](fields, "whisparr")
+        with self.assertRaises(ValueError):
+            M["validate_fields"](self.fields(), "whisparr")
+
+    def test_whisparr_transfer_requires_both_databases_and_no_other_members(self):
+        import io
+        import tarfile
+        import tempfile
+        names = [".kopiur-postgres/COMPLETE", ".kopiur-postgres/current", ".kopiur-postgres/current/SHA256SUMS"]
+        names += [".kopiur-postgres/current/" + name for name in (
+            "whisparrv3_main.dump", "whisparrv3_main.toc", "whisparrv3_logs.dump", "whisparrv3_logs.toc",
+            "application-config", "application-state.tar", "filetree.sha256", "metadata")]
+        databases = ["whisparrv3_main", "whisparrv3_logs"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "transfer.tar"
+            for members in (names, names[:-1], names + ["unrelated.dump"]):
+                with tarfile.open(archive, "w") as bundle:
+                    for name in members:
+                        member = tarfile.TarInfo(name)
+                        if name == ".kopiur-postgres/current":
+                            member.type = tarfile.DIRTYPE
+                        else:
+                            member.size = 1
+                        bundle.addfile(member, io.BytesIO(b"x") if member.isfile() else None)
+                if members == names:
+                    M["extract_original"](archive, root / "restored", database=databases)
+                else:
+                    with self.assertRaises(ValueError):
+                        M["extract_original"](archive, root / "restored", database=databases)
+            with self.assertRaises(ValueError):
+                M["extract_original"](archive, root / "restored", database=["whisparrv3_main"])
+
     def test_original_suite_retains_trusted_dispatch_boundary(self):
         text = (ROOT / ".github/workflows/recovery-verify.yaml").read_text()
         self.assertIn('postgres-bazarr-original|postgres-radarr', text)

@@ -35,7 +35,7 @@ SONARR_ORIGINALS = {"nas": "fae589bd0c33f21731c9ef5f0ee6c4fa", "r2": "0b4d52a245
 
 
 def validate_fields(fields, app="bazarr"):
-    if app not in ("bazarr", "radarr", "radarr-3d", "sonarr"):
+    if app not in ("bazarr", "radarr", "radarr-3d", "sonarr", "whisparr"):
         raise ValueError("unsupported original application")
     required = {"NAS_RCLONE_CONFIG", "NAS_KOPIA_PASSWORD", "R2_KOPIA_PASSWORD",
                 "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"}
@@ -72,7 +72,12 @@ def compare_results(results):
 
 def extract_original(archive, destination, *, database="bazarr", capacity=2 * 1024**3):
     allowed = {".kopiur-postgres/COMPLETE", ".kopiur-postgres/current", ".kopiur-postgres/current/SHA256SUMS"}
-    filenames = (database + ".dump", database + ".toc", "application-config", "application-state.tar", "filetree.sha256", "metadata")
+    databases = (database,) if isinstance(database, str) else tuple(database)
+    if databases not in (("bazarr",), ("radarr_main",), ("radarr_3d_main",), ("sonarr_main",),
+                         ("whisparrv3_main", "whisparrv3_logs")):
+        raise ValueError("unsupported native database transfer inventory")
+    filenames = ["application-config", "application-state.tar", "filetree.sha256", "metadata"]
+    filenames += [db + suffix for db in databases for suffix in (".dump", ".toc")]
     allowed.update(".kopiur-postgres/current/" + name for name in filenames)
     with tarfile.open(archive) as bundle:
         members = bundle.getmembers()
@@ -89,15 +94,29 @@ def extract_original(archive, destination, *, database="bazarr", capacity=2 * 10
         bundle.extractall(destination, filter="data")
 
 
+def originals_for(app):
+    if app == "whisparr":
+        originals = {kind: os.environ.get("ORIGINAL_" + kind.upper() + "_SNAPSHOT", "") for kind in ("nas", "r2")}
+        if not all(re.fullmatch(r"[0-9a-f]{32}", value) for value in originals.values()):
+            raise ValueError("missing exact original Whisparr snapshot IDs")
+        if originals["nas"] == originals["r2"]:
+            raise ValueError("original Whisparr backends must have distinct manifests")
+        return originals
+    return {"bazarr": ORIGINALS, "radarr": RADARR_ORIGINALS, "radarr-3d": RADARR_3D_ORIGINALS,
+            "sonarr": SONARR_ORIGINALS}[app]
+
+
 def qualify(fields, app="bazarr"):
     validate_fields(fields, app)
-    originals = {"bazarr": ORIGINALS, "radarr": RADARR_ORIGINALS, "radarr-3d": RADARR_3D_ORIGINALS, "sonarr": SONARR_ORIGINALS}[app]
-    database = NATIVE["CONTRACTS"][app][1][0]
+    originals = originals_for(app)
+    database = NATIVE["CONTRACTS"][app][1]
     if set(originals) != {"nas", "r2"}:
         raise ValueError("original generation is not retained on both backends")
-    large_app = app in ("radarr", "sonarr")
-    capacity_mib = 8192 if large_app else 2048
-    config_mib = 7168 if large_app else 1024
+    large_app = app in ("radarr", "sonarr", "whisparr")
+    # Whisparr source PVC is 15Gi, with 12614Mi of original files observed.
+    # Bound disposable capacity to that original tree plus bundle/cache overhead.
+    capacity_mib = 16384 if app == "whisparr" else 8192 if large_app else 2048
+    config_mib = 15360 if app == "whisparr" else 7168 if large_app else 1024
     nonce = uuid.uuid4().hex
     tools = "k8s92-bazarr-tools-" + nonce
     containers = []
@@ -181,7 +200,7 @@ def qualify(fields, app="bazarr"):
                 checksum = hashlib.sha256((current / "SHA256SUMS").read_bytes()).hexdigest()
                 metadata = (current / "metadata").read_text().splitlines()
                 proof = NATIVE["restore_pvc"](source, app, config_mib=config_mib, database_mib=4096,
-                                            memory_mib=8192 if large_app else None)
+                                            memory_mib=16384 if app == "whisparr" else 8192 if large_app else None)
                 proof.update(snapshot_id=snapshot, bundle_checksums_sha256=checksum, metadata=metadata,
                              original_backend_readonly=True, networked_restorer_removed_before_boot=True)
                 results[kind] = proof
@@ -203,7 +222,7 @@ def main():
     arguments = sys.argv[1:]
     app = arguments[2] if len(arguments) == 3 and arguments[:2] == ["--serve", "--app"] else "bazarr"
     valid_arguments = ["--serve"] if app == "bazarr" else ["--serve", "--app", app]
-    if app not in ("bazarr", "radarr", "radarr-3d", "sonarr") or sys.platform != "linux" or \
+    if app not in ("bazarr", "radarr", "radarr-3d", "sonarr", "whisparr") or sys.platform != "linux" or \
             not os.environ.get("RUNNER_NAME") or arguments != valid_arguments:
         raise RuntimeError("original recovery requires the assigned ARC dispatch")
     if not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("QUALIFICATION_COMMIT", "")):

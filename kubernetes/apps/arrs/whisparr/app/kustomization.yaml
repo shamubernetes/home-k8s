@@ -17,6 +17,7 @@ resources:
 - ./kopiur-policy.yaml
 - ./kopiur-original-snapshot.yaml
 - ./kopiur-original-retry-snapshot.yaml
+- ./kopiur-bundle-original-snapshot.yaml
 - ./kopiur-original-replication.yaml
 - ./kopiur-original-r2-retain.yaml
 - ./kopiur-scheduled-r2-retain.yaml

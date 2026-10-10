@@ -98,7 +98,8 @@ kind: SnapshotReplication
 metadata:
   name: radarr-3d-nas-to-r2
   annotations:
-    kopiur.home.arpa/awaiting-first-scheduled-point: "true"
+    # Copy the actual schedule-owned NAS point after its successful capture.
+    kopiur.home-operations.com/run-requested: "2026-10-10T00:14:51Z"
 spec:
   sourceRef:
     kind: Repository
@@ -121,5 +122,5 @@ spec:
     policies: none
   pruning:
     none: {}
-  # Enable after the first actual primary-schedule capture succeeds.
-  suspend: true
+  # Original native proof and the first primary-schedule capture succeeded.
+  suspend: false

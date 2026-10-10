@@ -25,6 +25,17 @@ spec:
     accessModes:
     - ReadWriteOnce
   defaultDeletionPolicy: Retain
+  files:
+    # Keep the complete current paired generation and every application file.
+    # The helper's prior bundle is redundant and removed at the next capture.
+    # Preserve Kopiur's default excludes because an explicit list replaces them.
+    ignoreRules:
+    - /lost+found
+    - System Volume Information
+    - $RECYCLE.BIN
+    - '@eaDir'
+    - .snapshot
+    - /.kopiur-postgres/previous
   hooks:
     beforeSnapshot:
     - workloadExec:

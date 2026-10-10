@@ -39,6 +39,22 @@ class RecurringTests(unittest.TestCase):
             self.assertEqual(result.stdout, data)
             subprocess.run(["sh", "-n"], input=data, check=True)
 
+    def test_sonarr_uses_existing_bounded_capture_protocol(self):
+        sonarr = ROOT / "scripts/kopiur-sonarr-recurring-capture"
+        radarr = (ROOT / "scripts/kopiur-radarr-recurring-capture").read_text()
+        self.assertEqual(sonarr.read_text(), radarr.replace("radarr_main", "sonarr_main")
+                         .replace("Radarr recurring", "Sonarr recurring"))
+        subprocess.run(["sh", "-n", str(sonarr)], check=True)
+        result = subprocess.run(["flux", "envsubst", "--strict"], input=sonarr.read_bytes(),
+                                capture_output=True, check=True)
+        self.assertEqual(result.stdout, sonarr.read_bytes())
+        for database in ("radarr_main", "unrelated", "sonarr_main other"):
+            rejected = subprocess.run(["sh", str(sonarr)],
+                                      env={**os.environ, "PGDATABASES": database,
+                                           "CAPTURE_MODE": "single-db-stable-filetree"},
+                                      capture_output=True, timeout=3)
+            self.assertNotEqual(rejected.returncode, 0)
+
     def test_matching_current_hold(self):
         self.assertEqual(self.call("check", "720"), 0)
 

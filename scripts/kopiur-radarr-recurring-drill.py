@@ -16,6 +16,7 @@ CAPTURE = ROOT / "kubernetes/components/kopiur-postgres/capture.sh"
 def qualify(drill, source, config, run, pg_image, restore_pvc):
     run(sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "scripts/tests"),
         "-p", "test_kopiur_radarr_recurring.py", "-v")
+    driver = ROOT / "scripts/kopiur-sonarr-recurring-capture" if drill.app_name == "sonarr" else DRIVER
     state = drill.config_volume("recurring-state")
     app = drill.app("recurring-app", source, config, recurring_state=state)
     drill.healthy(app)
@@ -23,7 +24,7 @@ def qualify(drill, source, config, run, pg_image, restore_pvc):
                          user="568:568", network="container:" + source,
                          mounts=[(state, "/kopiur-quiescence", "rw"), (config, "/config", "rw"),
                                  (SCRIPT, "/kopiur/recurring.sh", "ro"),
-                                 (DRIVER, "/kopiur/recurring-capture.sh", "ro"),
+                                 (driver, "/kopiur/recurring-capture.sh", "ro"),
                                  (CAPTURE, "/kopiur/capture.sh", "ro")],
                          env={"PGHOST": "127.0.0.1", "PGPORT": "5432", "PGUSER": drill.capture_user,
                               "PGPASSWORD": drill.backup_password, "PGDATABASES": drill.databases[0],
@@ -41,7 +42,7 @@ def qualify(drill, source, config, run, pg_image, restore_pvc):
         # Read only comm names, never credential-bearing argv or app logs.
         raw = run("docker", "exec", app, "sh", "-ec",
                   'for file in /proc/[0-9]*/comm; do cat "$file" 2>/dev/null || true; done').stdout.decode().splitlines()
-        return sum(name.lower() in ("radarr", "dotnet", "ffprobe", "ffmpeg") for name in raw)
+        return sum(name.lower() in ("radarr", "sonarr", "dotnet", "ffprobe", "ffmpeg") for name in raw)
 
     assert writers() > 0, "native process inventory did not identify Radarr"
     control("acquire")
@@ -67,9 +68,9 @@ def qualify(drill, source, config, run, pg_image, restore_pvc):
         run("docker", "cp", helper + ":/config", str(copied))
         (copied / "config.xml").write_bytes(b"later-unpaired-state")
         (copied / "k8s92-private-fixture.bin").write_bytes(b"later-unpaired-state")
-        restored = restore_pvc(copied, "radarr", config_mib=256, database_mib=512)
+        restored = restore_pvc(copied, drill.app_name, config_mib=256, database_mib=512)
         assert restored["native_restore"] and restored["restored_app_ping"]
-        assert restored["table_counts"]["radarr_main"]["kopiur_fixture"] == 1
+        assert restored["table_counts"][drill.databases[0]]["kopiur_fixture"] == 1
         assert restored["paired_filetree_bytes_equal"] > 0
 
     # Database rejection releases the writer even though no COMPLETE is accepted.

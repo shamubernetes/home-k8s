@@ -99,7 +99,8 @@ kind: SnapshotReplication
 metadata:
   name: sonarr-nas-to-r2
   annotations:
-    kopiur.home.arpa/awaiting-first-scheduled-point: "true"
+    # Copy the actual successful primary-schedule point.
+    kopiur.home-operations.com/run-requested: "2026-10-10T03:07:42Z"
 spec:
   sourceRef:
     kind: Repository
@@ -122,4 +123,5 @@ spec:
     policies: none
   pruning:
     none: {}
-  suspend: true
+  # Original native proof and the first primary-schedule capture passed.
+  suspend: false

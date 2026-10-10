@@ -49,6 +49,31 @@ class RadarrOriginalTests(unittest.TestCase):
         self.assertTrue(set(ORIGINAL['RADARR_3D_ORIGINALS'].values()).isdisjoint(
             ORIGINAL['RADARR_ORIGINALS'].values()))
 
+    def test_sonarr_native_api_compares_every_series(self):
+        records = [{'id': 1, 'tvdbId': 101, 'title': 'Fixture', 'path': '/media/fixture'},
+                   {'id': 2, 'tvdbId': 102, 'title': 'Other fixture', 'path': '/media/other'}]
+        def sql(query):
+            self.assertIn('FROM "Series"', query)
+            self.assertIn('"TvdbId"', query)
+            self.assertNotIn('"Movies"', query)
+            return json.dumps(records)
+        proof = NATIVE['validate_radarr_api'](list(reversed(records)), 2, sql, app='sonarr')
+        self.assertEqual(proof['series'], 2)
+        self.assertEqual(proof['native_records_equal'], 2)
+        self.assertNotIn('/media', json.dumps(proof))
+        for field, value in [('id', True), ('id', 99), ('tvdbId', 999),
+                             ('title', 'Wrong title'), ('path', '/wrong')]:
+            changed = copy.deepcopy(records)
+            changed[0][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                NATIVE['validate_radarr_api'](changed, 2, sql, app='sonarr')
+        with self.assertRaises(ValueError):
+            NATIVE['validate_radarr_api'](records, 3, sql, app='sonarr')
+        with self.assertRaises(ValueError):
+            NATIVE['validate_radarr_api']([records[0], records[0]], 2, sql, app='sonarr')
+        self.assertEqual(NATIVE['validate_radarr_api']([], 0, lambda query: '[]',
+                                                    app='sonarr')['series'], 0)
+
     def test_empty_native_movie_catalog(self):
         proof = NATIVE['validate_radarr_api']([], 0, lambda query: '[]')
         self.assertEqual(proof['movies'], 0)

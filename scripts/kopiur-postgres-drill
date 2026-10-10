@@ -584,21 +584,29 @@ def validate_bazarr_api(response, expected, table, key, sql):
             "compared_fields": ["identity", "title", "path"] if expected else []}
 
 
-def validate_radarr_api(response, expected, sql):
+def validate_radarr_api(response, expected, sql, *, app="radarr"):
+    if app not in ("radarr", "sonarr"):
+        raise ValueError("unsupported native catalog application")
+    id_key, count_key = ("tvdbId", "series") if app == "sonarr" else ("tmdbId", "movies")
     if not isinstance(response, list) or len(response) != expected:
-        raise ValueError("restored Radarr API count differs from native data")
+        raise ValueError("restored native application API count differs from native data")
     records = []
     for record in response:
-        if type(record.get("id")) is not int or type(record.get("tmdbId")) is not int:
-            raise ValueError("restored Radarr API identity is invalid")
-        records.append({key: record[key] for key in ("id", "tmdbId", "title", "path")})
-    original = json.loads(sql('''SELECT coalesce(json_agg(json_build_object(
+        if type(record.get("id")) is not int or type(record.get(id_key)) is not int:
+            raise ValueError("restored native API identity is invalid")
+        records.append({key: record[key] for key in ("id", id_key, "title", "path")})
+    query = '''SELECT coalesce(json_agg(json_build_object(
         'id', m."Id", 'tmdbId', mm."TmdbId", 'title', mm."Title", 'path', m."Path")), '[]'::json)
-        FROM "Movies" m JOIN "MovieMetadata" mm ON mm."Id"=m."MovieMetadataId"'''))
+        FROM "Movies" m JOIN "MovieMetadata" mm ON mm."Id"=m."MovieMetadataId"'''
+    if app == "sonarr":
+        query = '''SELECT coalesce(json_agg(json_build_object(
+            'id', "Id", 'tvdbId', "TvdbId", 'title', "Title", 'path', "Path")), '[]'::json)
+            FROM "Series"'''
+    original = json.loads(sql(query))
     if sorted(records, key=lambda row: row["id"]) != sorted(original, key=lambda row: row["id"]):
-        raise ValueError("restored Radarr API records differ from native data")
+        raise ValueError("restored native application API records differ from native data")
     encoded = json.dumps(sorted(records, key=lambda row: row["id"]), sort_keys=True).encode()
-    return {"movies": expected, "native_records_equal": len(records),
+    return {count_key: expected, "native_records_equal": len(records),
             "native_records_sha256": hashlib.sha256(encoded).hexdigest()}
 
 
@@ -690,7 +698,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
         api = {}
-        if app_name in ("bazarr", "radarr", "radarr-3d"):
+        if app_name in ("bazarr", "radarr", "radarr-3d", "sonarr"):
             target_info = json.loads(run("docker", "inspect", target).stdout)[0]
             app_info = json.loads(run("docker", "inspect", restored_app).stdout)[0]
             if target_info["HostConfig"]["NetworkMode"] != "none" or \
@@ -706,14 +714,17 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
                 expected = counts["bazarr"][table]
                 api[endpoint] = validate_bazarr_api(response, expected, table, key,
                     lambda query: drill.sql(target, query, "bazarr"))
-        if app_name in ("radarr", "radarr-3d"):
-            curl_config = (f'url = "http://127.0.0.1:{drill.port}/api/v3/movie"\n'
+        if app_name in ("radarr", "radarr-3d", "sonarr"):
+            endpoint = "series" if app_name == "sonarr" else "movie"
+            curl_config = (f'url = "http://127.0.0.1:{drill.port}/api/v3/{endpoint}"\n'
                            f'header = "X-Api-Key: {drill.api_key}"\n')
             response = json.loads(run("docker", "exec", "-i", restored_app, "curl", "-fsS", "--config", "-",
                                       stdin=curl_config.encode()).stdout)
             database = databases[0]
-            api = validate_radarr_api(response, counts[database]["Movies"],
-                                      lambda query: drill.sql(target, query, database))
+            table = "Series" if app_name == "sonarr" else "Movies"
+            api = validate_radarr_api(response, counts[database][table],
+                                      lambda query: drill.sql(target, query, database),
+                                      app="sonarr" if app_name == "sonarr" else "radarr")
         return {"app": app_name, "native_restore": True, "restored_app_ping": True,
                 "database_count": len(databases), "tables": sum(len(t) for t in counts.values()),
                 "rows": sum(sum(t.values()) for t in counts.values()), "paired_filetree_bytes_equal": paired_count,

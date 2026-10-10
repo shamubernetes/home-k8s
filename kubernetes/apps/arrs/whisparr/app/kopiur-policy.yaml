@@ -68,7 +68,9 @@ spec:
         cron: "45 9 * * 0"
         jitter: 1h
       capacity: 45Gi
-      storageClassName: ceph-block
+      # Disposable native restore scratch, not application or repository storage.
+      # Ceph-backed scratch missed the unchanged deadline on the reduced real tree.
+      storageClassName: openebs-hostpath
       # Use Kopia's native restore default for the 100k-file production tree.
       # Two workers missed the admitted 3600s deadline; keep that cap unchanged.
       parallel: 8

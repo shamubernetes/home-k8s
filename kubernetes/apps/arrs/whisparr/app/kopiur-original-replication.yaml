@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotreplication_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: whisparr-k8s92-original-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-10T05:35:00Z"
+spec:
+  sourceRef:
+    kind: Repository
+    name: whisparr-nas-smb
+  destinationRef:
+    kind: Repository
+    name: whisparr-r2
+  # Copy the retained original without pruning; regular replication stays suspended.
+  schedule:
+    cron: "0 8 * * *"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: whisparr
+        hostname: arrs
+        sourcePath: /pvc/whisparr
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    none: {}
+  suspend: false

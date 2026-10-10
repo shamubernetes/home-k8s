@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt this existing scheduled-point copy; preserve its UID and manifest.
+  name: radarr-3d-nas-to-r2-copy-5148d828b17eb888-a3ae944d
+spec:
+  repository:
+    kind: Repository
+    name: radarr-3d-r2
+    namespace: arrs
+  deletionPolicy: Retain

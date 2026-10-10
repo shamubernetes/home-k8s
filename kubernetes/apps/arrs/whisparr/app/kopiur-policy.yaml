@@ -113,8 +113,8 @@ kind: SnapshotReplication
 metadata:
   name: whisparr-nas-to-r2
   annotations:
-    # Exercise the normal recurring path after the first actual scheduled NAS point.
-    kopiur.home-operations.com/run-requested: "2026-10-10T09:23:11Z"
+    # Exercise recurring replication after the actual reduced scheduled NAS point.
+    kopiur.home-operations.com/run-requested: "2026-10-10T16:24:19Z"
 spec:
   sourceRef:
     kind: Repository

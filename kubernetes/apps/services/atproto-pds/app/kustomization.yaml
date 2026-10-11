@@ -9,6 +9,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-original.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/external
 components:

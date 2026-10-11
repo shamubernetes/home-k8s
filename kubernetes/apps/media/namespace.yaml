@@ -6,3 +6,5 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
     volsync.backube/privileged-movers: "true"
+    # Grimmory restores preserve both root-owned runtime escrow and UID 568 data.
+    kopiur.home-operations.com/privileged-movers: "true"

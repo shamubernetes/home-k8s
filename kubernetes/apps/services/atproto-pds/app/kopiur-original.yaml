@@ -20,8 +20,8 @@ spec:
   policyRef:
     name: atproto-pds
   schedule:
-    suspend: true
-    # Preserve the incumbent hourly cadence. Qualify originals before activation.
+    suspend: false
+    # Original NAS/R2 native recovery passed; preserve the incumbent hourly cadence.
     cron: "${VOLSYNC_SCHEDULE}"
     jitter: 10m
     runOnCreate: false

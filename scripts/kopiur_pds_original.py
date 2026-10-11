@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import time
+from pathlib import Path
 
 import kopiur_pds_native as native
 
@@ -112,6 +113,128 @@ print(json.dumps({'equal_entries':len(rows),'tree_sha256':hashlib.sha256(json.du
 '''
 
 
+def original_api(drill, target, runtime, actor_keys, deadline):
+    repos=[];cursor=None;pages=0;seen_cursors=set()
+    while True:
+        if time.monotonic() >= deadline:
+            raise TimeoutError('original API absolute deadline exceeded')
+        from urllib.parse import quote
+        page=drill.http(target,'/xrpc/com.atproto.sync.listRepos?limit=1'+
+                       ('&cursor='+quote(cursor,safe='') if cursor else ''))
+        repos.extend(page['repos']);pages+=1
+        if not page.get('cursor'):break
+        if page['cursor'] in seen_cursors:
+            raise ValueError('native pagination cycle')
+        seen_cursors.add(page['cursor'])
+        cursor=page['cursor']
+    if len(repos)!=actor_keys:
+        raise ValueError('restored repository/key inventory differs')
+    api=[]
+    for repo in repos:
+        did=quote(repo['did'],safe='')
+        account=drill.http(target,'/xrpc/com.atproto.admin.getAccountInfo?did='+did,
+                           auth='admin:'+runtime['PDS_ADMIN_PASSWORD'])
+        if account['did']!=repo['did']:raise ValueError('original admin identity differs')
+        car=drill.http(target,'/xrpc/com.atproto.sync.getRepo?did='+did,raw=True)
+        if len(car)<100:raise ValueError('empty original repository CAR')
+        blobs=[];blob_cursor=None;seen_blob_cursors=set()
+        while True:
+            page=drill.http(target,'/xrpc/com.atproto.sync.listBlobs?did='+did+
+                           ('&cursor='+quote(blob_cursor,safe='') if blob_cursor else ''))
+            for cid in page['cids']:
+                data=drill.http(target,'/xrpc/com.atproto.sync.getBlob?did='+did+
+                                '&cid='+quote(cid,safe=''),raw=True)
+                blobs.append([cid,hashlib.sha256(data).hexdigest()])
+            if not page.get('cursor'):break
+            if page['cursor'] in seen_blob_cursors:raise ValueError('native blob pagination cycle')
+            seen_blob_cursors.add(page['cursor']);blob_cursor=page['cursor']
+        api.append({'did_sha256':hashlib.sha256(repo['did'].encode()).hexdigest(),
+                    'blobs':blobs,
+                    'repo':{k:v for k,v in repo.items() if k!='did'},
+                    'car_sha256':hashlib.sha256(car).hexdigest(),
+                    'account_sha256':hashlib.sha256(json.dumps(account,sort_keys=True).encode()).hexdigest()})
+    return api, pages
+
+
+def consumer_recovery(drill, target, runtime, actor_keys, deadline, api):
+    # These 45-second acceptance holds affect only the isolated original restore.
+    # Production's absolute hold and acquisition minimum remain unchanged.
+    control = ['exec',target,'sh','/kopiur/recurring.sh']
+    def state():
+        return json.loads(native.docker('exec',target,'node','-e',
+            "const fs=require('fs'),p=process.env.QUIESCENCE_STATE_DIR;"
+            "const read=n=>fs.existsSync(p+'/'+n)?fs.readFileSync(p+'/'+n,'utf8'):null;"
+            "console.log(JSON.stringify({request:read('request'),active:read('active'),"
+            "now:Math.floor(Date.now()/1000)}))"))
+    def resumed_state():
+        # Timestamp the successful health request inside the container. A later
+        # exec/state read can cross expiry and must not hide premature recovery.
+        return json.loads(native.docker('exec',target,'node','-e',
+            "const fs=require('fs'),p=process.env.QUIESCENCE_STATE_DIR;"
+            "const read=n=>fs.existsSync(p+'/'+n)?fs.readFileSync(p+'/'+n,'utf8'):null;"
+            "(async()=>{for(let i=0;i<60;i++){const healthAt=Math.floor(Date.now()/1000);"
+            "try{const r=await fetch('http://127.0.0.1:3000/xrpc/_health',"
+            "{signal:AbortSignal.timeout(2000)});if(!r.ok)throw Error('health');"
+            "console.log(JSON.stringify({healthAt,now:Math.floor(Date.now()/1000),"
+            "request:read('request'),active:read('active')}));return;}catch(e){}"
+            "await new Promise(r=>setTimeout(r,1000));}process.exit(1)})()"))
+    def stopped():
+        proof = native.docker('exec',target,'node','-e',
+            "fetch('http://127.0.0.1:3000/xrpc/_health',"
+            "{signal:AbortSignal.timeout(2000)}).then(()=>process.exit(1))"
+            ".catch(()=>console.log('writer-stopped'))")
+        if proof != 'writer-stopped':
+            raise ValueError('original writer remained available during hold')
+    for recovery in ('release','watchdog','container-restart'):
+        lease_token=os.urandom(16).hex()
+        native.docker(*control,'acquire',lease_token,'45','30')
+        accepted=state()
+        request=accepted['request']
+        if not request or request!=accepted['active']:
+            raise ValueError('original hold was not acknowledged')
+        parts=request.split()
+        if len(parts)!=3 or parts[1]!=lease_token:
+            raise ValueError('original accepted hold identity differs')
+        expires=int(parts[2])
+        if accepted['now']>=expires:
+            raise ValueError('original hold expired before verification')
+        if recovery == 'container-restart':
+            native.docker('restart',target)
+            # The supervisor must re-acknowledge the same accepted request before
+            # starting any native child, without extending its absolute expiry.
+            while True:
+                replacement=state()
+                if replacement['request']!=request or replacement['now']>=expires:
+                    raise ValueError('original replacement lost or extended hold')
+                if replacement['active']==request:break
+                if time.monotonic()>=deadline:
+                    raise TimeoutError('original replacement acknowledgement deadline')
+                time.sleep(1)
+        stopped()
+        native.docker(*control,'liveness')
+        current=state()
+        if current['request']!=request or current['active']!=request or current['now']>=expires:
+            raise ValueError('original hold expired before recovery action')
+        if recovery == 'release':
+            native.docker(*control,'release',lease_token)
+        # Watchdog and replacement deliberately await the unchanged absolute expiry.
+        resumed=resumed_state()
+        if recovery=='release' and resumed['healthAt']>=expires:
+            raise ValueError('original release was not proved before expiry')
+        if recovery!='release' and resumed['healthAt']<expires:
+            raise ValueError('original watchdog resumed before expiry')
+        if resumed['request'] is not None or resumed['active'] is not None:
+            raise ValueError('original consumer hold remained after '+recovery)
+        recovered,_=original_api(drill,target,runtime,actor_keys,deadline)
+        if recovered != api:
+            raise ValueError('original API differs after '+recovery)
+    return dict(original_supervisor_release_equal=True,
+                original_supervisor_watchdog_equal=True,
+                original_container_restart_equal=True,
+                original_replacement_preserved_absolute_hold=True,
+                original_consumer_hold_cleared=True)
+
+
 def exercise(identity, payload, deadline):
     original = validate_original(payload)
     app, fields = payload['app'], payload['fields']
@@ -121,11 +244,14 @@ def exercise(identity, payload, deadline):
     work_deadline = transport.deadline
     token = native.COMMAND_DEADLINE.set(work_deadline)
     results = []
+    helpers = {'recurring.sh': Path(__file__).with_name('kopiur-pds-recurring').read_text(),
+               'capture.cjs': Path(__file__).with_name('kopiur-pds-capture.cjs').read_text()}
     try:
         for image in (native.PDS, native.PYTHON, identity.IMAGE):
             native.docker('pull', '--platform', 'linux/amd64', image, timeout=600)
         for kind in ('nas', 'r2'):
             work, restored = drill.volume(kind+'-work'), drill.volume(kind+'-restore')
+            tools = drill.volume(kind+'-consumer-tools')
             mover = drill.start('reader-'+kind, identity.IMAGE,
                                 {work:'/work', restored:'/restored', identity.TOOLS:'/tools:ro'},
                                 command=['sh','-c','/tools/sleep 1800'],
@@ -158,7 +284,7 @@ def exercise(identity, payload, deadline):
             native.docker('rm','-f',mover);drill.containers.remove(mover)
             # Source has root-owned PVC directories. Restore metadata only in
             # this owned tmpfs, with no host/Kubernetes mounts or network.
-            checker = drill.start('check-'+kind, native.PYTHON, {restored:'/data'},
+            checker = drill.start('check-'+kind, native.PYTHON, {restored:'/data',tools:'/consumer-tools'},
                                   command=['python3','-c','import time;time.sleep(1800)'],
                                   user='0:1000', capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
             drill.native_python = {checker}
@@ -174,14 +300,20 @@ def exercise(identity, payload, deadline):
             digest = hashlib.sha256(json.dumps(runtime,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
             if digest != original['runtime_sha256']:
                 raise ValueError('original effective runtime escrow differs')
+            drill.python(checker,
+                "import json,pathlib,sys; files=json.load(sys.stdin); "
+                "[(pathlib.Path('/consumer-tools')/name).write_text(code) for name,code in files.items()]",
+                json.dumps(helpers))
             native.docker('rm','-f',checker);drill.containers.remove(checker)
             # Load original secrets inside Node from the memory-backed restore.
             # Docker configuration contains no original environment values.
             boot = ("const fs=require('fs'),p='/pds/.recovery-runtime.json';"
                     "Object.assign(process.env,JSON.parse(fs.readFileSync(p,'utf8')));"
-                    "fs.unlinkSync(p);import('./index.ts').catch(()=>process.exit(1));")
-            target = drill.start('boot-'+kind,native.PDS,{restored:'/pds'},
-                                 command=['--','node','--enable-source-maps','--eval',boot],
+                    "import('./index.ts').catch(()=>process.exit(1));")
+            target = drill.start('boot-'+kind,native.PDS,{restored:'/pds',tools:'/kopiur:ro'},
+                                 env={'QUIESCENCE_STATE_DIR':'/pds/.kopiur-pds/coordination'},
+                                 command=['--','sh','/kopiur/recurring.sh','supervise',
+                                          'node','--enable-source-maps','--eval',boot],
                                  entrypoint='dumb-init',volume_subpaths={restored:'point'})
             inspect=json.loads(native.docker('inspect',target))[0]
             configured_env=dict(entry.split('=',1) for entry in inspect['Config']['Env'])
@@ -192,45 +324,7 @@ def exercise(identity, payload, deadline):
             if inspect['HostConfig']['LogConfig']['Type']!='none':
                 raise ValueError('original native logging persisted')
             drill.ready(target,'/xrpc/_health')
-            repos=[];cursor=None;pages=0;seen_cursors=set()
-            while True:
-                if time.monotonic() >= work_deadline:
-                    raise TimeoutError('original API absolute deadline exceeded')
-                from urllib.parse import quote
-                page=drill.http(target,'/xrpc/com.atproto.sync.listRepos?limit=1'+
-                               ('&cursor='+quote(cursor,safe='') if cursor else ''))
-                repos.extend(page['repos']);pages+=1
-                if not page.get('cursor'):break
-                if page['cursor'] in seen_cursors:
-                    raise ValueError('native pagination cycle')
-                seen_cursors.add(page['cursor'])
-                cursor=page['cursor']
-            if len(repos)!=receipt['actor_keys']:
-                raise ValueError('restored repository/key inventory differs')
-            api=[]
-            for repo in repos:
-                did=quote(repo['did'],safe='')
-                account=drill.http(target,'/xrpc/com.atproto.admin.getAccountInfo?did='+did,
-                                   auth='admin:'+runtime['PDS_ADMIN_PASSWORD'])
-                if account['did']!=repo['did']:raise ValueError('original admin identity differs')
-                car=drill.http(target,'/xrpc/com.atproto.sync.getRepo?did='+did,raw=True)
-                if len(car)<100:raise ValueError('empty original repository CAR')
-                blobs=[];blob_cursor=None;seen_blob_cursors=set()
-                while True:
-                    page=drill.http(target,'/xrpc/com.atproto.sync.listBlobs?did='+did+
-                                   ('&cursor='+quote(blob_cursor,safe='') if blob_cursor else ''))
-                    for cid in page['cids']:
-                        data=drill.http(target,'/xrpc/com.atproto.sync.getBlob?did='+did+
-                                        '&cid='+quote(cid,safe=''),raw=True)
-                        blobs.append([cid,hashlib.sha256(data).hexdigest()])
-                    if not page.get('cursor'):break
-                    if page['cursor'] in seen_blob_cursors:raise ValueError('native blob pagination cycle')
-                    seen_blob_cursors.add(page['cursor']);blob_cursor=page['cursor']
-                api.append({'did_sha256':hashlib.sha256(repo['did'].encode()).hexdigest(),
-                            'blobs':blobs,
-                            'repo':{k:v for k,v in repo.items() if k!='did'},
-                            'car_sha256':hashlib.sha256(car).hexdigest(),
-                            'account_sha256':hashlib.sha256(json.dumps(account,sort_keys=True).encode()).hexdigest()})
+            api,pages=original_api(drill,target,runtime,receipt['actor_keys'],work_deadline)
             signing = json.loads(native.docker('exec',target,'node','-e',
                 "const fs=require('fs'),{createRequire}=require('module'),r=createRequire(require.resolve('@atproto/pds')),"
                 "{Secp256k1Keypair,verifySignature}=r('@atproto/crypto');"
@@ -242,6 +336,7 @@ def exercise(identity, payload, deadline):
                 "console.log(JSON.stringify({offline_actor_signatures:keys.length}));})().catch(()=>process.exit(1));"))
             if signing['offline_actor_signatures']!=receipt['actor_keys']:
                 raise ValueError('original actor signing inventory differs')
+            receipt.update(consumer_recovery(drill,target,runtime,receipt['actor_keys'],work_deadline,api))
             receipt.update(signing)
             receipt.update(backend=kind,snapshot_id=original['snapshots'][kind],
                            original_backend_readonly=True,native_isolated_boot=True,

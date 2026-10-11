@@ -196,7 +196,7 @@ spec:
             matchExpressions:
             - key: kopiur.home-operations.com/snapshot-replication
               operator: In
-              values: ["bazarr-nas-to-r2", "radarr-nas-to-r2", "radarr-k8s92-original-to-r2", "radarr-3d-nas-to-r2", "sonarr-nas-to-r2", "whisparr-nas-to-r2"]
+              values: ["bazarr-nas-to-r2", "radarr-nas-to-r2", "radarr-k8s92-original-to-r2", "radarr-3d-nas-to-r2", "sonarr-nas-to-r2", "whisparr-nas-to-r2", "whisparr-k8s92-original-to-r2"]
       - resources:
           kinds: ["batch/v1/Job"]
           namespaces: ["arrs"]

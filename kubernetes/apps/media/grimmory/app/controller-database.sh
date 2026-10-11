@@ -39,8 +39,23 @@ while true; do
   fi
   if [[ -f /control/replace-database ]]; then
     rm /control/replace-database /control/database-ready
-    # PID 1 is this disposable container's /init. Kubelet must replace it.
-    kill -TERM 1
+    # Freeze only the native daemon as its incumbent owner. s6 PID 1 can
+    # consume TERM without exiting; its ping probe must recover this fault.
+    # Variables belong to the UID-568 child shell, not the root monitor.
+    # shellcheck disable=SC2016
+    s6-setuidgid abc bash -c '
+      set -euo pipefail
+      targets=()
+      for file in /proc/[0-9]*/comm; do
+        IFS= read -r comm <"$file" || continue
+        if [[ $comm == mariadbd ]]; then
+          pid=${file%/comm}
+          targets+=("${pid##*/}")
+        fi
+      done
+      [[ ${#targets[@]} == 1 && ${targets[0]} -gt 1 ]]
+      kill -STOP "${targets[0]}"
+    '
     exit 0
   fi
   sleep 2

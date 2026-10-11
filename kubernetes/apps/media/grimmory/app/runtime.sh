@@ -49,12 +49,14 @@ stage=$(mktemp -d "$root/.capture.XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
 # Do not echo any environment, command arguments or configuration content.
 copy_effective() {
-  cp "$proc/environ" "$stage/application.env0"
-  cp "$proc/cmdline" "$stage/application.argv0"
+  # Java runs as UID568 and is nondumpable after the entrypoint changes UID.
+  # Read procfs as that same UID, without adding SYS_PTRACE to the workload.
+  su-exec 568:568 cat "$proc/environ" >"$stage/application.env0"
+  su-exec 568:568 cat "$proc/cmdline" >"$stage/application.argv0"
   cp "$proc/stat" "$stage/process.stat"
   [ -s "$stage/application.env0" ] && [ -s "$stage/application.argv0" ] || exit 1
-  cp "$proc/environ" "$stage/check.env0"
-  cp "$proc/cmdline" "$stage/check.argv0"
+  su-exec 568:568 cat "$proc/environ" >"$stage/check.env0"
+  su-exec 568:568 cat "$proc/cmdline" >"$stage/check.argv0"
   cmp -s "$stage/application.env0" "$stage/check.env0"
   cmp -s "$stage/application.argv0" "$stage/check.argv0"
   rm "$stage/check.env0" "$stage/check.argv0"

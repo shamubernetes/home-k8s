@@ -1,4 +1,4 @@
-# Original copy only. Preserve the incumbent daily cadence and disable pruning.
+# Qualified originals. Preserve the incumbent UTC daily cadence and disable pruning.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
@@ -14,6 +14,8 @@ spec:
     name: grimmory-r2
   schedule:
     cron: "${VOLSYNC_R2_SCHEDULE_GRIMMORY}"
+    # The legacy mover runs at 04:04Z; the repository default is not UTC.
+    timezone: UTC
   selection:
     identities:
       include:

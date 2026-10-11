@@ -1,0 +1,125 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-v1.json
+# Read only the two completed controller restores. No production PVC or runtime Secret.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grimmory-k8s92-original-proof
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grimmory-k8s92-original-proof
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        # Deliberately omit fsGroup. A remount must not change restored ownership/modes.
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: verify
+        image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+        command: [python3, -B, -c]
+        args:
+        - |
+          import hashlib, json, pathlib, stat
+          expected_generation = '8dbce9ee-1a02-4860-8fd0-eb2b26fbf461'
+          expected_sql = '9d8acbaeff6acae287106f1c0a274035f0c629037477e189e0bb29a51097b685'
+          expected_roster = 'f1e7245db66c0a37b35e71bc65138285de2134bc77852648f94d2fc4dbd6f8bf'
+          expected_tree = '4e1f1b2f56bfcb0ff57d15c2fdd01c856302e16591d7a76e29bbeb67c920bb87'
+          expected_runtime = {
+              'application.env0': '7c1f74cd6aaa03077acc9ee774c4db4fa8425b86fc7f3839cefd500c33616dac',
+              'application.argv0': '41aeec711774466dfd5febc2b73f75b10cc425487c8b83d130467747a9d8d9b5',
+              'app-data.tar': '865738a2c2891ffcbc3b6040cbc1021b478ccb7e59c3a7db62727d7792f97feb',
+              'process-start.txt': 'a46c2c115ebba18f6b47c3f859a6f69559ac37a4da8482c25e08f96e8e74bb77',
+              'runtime.txt': '0abeab27bcc2635856b6a791044a5675fc92d407926c7eaf53ae186361837705',
+          }
+          def digest(path):
+              with path.open('rb') as source:
+                  return hashlib.file_digest(source, 'sha256').hexdigest()
+          def metadata(path, uid, mode):
+              details = path.lstat()
+              assert not path.is_symlink(), 'symlink rejected'
+              assert details.st_uid == uid and details.st_gid == 568, 'owner differs'
+              assert stat.S_IMODE(details.st_mode) == mode, 'permissions differ'
+          receipts = []
+          for backend in ('nas', 'r2'):
+              root = pathlib.Path('/' + backend)
+              bundle = root / 'mariadb-config/kopiur'
+              escrow = root / 'grimmory-runtime'
+              assert (bundle / 'COMPLETE').read_text().strip() == expected_generation, 'SQL generation differs'
+              assert (escrow / 'COMPLETE').read_text().strip() == expected_generation, 'escrow generation differs'
+              manifest = dict(line.split('=', 1) for line in (bundle / 'manifest.txt').read_text().splitlines())
+              assert manifest['format'] == 'mariadb-logical-runtime-v2', 'unsupported format'
+              assert manifest['base_tables'] == '73', 'table inventory differs'
+              assert manifest['runtime_generation'] == expected_generation, 'bound generation differs'
+              assert manifest['sql_sha256'] == expected_sql and digest(bundle / 'grimmory.sql') == expected_sql, 'SQL differs'
+              assert manifest['runtime_manifest_sha256'] == expected_roster, 'runtime binding differs'
+              metadata(escrow, 0, 0o2750)
+              metadata(escrow / 'current', 0, 0o2750)
+              metadata(escrow / 'COMPLETE', 0, 0o640)
+              metadata(bundle / 'runtime', 568, 0o2700)
+              for runtime, uid, mode in ((bundle / 'runtime', 568, 0o600), (escrow / 'current', 0, 0o640)):
+                  assert digest(runtime / 'runtime.sha256') == expected_roster, 'roster differs'
+                  metadata(runtime / 'runtime.sha256', uid, mode)
+                  for name, checksum in expected_runtime.items():
+                      metadata(runtime / name, uid, mode)
+                      assert digest(runtime / name) == checksum, 'runtime file differs'
+              appdata = root / 'grimmory-data'
+              rows = []
+              for path in [appdata, *sorted(appdata.rglob('*'))]:
+                  details = path.lstat()
+                  assert not path.is_symlink() and (path.is_file() or path.is_dir()), 'unsupported tree entry'
+                  rows.append([str(path.relative_to(appdata)), stat.S_IMODE(details.st_mode), details.st_uid,
+                               details.st_gid, digest(path) if path.is_file() else None])
+              tree_hash = hashlib.sha256(json.dumps(rows).encode()).hexdigest()
+              assert tree_hash == expected_tree, 'native app tree differs'
+              receipts.append({'backend': backend, 'generation': expected_generation, 'base_tables': 73,
+                               'sql_sha256': expected_sql, 'runtime_roster_sha256': expected_roster,
+                               'app_tree_sha256': tree_hash, 'root_escrow_permissions_preserved': True})
+          print(json.dumps({'controller_restored_originals_equal': True, 'results': receipts}))
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+        volumeMounts:
+        - name: nas
+          mountPath: /nas
+          readOnly: true
+        - name: r2
+          mountPath: /r2
+          readOnly: true
+      volumes:
+      - name: nas
+        persistentVolumeClaim:
+          claimName: grimmory-k8s92-original-nas
+          readOnly: true
+      - name: r2
+        persistentVolumeClaim:
+          claimName: grimmory-k8s92-original-r2
+          readOnly: true
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/networkpolicy-v1.json
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grimmory-k8s92-original-proof
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grimmory-k8s92-original-proof
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []

@@ -8,6 +8,7 @@ resources:
 - ./kopiur-policy.yaml
 - ./kopiur-original.yaml
 - ./kopiur-original-restores.yaml
+- ./kopiur-original-proof.yaml
 - ./kopiur-replication.yaml
 - ../../../../templates/volsync
 - ./secret.sops.yaml

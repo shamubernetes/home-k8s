@@ -136,10 +136,43 @@ class OriginalTests(unittest.TestCase):
         text = SCRIPT.read_text()
         workflow = (ROOT / ".github/workflows/recovery-verify.yaml").read_text()
         self.assertIn('reader_timeout = 1800 if app == "whisparr" else 900', text)
-        self.assertIn('str(reader_timeout + 600) if app == "whisparr" else "1800"', text)
+        self.assertIn('transfer_timeout = reader_timeout if app == "whisparr" else 300', text)
+        self.assertIn('str(reader_timeout + transfer_timeout + 600) if app == "whisparr" else "1800"', text)
         self.assertIn("stdin=body.encode(), check=False, timeout=reader_timeout)", text)
         self.assertIn("inputs.suite == 'postgres-whisparr-original' && 75 || 45", workflow)
         self.assertIn("--readonly >/dev/null", text)
+
+    def test_transfer_and_restorer_lifetime_use_the_effective_scoped_budget(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest import mock
+
+        for app in ("bazarr", "radarr", "sonarr", "whisparr"):
+            calls = []
+            transfer = {}
+
+            def run(*args, **kwargs):
+                calls.append(args)
+                nonce = args[-1].split("-")[-2] if args[:2] == ("docker", "inspect") else ""
+                return SimpleNamespace(returncode=0, stdout=(nonce + "\n").encode())
+
+            def at_transfer(*args, **kwargs):
+                transfer.update(kwargs)
+                raise RuntimeError("stopped at transfer boundary")
+
+            scope = M["qualify"].__globals__
+            with self.subTest(app=app), tempfile.TemporaryDirectory() as temporary, \
+                    mock.patch.dict(scope["os"].environ, {"RUNNER_TEMP": temporary}), \
+                    mock.patch.dict(scope, {"validate_fields": lambda fields, app: None,
+                                           "originals_for": lambda app: {"nas": "a" * 32, "r2": "b" * 32},
+                                           "run": run}), \
+                    mock.patch.object(scope["subprocess"], "run", side_effect=at_transfer):
+                with self.assertRaisesRegex(RuntimeError, "stopped at transfer boundary"):
+                    M["qualify"](self.fields(), app)
+                self.assertEqual(transfer["timeout"], 1800 if app == "whisparr" else 300)
+                restorer = next(args for args in calls if args[:3] == ("docker", "run", "-d"))
+                self.assertEqual(restorer[-1], "4200" if app == "whisparr" else "1800")
+                self.assertTrue(any(args[:3] == ("docker", "rm", "-fv") for args in calls))
 
     def test_whisparr_original_ids_are_exact_distinct_and_do_not_change_other_apps(self):
         from unittest import mock
@@ -184,6 +217,49 @@ class OriginalTests(unittest.TestCase):
                         M["extract_original"](archive, root / "restored", database=databases)
             with self.assertRaises(ValueError):
                 M["extract_original"](archive, root / "restored", database=["whisparrv3_main"])
+
+    def test_stage_timings_do_not_print_arguments_results_or_exception_text(self):
+        import io
+        from contextlib import redirect_stdout
+        from unittest import mock
+        for fails in (False, True):
+            def operation(secret):
+                if fails:
+                    raise ValueError(secret)
+                return secret
+            output = io.StringIO()
+            with self.subTest(fails=fails), redirect_stdout(output), \
+                    mock.patch.object(M["time"], "monotonic", side_effect=[10, 12.5]):
+                if fails:
+                    with self.assertRaises(ValueError):
+                        M["original_stage"]("nas", "native-restore", operation, "SECRET_CANARY")
+                else:
+                    self.assertEqual(M["original_stage"]("nas", "native-restore", operation, "SECRET_CANARY"),
+                                     "SECRET_CANARY")
+            self.assertNotIn("SECRET_CANARY", output.getvalue())
+            records = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual(records[0]["state"], "started")
+            self.assertEqual(records[1]["state"], "failed" if fails else "completed")
+            self.assertEqual(records[1]["elapsed_seconds"], 2.5)
+
+    def test_nonzero_restore_and_export_are_reported_failed_without_output(self):
+        import io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+        for stage in ("native-restore", "archive-export"):
+            result = SimpleNamespace(returncode=1, stdout=b"SECRET_CANARY", stderr=b"SECRET_CANARY")
+            output = io.StringIO()
+            with self.subTest(stage=stage), redirect_stdout(output):
+                self.assertIs(M["original_stage"]("nas", stage, lambda: result), result)
+            self.assertNotIn("SECRET_CANARY", output.getvalue())
+            self.assertEqual(json.loads(output.getvalue().splitlines()[-1])["state"], "failed")
+
+    def test_native_progress_reports_validation_entry_not_false_success(self):
+        import tempfile
+        stages = []
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaises(FileNotFoundError):
+            M["NATIVE"]["restore_pvc"](Path(temporary), "whisparr", observe=stages.append)
+        self.assertEqual(stages, ["bundle-validation"])
 
     def test_original_suite_retains_trusted_dispatch_boundary(self):
         text = (ROOT / ".github/workflows/recovery-verify.yaml").read_text()

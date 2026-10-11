@@ -116,8 +116,8 @@ kind: SnapshotReplication
 metadata:
   name: whisparr-nas-to-r2
   annotations:
-    # Retry unchanged full-history replication after the retained paired seed.
-    kopiur.home-operations.com/run-requested: "2026-10-11T01:37:00Z"
+    # Observe native full-history progress after original NAS/R2 recovery passed.
+    kopiur.home-operations.com/run-requested: "2026-10-11T05:16:10Z"
 spec:
   sourceRef:
     kind: Repository

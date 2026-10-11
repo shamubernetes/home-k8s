@@ -13,6 +13,18 @@ spec:
   description: K8S-92 original stopped whole-store and runtime escrow
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt only the independently restored original R2 point, without replacing it.
+  name: atproto-pds-nas-to-r2-copy-cf12bfa9f369fb32-fc7a9cb9
+spec:
+  repository:
+    kind: Repository
+    name: atproto-pds-r2
+    namespace: services
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotSchedule
 metadata:
   name: atproto-pds-primary

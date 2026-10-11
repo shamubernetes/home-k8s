@@ -316,16 +316,30 @@ class RadarrQuiescenceTests(unittest.TestCase):
         (self.state / "active").write_text(str(deadline) + "\n")
 
     def test_deadline_is_absolute_and_expiry_restores_native_command(self):
-        deadline = int(time.time()) + 3
+        # Drive the clock explicitly: a busy ARC can consume a real 3s lease
+        # before the assertion, without any production watchdog defect.
+        now = int(time.time())
+        clock = self.base / "clock"
+        clock.write_text(str(now))
+        bin_dir = self.base / "bin"
+        bin_dir.mkdir()
+        date = bin_dir / "date"
+        date.write_text('#!/bin/sh\nexec cat "$TEST_CLOCK"\n')
+        date.chmod(0o700)
+        self.env.update(TEST_CLOCK=str(clock), PATH=str(bin_dir) + os.pathsep + self.env["PATH"])
+        deadline = now + 3
         process = subprocess.Popen(["sh", self.script, "start", str(deadline), *self.command],
                                    env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
-            for _ in range(40):
-                if (self.state / "active").exists():
-                    break
+            ready_by = time.monotonic() + 10
+            while not (self.state / "active").exists() and time.monotonic() < ready_by:
                 time.sleep(0.025)
+            self.assertTrue((self.state / "active").exists())
             self.assertFalse((self.base / "resumed").exists())
             self.assertEqual(self.call("check", deadline, 1).returncode, 0)
+            next_clock = self.base / "clock.next"
+            next_clock.write_text(str(deadline))
+            next_clock.replace(clock)
             self.assertEqual(process.wait(timeout=6), 0)
             self.assertEqual((self.base / "resumed").read_text(), "resumed")
             self.assertFalse((self.state / "active").exists())

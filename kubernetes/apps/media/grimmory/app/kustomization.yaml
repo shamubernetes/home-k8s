@@ -9,6 +9,7 @@ resources:
 - ./kopiur-original.yaml
 - ./kopiur-original-restores.yaml
 - ./kopiur-original-proof.yaml
+- ./kopiur-controller-consumers.yaml
 - ./kopiur-replication.yaml
 - ../../../../templates/volsync
 - ./secret.sops.yaml
@@ -16,6 +17,18 @@ resources:
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
 configMapGenerator:
+- name: grimmory-controller-consumer-contract
+  files:
+  - consumer-prepare.py
+  - consumer-database.sh
+  - consumer-app.sh
+  - consumer-verify.py
+  - restore.sh
+  - runtime.sh
+  options:
+    disableNameSuffixHash: true
+    annotations:
+      kustomize.toolkit.fluxcd.io/substitute: disabled
 - name: grimmory-backup-contract
   files:
   - backup.sh

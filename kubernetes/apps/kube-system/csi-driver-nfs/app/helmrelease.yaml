@@ -19,7 +19,7 @@ spec:
   values:
     image:
       nfs:
-        tag: v4.13.4@sha256:1eb5a85180a4ad0193a31d319b163f35c8c1857794ebaac71d8abcdd5a0516d3
+        tag: v4.13.5@sha256:19162ec4fb3f56a7e53f578721b0d5b8e9c691c27d2789aecb17e9de60a94595
       csiProvisioner:
         tag: v6.3.0@sha256:a4b0b1a37605b7b04a293e136edf7006ec1786a8eb3f4e5a945f81d667dcc371
       csiResizer:

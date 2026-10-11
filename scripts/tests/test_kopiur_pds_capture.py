@@ -112,6 +112,12 @@ fi
         self.assertNotEqual(self.run_capture().returncode, 0)
         self.assertFalse((self.store / '.kopiur-pds/COMPLETE').exists())
 
+    def test_deployed_scripts_match_arc_qualified_sources(self):
+        app = SCRIPT.parent.parent / 'kubernetes/apps/services/atproto-pds/app/kopiur-runtime'
+        self.assertEqual(SCRIPT.read_bytes(), (app / 'capture.cjs').read_bytes())
+        self.assertEqual((SCRIPT.parent / 'kopiur-pds-recurring').read_bytes(),
+                         (app / 'recurring.sh').read_bytes())
+
     def test_embedded_native_python_compiles(self):
         tree = ast.parse((SCRIPT.parent / 'kopiur_pds_native.py').read_text())
         for call in ast.walk(tree):

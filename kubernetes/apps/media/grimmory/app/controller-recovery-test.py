@@ -83,6 +83,29 @@ class ControllerTests(unittest.TestCase):
             application = next(c for c in pod['containers'] if c['name'] == 'application')
             self.assertEqual(application['livenessProbe']['httpGet']['path'], '/api/v1/healthcheck')
 
+    def test_native_database_fault_selects_exact_daemon(self):
+        source = (HERE / 'controller-database.sh').read_text()
+        self.assertNotIn('kill -TERM 1', source)
+        snippet = source.split("s6-setuidgid abc bash -c '", 1)[1].split("\n    '", 1)[0]
+        for count in (0, 1, 2):
+            with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as temporary:
+                root = Path(temporary)
+                for index in range(count):
+                    folder = root / str(index + 100)
+                    folder.mkdir()
+                    (folder / 'comm').write_text('mariadbd\n')
+                other = root / '200'
+                other.mkdir()
+                (other / 'comm').write_text('mariadbd-safe\n')
+                record = root / 'signal'
+                code = 'kill() { printf "%s %s\\n" "$1" "$2" >"' + str(record) + '"; };\n'
+                code += snippet.replace('/proc/[0-9]*/comm', str(root) + '/[0-9]*/comm')
+                result = subprocess.run(['bash', '-c', code], capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, count == 1)
+                self.assertEqual(record.exists(), count == 1)
+                if count == 1:
+                    self.assertEqual(record.read_text(), '-STOP 100\n')
+
     def test_suppressed_restart_epoch_cannot_pass(self):
         c = self.controller
         (c.CONTROL / 'database-ready').write_text(c.native.EXPECTED_DATA)

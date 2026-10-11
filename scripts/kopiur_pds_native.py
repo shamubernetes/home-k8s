@@ -236,6 +236,9 @@ p.PDS.run({onStarted:async server=>{
                  'record': {'$type': 'app.bsky.feed.post', 'text': 'before recovery',
                             'createdAt': '2026-09-26T00:00:00.000Z'}},
                 headers={'Authorization': 'Bearer ' + login['accessJwt']}))
+        # Include defaults baked into the exact image, not only fixture overrides.
+        expected_runtime = json.loads(docker('exec', app, 'node', '-e',
+            "console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k])=>k.startsWith('PDS_')||['TZ','LOG_ENABLED','LOG_LEVEL'].includes(k)))))"))
         self.quiesce_copy_resume(app, [(source, restored)])
         for number,restored in enumerate(self.restore_volumes):
             # Verify every nested actor database and key, not just a sample CAR.
@@ -256,8 +259,7 @@ print(json.dumps({'sqliteDatabases':len(dbs),'actorKeys':len(keys)}))''')
             # callback is mounted or run against recovered state.
             recovered_env = json.loads(docker('run','--rm','--network=none','-v',restored+':/data:ro',
                 PYTHON,'python3','-c',"import pathlib; print(pathlib.Path('/data/point/.recovery-runtime.json').read_text())"))
-            expected_env = {k:v for k,v in env.items() if k.startswith('PDS_') or k in ('TZ','LOG_ENABLED','LOG_LEVEL')}
-            assert recovered_env == expected_env, 'original runtime escrow differs'
+            assert recovered_env == expected_runtime, 'original effective runtime escrow differs'
             target = self.start('pds-restore-'+str(number), PDS, {restored: '/pds'}, recovered_env,
                                 volume_subpaths={restored:'point'})
             self.ready(target, '/xrpc/_health')

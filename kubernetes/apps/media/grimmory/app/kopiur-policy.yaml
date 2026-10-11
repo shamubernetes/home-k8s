@@ -4,7 +4,8 @@ kind: SnapshotPolicy
 metadata:
   name: grimmory
 spec:
-  suspend: true
+  # Manual retained original only. No schedule or pruning is enabled.
+  suspend: false
   repository:
     kind: Repository
     name: grimmory-nas-smb

@@ -1,0 +1,14 @@
+# Validated against the installed Kopiur CRDs by scripts/validate-app.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-k8s92-original
+spec:
+  policyRef:
+    name: grimmory
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    # Preserve the established original-capture mover deadline.
+    activeDeadlineSeconds: 3600
+  description: K8S-92 original native SQL and generation-bound runtime escrow

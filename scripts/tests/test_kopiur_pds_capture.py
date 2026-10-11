@@ -1,4 +1,5 @@
 """PDS-specific capture regression tests. Native Linux execution belongs to ARC."""
+import ast
 import hashlib
 import json
 import os
@@ -110,6 +111,19 @@ fi
         (self.store / '.kopiur-pds/pending').symlink_to(self.base / 'absent')
         self.assertNotEqual(self.run_capture().returncode, 0)
         self.assertFalse((self.store / '.kopiur-pds/COMPLETE').exists())
+
+    def test_embedded_native_python_compiles(self):
+        tree = ast.parse((SCRIPT.parent / 'kopiur_pds_native.py').read_text())
+        for call in ast.walk(tree):
+            if not isinstance(call, ast.Call): continue
+            for i, arg in enumerate(call.args):
+                if isinstance(arg, ast.Constant) and arg.value == 'python3':
+                    code = call.args[i + 2]
+                    if isinstance(code, ast.Constant) and isinstance(code.value, str):
+                        ast.parse(code.value)
+        source = next(n.value for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                      and isinstance(n.value, str) and "COMPLETE" in n.value)
+        self.assertIn("'complete\\n'", source)
 
     def test_acquisition_failure_and_broken_helper_symlink(self):
         self.assertNotEqual(self.run_capture(FAIL_ACQUIRE='1').returncode, 0)

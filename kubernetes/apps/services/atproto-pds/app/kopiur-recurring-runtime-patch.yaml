@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: atproto-pds
+spec:
+  interval: 10m
+  # Match the established 30m bounded supervisor plus native startup allowance.
+  timeout: 35m
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: atproto-pds
+        patch: |
+          - op: add
+            path: /spec/progressDeadlineSeconds
+            value: 2100
+          - op: test
+            path: /spec/template/spec/containers/0/name
+            value: app
+          - op: add
+            path: /spec/template/spec/containers/0/livenessProbe/httpGet
+            value: null
+  values:
+    controllers:
+      atproto-pds:
+        containers:
+          app:
+            # Preserve the exact image's dumb-init entrypoint and native command.
+            command: [dumb-init, --, sh, /kopiur/recurring.sh, supervise, node, --enable-source-maps, index.ts]
+            env:
+              QUIESCENCE_STATE_DIR: /pds/.kopiur-pds/coordination
+              PDS_CAPTURE_SUPERVISOR: /kopiur/recurring.sh
+            probes:
+              startup:
+                spec:
+                  periodSeconds: 10
+                  failureThreshold: 210
+              liveness:
+                spec:
+                  httpGet: null
+                  exec:
+                    command: [node, /kopiur/capture.cjs, liveness]
+                  timeoutSeconds: 5
+    persistence:
+      kopiur-recurring:
+        type: configMap
+        name: atproto-pds-kopiur-recurring
+        advancedMounts:
+          atproto-pds:
+            app:
+            - path: /kopiur
+              readOnly: true

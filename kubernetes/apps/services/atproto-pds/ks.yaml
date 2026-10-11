@@ -11,6 +11,8 @@ spec:
       app.kubernetes.io/name: *app
   dependsOn:
   - name: external-secrets-secret-store
+  - name: kopiur
+  - name: kyverno-policies
   path: ./kubernetes/apps/services/atproto-pds/app
   prune: true
   sourceRef:

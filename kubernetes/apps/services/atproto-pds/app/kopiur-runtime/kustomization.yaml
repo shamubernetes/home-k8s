@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+- name: atproto-pds-kopiur-recurring
+  files:
+  - recurring.sh
+  - capture.cjs
+  options:
+    disableNameSuffixHash: true
+    labels:
+      app.kubernetes.io/name: atproto-pds

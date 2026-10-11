@@ -1,0 +1,61 @@
+# Validated against the installed Kopiur CRD by scripts/validate-app.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: atproto-pds
+  annotations:
+    kopiur.home.arpa/native-capture-qualification: https://github.com/shamubernetes/home-k8s/actions/runs/38128895678
+spec:
+  # One original capture first. Recurring protection waits for original recovery.
+  suspend: false
+  repository:
+    kind: Repository
+    name: atproto-pds-nas-smb
+  identity:
+    username: atproto-pds
+    hostname: services
+  sources:
+  - pvc:
+      name: atproto-pds
+    sourcePathOverride: /pvc/atproto-pds
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes: [ReadWriteOnce]
+  defaultDeletionPolicy: Retain
+  files:
+    ignoreRules:
+    - /lost+found
+    - System Volume Information
+    - $RECYCLE.BIN
+    - '@eaDir'
+    - .snapshot
+    - /.kopiur-pds/previous
+    - /.kopiur-pds/pending
+    - /.kopiur-pds/coordination
+    - /.kopiur-pds/capture.lock
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: atproto-pds
+            app.kubernetes.io/controller: atproto-pds
+        container: app
+        command:
+        - sh
+        - -c
+        - >-
+          set -eu; lock=/pds/.kopiur-pds/capture.lock;
+          [ ! -L "$lock" ] && { [ ! -e "$lock" ] || [ -f "$lock" ]; };
+          exec timeout 720 flock -n "$lock" node /kopiur/capture.cjs capture
+        timeout: 13m
+        continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch

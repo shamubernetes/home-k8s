@@ -1,0 +1,449 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-v1.json
+# Disposable native consumers, exact original PVCs read-only. No production runtime Secret or media mounts.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grimmory-k8s92-consumer-nas
+spec:
+  activeDeadlineSeconds: 900
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grimmory-k8s92-consumer
+        k8s92-backend: nas
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare
+          image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+          command:
+            - python3
+            - -B
+            - /contract/consumer-prepare.py
+          volumeMounts:
+            - name: original
+              mountPath: /data/restored
+              readOnly: true
+            - name: appdata
+              mountPath: /appdata
+              readOnly: false
+            - name: tools
+              mountPath: /tools
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+            runAsUser: 0
+            runAsGroup: 568
+            runAsNonRoot: false
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+        - name: database
+          image: docker.io/linuxserver/mariadb:11.8.8@sha256:fa63c6ff84bd6bab0a188d68e1b4cd1e4e1b34c22101fc52d544a53dfd502d45
+          command:
+            - bash
+            - -c
+            - set -a; source /tools/database.env; set +a; exec /init >/private/database.log 2>&1
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+              readOnly: true
+            - name: control
+              mountPath: /control
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+            - name: original
+              mountPath: /original
+              readOnly: true
+            - name: database
+              mountPath: /config
+              readOnly: false
+            - name: private
+              mountPath: /private
+              readOnly: false
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsUser: 0
+            runAsGroup: 568
+            runAsNonRoot: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - SETUID
+                - SETGID
+                - FOWNER
+                - DAC_OVERRIDE
+          resources:
+            requests:
+              cpu: 25m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          restartPolicy: Always
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - bash
+                  - -c
+                  - bash /contract/consumer-database.sh >/private/database-bootstrap.log 2>&1 &
+        - name: application
+          image: docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526
+          command:
+            - sh
+            - /contract/consumer-app.sh
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+              readOnly: true
+            - name: control
+              mountPath: /control
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+            - name: appdata
+              mountPath: /app/data
+              readOnly: false
+            - name: app-tmp
+              mountPath: /tmp
+            - name: private
+              mountPath: /private
+              readOnly: false
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 568
+            runAsGroup: 568
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          restartPolicy: Always
+      containers:
+        - name: verify
+          image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+          command:
+            - python3
+            - -B
+            - /contract/consumer-verify.py
+          volumeMounts:
+            - name: control
+              mountPath: /control
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 568
+            runAsGroup: 568
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          env:
+            - name: BACKEND
+              value: nas
+      volumes:
+        - name: original
+          persistentVolumeClaim:
+            claimName: grimmory-k8s92-original-nas
+            readOnly: true
+        - name: contract
+          configMap:
+            name: grimmory-controller-consumer-contract
+            defaultMode: 292
+        - name: tools
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        - name: control
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: private
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: appdata
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+        - name: app-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+        - name: database
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grimmory-k8s92-consumer-r2
+spec:
+  activeDeadlineSeconds: 900
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grimmory-k8s92-consumer
+        k8s92-backend: r2
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare
+          image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+          command:
+            - python3
+            - -B
+            - /contract/consumer-prepare.py
+          volumeMounts:
+            - name: original
+              mountPath: /data/restored
+              readOnly: true
+            - name: appdata
+              mountPath: /appdata
+              readOnly: false
+            - name: tools
+              mountPath: /tools
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+            runAsUser: 0
+            runAsGroup: 568
+            runAsNonRoot: false
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+        - name: database
+          image: docker.io/linuxserver/mariadb:11.8.8@sha256:fa63c6ff84bd6bab0a188d68e1b4cd1e4e1b34c22101fc52d544a53dfd502d45
+          command:
+            - bash
+            - -c
+            - set -a; source /tools/database.env; set +a; exec /init >/private/database.log 2>&1
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+              readOnly: true
+            - name: control
+              mountPath: /control
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+            - name: original
+              mountPath: /original
+              readOnly: true
+            - name: database
+              mountPath: /config
+              readOnly: false
+            - name: private
+              mountPath: /private
+              readOnly: false
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsUser: 0
+            runAsGroup: 568
+            runAsNonRoot: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - SETUID
+                - SETGID
+                - FOWNER
+                - DAC_OVERRIDE
+          resources:
+            requests:
+              cpu: 25m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          restartPolicy: Always
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - bash
+                  - -c
+                  - bash /contract/consumer-database.sh >/private/database-bootstrap.log 2>&1 &
+        - name: application
+          image: docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526
+          command:
+            - sh
+            - /contract/consumer-app.sh
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+              readOnly: true
+            - name: control
+              mountPath: /control
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+            - name: appdata
+              mountPath: /app/data
+              readOnly: false
+            - name: app-tmp
+              mountPath: /tmp
+            - name: private
+              mountPath: /private
+              readOnly: false
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 568
+            runAsGroup: 568
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          restartPolicy: Always
+      containers:
+        - name: verify
+          image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+          command:
+            - python3
+            - -B
+            - /contract/consumer-verify.py
+          volumeMounts:
+            - name: control
+              mountPath: /control
+              readOnly: false
+            - name: contract
+              mountPath: /contract
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 568
+            runAsGroup: 568
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          env:
+            - name: BACKEND
+              value: r2
+      volumes:
+        - name: original
+          persistentVolumeClaim:
+            claimName: grimmory-k8s92-original-r2
+            readOnly: true
+        - name: contract
+          configMap:
+            name: grimmory-controller-consumer-contract
+            defaultMode: 292
+        - name: tools
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        - name: control
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: private
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: appdata
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+        - name: app-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+        - name: database
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grimmory-k8s92-consumer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grimmory-k8s92-consumer
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

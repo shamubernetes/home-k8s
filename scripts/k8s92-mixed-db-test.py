@@ -111,12 +111,13 @@ def grimmory():
                        'DATABASE_USERNAME': 'grimmory', 'DATABASE_PASSWORD': database_env['MYSQL_PASSWORD'],
                        'USER_ID': '568', 'GROUP_ID': '568', 'FORCE_DISABLE_OIDC': 'true',
                        'JAVA_TOOL_OPTIONS': '-Xmx384m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 --enable-preview'}
-    dbdata, appdata = volume('source-db'), volume('source-app')
+    dbdata, appdata, runtime_data = volume('source-db'), volume('source-app'), volume('source-runtime')
     database = start('database-source', MARIA, net, database_env,
-                     ((dbdata, '/config', False), (appdata, '/app-runtime', True)))
+                     ((dbdata, '/config', False), (runtime_data, '/runtime-escrow', True)))
     wait(lambda: sql(database, 'SELECT 1', ok=False).returncode == 0)
     app = start('app-source', GRIMM, 'container:' + database, application_env,
-                ((appdata, '/app/data', False), (dbdata, '/database-state', True)))
+                ((appdata, '/app/data', False), (dbdata, '/database-state', True),
+                 (runtime_data, '/runtime-escrow', False)))
     wait(lambda: health(app))
     helpers(database)
     helpers(app)
@@ -125,10 +126,21 @@ def grimmory():
                   "CREATE VIEW grimmory.lane_view AS SELECT id FROM grimmory.lane_fixture;"
                   "CREATE PROCEDURE grimmory.lane_proc() SELECT COUNT(*) FROM grimmory.lane_fixture;")
     if runtime:
+        docker('exec', app, 'sh', '-c', 'mkdir -p /app/data/native-config; printf "synthetic-config" >/app/data/native-config/value')
+        docker('exec', app, 'sh', '/runtime.sh', 'capture')
+        assert docker('exec', '--user=568:568', app, 'sh', '-c',
+                      'printf unsafe > /runtime-escrow/.lock', ok=False).returncode != 0
+        # Even a preexisting link must not redirect a root control write.
+        docker('exec', app, 'sh', '-c',
+               'printf preserve >/app/data/control-victim; rm /runtime-escrow/.lock; '
+               'ln -s /app/data/control-victim /runtime-escrow/.lock')
+        assert docker('exec', app, 'sh', '/runtime.sh', 'capture', ok=False).returncode != 0
+        assert docker('exec', app, 'cat', '/app/data/control-victim').stdout == b'preserve'
+        docker('exec', app, 'rm', '/runtime-escrow/.lock', '/app/data/control-victim')
         docker('exec', app, 'sh', '/runtime.sh', 'capture')
         # Every captured file, including control files, must be readable by UID568.
         docker('exec', database, 's6-setuidgid', 'abc', 'sh', '-c',
-               'find /app-runtime/.kopiur-runtime -type f -exec cat {} + >/dev/null')
+               'find /runtime-escrow -type f -exec cat {} + >/dev/null')
     hook(database)
     if runtime:
         docker('exec', '-e', 'GRIMMORY_DB_BUNDLE=/database-state/kopiur', app,
@@ -162,6 +174,15 @@ def grimmory():
         assert restore(False).returncode != 0
         docker('exec', restored, 'bash', '-c',
                'mv /restore/original.sql /restore/grimmory.sql; cd /restore; sha256sum grimmory.sql >grimmory.sql.sha256')
+        docker('exec', restored, 'bash', '-c',
+               'cp /restore/runtime/runtime.sha256 /restore/original-runtime.sha256; '
+               'cd /restore/runtime; sha256sum runtime.txt >runtime.sha256; '
+               'digest=$(sha256sum runtime.sha256 | cut -d" " -f1); '
+               'sed -i "s/^runtime_manifest_sha256=.*/runtime_manifest_sha256=$digest/" /restore/manifest.txt')
+        assert restore(False).returncode != 0
+        # Restore the immutable original bundle, not a patched generation.
+        docker('exec', restored, 'rm', '-rf', '/restore')
+        docker('cp', str(SCRATCH / 'bundle'), restored + ':/restore')
     restore()
     assert sql(restored, 'SELECT HEX(body),text_value FROM grimmory.lane_fixture').stdout == original
     assert sql(restored, 'CALL grimmory.lane_proc()').stdout.strip() == b'1'
@@ -169,16 +190,28 @@ def grimmory():
     if runtime:
         env0 = (SCRATCH / 'bundle/runtime/application.env0').read_bytes()
         application_env = dict(item.decode().split('=', 1) for item in env0.split(b'\0') if item)
-    def setup(name):
-        if runtime:
-            docker('cp', str(SCRATCH / 'bundle/runtime/app-data.tar'), name + ':/recovered-app-data.tar')
-            # docker exec is unavailable before boot. Existing empty fixture data
-            # is qualified here; nonempty production data needs the original reader.
-            with __import__('tarfile').open(SCRATCH / 'bundle/runtime/app-data.tar') as archive:
-                assert all(member.isdir() for member in archive.getmembers())
+    restored_appdata = volume('restore-app')
+    if runtime:
+        import tarfile
+        with tarfile.open(SCRATCH / 'bundle/runtime/app-data.tar') as archive:
+            for member in archive.getmembers():
+                path = Path(member.name)
+                assert not path.is_absolute() and '..' not in path.parts
+                assert member.isdir() or member.isfile()
+        # Extract into the fresh disposable volume while the native app is absent.
+        tool = PREFIX + '-unpack'
+        CONTAINERS.append(tool)
+        docker('create', '--name', tool, '--network', 'none', '--entrypoint', 'sleep',
+               '-v', restored_appdata + ':/app/data', GRIMM, 'infinity')
+        docker('start', tool)
+        docker('cp', str(SCRATCH / 'bundle/runtime/app-data.tar'), tool + ':/app-data.tar')
+        docker('exec', tool, 'tar', '-xf', '/app-data.tar', '-C', '/app/data')
+        remove(tool)
     restored_app = start('app-restored', GRIMM, 'container:' + restored, application_env,
-                         ((volume('restore-app'), '/app/data', False),), setup=setup)
+                         ((restored_appdata, '/app/data', False),))
     wait(lambda: health(restored_app))
+    if runtime:
+        assert docker('exec', restored_app, 'cat', '/app/data/native-config/value').stdout == b'synthetic-config'
     assert sql(restored, 'SELECT HEX(body),text_value FROM grimmory.lane_fixture').stdout == original
     print(json.dumps({'suite': 'mixed-grimmory', 'scope': 'synthetic prerequisite, not original NAS/R2',
                       'production_images': True, 'runtime_bundle': runtime,

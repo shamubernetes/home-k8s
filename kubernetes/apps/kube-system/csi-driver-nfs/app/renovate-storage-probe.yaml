@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/v1/persistentvolumeclaim.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: csi-nfs-renovate-probe-20261011
+  labels:
+    app.kubernetes.io/name: csi-nfs-renovate-probe
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-csi
+  resources:
+    requests:
+      storage: 1Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: csi-nfs-renovate-probe-20261011
+  labels:
+    app.kubernetes.io/name: csi-nfs-renovate-probe
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 568
+    runAsGroup: 568
+    fsGroup: 568
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: probe
+      image: docker.io/library/busybox:latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
+      command: [sh, -ec]
+      args:
+        - |
+          umask 077
+          printf 'csi-nfs-probe\n' > /probe/receipt
+          sync
+          printf 'csi-nfs-probe\n' | cmp - /probe/receipt
+          sha256sum /probe/receipt
+          rm /probe/receipt
+          printf 'NFS provision, mount, write, sync, read and owned receipt cleanup passed\n'
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 8Mi
+        limits:
+          memory: 32Mi
+      volumeMounts:
+        - name: probe
+          mountPath: /probe
+  volumes:
+    - name: probe
+      persistentVolumeClaim:
+        claimName: csi-nfs-renovate-probe-20261011

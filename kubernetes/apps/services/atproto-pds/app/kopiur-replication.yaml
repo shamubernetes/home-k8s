@@ -1,0 +1,30 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: atproto-pds-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: atproto-pds-nas-smb
+  destinationRef:
+    kind: Repository
+    name: atproto-pds-r2
+  schedule:
+    cron: "30 6 * * *"
+    jitter: 15m
+  selection:
+    identities:
+      include:
+      - username: atproto-pds
+        hostname: services
+        sourcePath: /pvc/atproto-pds
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  # Parent enables after a complete capture, credentials and shared guards.
+  suspend: true

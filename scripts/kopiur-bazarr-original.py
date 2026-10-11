@@ -129,6 +129,9 @@ def qualify(fields, app="bazarr"):
         # The original Whisparr NAS bundle exceeded the small-reader 900s limit.
         # Bound only its read-only restore; production capture/hold is unchanged.
         reader_timeout = 1800 if app == "whisparr" else 900
+        # The complete Whisparr bundle exceeded the 300s ARC-local tar transfer.
+        # Reuse its bounded reader budget; production capture/hold is unchanged.
+        transfer_timeout = reader_timeout if app == "whisparr" else 300
         with tempfile.TemporaryDirectory(prefix="bazarr-original-", dir=os.environ["RUNNER_TEMP"]) as temporary:
             for kind, snapshot in originals.items():
                 name = "k8s92-bazarr-original-" + nonce + "-" + kind
@@ -138,7 +141,8 @@ def qualify(fields, app="bazarr"):
                     "--memory", f"{capacity_mib + 1024 if large_app else capacity_mib}m", "--tmpfs", "/tmp:rw,nosuid,size=16m,mode=1777",
                     "--tmpfs", f"/work:rw,nosuid,size={capacity_mib}m,uid=568,gid=568,mode=0700",
                     "--mount", "type=volume,src=" + tools + ",dst=/tools,readonly,volume-nocopy",
-                    "--entrypoint", "/tools/busybox", MOVER, "sleep", str(reader_timeout + 600) if app == "whisparr" else "1800")
+                    "--entrypoint", "/tools/busybox", MOVER, "sleep",
+                    str(reader_timeout + transfer_timeout + 600) if app == "whisparr" else "1800")
                 values = {"HOME": "/work", "PATH": "/tools:/usr/local/bin:/usr/bin:/bin", "TMPDIR": "/work/tmp",
                           "KOPIA_PASSWORD": fields["NAS_KOPIA_PASSWORD" if kind == "nas" else "R2_KOPIA_PASSWORD"],
                           "KOPIA_CONFIG_PATH": "/work/repository.config", "KOPIA_LOG_DIR": "/work/log",
@@ -190,7 +194,7 @@ def qualify(fields, app="bazarr"):
                 with archive.open("wb") as stream:
                     copied = subprocess.run(["docker", "exec", name, "/tools/busybox", "tar",
                         "-C", "/work/restored", "-cf", "-", ".kopiur-postgres/COMPLETE", ".kopiur-postgres/current"],
-                        stdout=stream, stderr=subprocess.PIPE, timeout=300)
+                        stdout=stream, stderr=subprocess.PIPE, timeout=transfer_timeout)
                 if copied.returncode:
                     raise RuntimeError("original " + kind + " transfer failed")
                 extract_original(archive, source, database=database,

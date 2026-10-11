@@ -136,10 +136,43 @@ class OriginalTests(unittest.TestCase):
         text = SCRIPT.read_text()
         workflow = (ROOT / ".github/workflows/recovery-verify.yaml").read_text()
         self.assertIn('reader_timeout = 1800 if app == "whisparr" else 900', text)
-        self.assertIn('str(reader_timeout + 600) if app == "whisparr" else "1800"', text)
+        self.assertIn('transfer_timeout = reader_timeout if app == "whisparr" else 300', text)
+        self.assertIn('str(reader_timeout + transfer_timeout + 600) if app == "whisparr" else "1800"', text)
         self.assertIn("stdin=body.encode(), check=False, timeout=reader_timeout)", text)
         self.assertIn("inputs.suite == 'postgres-whisparr-original' && 75 || 45", workflow)
         self.assertIn("--readonly >/dev/null", text)
+
+    def test_transfer_and_restorer_lifetime_use_the_effective_scoped_budget(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest import mock
+
+        for app in ("bazarr", "radarr", "sonarr", "whisparr"):
+            calls = []
+            transfer = {}
+
+            def run(*args, **kwargs):
+                calls.append(args)
+                nonce = args[-1].split("-")[-2] if args[:2] == ("docker", "inspect") else ""
+                return SimpleNamespace(returncode=0, stdout=(nonce + "\n").encode())
+
+            def at_transfer(*args, **kwargs):
+                transfer.update(kwargs)
+                raise RuntimeError("stopped at transfer boundary")
+
+            scope = M["qualify"].__globals__
+            with self.subTest(app=app), tempfile.TemporaryDirectory() as temporary, \
+                    mock.patch.dict(scope["os"].environ, {"RUNNER_TEMP": temporary}), \
+                    mock.patch.dict(scope, {"validate_fields": lambda fields, app: None,
+                                           "originals_for": lambda app: {"nas": "a" * 32, "r2": "b" * 32},
+                                           "run": run}), \
+                    mock.patch.object(scope["subprocess"], "run", side_effect=at_transfer):
+                with self.assertRaisesRegex(RuntimeError, "stopped at transfer boundary"):
+                    M["qualify"](self.fields(), app)
+                self.assertEqual(transfer["timeout"], 1800 if app == "whisparr" else 300)
+                restorer = next(args for args in calls if args[:3] == ("docker", "run", "-d"))
+                self.assertEqual(restorer[-1], "4200" if app == "whisparr" else "1800")
+                self.assertTrue(any(args[:3] == ("docker", "rm", "-fv") for args in calls))
 
     def test_whisparr_original_ids_are_exact_distinct_and_do_not_change_other_apps(self):
         from unittest import mock

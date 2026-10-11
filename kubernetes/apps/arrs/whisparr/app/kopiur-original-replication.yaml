@@ -4,7 +4,7 @@ kind: SnapshotReplication
 metadata:
   name: whisparr-k8s92-original-to-r2
   annotations:
-    kopiur.home-operations.com/run-requested: "2026-10-10T05:35:00Z"
+    kopiur.home-operations.com/run-requested: "2026-10-11T00:39:00Z"
 spec:
   sourceRef:
     kind: Repository
@@ -12,7 +12,8 @@ spec:
   destinationRef:
     kind: Repository
     name: whisparr-r2
-  # Copy the retained original without pruning; regular replication stays suspended.
+  # One supplemental paired seed; normal full-history replication is unchanged.
+  # Restore this original lane to suspended/full-history before its next daily slot.
   schedule:
     cron: "0 8 * * *"
     jitter: 10m
@@ -22,10 +23,10 @@ spec:
       - username: whisparr
         hostname: arrs
         sourcePath: /pvc/whisparr
-    latestOnly: false
+    latestOnly: true
   migrate:
     parallel: 2
     policies: none
   pruning:
     none: {}
-  suspend: true
+  suspend: false

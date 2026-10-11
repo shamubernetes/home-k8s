@@ -23,7 +23,7 @@ IMAGE = "ghcr.io/home-operations/kopiur-mover@sha256:49d3c4cb6fce429bad8ec9f694f
 TOOL_IMAGE = "docker.io/library/busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092"
 TOOLS = ""
 ACCOUNT = "0834f4848c703f1fcf5b524bdf5f1722"
-APPS = {"atproto-pds"}
+APPS = {"grimmory"}
 
 
 def run(args, *, stdin=None, check=True, timeout=180.0):
@@ -204,6 +204,12 @@ def exercise_payload(payload, deadline=None):
     assert dict(config["mnemosyne"]) == {"type": "smb", "host": "10.100.47.100",
         "user": "kp-" + app, "domain": "WORKGROUP", "pass": config["mnemosyne"]["pass"]}
     assert config["mnemosyne"]["pass"]
+    if app == 'grimmory':
+        if 'original' not in payload:
+            raise ValueError('Grimmory requires the retained-original contract')
+        import kopiur_grimmory_original
+        return kopiur_grimmory_original.exercise(sys.modules[__name__], payload,
+                                                deadline or time.monotonic()+1200)
     if "original" in payload:
         import kopiur_pds_original
         return kopiur_pds_original.exercise(sys.modules[__name__], payload,
@@ -270,10 +276,17 @@ def main():
     global TOOLS
     if sys.platform != "linux" or not os.environ.get("RUNNER_NAME"):
         raise RuntimeError("identity drill requires an assigned Linux ARC runner")
-    import kopiur_pds_native
-    run(['docker', 'pull', kopiur_pds_native.PDS], timeout=600)
+    if APPS == {'grimmory'}:
+        import kopiur_grimmory_original
+        for image in (kopiur_grimmory_original.MARIA, kopiur_grimmory_original.GRIMM):
+            run(['docker', 'pull', image], timeout=600)
+        test_pattern = 'test_kopiur_grimmory_original.py'
+    else:
+        import kopiur_pds_native
+        run(['docker', 'pull', kopiur_pds_native.PDS], timeout=600)
+        test_pattern = 'test_kopiur_pds_capture.py'
     subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts/tests',
-                    '-p', 'test_kopiur_pds_capture.py', '-v'], check=True, timeout=300)
+                    '-p', test_pattern, '-v'], check=True, timeout=300)
     # Production is distroless. Supply credential-free static shell tooling from
     # a pinned image in a separate read-only volume. Kopia/rclone remain exactly
     # the production image binaries; no secret or application bytes enter tools.

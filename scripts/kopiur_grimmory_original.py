@@ -108,6 +108,13 @@ print(json.dumps({'original_runtime_hash':__import__('hashlib').sha256((r/'appli
 '''
 
 
+def verify_network(info, database_id, *, database=False):
+    host = info['HostConfig']
+    assert not host.get('PortBindings') and host['LogConfig']['Type'] == 'none'
+    # Docker normalizes a container network reference to the full container ID.
+    assert host['NetworkMode'] == ('none' if database else 'container:' + database_id)
+
+
 def data_digest(database):
     cmd = ('MYSQL_PWD="$MYSQL_PASSWORD" mariadb-dump --protocol=tcp -h127.0.0.1 -u"$MYSQL_USER" '
            '--skip-comments --compact --no-create-info --skip-add-locks --skip-disable-keys '
@@ -192,10 +199,11 @@ def exercise(identity, payload, deadline):
             native.docker('restart',app)
             wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
             if data_digest(database)!=original['data_sha256']:raise ValueError('data differs after native app restart')
+            database_id = json.loads(native.docker('inspect',database))[0]['Id']
+            assert re.fullmatch(r'[0-9a-f]{64}', database_id)
             for c in (app,database):
                 info=json.loads(native.docker('inspect',c))[0]
-                assert not info['HostConfig'].get('PortBindings') and info['HostConfig']['LogConfig']['Type']=='none'
-                assert info['HostConfig']['NetworkMode']==('none' if c==database else 'container:'+database)
+                verify_network(info, database_id, database=c==database)
             receipt.update(backend=kind,snapshot_id=point['id'],start_time=point['startTime'],end_time=point['endTime'],
                 original_data_sha256=original['data_sha256'],original_runtime_config_equal=True,
                 native_health=True,native_container_restart_equal=True,networked_reader_removed_before_boot=True,

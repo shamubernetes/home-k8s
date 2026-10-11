@@ -90,6 +90,20 @@ class OriginalTests(unittest.TestCase):
             result = self.execute_check(file_mode=mode)
             self.assertNotEqual(result.returncode, 0)
 
+    def test_normalized_network_reference(self):
+        identifier = 'd'*64
+        host = {'PortBindings': {}, 'LogConfig': {'Type': 'none'},
+                'NetworkMode': 'container:'+identifier}
+        original.verify_network({'HostConfig': host}, identifier)
+        host['NetworkMode'] = 'none'
+        original.verify_network({'HostConfig': host}, identifier, database=True)
+        for mode in ('bridge', 'host', 'container:'+('e'*64), 'container:friendly-name'):
+            host['NetworkMode'] = mode
+            with self.assertRaises(AssertionError):original.verify_network({'HostConfig': host}, identifier)
+        host['NetworkMode'] = 'container:'+identifier
+        host['PortBindings'] = {'6060/tcp': [{'HostPort': '6060'}]}
+        with self.assertRaises(AssertionError):original.verify_network({'HostConfig': host}, identifier)
+
     def test_reader_and_boot_boundaries(self):
         source = Path(original.__file__).read_text()
         self.assertIn('--readonly', source)

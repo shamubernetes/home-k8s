@@ -156,6 +156,70 @@ class OriginalTests(unittest.TestCase):
                 drill.ready('owned','/xrpc/_health')
             run.assert_not_called()
 
+    def consumer(self, changed_api=False, uncleared=False, live_writer=False,
+                 expired_release=False, premature_watchdog=False, lost_replacement=False):
+        drill=mock.Mock()
+        api=[{'repo':{'rev':'original'},'car_sha256':'a'*64}]
+        phase=0; replaced=False
+        request='generation '+('ab'*16)+' 100\n'
+        def docker(*args, **kwargs):
+            nonlocal phase,replaced
+            if 'acquire' in args:
+                phase+=1;replaced=False
+            if args==('restart','owned'):replaced=True
+            if args[:3]==('exec','owned','node'):
+                if 'writer-stopped' in args[-1]:
+                    return 'writer-live' if live_writer else 'writer-stopped'
+                if 'const healthAt' in args[-1]:
+                    now=101 if phase!=1 or expired_release else 70
+                    health_at=99 if phase==2 and premature_watchdog else now
+                    return json.dumps({'request':request if uncleared else None,
+                                       'active':request if uncleared else None,
+                                       'healthAt':health_at,'now':now})
+                return json.dumps({'request':None if replaced and lost_replacement else request,
+                                   'active':request,'now':60})
+            return ''
+        with mock.patch.object(original.native,'docker',side_effect=docker) as calls, \
+                mock.patch.object(original.os,'urandom',return_value=bytes.fromhex('ab'*16)), \
+                mock.patch.object(original,'original_api',return_value=([] if changed_api else api,2)):
+            result=original.consumer_recovery(drill,'owned',{},1,1000,api)
+        return result,calls,drill
+
+    def test_original_consumer_release_watchdog_and_restart(self):
+        result,calls,drill=self.consumer()
+        self.assertEqual(sum(c.args[:3]==('exec','owned','node') and
+                             'const healthAt' in c.args[-1] for c in calls.call_args_list),3)
+        self.assertTrue(all(result.values()))
+        commands=[c.args for c in calls.call_args_list]
+        self.assertEqual(sum('acquire' in c for c in commands),3)
+        self.assertEqual(sum('release' in c for c in commands),1)
+        self.assertEqual(sum('liveness' in c for c in commands),3)
+        self.assertIn(('restart','owned'),commands)
+
+    def test_original_consumer_rejects_changed_api(self):
+        with self.assertRaisesRegex(ValueError,'original API differs'):
+            self.consumer(changed_api=True)
+
+    def test_original_consumer_rejects_uncleared_hold(self):
+        with self.assertRaisesRegex(ValueError,'hold remained'):
+            self.consumer(uncleared=True)
+
+    def test_original_consumer_rejects_live_writer_during_hold(self):
+        with self.assertRaisesRegex(ValueError,'writer remained available'):
+            self.consumer(live_writer=True)
+
+    def test_original_release_must_resume_before_expiry(self):
+        with self.assertRaisesRegex(ValueError,'release was not proved before expiry'):
+            self.consumer(expired_release=True)
+
+    def test_original_watchdog_must_not_resume_early(self):
+        with self.assertRaisesRegex(ValueError,'watchdog resumed before expiry'):
+            self.consumer(premature_watchdog=True)
+
+    def test_original_replacement_must_preserve_accepted_hold(self):
+        with self.assertRaisesRegex(ValueError,'replacement lost or extended hold'):
+            self.consumer(lost_replacement=True)
+
     def test_reader_never_calls_repository_mutation(self):
         source=Path(original.__file__).read_text()
         for forbidden in ('repository create','snapshot create','snapshot delete','rclone purge','transport.cleanup('):

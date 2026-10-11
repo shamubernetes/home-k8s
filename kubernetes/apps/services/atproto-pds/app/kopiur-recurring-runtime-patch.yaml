@@ -5,6 +5,10 @@ metadata:
   name: atproto-pds
 spec:
   interval: 10m
+  upgrade:
+    # The incumbent HTTP probe must be removed when adding the exec handler.
+    # Helm's client-side three-way patch performs that union-field transition.
+    serverSideApply: disabled
   # Match the established 30m bounded supervisor plus native startup allowance.
   timeout: 35m
   postRenderers:

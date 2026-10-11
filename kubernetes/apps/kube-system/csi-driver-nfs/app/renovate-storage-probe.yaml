@@ -1,14 +1,32 @@
-# yaml-language-server: $schema=https://k8s-schemas.pages.dev/v1/persistentvolumeclaim.json
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/storage.k8s.io/storageclass_v1.json
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-nfs-renovate-probe-20261011
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: "${IPAM_IP_NFS}"
+  share: /mnt/user/Media
+  subDir: .renovate-csi-probe-20261011
+  onDelete: delete
+  mountPermissions: "0777"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+mountOptions:
+  - nfsvers=4.2
+  - hard
+  - noatime
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: csi-nfs-renovate-probe-20261011
+  name: csi-nfs-renovate-probe-20261011-v2
   labels:
     app.kubernetes.io/name: csi-nfs-renovate-probe
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: nfs-csi
+  storageClassName: csi-nfs-renovate-probe-20261011
   resources:
     requests:
       storage: 1Mi
@@ -16,7 +34,7 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: csi-nfs-renovate-probe-20261011
+  name: csi-nfs-renovate-probe-20261011-v2
   labels:
     app.kubernetes.io/name: csi-nfs-renovate-probe
 spec:
@@ -59,4 +77,4 @@ spec:
   volumes:
     - name: probe
       persistentVolumeClaim:
-        claimName: csi-nfs-renovate-probe-20261011
+        claimName: csi-nfs-renovate-probe-20261011-v2

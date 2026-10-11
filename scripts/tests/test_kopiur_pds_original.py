@@ -43,7 +43,8 @@ class OriginalTests(unittest.TestCase):
         self.assertIn('o=size=192m,uid=1000,gid=1000,mode=0700',args)
         self.assertIn('k8s92.pds='+drill.prefix,args)
 
-    def extract(self, mutation=None, wrong_hash=False, reordered=False):
+    def extract(self, mutation=None, wrong_hash=False, reordered=False,
+                directory_uid=1000, file_uid=1000):
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
             root=Path(tmp);source=root/'source';source.mkdir()
             (source/'key').write_bytes(b'x'*32)
@@ -56,7 +57,8 @@ class OriginalTests(unittest.TestCase):
             with tarfile.open(bundle/'application-state.tar','w') as archive:
                 for path in [source,*sorted(source.iterdir())]:
                     info=archive.gettarinfo(str(path),arcname='.' if path==source else './'+path.name)
-                    info.uid=info.gid=1000
+                    info.gid=1000
+                    info.uid=directory_uid if path.is_dir() else file_uid
                     if path.is_dir():archive.addfile(info)
                     else:
                         with path.open('rb') as f:archive.addfile(info,f)
@@ -73,6 +75,9 @@ class OriginalTests(unittest.TestCase):
             # Replace only the two explicit container-root paths, not fixture input.
             code=original.EXTRACT.replace("'/data/restored/.kopiur-pds'",repr(str(root/'restored/.kopiur-pds')))
             code=code.replace("'/data/point'",repr(str(root/'point')))
+            # Host regressions cannot chown. The real isolated ARC extraction
+            # retains VERIFY_METADATA=True and proves native UID/GID/mode equality.
+            code=code.replace('VERIFY_METADATA=True','VERIFY_METADATA=False')
             return subprocess.run([sys.executable,'-c',code],input=json.dumps(expected),
                                   capture_output=True,text=True,timeout=10)
 
@@ -82,6 +87,26 @@ class OriginalTests(unittest.TestCase):
         self.assertEqual(len(receipt['databases']),3)
         self.assertEqual(receipt['actor_keys'],1)
         self.assertTrue(all(d['tables']['records']['rows']==1 for d in receipt['databases']))
+
+    def test_root_owned_directories_allowed_but_root_files_denied(self):
+        result=self.extract(directory_uid=0)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertNotEqual(self.extract(file_uid=0).returncode,0)
+        self.assertNotEqual(self.extract(directory_uid=123).returncode,0)
+
+    def test_metadata_checker_has_only_required_owned_tmpfs_capabilities(self):
+        drill=original.Original()
+        with mock.patch.object(original.native,'docker',return_value='') as docker:
+            drill.start('check',original.native.PYTHON,{'owned':'/data'},
+                        user='0:1000',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
+        args=docker.call_args.args
+        self.assertEqual(args[args.index('--network')+1],'none')
+        self.assertEqual(args[args.index('--user')+1],'0:1000')
+        self.assertEqual(args[args.index('--cap-drop')+1],'ALL')
+        self.assertEqual({args[i+1] for i,a in enumerate(args) if a=='--cap-add'},
+                         {'CHOWN','FOWNER','DAC_OVERRIDE'})
+        self.assertNotIn('--privileged',args)
+        self.assertIn('VERIFY_METADATA=True',original.EXTRACT)
 
     def test_unsafe_and_duplicate_members_denied(self):
         for name in ('../escape','/absolute','./account.sqlite'):

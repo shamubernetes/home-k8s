@@ -52,6 +52,7 @@ class Original(native.Drill):
 
 # Run inside an isolated Python container, never on the source workload.
 EXTRACT = '''import hashlib,json,os,pathlib,sqlite3,sys,tarfile
+VERIFY_METADATA=True
 p=pathlib.Path('/data/restored/.kopiur-pds'); expected=json.load(sys.stdin)
 assert not p.is_symlink() and p.is_dir()
 assert not (p/'COMPLETE').is_symlink() and (p/'COMPLETE').is_file()
@@ -75,8 +76,13 @@ with tarfile.open(b/'application-state.tar') as archive:
   assert not name.is_absolute() and '..' not in name.parts
   normalized=str(name);assert normalized not in seen;seen.add(normalized)
   assert member.isfile() or member.isdir()
-  assert member.uid==1000 and member.gid==1000
+  assert member.gid==1000 and (member.uid==1000 or member.isdir() and member.uid==0)
+  assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
  archive.extractall(point,filter='fully_trusted')
+ if VERIFY_METADATA:
+  for member in members:
+   info=(point/member.name).lstat()
+   assert (info.st_uid,info.st_gid,info.st_mode & 0o7777)==(member.uid,member.gid,member.mode),'original file metadata differs'
 rows=[];databases=[];keys=0
 for f in [point,*sorted(point.rglob('*'))]:
  info=f.lstat();assert f.is_dir() or f.is_file();assert not f.is_symlink()
@@ -97,6 +103,7 @@ runtime_file=point/'.recovery-runtime.json'
 assert not runtime_file.exists()
 fd=os.open(runtime_file,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
 with os.fdopen(fd,'wb') as out:out.write((b/'runtime.json').read_bytes())
+if VERIFY_METADATA:os.chown(runtime_file,1000,1000)
 print(json.dumps({'equal_entries':len(rows),'tree_sha256':hashlib.sha256(json.dumps(rows).encode()).hexdigest(),'databases':databases,'actor_keys':keys,'bundle_sha256':actual}))
 '''
 
@@ -145,10 +152,19 @@ def exercise(identity, payload, deadline):
                            password=password)
             # No networked container remains mounted when original native secrets boot.
             native.docker('rm','-f',mover);drill.containers.remove(mover)
+            # Source has root-owned PVC directories. Restore metadata only in
+            # this owned tmpfs, with no host/Kubernetes mounts or network.
             checker = drill.start('check-'+kind, native.PYTHON, {restored:'/data'},
-                                  command=['python3','-c','import time;time.sleep(1800)'])
+                                  command=['python3','-c','import time;time.sleep(1800)'],
+                                  user='0:1000', capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
             drill.native_python = {checker}
-            receipt = json.loads(drill.python(checker, EXTRACT, json.dumps(original['bundle_sha256'])))
+            checked_extract = ("try:\n exec(compile("+repr(EXTRACT)+", 'original-extract', 'exec'))\n"
+                               "except Exception as error:\n import traceback\n"
+                               " print(json.dumps({'extract_error':{'type':type(error).__name__,"
+                               "'line':traceback.extract_tb(error.__traceback__)[-1].lineno}}))\n")
+            receipt = json.loads(drill.python(checker, checked_extract, json.dumps(original['bundle_sha256'])))
+            if 'extract_error' in receipt:
+                raise ValueError('original extraction failed: '+json.dumps(receipt['extract_error']))
             runtime = json.loads(drill.python(checker,
                 "import pathlib;print(pathlib.Path('/data/restored/.kopiur-pds/current/runtime.json').read_text())"))
             digest = hashlib.sha256(json.dumps(runtime,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()

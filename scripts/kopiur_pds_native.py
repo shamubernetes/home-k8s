@@ -56,12 +56,14 @@ class Drill:
         return name
 
     def start(self, suffix, image, mounts, env=None, command=None, network='none', entrypoint=None,
-              volume_subpaths=None, log_driver=None):
+              volume_subpaths=None, log_driver=None, user='1000:1000', capabilities=()):
         name = self.prefix + '-' + suffix
         subpaths = volume_subpaths or {}
-        args = ['run', '-d', '--name', name, '--network', network, '--user','1000:1000',
+        args = ['run', '-d', '--name', name, '--network', network, '--user',user,
                 '--label','k8s92.pds='+self.prefix,'--read-only','--cap-drop','ALL',
                 '--security-opt','no-new-privileges','--tmpfs','/tmp:rw,nosuid,uid=1000,gid=1000']
+        for capability in capabilities:
+            args += ['--cap-add', capability]
         if log_driver: args += ['--log-driver', log_driver]
         for vol, path in mounts.items():
             if vol in subpaths:

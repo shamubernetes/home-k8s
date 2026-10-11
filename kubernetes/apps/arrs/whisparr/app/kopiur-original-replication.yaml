@@ -23,10 +23,10 @@ spec:
       - username: whisparr
         hostname: arrs
         sourcePath: /pvc/whisparr
-    latestOnly: true
+    latestOnly: false
   migrate:
     parallel: 2
     policies: none
   pruning:
     none: {}
-  suspend: false
+  suspend: true

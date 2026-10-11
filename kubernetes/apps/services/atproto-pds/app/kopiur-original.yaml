@@ -33,6 +33,9 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: atproto-pds-nas-to-r2
+  annotations:
+    # Copy the verified retained original before independent native recovery.
+    kopiur.home-operations.com/run-requested: "2026-10-11T11:30:00Z"
 spec:
   sourceRef:
     kind: Repository
@@ -55,4 +58,4 @@ spec:
     policies: none
   pruning:
     none: {}
-  suspend: true
+  suspend: false

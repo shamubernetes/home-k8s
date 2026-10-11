@@ -138,6 +138,18 @@ class MoverDeadlineTests(unittest.TestCase):
             with self.subTest(key=key, value=value):
                 self.assertEqual(self.mutated_deadline(key, value), 3600)
 
+    def test_pds_mover_types_use_existing_cap(self):
+        pairs = [('config', 'atproto-pds'), ('config', 'atproto-pds-nas-smb'),
+                 ('config', 'atproto-pds-r2'), ('maintenance', 'atproto-pds-nas-smb'),
+                 ('maintenance', 'atproto-pds-r2'), ('verify', 'atproto-pds'),
+                 ('snapshot-replication', 'atproto-pds-nas-to-r2')]
+        for key, value in pairs:
+            with self.subTest(key=key, value=value):
+                self.assertEqual(self.mutated_deadline(key, value, 'services'), 3600)
+                self.assertEqual(self.mutated_deadline(key, value, 'default'), 172800)
+                self.assertEqual(self.mutated_deadline(key, value, 'services', 'volsync'), 172800)
+                self.assertEqual(self.mutated_deadline(key, value + '-unrelated', 'services'), 172800)
+
     def test_unrelated_jobs_are_unchanged(self):
         for arguments in [('config', 'unrelated'), ('config', 'cwa-bdl', 'default'),
                           ('config', 'cwa-bdl', 'arrs', 'other-controller'),

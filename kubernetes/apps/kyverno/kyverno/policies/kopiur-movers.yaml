@@ -52,8 +52,11 @@ spec:
               - sabnzbd-nas-smb
               - sabnzbd-r2
               - listenarr
+              - atproto-pds
               - listenarr-nas-smb
               - listenarr-r2
+              - atproto-pds-nas-smb
+              - atproto-pds-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -94,6 +97,8 @@ spec:
               - sabnzbd-r2
               - listenarr-nas-smb
               - listenarr-r2
+              - atproto-pds-nas-smb
+              - atproto-pds-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -135,6 +140,7 @@ spec:
               - cwa-bdl-nas-to-r2
               - sabnzbd-nas-to-r2
               - listenarr-nas-to-r2
+              - atproto-pds-nas-to-r2
     mutate:
       patchStrategicMerge:
         spec:
@@ -295,6 +301,7 @@ spec:
               - cwa-bdl
               - sabnzbd
               - listenarr
+              - atproto-pds
     mutate:
       patchStrategicMerge:
         spec:

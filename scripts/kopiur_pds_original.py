@@ -47,6 +47,10 @@ class Original(native.Drill):
                       '--driver', 'local', '--opt', 'type=tmpfs', '--opt', 'device=tmpfs',
                       '--opt', 'o=size=192m,uid=1000,gid=1000,mode=0700', name)
         self.volumes.append(name)
+        # A local tmpfs volume loses its bytes when its last mount closes.
+        # Keep one network-none mount alive through reader/checker/native handoff.
+        self.start('keep-'+suffix, native.PYTHON, {name:'/memory'},
+                   command=['python3','-c','import time;time.sleep(1800)'])
         return name
 
 

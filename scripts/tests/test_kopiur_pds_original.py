@@ -38,8 +38,15 @@ class OriginalTests(unittest.TestCase):
         with mock.patch.object(original.native,'docker',return_value='') as docker:
             name=drill.volume('nas')
         self.assertEqual(drill.volumes,[name])
-        args=docker.call_args.args
+        args=docker.call_args_list[0].args
         self.assertIn('type=tmpfs',args)
+        keeper=docker.call_args_list[1].args
+        self.assertEqual(keeper[keeper.index('--network')+1],'none')
+        self.assertEqual(keeper[keeper.index('--user')+1],'1000:1000')
+        self.assertEqual(keeper[keeper.index('--log-driver')+1],'none')
+        self.assertIn(name+':/memory',keeper)
+        self.assertEqual(len(drill.containers),1)
+        self.assertNotIn('--cap-add',keeper)
         self.assertIn('o=size=192m,uid=1000,gid=1000,mode=0700',args)
         self.assertIn('k8s92.pds='+drill.prefix,args)
 

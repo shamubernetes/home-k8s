@@ -31,8 +31,26 @@ spec:
           matchLabels:
             app.kubernetes.io/name: grimmory
             app.kubernetes.io/controller: grimmory
+        container: app
+        command: [sh, /backup-contract/runtime.sh, capture]
+        timeout: 4m
+        continueOnFailure: false
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: grimmory
+            app.kubernetes.io/controller: grimmory
         container: mariadb
         command: [s6-setuidgid, abc, bash, /backup-contract/backup.sh]
+        timeout: 4m
+        continueOnFailure: false
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: grimmory
+            app.kubernetes.io/controller: grimmory
+        container: app
+        command: [sh, /backup-contract/runtime.sh, verify]
         timeout: 4m
         continueOnFailure: false
   mover:

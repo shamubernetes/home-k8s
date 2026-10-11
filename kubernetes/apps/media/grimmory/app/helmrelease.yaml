@@ -142,6 +142,9 @@ spec:
         name: grimmory-backup-contract
         advancedMounts:
           grimmory:
+            app:
+            - path: /backup-contract
+              readOnly: true
             mariadb:
             - path: /backup-contract
               readOnly: true
@@ -152,9 +155,17 @@ spec:
             app:
             - path: /app/data
               subPath: grimmory-data
+            - path: /runtime-escrow
+              subPath: grimmory-runtime
+            - path: /database-capture
+              subPath: mariadb-config/kopiur
+              readOnly: true
             mariadb:
             - path: /config
               subPath: mariadb-config
+            - path: /runtime-escrow
+              subPath: grimmory-runtime
+              readOnly: true
       media:
         type: nfs
         server: "${IPAM_IP_NFS}"

@@ -15,6 +15,7 @@ configMapGenerator:
 - name: grimmory-backup-contract
   files:
   - backup.sh
+  - runtime.sh
   options:
     disableNameSuffixHash: true
     annotations:

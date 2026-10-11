@@ -14,6 +14,25 @@ client=(mariadb --protocol=tcp --host=127.0.0.1 --port=3306 --user="$MYSQL_USER"
 [[ $("${client[@]}" -e 'SELECT VERSION()') == 11.8.8-* ]] || exit 1
 [[ $("${client[@]}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='grimmory'") == 0 ]] || { printf 'refuse nonempty target\n' >&2; exit 1; }
 (cd "$bundle" && sha256sum -c grimmory.sql.sha256)
+# Preserve legacy v1 restores. New v2 points must carry the bound runtime escrow.
+format=$(sed -n 's/^format=//p' "$bundle/manifest.txt")
+case "$format" in
+  mariadb-logical-v1) ;;
+  mariadb-logical-runtime-v2)
+    generation=$(sed -n 's/^runtime_generation=//p' "$bundle/manifest.txt")
+    [[ $generation =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]
+    [[ $(cat "$bundle/COMPLETE") == "$generation" ]]
+    [[ $(sed -n 's/^generation=//p' "$bundle/runtime/runtime.txt") == "$generation" ]]
+    digest=$(sed -n 's/^runtime_manifest_sha256=//p' "$bundle/manifest.txt")
+    [[ $digest =~ ^[0-9a-f]{64}$ ]]
+    [[ $(sha256sum "$bundle/runtime/runtime.sha256" | cut -d' ' -f1) == "$digest" ]]
+    sh "$(dirname "$0")/runtime.sh" --bounded validate "$bundle/runtime"
+    sql_digest=$(sed -n 's/^sql_sha256=//p' "$bundle/manifest.txt")
+    [[ $sql_digest =~ ^[0-9a-f]{64}$ ]]
+    [[ $(sha256sum "$bundle/grimmory.sql" | cut -d' ' -f1) == "$sql_digest" ]]
+    ;;
+  *) exit 1 ;;
+esac
 expected=
 while IFS='=' read -r key value; do
   if [[ $key == base_tables ]]; then expected=$value; fi

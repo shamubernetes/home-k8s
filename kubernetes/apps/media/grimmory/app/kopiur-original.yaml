@@ -12,3 +12,15 @@ spec:
     # Preserve the established original-capture mover deadline.
     activeDeadlineSeconds: 3600
   description: K8S-92 original native SQL and generation-bound runtime escrow
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  # Adopt the existing original copy without replacing its UID or manifest.
+  name: grimmory-nas-to-r2-copy-116a62c4ff941d29-ce406fd5
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain

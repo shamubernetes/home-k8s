@@ -1,0 +1,44 @@
+# Original qualification only. No recurring capture or pruning until native proof.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: grimmory
+spec:
+  suspend: true
+  repository:
+    kind: Repository
+    name: grimmory-nas-smb
+  identity:
+    username: grimmory
+    hostname: media
+  sources:
+  - pvc:
+      name: grimmory
+    readOnly: true
+    sourcePathOverride: /pvc/grimmory
+    sourcePathStrategy: PvcName
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes: [ReadWriteOnce]
+  defaultDeletionPolicy: Retain
+  hooks:
+    beforeSnapshot:
+    - workloadExec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: grimmory
+            app.kubernetes.io/controller: grimmory
+        container: mariadb
+        command: [s6-setuidgid, abc, bash, /backup-contract/backup.sh]
+        timeout: 4m
+        continueOnFailure: false
+  mover:
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch

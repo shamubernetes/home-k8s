@@ -10,6 +10,10 @@ spec:
     labels:
       app.kubernetes.io/name: *app
   dependsOn:
+  - name: kopiur
+  - name: snapshot-controller
+  - name: rook-ceph-cluster
+  - name: volsync
   - name: external-secrets-secret-store
   path: ./kubernetes/apps/media/grimmory/app
   prune: true
@@ -17,6 +21,23 @@ spec:
     kind: GitRepository
     name: "${KS_GIT_REPO_NAME}"
   wait: false
+  healthChecks:
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: grimmory-kopiur-nas
+    namespace: media
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    name: grimmory-kopiur-r2
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: grimmory-nas-smb
+    namespace: media
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
   interval: "${KS_INTERVAL}"
   retryInterval: "${KS_RETRY_INTERVAL}"
   timeout: "${KS_TIMEOUT}"

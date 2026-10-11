@@ -1,0 +1,28 @@
+# Original copy only. Preserve the incumbent daily cadence and disable pruning.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: grimmory-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-11T18:10:00Z"
+spec:
+  sourceRef:
+    kind: Repository
+    name: grimmory-nas-smb
+  destinationRef:
+    kind: Repository
+    name: grimmory-r2
+  schedule:
+    cron: "${VOLSYNC_R2_SCHEDULE_GRIMMORY}"
+  selection:
+    identities:
+      include:
+      - username: grimmory
+        hostname: media
+        sourcePath: /pvc/grimmory
+    latestOnly: false
+  migrate:
+    policies: none
+  pruning:
+    none: {}
+  suspend: false

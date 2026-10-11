@@ -6,6 +6,7 @@ source removed before fresh isolated native boots. No production workload change
 The Docker copy establishes the non-production point, not a CSI claim.
 """
 import base64
+import contextvars
 import json
 from typing import Any
 import subprocess
@@ -19,7 +20,16 @@ PYTHON = 'python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3
 PDS = 'ghcr.io/bluesky-social/pds@sha256:74c650cd620eee2e6e0272b4cb76036a0271523b1742f61f813b79dc5a8b5273'
 
 
+COMMAND_DEADLINE: contextvars.ContextVar[float | None] = contextvars.ContextVar('pds_command_deadline', default=None)
+
+
 def docker(*args, data=None, timeout=120, environ=None):
+    deadline = COMMAND_DEADLINE.get()
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('PDS absolute command deadline exceeded')
+        timeout = min(timeout, remaining)
     result = subprocess.run(['docker', *args], input=data, capture_output=True, text=True, timeout=timeout,
                             env=None if environ is None else __import__('os').environ | environ)
     if result.returncode:
@@ -46,12 +56,15 @@ class Drill:
         return name
 
     def start(self, suffix, image, mounts, env=None, command=None, network='none', entrypoint=None,
-              volume_subpaths=None):
+              volume_subpaths=None, log_driver=None, user='1000:1000', capabilities=()):
         name = self.prefix + '-' + suffix
         subpaths = volume_subpaths or {}
-        args = ['run', '-d', '--name', name, '--network', network, '--user','1000:1000',
+        args = ['run', '-d', '--name', name, '--network', network, '--user',user,
                 '--label','k8s92.pds='+self.prefix,'--read-only','--cap-drop','ALL',
                 '--security-opt','no-new-privileges','--tmpfs','/tmp:rw,nosuid,uid=1000,gid=1000']
+        for capability in capabilities:
+            args += ['--cap-add', capability]
+        if log_driver: args += ['--log-driver', log_driver]
         for vol, path in mounts.items():
             if vol in subpaths:
                 args += ['--mount','type=volume,src='+vol+',dst='+path+',volume-nocopy,volume-subpath='+subpaths[vol]]
@@ -67,7 +80,7 @@ class Drill:
     def python(self, container, code, data=None):
         if container in getattr(self, 'native_python', set()):
             return docker('exec', '-i', container, 'python3', '-c', code, data=data)
-        return docker('run', '--rm', '-i', '--network', 'container:' + container,
+        return docker('run', '--rm', '-i', '--log-driver=none', '--network', 'container:' + container,
                       PYTHON, 'python3', '-c', code, data=data)
 
     def http(self, container, path, body=None, auth=None, port=3000, raw=False, headers=None, method=None) -> Any:
@@ -100,6 +113,8 @@ except urllib.error.HTTPError as e:
                 return self.http(container, path, port=port, **kwargs)
             except RuntimeError:
                 if docker('inspect', '--format', '{{.State.Running}}', container) != 'true':
+                    if getattr(self, 'native_logs_disabled', False):
+                        raise RuntimeError('application exited before readiness; native logs disabled') from None
                     logs = subprocess.run(['docker', 'logs', container], capture_output=True, text=True).stderr
                     detail = next((line for line in logs.splitlines() if line.startswith('DRILL_ERROR ')), '')
                     raise RuntimeError('application exited before readiness: ' + detail) from None

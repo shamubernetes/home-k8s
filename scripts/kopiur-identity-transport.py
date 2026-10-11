@@ -204,6 +204,10 @@ def exercise_payload(payload, deadline=None):
     assert dict(config["mnemosyne"]) == {"type": "smb", "host": "10.100.47.100",
         "user": "kp-" + app, "domain": "WORKGROUP", "pass": config["mnemosyne"]["pass"]}
     assert config["mnemosyne"]["pass"]
+    if "original" in payload:
+        import kopiur_pds_original
+        return kopiur_pds_original.exercise(sys.modules[__name__], payload,
+                                           deadline or time.monotonic()+1200)
     import kopiur_pds_native
     return kopiur_pds_native.exercise(sys.modules[__name__],app,fields,
                                       deadline or time.monotonic()+1200)

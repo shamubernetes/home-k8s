@@ -142,6 +142,19 @@ def wait(check):
     raise TimeoutError('original native readiness expired')
 
 
+def recreate_consumer(drill, app, database, kind, appdata, tools, expected):
+    # Docker replaces a restarted container's network namespace. Remove the
+    # disposable consumer first and join the new namespace when recreating it.
+    native.docker('rm','-f',app);drill.containers.remove(app)
+    native.docker('restart',database)
+    wait(lambda:data_digest(database)==expected)
+    app=drill.start('app-'+kind,GRIMM,{appdata:'/app/data',tools:'/tools:ro'},
+        command=['/tools/boot.sh'],entrypoint='sh',network='container:'+database,user='568:568')
+    wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
+    if data_digest(database)!=expected:raise ValueError('data differs after consumer recreation')
+    return app
+
+
 def exercise(identity, payload, deadline):
     original = validate_original(payload)
     transport = identity.Drill('grimmory', payload['fields'])
@@ -199,6 +212,8 @@ def exercise(identity, payload, deadline):
             native.docker('restart',app)
             wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
             if data_digest(database)!=original['data_sha256']:raise ValueError('data differs after native app restart')
+            app=recreate_consumer(drill,app,database,kind,appdata,tools,original['data_sha256'])
+            receipt.update(native_database_restart_equal=True,native_consumer_recreation_equal=True)
             database_id = json.loads(native.docker('inspect',database))[0]['Id']
             assert re.fullmatch(r'[0-9a-f]{64}', database_id)
             for c in (app,database):

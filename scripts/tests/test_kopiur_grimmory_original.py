@@ -104,6 +104,42 @@ class OriginalTests(unittest.TestCase):
         host['PortBindings'] = {'6060/tcp': [{'HostPort': '6060'}]}
         with self.assertRaises(AssertionError):original.verify_network({'HostConfig': host}, identifier)
 
+    def test_consumer_recreation_order_and_inputs(self):
+        from unittest.mock import Mock, patch
+        drill = Mock()
+        drill.containers = ['old-app', 'database']
+        drill.start.return_value = 'new-app'
+        drill.http.return_value = {'status': 'up'}
+        events = []
+        def docker(*args):events.append(args)
+        def start(*args, **kwargs):
+            self.assertEqual(events, [('rm', '-f', 'old-app'), ('restart', 'database')])
+            self.assertNotIn('old-app', drill.containers)
+            self.assertEqual(args, ('app-nas', original.GRIMM,
+                {'app-volume':'/app/data', 'tools-volume':'/tools:ro'}))
+            self.assertEqual(kwargs['network'], 'container:database')
+            self.assertEqual(kwargs['command'], ['/tools/boot.sh'])
+            return 'new-app'
+        drill.start.side_effect = start
+        def wait(check):self.assertTrue(check())
+        with patch.object(original.native, 'docker', side_effect=docker), \
+                patch.object(original, 'wait', side_effect=wait), \
+                patch.object(original, 'data_digest', return_value='c'*64):
+            self.assertEqual(original.recreate_consumer(drill,'old-app','database',
+                'nas','app-volume','tools-volume','c'*64), 'new-app')
+
+    def test_consumer_recreation_rejects_data_drift(self):
+        from unittest.mock import Mock, patch
+        drill = Mock()
+        drill.containers = ['old-app', 'database']
+        drill.start.return_value = 'new-app'
+        drill.http.return_value = {}
+        with patch.object(original.native, 'docker'), \
+                patch.object(original, 'wait', side_effect=lambda check: check()), \
+                patch.object(original, 'data_digest', side_effect=['c'*64, 'd'*64]):
+            with self.assertRaisesRegex(ValueError, 'data differs'):
+                original.recreate_consumer(drill,'old-app','database','nas','app','tools','c'*64)
+
     def test_reader_and_boot_boundaries(self):
         source = Path(original.__file__).read_text()
         self.assertIn('--readonly', source)

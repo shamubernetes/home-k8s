@@ -655,8 +655,10 @@ def validate_radarr_api(response, expected, sql, *, app="radarr"):
             "native_records_sha256": hashlib.sha256(encoded).hexdigest()}
 
 
-def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_mib=None):
+def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_mib=None, observe=None):
     """Read a recovered PVC. Write only new, isolated Docker resources."""
+    observe = observe or (lambda stage: None)
+    observe("bundle-validation")
     source = Path(source)
     if source.is_symlink() or not source.is_dir():
         raise ValueError("source must be a recovered PVC directory, not a symlink")
@@ -676,8 +678,10 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
         if path.is_symlink() or not (path.is_dir() or path.is_file()):
             raise ValueError("recovered PVC contains links or special files")
     try:
+        observe("database-import")
         target = drill.database("restore-db", databases)
         drill.restore(target, bundle, databases)
+        observe("database-equality")
         counts = {db: drill.counts(target, db) for db in databases}
         fingerprints = {db: drill.fingerprints(target, db) for db in databases}
         if any(not tables for tables in counts.values()):
@@ -685,6 +689,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
         # A valid log database can contain zero rows. Require main-app data only.
         if not sum(counts[databases[0]].values()):
             raise ValueError("restored main database is empty")
+        observe("application-file-import")
         config = drill.config_volume("restored-config")
         holder = drill.start("config-copy", PG_IMAGE, user="568:568", mounts=[(config, "/config", "rw")], command=["sleep", "infinity"])
         # Do not copy prior dump generations into the running application's volume.
@@ -723,6 +728,7 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
                 raise
         if result:
             raise RuntimeError("isolated config import failed; check --config-mib capacity")
+        observe("application-file-equality")
         paired_count = 0
         if paired.is_file():
             expected_files = {}
@@ -741,8 +747,10 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
             if observed_files != expected_files:
                 raise ValueError("paired application file bytes differ after isolated restore")
             paired_count = len(expected_files)
+        observe("native-application-boot")
         restored_app = drill.app("restored-app", target, config)
         drill.healthy(restored_app)
+        observe("native-api-equality")
         api = {}
         if app_name in PAIRED_APPS:
             target_info = json.loads(run("docker", "inspect", target).stdout)[0]
@@ -777,7 +785,10 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
                 "table_counts": counts, "table_fingerprints": fingerprints, "api": api,
                 "network": "none-shared-namespace"}
     finally:
-        drill.close()
+        try:
+            observe("isolated-cleanup")
+        finally:
+            drill.close()
 
 
 def main():

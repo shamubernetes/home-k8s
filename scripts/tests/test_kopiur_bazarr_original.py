@@ -218,6 +218,49 @@ class OriginalTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 M["extract_original"](archive, root / "restored", database=["whisparrv3_main"])
 
+    def test_stage_timings_do_not_print_arguments_results_or_exception_text(self):
+        import io
+        from contextlib import redirect_stdout
+        from unittest import mock
+        for fails in (False, True):
+            def operation(secret):
+                if fails:
+                    raise ValueError(secret)
+                return secret
+            output = io.StringIO()
+            with self.subTest(fails=fails), redirect_stdout(output), \
+                    mock.patch.object(M["time"], "monotonic", side_effect=[10, 12.5]):
+                if fails:
+                    with self.assertRaises(ValueError):
+                        M["original_stage"]("nas", "native-restore", operation, "SECRET_CANARY")
+                else:
+                    self.assertEqual(M["original_stage"]("nas", "native-restore", operation, "SECRET_CANARY"),
+                                     "SECRET_CANARY")
+            self.assertNotIn("SECRET_CANARY", output.getvalue())
+            records = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual(records[0]["state"], "started")
+            self.assertEqual(records[1]["state"], "failed" if fails else "completed")
+            self.assertEqual(records[1]["elapsed_seconds"], 2.5)
+
+    def test_nonzero_restore_and_export_are_reported_failed_without_output(self):
+        import io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+        for stage in ("native-restore", "archive-export"):
+            result = SimpleNamespace(returncode=1, stdout=b"SECRET_CANARY", stderr=b"SECRET_CANARY")
+            output = io.StringIO()
+            with self.subTest(stage=stage), redirect_stdout(output):
+                self.assertIs(M["original_stage"]("nas", stage, lambda: result), result)
+            self.assertNotIn("SECRET_CANARY", output.getvalue())
+            self.assertEqual(json.loads(output.getvalue().splitlines()[-1])["state"], "failed")
+
+    def test_native_progress_reports_validation_entry_not_false_success(self):
+        import tempfile
+        stages = []
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaises(FileNotFoundError):
+            M["NATIVE"]["restore_pvc"](Path(temporary), "whisparr", observe=stages.append)
+        self.assertEqual(stages, ["bundle-validation"])
+
     def test_original_suite_retains_trusted_dispatch_boundary(self):
         text = (ROOT / ".github/workflows/recovery-verify.yaml").read_text()
         self.assertIn('postgres-bazarr-original|postgres-radarr', text)

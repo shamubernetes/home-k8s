@@ -126,9 +126,13 @@ def exercise(identity, payload, deadline):
             password = fields['NAS_KOPIA_PASSWORD' if kind=='nas' else 'R2_KOPIA_PASSWORD']
             connect = 'k repository connect '+backend+' --readonly >/dev/null\n'
             transport.stage = kind+'-original-read'
-            shown = transport.exec(mover, connect+'k snapshot show '+original['snapshots'][kind]+' --json\n',
+            shown = transport.exec(mover, connect+'k snapshot list --all --json\n',
                                    password=password)
-            snapshot = json.loads(shown.stdout)
+            matches = [point for point in json.loads(shown.stdout)
+                       if point['id'] == original['snapshots'][kind]]
+            if len(matches) != 1:
+                raise ValueError('exact original snapshot not found uniquely')
+            snapshot = matches[0]
             source = snapshot['source']
             if source != {'userName':'atproto-pds','host':'services','path':'/pvc/atproto-pds'}:
                 raise ValueError('original snapshot identity differs')

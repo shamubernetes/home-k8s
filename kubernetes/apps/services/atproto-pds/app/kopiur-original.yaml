@@ -1,0 +1,58 @@
+# Validated against the installed Kopiur CRDs by scripts/validate-app.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: atproto-pds-k8s92-original
+spec:
+  policyRef:
+    name: atproto-pds
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+  description: K8S-92 original stopped whole-store and runtime escrow
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: atproto-pds-primary
+spec:
+  policyRef:
+    name: atproto-pds
+  schedule:
+    suspend: true
+    # Preserve the incumbent hourly cadence. Qualify originals before activation.
+    cron: "${VOLSYNC_SCHEDULE}"
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: atproto-pds-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: atproto-pds-nas-smb
+  destinationRef:
+    kind: Repository
+    name: atproto-pds-r2
+  schedule:
+    cron: "${VOLSYNC_R2_SCHEDULE}"
+    jitter: 10m
+  selection:
+    identities:
+      include:
+      - username: atproto-pds
+        hostname: services
+        sourcePath: /pvc/atproto-pds
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    none: {}
+  suspend: true

@@ -53,8 +53,10 @@ fi
             for key, value in effective.items():
                 if key.startswith('PDS_') or key in ('CONTROL_LOG', 'FAIL_ACQUIRE', 'FAIL_CHECK', 'FAIL_RELEASE', 'MUTATE'):
                     command += ['-e', key + '=' + value]
-            command += ['--entrypoint', 'node', image, str(SCRIPT), 'capture']
-        return subprocess.run(command, env=effective, capture_output=True, text=True, timeout=30)
+            # The capture still has a 30s process bound. DinD startup is separate.
+            command += ['--entrypoint', 'timeout', image, '30', 'node', str(SCRIPT), 'capture']
+        return subprocess.run(command, env=effective, capture_output=True, text=True,
+                              timeout=120 if os.environ.get('RUNNER_NAME') else 30)
 
     def test_complete_whole_store_and_original_runtime(self):
         for _ in range(2):

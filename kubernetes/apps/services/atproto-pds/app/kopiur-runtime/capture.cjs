@@ -79,7 +79,12 @@ function capture() {
     if (inventory() !== before) throw Error('native store changed while held');
     const runtime = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
       key.startsWith('PDS_') || ['TZ', 'LOG_ENABLED', 'LOG_LEVEL'].includes(key)));
-    for (const key of ['PDS_JWT_SECRET', 'PDS_ADMIN_PASSWORD', 'PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX']) {
+    const escrowKeys = [
+      'PDS_JWT_SECRET',
+      'PDS_ADMIN_PASSWORD',
+      'PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX',
+    ];
+    for (const key of escrowKeys) {
       if (!runtime[key]) throw Error('original runtime escrow input missing');
     }
     durable(path.join(pending, 'runtime.json'), JSON.stringify(runtime));

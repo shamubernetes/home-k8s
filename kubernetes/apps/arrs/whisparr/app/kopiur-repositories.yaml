@@ -35,6 +35,11 @@ spec:
         cron: "20 3 * * *"
         jitter: 1h
   moverDefaults:
+    # Keep disposable Kopia cache writes off the saturated node SATA disk.
+    cache:
+      mode: Ephemeral
+      capacity: 8Gi
+      storageClassName: ceph-block
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568

@@ -151,19 +151,16 @@ class OriginalTests(unittest.TestCase):
         from unittest.mock import Mock, patch
         drill = Mock()
         drill.containers = ['old-app', 'database']
-        drill.start.return_value = 'new-app'
+        drill.start_consumer.return_value = 'new-app'
         drill.http.return_value = {'status': 'up'}
         events = []
         def docker(*args):events.append(args)
         def start(*args, **kwargs):
             self.assertEqual(events, [('rm', '-f', 'old-app'), ('restart', 'database')])
             self.assertNotIn('old-app', drill.containers)
-            self.assertEqual(args, ('app-nas', original.GRIMM,
-                {'app-volume':'/app/data', 'tools-volume':'/tools:ro'}))
-            self.assertEqual(kwargs['network'], 'container:database')
-            self.assertEqual(kwargs['command'], ['/tools/boot.sh'])
+            self.assertEqual(args, ('nas','database','app-volume','tools-volume',None))
             return 'new-app'
-        drill.start.side_effect = start
+        drill.start_consumer.side_effect = start
         def wait(check):self.assertTrue(check())
         with patch.object(original.native, 'docker', side_effect=docker), \
                 patch.object(original, 'wait', side_effect=wait), \
@@ -175,13 +172,61 @@ class OriginalTests(unittest.TestCase):
         from unittest.mock import Mock, patch
         drill = Mock()
         drill.containers = ['old-app', 'database']
-        drill.start.return_value = 'new-app'
+        drill.start_consumer.return_value = 'new-app'
         drill.http.return_value = {}
         with patch.object(original.native, 'docker'), \
                 patch.object(original, 'wait', side_effect=lambda check: check()), \
                 patch.object(original, 'data_digest', side_effect=['c'*64, 'd'*64]):
             with self.assertRaisesRegex(ValueError, 'data differs'):
                 original.recreate_consumer(drill,'old-app','database','nas','app','tools','c'*64)
+
+    def test_books_consumer_exact_duplicate_volume_and_isolation(self):
+        from unittest.mock import patch
+        drill=original.Restore()
+        with patch.object(original.native,'docker') as docker:
+            app=drill.start_consumer('nas','db','app','tools','books')
+        args=docker.call_args.args
+        self.assertIn(app,drill.containers)
+        for value in ('container:db','568:568','--log-driver=none','--read-only',
+                      'no-new-privileges','books:/books:ro',
+                      'type=volume,src=books,dst=/bookdrop,volume-nocopy,volume-subpath=bookdrop,readonly'):
+            self.assertIn(value,args)
+        self.assertNotIn('--privileged',args)
+        self.assertEqual(args[-3:],('sh',original.GRIMM,'/tools/boot.sh'))
+
+    def test_legacy_consumer_uses_existing_start(self):
+        from unittest.mock import patch
+        drill=original.Restore()
+        with patch.object(drill,'start',return_value='legacy') as start:
+            self.assertEqual(drill.start_consumer('nas','db','app','tools'),'legacy')
+        self.assertEqual(start.call_args.args[2],{'app':'/app/data','tools':'/tools:ro'})
+
+    def test_books_consumer_readback_rejects_writable_or_wrong_volume(self):
+        from unittest.mock import patch
+        mounts=[{'Destination':'/books','Name':'books','RW':False},
+                {'Destination':'/bookdrop','Name':'books','RW':False}]
+        for case in ('valid','writable','wrong','missing'):
+            sample=copy.deepcopy(mounts)
+            if case=='writable':sample[1]['RW']=True
+            if case=='wrong':sample[1]['Name']='another'
+            if case=='missing':sample.pop()
+            with patch.object(original.native,'docker',return_value=json.dumps([{'Mounts':sample}])) as docker:
+                if case=='valid':
+                    original.verify_consumer_books('native-app','d'*64)
+                    args=docker.call_args.args
+                    self.assertIn('native-app:ro',args)
+                    self.assertIn('--network=none',args)
+                    compile(args[-2],'<books-mounted-verifier>','exec')
+                else:
+                    with self.assertRaises(AssertionError):original.verify_consumer_books('native-app','d'*64)
+
+    def test_books_survive_database_consumer_recreation(self):
+        from unittest.mock import Mock,patch
+        drill=Mock();drill.containers=['old','db'];drill.start_consumer.return_value='new'
+        with patch.object(original.native,'docker'),patch.object(original,'wait',side_effect=lambda check:check()), \
+                patch.object(original,'data_digest',return_value='c'*64):
+            original.recreate_consumer(drill,'old','db','nas','app','tools','c'*64,'books')
+        drill.start_consumer.assert_called_once_with('nas','db','app','tools','books')
 
     def test_reader_and_boot_boundaries(self):
         source = Path(original.__file__).read_text()

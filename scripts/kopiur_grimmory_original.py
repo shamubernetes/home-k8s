@@ -100,7 +100,8 @@ def unpack(filename,point):
    assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
    data=archive.extractfile(member) if member.isfile() else None
    rows.append([name,member.mode,member.uid,member.gid,hashlib.file_digest(data,'sha256').hexdigest() if data else None])
-  archive.extractall(point,filter='fully_trusted')
+  # Original numeric IDs must survive a different recovery image's name database.
+  archive.extractall(point,filter='fully_trusted',numeric_owner=True)
  return members,rows
 source=root/'grimmory-data';point=pathlib.Path('/appdata');point.mkdir(exist_ok=True)
 unpack(r/'app-data.tar',point)

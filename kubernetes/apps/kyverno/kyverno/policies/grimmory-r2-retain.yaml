@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kyverno.io/clusterpolicy_v1.json
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: grimmory-r2-retain
+  annotations:
+    policies.kyverno.io/title: Retain Grimmory replicated recovery points
+    policies.kyverno.io/subject: Snapshot
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  admission: true
+  background: false
+  webhookConfiguration:
+    failurePolicy: Fail
+  rules:
+  - name: retain-grimmory-r2-copies
+    match:
+      any:
+      - resources:
+          kinds: ["kopiur.home-operations.com/v1alpha1/Snapshot"]
+          namespaces: ["media"]
+          operations: ["CREATE", "UPDATE"]
+          selector:
+            matchLabels:
+              kopiur.home-operations.com/origin: replicated
+              kopiur.home-operations.com/snapshot-replication: grimmory-nas-to-r2
+              # Fail closed across a repository replacement until requalified.
+              kopiur.home-operations.com/repository-uid: 3e49e730-4f33-4673-91ef-262e6b0bcbc5
+    preconditions:
+      all:
+      - key: "{{ request.object.spec.repository.kind || '' }}"
+        operator: Equals
+        value: Repository
+      - key: "{{ request.object.spec.repository.name || '' }}"
+        operator: Equals
+        value: grimmory-r2
+      - key: "{{ request.object.spec.repository.namespace || '' }}"
+        operator: Equals
+        value: media
+    mutate:
+      patchStrategicMerge:
+        spec:
+          # Retain manifests when child CRs are deleted. Pruning/retirement is separate.
+          deletionPolicy: Retain

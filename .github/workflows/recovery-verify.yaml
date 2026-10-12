@@ -35,6 +35,7 @@ on:
         - identities
         - radarr-transport
         - cwa-bdl-startup
+        - chaptarr-startup
       nas_snapshot:
         description: "Exact original NAS manifest, required only for Whisparr original proof"
         type: string
@@ -83,7 +84,7 @@ jobs:
           postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-sonarr-original|postgres-whisparr|postgres-whisparr-original) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
           identities|radarr-transport) ;;
-          cwa-bdl-startup) ;;
+          cwa-bdl-startup|chaptarr-startup) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
         esac
         # GitHub can resolve fork objects by SHA. Require an actual branch tip
@@ -132,7 +133,7 @@ jobs:
         flux2 = "2.9.5"
         TOML
             ;;
-          mixed-*|identities|radarr-transport|cwa-bdl-startup)
+          mixed-*|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup)
             cat > "$RUNNER_TEMP/recovery-tools/mise.toml" <<'TOML'
         [tools]
         python = "3.14.7"
@@ -183,7 +184,7 @@ jobs:
           tunarr) tools=(python3 node yq kubectl helm jq flux) ;;
           deadlines) tools=(python3 yq kyverno) ;;
           postgres-*) tools=(python3 yq kustomize kubectl helm jq flux) ;;
-          mixed-*|identities|radarr-transport|cwa-bdl-startup) tools=(python3) ;;
+          mixed-*|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup) tools=(python3) ;;
           *) exit 1 ;;
         esac
         for tool in "${tools[@]}"; do
@@ -344,3 +345,11 @@ jobs:
         python3 -m unittest discover -s scripts/tests -p test_kopiur_cwa_startup_hold.py -v
         python3 -m unittest discover -s scripts/tests -p test_kopiur_cwa_bdl_startup.py -v
         python3 scripts/kopiur-cwa-bdl-startup-native.py
+
+    - name: Chaptarr non-root native Books startup prerequisite
+      if: ${{ inputs.suite == 'chaptarr-startup' }}
+      env:
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+      run: |
+        python3 -m unittest discover -s scripts/tests -p test_kopiur_chaptarr_startup.py -v
+        python3 scripts/kopiur-chaptarr-startup-native.py

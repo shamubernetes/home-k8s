@@ -5,6 +5,7 @@ resources:
 - ./defaultPodResources.yaml
 - ./disallowEmptyIngress.yaml
 - ./ghcrPullSecret.yaml
+- ./grimmory-r2-retain.yaml
 - ./kopiur-movers.yaml
 - ./safeToEvict.yaml
 - ./talos-runner-boundary.yaml

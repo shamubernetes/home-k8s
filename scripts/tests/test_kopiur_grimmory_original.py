@@ -136,6 +136,15 @@ class OriginalTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(json.loads(result.stdout)['books_original_bytes_metadata_equal'])
 
+    def test_original_preserves_books_setgid_for_foreign_numeric_group(self):
+        source = Path(original.__file__).read_text()
+        # The original Books root is mode02777, gid100. Checker runs gid568.
+        # Linux otherwise strips setgid on chmod without CAP_FSETID.
+        self.assertIn("user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE','FSETID')", source)
+        self.assertEqual(source.count("'FSETID'"), 1)
+        result = self.execute_check(books='valid', numeric_names=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_original_check_preserves_setgid_directories(self):
         for mode in (0o2750, 0o2775):
             result = self.execute_check(root_mode=mode)

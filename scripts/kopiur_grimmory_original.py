@@ -265,8 +265,9 @@ def exercise(identity, payload, deadline):
             if not re.fullmatch(r'[A-Za-z0-9]+',obj):raise ValueError('invalid original root')
             transport.exec(reader,'k snapshot restore '+shlex.quote(obj)+' /restored/restored >/dev/null\n',password=password)
             native.docker('rm','-f',reader);drill.containers.remove(reader)
+            # Restore Books setgid directories owned by gid100 while checker is gid568.
             checker=drill.start('checker-'+kind,native.PYTHON,checker_mounts,
-                command=['python3','-c','import time;time.sleep(1800)'],user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
+                command=['python3','-c','import time;time.sleep(1800)'],user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE','FSETID'))
             drill.native_python={checker}
             receipt=checked_original(drill,checker,original)
             fresh_password=secrets.token_hex(24)

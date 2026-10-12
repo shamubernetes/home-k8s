@@ -122,4 +122,8 @@ spec:
     parallel: 2
     policies: none
   # Preserve every copied point. No pruning is introduced.
-  suspend: false
+  # Suspended 2026-10-12: the morning mover burst cannot finish the full-history
+  # R2 copy inside the deployed 1h Job deadline; three consecutive cycles
+  # hit DeadlineExceeded (KubeJobFailed). Scoped K8S-92 gate repair; unsuspend
+  # after the deadline repair.
+  suspend: true

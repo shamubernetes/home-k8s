@@ -151,6 +151,24 @@ class BooksMountTests(unittest.TestCase):
         self.assertEqual(contract['uid'], 568)
         self.assertEqual(contract['writable'], ['TV'])
 
+    def test_whisparr_rollback_preserves_adult_writes(self):
+        result = self.shell_probe(False, directory='Adult')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['writable_paths'], ['Adult'])
+
+    def test_whisparr_writable_books_rejected(self):
+        result = self.shell_probe(True, directory='Adult')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Books is writable', result.stderr)
+
+    def test_whisparr_exact_live_digest(self):
+        contract = module.CONTRACTS['whisparr']
+        manifest = (ROOT / 'kubernetes/apps/arrs/whisparr/app/helmrelease.yaml').read_text()
+        self.assertIn(contract['image'].split(':', 1)[1], manifest)
+        self.assertTrue(contract['shell_probe'])
+        self.assertEqual(contract['uid'], 568)
+        self.assertEqual(contract['writable'], ['Adult'])
+
     def test_cleanup_continues_after_failure(self):
         seen = []
         def inspect(kind, name, owner):

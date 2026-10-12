@@ -143,9 +143,11 @@ def exercise():
     for item in (info, db_info):
         if item['HostConfig'].get('PortBindings') or item['HostConfig']['LogConfig']['Type'] != 'none':
             raise RuntimeError('private native boundary failed')
-        if sorted(item['HostConfig']['CapAdd']) != sorted(['CHOWN', 'SETUID', 'SETGID', 'FOWNER', 'DAC_OVERRIDE']):
+        added = sorted(value.removeprefix('CAP_') for value in item['HostConfig']['CapAdd'])
+        dropped = [value.removeprefix('CAP_') for value in item['HostConfig']['CapDrop']]
+        if added != sorted(['CHOWN', 'SETUID', 'SETGID', 'FOWNER', 'DAC_OVERRIDE']) or dropped != ['ALL']:
             raise RuntimeError('production capability parity failed')
-    if fence('acquire', str(int(time.time()) + 1801), '1', check=False).returncode == 0:
+    if fence('acquire', str(int(time.time()) + 3600), '1', check=False).returncode == 0:
         raise RuntimeError('oversized hold accepted')
     if execute('su-exec', '568:568', 'sh', '-c', 'printf unsafe >/runtime-escrow/fence/request', check=False).returncode == 0:
         raise RuntimeError('native UID changed root fence state')

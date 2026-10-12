@@ -88,7 +88,7 @@ def exercise(replacement):
             wait(lambda: status().returncode != 0, 5)
             if not not check(first):
                 raise RuntimeError('native qualification check failed')
-            wait(lambda: docker('exec', name, '/bin/bash', '-c', 'curl --fail --silent --max-time 2 http://127.0.0.1:8789/ping >/dev/null', check=False).returncode == 0, 120)
+            wait(lambda: docker('exec', name, '/bin/bash', '-c', 'wget -q -T 2 -O /dev/null http://127.0.0.1:8789/ping', check=False).returncode == 0, 120)
             command = docker('exec', name, '/bin/bash', '-c', 'tr "\\0" " " </proc/1/cmdline').stdout
             if not command.strip() == 'dotnet /app/Chaptarr.dll -nobrowser -data=/config':
                 raise RuntimeError('native qualification check failed')

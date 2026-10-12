@@ -70,7 +70,7 @@ class OriginalTests(unittest.TestCase):
     def test_embedded_programs_compile(self):
         for script in (original.CHECK, original.BOOT):compile(script, '<isolated-original>', 'exec')
 
-    def execute_check(self, file_mode=0o640, root_mode=0o2750, books=None):
+    def execute_check(self, file_mode=0o640, root_mode=0o2750, books=None, numeric_names=False):
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as temporary:
             root = Path(temporary)/'restored'
             runtime = root/'mariadb-config/kopiur/runtime'
@@ -121,8 +121,29 @@ class OriginalTests(unittest.TestCase):
             script = original.CHECK.replace("'/data/restored'", repr(str(root))).replace(
                 "'/appdata'", repr(str(Path(temporary)/'appdata'))).replace(
                 "'/bookdata'", repr(str(Path(temporary)/'bookdata')))
+            if numeric_names:
+                # Exercise tarfile's privileged ownership path on files owned by
+                # this test user. Any name lookup would reinterpret original IDs.
+                script = ('import tarfile, unittest.mock\n'
+                    'tarfile.os.geteuid = lambda: 0\n'
+                    'tarfile.pwd.getpwnam = unittest.mock.Mock(side_effect=AssertionError("owner name lookup"))\n'
+                    'tarfile.grp.getgrnam = unittest.mock.Mock(side_effect=AssertionError("group name lookup"))\n') + script
             return subprocess.run([sys.executable, '-c', script], input=json.dumps(expected),
                 text=True, capture_output=True, timeout=10)
+
+    def test_original_preserves_numeric_owners_without_image_name_lookup(self):
+        result = self.execute_check(books='valid', numeric_names=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)['books_original_bytes_metadata_equal'])
+
+    def test_original_preserves_books_setgid_for_foreign_numeric_group(self):
+        source = Path(original.__file__).read_text()
+        # The original Books root is mode02777, gid100. Checker runs gid568.
+        # Linux otherwise strips setgid on chmod without CAP_FSETID.
+        self.assertIn("user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE','FSETID')", source)
+        self.assertEqual(source.count("'FSETID'"), 1)
+        result = self.execute_check(books='valid', numeric_names=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_original_check_preserves_setgid_directories(self):
         for mode in (0o2750, 0o2775):

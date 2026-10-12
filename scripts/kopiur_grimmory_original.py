@@ -100,7 +100,8 @@ def unpack(filename,point):
    assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
    data=archive.extractfile(member) if member.isfile() else None
    rows.append([name,member.mode,member.uid,member.gid,hashlib.file_digest(data,'sha256').hexdigest() if data else None])
-  archive.extractall(point,filter='fully_trusted')
+  # Original numeric IDs must survive a different recovery image's name database.
+  archive.extractall(point,filter='fully_trusted',numeric_owner=True)
  return members,rows
 source=root/'grimmory-data';point=pathlib.Path('/appdata');point.mkdir(exist_ok=True)
 unpack(r/'app-data.tar',point)
@@ -264,8 +265,9 @@ def exercise(identity, payload, deadline):
             if not re.fullmatch(r'[A-Za-z0-9]+',obj):raise ValueError('invalid original root')
             transport.exec(reader,'k snapshot restore '+shlex.quote(obj)+' /restored/restored >/dev/null\n',password=password)
             native.docker('rm','-f',reader);drill.containers.remove(reader)
+            # Restore Books setgid directories owned by gid100 while checker is gid568.
             checker=drill.start('checker-'+kind,native.PYTHON,checker_mounts,
-                command=['python3','-c','import time;time.sleep(1800)'],user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
+                command=['python3','-c','import time;time.sleep(1800)'],user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE','FSETID'))
             drill.native_python={checker}
             receipt=checked_original(drill,checker,original)
             fresh_password=secrets.token_hex(24)

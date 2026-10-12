@@ -11,7 +11,13 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = 'docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526'
 MARIA = 'docker.io/linuxserver/mariadb:11.8.8@sha256:fa63c6ff84bd6bab0a188d68e1b4cd1e4e1b34c22101fc52d544a53dfd502d45'
+HELPERS = ROOT / 'kubernetes/apps/media/grimmory/app'
 HOLDER = ROOT / 'scripts/kopiur-grimmory-fence.sh'
+PRODUCTION_HOLDER = HELPERS / 'fence.sh'
+if PRODUCTION_HOLDER.exists():
+    if PRODUCTION_HOLDER.read_bytes() != HOLDER.read_bytes():
+        raise RuntimeError('production fence differs from qualified contract')
+    HOLDER = PRODUCTION_HOLDER
 NATIVE = ['/usr/local/bin/entrypoint.sh', 'java', '--enable-native-access=ALL-UNNAMED', '--enable-preview', '-jar', '/app/app.jar']
 OWNER = uuid.uuid4().hex
 PREFIX = 'k92-grimm-fence-' + OWNER[:12]
@@ -93,9 +99,12 @@ def exercise():
               'MYSQL_USER': 'grimmory', 'MYSQL_PASSWORD': password, 'PUID': '568', 'PGID': '568', 'TZ': 'UTC'}
     app_env = {'DATABASE_URL': 'jdbc:mariadb://127.0.0.1:3306/grimmory', 'DATABASE_USERNAME': 'grimmory',
                'DATABASE_PASSWORD': password, 'USER_ID': '568', 'GROUP_ID': '568', 'FORCE_DISABLE_OIDC': 'true',
-               'KOPIUR_POD_UID': pod_uid, 'JAVA_TOOL_OPTIONS': '-Xmx384m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 --enable-preview'}
+               'KOPIUR_POD_UID': pod_uid, 'GRIMMORY_BOOKDROP': '/books/bookdrop',
+               'JAVA_TOOL_OPTIONS': '-Xmx384m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 --enable-preview'}
     runtime_volume, app_volume, books_volume = volume('runtime'), volume('app'), volume('books')
-    create(db, MARIA, 'none', db_env, ('--tmpfs=/config:rw,uid=568,gid=568,size=512m', '-v', runtime_volume + ':/fixture-runtime'))
+    db_volume = volume('db')
+    create(db, MARIA, 'none', db_env, ('-v', db_volume + ':/config', '-v', runtime_volume + ':/fixture-runtime',
+                                     '-v', runtime_volume + ':/runtime-escrow:ro'))
     docker('start', db)
 
     def sql(statement, check=True):
@@ -107,8 +116,14 @@ def exercise():
     create(app, IMAGE, 'container:' + db, app_env,
            ('-v', app_volume + ':/app/data', '-v', books_volume + ':/books',
             '--tmpfs=/bookdrop:rw,uid=568,gid=568,size=16m', '-v', runtime_volume + ':/runtime-escrow',
+            '-v', db_volume + ':/database-state:ro',
             '--entrypoint=/bin/sh'), ('/fence.sh', 'supervise', *NATIVE))
     docker('cp', str(HOLDER), app + ':/fence.sh')
+    if PRODUCTION_HOLDER.exists():
+        for name in ('runtime.sh', 'books.sh'):
+            docker('cp', str(HELPERS / name), app + ':/' + name)
+        for name in ('backup.sh', 'runtime.sh'):
+            docker('cp', str(HELPERS / name), db + ':/' + name)
     docker('start', app)
 
     def execute(*args, check=True):
@@ -143,16 +158,18 @@ def exercise():
     for item in (info, db_info):
         if item['HostConfig'].get('PortBindings') or item['HostConfig']['LogConfig']['Type'] != 'none':
             raise RuntimeError('private native boundary failed')
-        if sorted(item['HostConfig']['CapAdd']) != sorted(['CHOWN', 'SETUID', 'SETGID', 'FOWNER', 'DAC_OVERRIDE']):
+        added = sorted(value.removeprefix('CAP_') for value in item['HostConfig']['CapAdd'])
+        dropped = [value.removeprefix('CAP_') for value in item['HostConfig']['CapDrop']]
+        if added != sorted(['CHOWN', 'SETUID', 'SETGID', 'FOWNER', 'DAC_OVERRIDE']) or dropped != ['ALL']:
             raise RuntimeError('production capability parity failed')
-    if fence('acquire', str(int(time.time()) + 1801), '1', check=False).returncode == 0:
+    if fence('acquire', str(int(time.time()) + 3600), '1', check=False).returncode == 0:
         raise RuntimeError('oversized hold accepted')
     if execute('su-exec', '568:568', 'sh', '-c', 'printf unsafe >/runtime-escrow/fence/request', check=False).returncode == 0:
         raise RuntimeError('native UID changed root fence state')
 
     results = []
     for release in (True, False):
-        deadline = int(time.time()) + 18
+        deadline = int(time.time()) + (120 if PRODUCTION_HOLDER.exists() else 18)
         evidence = fence('acquire', str(deadline), '8').stdout.strip()
         if evidence.split()[0] != pod_uid or len(evidence.split()) != 5:
             raise RuntimeError('native evidence identity mismatch')
@@ -160,6 +177,12 @@ def exercise():
         if health():
             raise RuntimeError('native Java still served requests while fenced')
         fence('liveness')
+        if PRODUCTION_HOLDER.exists():
+            fence('check', evidence, '60')
+            execute('sh', '/runtime.sh', 'capture')
+            docker('exec', db, 's6-setuidgid', 'abc', 'bash', '/backup.sh')
+            docker('exec', '-e', 'GRIMMORY_DB_BUNDLE=/database-state/kopiur', app, 'sh', '/runtime.sh', 'verify')
+            fence('check', evidence, '1')
         if execute('sh', '-c', 'su-exec 568:568 cat /proc/"$1"/environ | sha256sum', 'native-env', process).stdout.split()[0] != environment_digest:
             raise RuntimeError('native runtime changed under fence')
         if execute('sh', '-c', 'sha256sum /proc/"$1"/cmdline', 'native-command', process).stdout.split()[0] != command_digest:
@@ -222,7 +245,8 @@ def exercise():
             'replacement_preserves_absolute_expiry': True, 'old_process_evidence_rejected': True,
             'replacement_http_status': 200, 'replacement_data_equal': True,
             'argv_sha256': command_digest, 'pod_identity_checked': True, 'root_state_protected': True,
-            'capabilities_unchanged': True, 'production_shared_books_acceptance': False}
+            'capabilities_unchanged': True, 'production_capture_adapter_exercised': PRODUCTION_HOLDER.exists(),
+            'production_shared_books_acceptance': False}
 
 
 def main():

@@ -143,6 +143,7 @@ def exercise():
     if not setup():
         raise RuntimeError('native database-backed setup gate failed')
     process = fence('process').stdout.strip()
+    supervised_umask = execute('sh', '-c', 'awk "/^Umask:/{print \\$2}" /proc/"$1"/status', 'native-umask', process).stdout.strip()
     if process == '1':
         raise RuntimeError('supervised native process was not separate')
     command_digest = execute('sh', '-c', 'sha256sum /proc/"$1"/cmdline', 'native-command', process).stdout.split()[0]
@@ -241,7 +242,23 @@ def exercise():
         raise RuntimeError('native replacement recovery not proved')
     if execute('sh', '-c', 'sha256sum /books/bookdrop/fence-fixture /app/data/fence-fixture').stdout != file_digest or sql('SELECT id,HEX(body) FROM grimmory.fence_fixture').stdout != native_sql:
         raise RuntimeError('replacement data equality failed')
+    docker('stop', '--time=20', app)
+    rollback = PREFIX + '-rollback'
+    create(rollback, IMAGE, 'container:' + db, app_env,
+           ('-v', app_volume + ':/app/data', '-v', books_volume + ':/books',
+            '--tmpfs=/bookdrop:rw,uid=568,gid=568,size=16m'))
+    docker('start', rollback)
+    wait(lambda: docker('exec', rollback, 'wget', '-q', '-T', '2', '-O', '/dev/null', 'http://127.0.0.1:6060/api/v1/healthcheck', check=False).returncode == 0)
+    rollback_umask = docker('exec', rollback, 'sh', '-c', "awk '/^Umask:/{print $2}' /proc/1/status").stdout.strip()
+    if rollback_umask != supervised_umask or len(rollback_umask) != 4 or any(char not in '01234567' for char in rollback_umask):
+        raise RuntimeError('native umask parity failed')
+    if docker('exec', rollback, 'sh', '-c', 'test "$(cat /proc/1/comm)" = java; sha256sum /books/bookdrop/fence-fixture /app/data/fence-fixture').stdout != file_digest or sql('SELECT id,HEX(body) FROM grimmory.fence_fixture').stdout != native_sql:
+        raise RuntimeError('independent native rollback equality failed')
+    rollback_setup = json.loads(docker('exec', rollback, 'wget', '-q', '-T', '2', '-O', '-', 'http://127.0.0.1:6060/api/v1/setup/status').stdout)
+    if rollback_setup.get('data') is not False:
+        raise RuntimeError('independent rollback database gate failed')
     return {'image': IMAGE, 'native_fences': results, 'runtime_sha256': environment_digest,
+            'native_umask_unchanged': True, 'independent_native_rollback_equal': True, 'rollback_http_status': 200,
             'replacement_preserves_absolute_expiry': True, 'old_process_evidence_rejected': True,
             'replacement_http_status': 200, 'replacement_data_equal': True,
             'argv_sha256': command_digest, 'pod_identity_checked': True, 'root_state_protected': True,

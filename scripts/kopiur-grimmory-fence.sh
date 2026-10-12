@@ -1,6 +1,7 @@
 #!/bin/sh
 # App-local Java process-group fence. No shared PID namespace or added capability.
 set -eu
+native_umask=$(umask)
 umask 077
 state=/runtime-escrow/fence
 max_hold=1800
@@ -112,7 +113,7 @@ case ${1:-} in
     }
     trap cleanup EXIT
     trap 'exit 143' TERM HUP INT
-    setsid "$@" &
+    (umask "$native_umask"; exec setsid "$@") &
     child=$!
     child_birth=$(birth "$child")
     ticks=0

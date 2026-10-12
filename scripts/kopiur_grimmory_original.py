@@ -130,6 +130,19 @@ if 'books_sha256' in expected:
 print(json.dumps(receipt))
 '''
 
+def checked_original(drill, checker, expected):
+    # The checker may fail on credential-bearing files. Export only a source-line
+    # number, never exception messages, paths, original bytes or tracebacks.
+    program = 'import json,traceback\ntry:\n exec(compile('+repr(CHECK)+',"<grimmory-original-check>","exec"))\nexcept Exception as error:\n frames=traceback.extract_tb(error.__traceback__)\n line=next((f.lineno for f in reversed(frames) if f.filename=="<grimmory-original-check>"),0)\n print(json.dumps({"check_failed_line":line}))\n'
+    result=json.loads(drill.python(checker,program,json.dumps(expected)))
+    if 'check_failed_line' in result:
+        line=result['check_failed_line']
+        if type(line) is not int or not 0<=line<=len(CHECK.splitlines()):
+            raise RuntimeError('invalid original checker diagnostic')
+        raise RuntimeError('original integrity checker failed at source line '+str(line))
+    return result
+
+
 BOOT = '''import json,pathlib,sys,shlex,os
 c=json.load(sys.stdin);r=pathlib.Path('/data/restored/mariadb-config/kopiur/runtime')
 env={}
@@ -254,7 +267,7 @@ def exercise(identity, payload, deadline):
             checker=drill.start('checker-'+kind,native.PYTHON,checker_mounts,
                 command=['python3','-c','import time;time.sleep(1800)'],user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
             drill.native_python={checker}
-            receipt=json.loads(drill.python(checker,CHECK,json.dumps(original)))
+            receipt=checked_original(drill,checker,original)
             fresh_password=secrets.token_hex(24)
             receipt.update(json.loads(drill.python(checker,BOOT,json.dumps({'password':fresh_password,
                 'helpers':{n:(HELPERS/n).read_text() for n in ('restore.sh','runtime.sh')}}))))

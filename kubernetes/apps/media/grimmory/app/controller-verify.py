@@ -21,6 +21,7 @@ def epoch(name):
 def qualify():
     native.wait_for(lambda: epoch('database-ready') == native.EXPECTED_DATA)
     native.wait_for(native.health)
+    native.wait_for(native.setup_status)
     native.check_database()
     first_database = epoch('database-epoch')
     first_application = epoch('application-epoch')
@@ -29,6 +30,7 @@ def qualify():
     native.wait_for(lambda: epoch('database-epoch') not in ('', first_database) and
                     epoch('database-ready') == native.EXPECTED_DATA)
     native.wait_for(native.health)
+    native.wait_for(native.setup_status)
     native.check_database()
     # Freeze the native Java process once. The real HTTP probe, not this verifier
     # or the app wrapper, must cause Kubernetes to restart its container.
@@ -37,6 +39,7 @@ def qualify():
     native.wait_for(lambda: not native.health())
     native.wait_for(lambda: epoch('application-epoch') not in ('', first_application))
     native.wait_for(native.health)
+    native.wait_for(native.setup_status)
     native.check_database()
     backend = os.environ['BACKEND']
     receipt = {'backend': backend, 'snapshot_id': native.SNAPSHOTS[backend],
@@ -48,7 +51,9 @@ def qualify():
                'application_epoch': epoch('application-epoch'),
                'native_health': True, 'original_pvc_readonly': True,
                'shared_books_qualified': False,
-               'database_backed_api_qualified': False,
+               'books_original_mounted': True,
+               'database_backed_setup_status_equal': True,
+               'authenticated_catalog_api_qualified': False,
                'production_watchdog_qualified': False}
     (CONTROL / 'controller-receipt.json').write_text(json.dumps(receipt))
     (CONTROL / 'qualification-complete').touch()

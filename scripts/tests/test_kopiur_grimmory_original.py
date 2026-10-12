@@ -48,7 +48,7 @@ class OriginalTests(unittest.TestCase):
     def test_embedded_programs_compile(self):
         for script in (original.CHECK, original.BOOT):compile(script, '<isolated-original>', 'exec')
 
-    def execute_check(self, file_mode=0o640, root_mode=0o2750):
+    def execute_check(self, file_mode=0o640, root_mode=0o2750, books=None):
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as temporary:
             root = Path(temporary)/'restored'
             runtime = root/'mariadb-config/kopiur/runtime'
@@ -63,11 +63,33 @@ class OriginalTests(unittest.TestCase):
             for name in ('application.env0', 'application.argv0', 'process-start.txt', 'runtime.txt'):
                 (runtime/name).write_bytes(b'native-runtime')
             def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+            expected = copy.deepcopy(self.payload['original'])
+            if books:
+                physical = Path(temporary)/'source-books'
+                physical.mkdir()
+                (physical/'bookdrop').mkdir()
+                (physical/'a book.bin').write_bytes(b'original-physical-book')
+                (physical/'a book.bin').chmod(0o640)
+                physical.chmod(0o2775)
+                with tarfile.open(runtime/'books.tar', 'w') as archive:
+                    archive.add(physical, arcname='.')
+                    if books == 'traversal':
+                        archive.addfile(tarfile.TarInfo('../outside'))
+                    if books == 'symlink':
+                        link = tarfile.TarInfo('link')
+                        link.type = tarfile.SYMTYPE
+                        link.linkname = '/outside'
+                        archive.addfile(link)
+                (runtime/'runtime.txt').write_text('format=grimmory-runtime-books-v2\n')
+                (runtime/'books.txt').write_text('format=grimmory-books-v1\nsource=/books\n'
+                    'bookdrop_subpath=bookdrop\nconsistency=repeated-byte-metadata-stability-not-writer-fenced\n')
+                expected['books_sha256'] = digest(runtime/'books.tar')
+                if books == 'digest':expected['books_sha256'] = 'f'*64
+                if books == 'omitted':del expected['books_sha256']
             roster = sorted(runtime.iterdir())
             (runtime/'runtime.sha256').write_text(''.join(digest(p)+'  '+p.name+'\n' for p in roster))
             base = runtime.parent
             (base/'grimmory.sql').write_bytes(b'native-sql')
-            expected = copy.deepcopy(self.payload['original'])
             expected['sql_sha256'] = digest(base/'grimmory.sql')
             expected['runtime_sha256'] = digest(runtime/'runtime.sha256')
             (base/'COMPLETE').write_text(expected['generation']+'\n')
@@ -75,7 +97,8 @@ class OriginalTests(unittest.TestCase):
                 +'runtime_generation='+expected['generation']+'\nsql_sha256='+expected['sql_sha256']
                 +'\nruntime_manifest_sha256='+expected['runtime_sha256']+'\n')
             script = original.CHECK.replace("'/data/restored'", repr(str(root))).replace(
-                "'/appdata'", repr(str(Path(temporary)/'appdata')))
+                "'/appdata'", repr(str(Path(temporary)/'appdata'))).replace(
+                "'/bookdata'", repr(str(Path(temporary)/'bookdata')))
             return subprocess.run([sys.executable, '-c', script], input=json.dumps(expected),
                 text=True, capture_output=True, timeout=10)
 
@@ -89,6 +112,26 @@ class OriginalTests(unittest.TestCase):
         for mode in (0o2640, 0o4640):
             result = self.execute_check(file_mode=mode)
             self.assertNotEqual(result.returncode, 0)
+
+    def test_books_original_contract(self):
+        self.payload['original']['books_sha256'] = 'd'*64
+        original.validate_original(self.payload)
+        self.payload['original']['books_sha256'] = 'latest'
+        with self.assertRaises(ValueError):original.validate_original(self.payload)
+
+    def test_books_original_bytes_metadata_and_bookdrop(self):
+        result = self.execute_check(books='valid')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(result.stdout)
+        self.assertEqual(receipt['books_files'], 1)
+        self.assertEqual(receipt['books_entries'], 3)
+        self.assertTrue(receipt['books_original_bytes_metadata_equal'])
+        self.assertTrue(receipt['bookdrop_subtree_restored'])
+        self.assertFalse(receipt['shared_writer_fencing_qualified'])
+
+    def test_books_original_rejects_unsafe_or_unbound_payload(self):
+        for case in ('traversal', 'symlink', 'digest', 'omitted'):
+            self.assertNotEqual(self.execute_check(books=case).returncode, 0, case)
 
     def test_normalized_network_reference(self):
         identifier = 'd'*64

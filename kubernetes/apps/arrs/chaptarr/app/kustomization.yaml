@@ -12,3 +12,11 @@ resources:
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
+configMapGenerator:
+- name: chaptarr-kopiur-startup
+  files:
+  - startup-hold.sh=kopiur-startup-hold.sh
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

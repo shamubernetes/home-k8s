@@ -51,7 +51,14 @@ spec:
             image:
               repository: docker.io/chaptarr/chaptarr
               tag: 0.9.965@sha256:bb00d67cbe1485d1cd61ef178362a29b42aa08f86b290841aab4b115ad2647a6
+            # Deadline zero stages the qualified guard without pausing service.
+            command: ["/bin/bash", "/backup-contract/startup-hold.sh"]
+            args: ["start", "0"]
             env:
+              KOPIUR_POD_UID:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.uid
               CHAPTARR__APP__INSTANCENAME: Chaptarr
               CHAPTARR__AUTH__METHOD: External
               CHAPTARR__AUTH__REQUIRED: DisabledForLocalAddresses
@@ -107,6 +114,15 @@ spec:
           http:
             port: *port
     persistence:
+      backup-contract:
+        type: configMap
+        name: chaptarr-kopiur-startup
+        defaultMode: 365 # 0555
+        advancedMounts:
+          chaptarr:
+            app:
+            - path: /backup-contract
+              readOnly: true
       config:
         existingClaim: *app
         globalMounts:
@@ -119,11 +135,28 @@ spec:
         type: nfs
         server: "${IPAM_IP_NFS}"
         path: /mnt/user/Media
-        globalMounts:
-        - path: /media
-        - path: /audiobooks
-          subPath: Audiobooks
-        - path: /ebooks
-          subPath: Books
-        - path: /downloads
-          subPath: Downloads
+        advancedMounts:
+          chaptarr:
+            app:
+            - path: /media
+            - path: /audiobooks
+              subPath: Audiobooks
+            - path: /ebooks
+              subPath: Books
+            - path: /downloads
+              subPath: Downloads
+            # Database init containers do not write local Books or parent Media.
+            init-db-main: &readonlyMedia
+            - path: /media
+              readOnly: true
+            - path: /audiobooks
+              subPath: Audiobooks
+              readOnly: true
+            - path: /ebooks
+              subPath: Books
+              readOnly: true
+            - path: /downloads
+              subPath: Downloads
+              readOnly: true
+            init-db-log: *readonlyMedia
+            init-db-cache: *readonlyMedia

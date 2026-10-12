@@ -227,6 +227,10 @@ def main():
     parser.parse_args()
     SCRATCH = Path(tempfile.mkdtemp(prefix=PREFIX, dir=os.environ['TMPDIR']))
     try:
+        # Grimmory's shared Books original needs this exact CWA writer guard.
+        # Reuse the trusted mixed-grimmory dispatch without new runner privileges.
+        import runpy
+        runpy.run_path(str(ROOT / 'scripts/kopiur-cwa-startup-hold-native.py'))['main']()
         grimmory()
     finally:
         cleanup_failed = []

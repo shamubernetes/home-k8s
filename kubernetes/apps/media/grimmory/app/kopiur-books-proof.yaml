@@ -1,0 +1,157 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/job-v1.json
+# Read only the two completed controller restores. No production PVC or runtime Secret.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grimmory-k8s92-books-proof
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grimmory-k8s92-books-proof
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        # Deliberately omit fsGroup. A remount must not change restored ownership/modes.
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: verify
+        image: docker.io/library/python:3.13-alpine@sha256:399babc8b49529dabfd9c922f2b5eea81d611e4512e3ed250d75bd2e7683f4b0
+        command: [python3, -B, -c]
+        args:
+        - |
+          import sys
+          try:
+              import hashlib, json, pathlib, stat, tarfile
+              expected_generation = 'd4628863-facf-417b-83b6-6e91e405f572'
+              expected_sql = 'e2cd65afce4e8ecafe15c4462162f536b6dd2531ed709e63e1f84ba17493cb69'
+              expected_roster = '959144d641d4a5b5ebf684563719e98596fe7bd98db61d73ec9e6740985cf93b'
+              expected_tree = '4e1f1b2f56bfcb0ff57d15c2fdd01c856302e16591d7a76e29bbeb67c920bb87'
+              # Exact nonsecret original receipt from ARC 38193532128.
+              expected_runtime = {
+                  'application.env0': 'c6ce5d06db0f09995b7a628fdbb4b82ee60fcacffc27e0e9137fcd2fd71e19ad',
+                  'application.argv0': '41aeec711774466dfd5febc2b73f75b10cc425487c8b83d130467747a9d8d9b5',
+                  'app-data.tar': '865738a2c2891ffcbc3b6040cbc1021b478ccb7e59c3a7db62727d7792f97feb',
+                  'process-start.txt': 'aa0e6ab892ad6c13bc64b0f52f85709dfc8c20229e3e626cd3fde4d6898c3008',
+                  'runtime.txt': '7d75c8989bc8cbf7cd83c5f3851e6a6ccb214d40148af1643b2a084112b3a046',
+                  'books.tar': '04580ad60b15618d7665efdd3792fff53ed2c957160ef77c8f6cd61c152bf077',
+                  'books.txt': 'ee3b44a509661b8c6a244902d4442e56ed4302bdab630424e8c5cfc89799e6c9',
+              }
+              expected_books_tree = 'b58648198e93325536b4b3746a720fa8c2d024d8c0404c547b0309f62357a0e3'
+              def digest(path):
+                  with path.open('rb') as source:
+                      return hashlib.file_digest(source, 'sha256').hexdigest()
+              def metadata(path, uid, mode):
+                  details = path.lstat()
+                  assert not path.is_symlink(), 'symlink rejected'
+                  assert details.st_uid == uid and details.st_gid == 568, 'owner differs'
+                  assert stat.S_IMODE(details.st_mode) == mode, 'permissions differ'
+              receipts = []
+              for backend in ('nas', 'r2'):
+                  root = pathlib.Path('/' + backend)
+                  bundle = root / 'mariadb-config/kopiur'
+                  escrow = root / 'grimmory-runtime'
+                  assert (bundle / 'COMPLETE').read_text().strip() == expected_generation, 'SQL generation differs'
+                  assert (escrow / 'COMPLETE').read_text().strip() == expected_generation, 'escrow generation differs'
+                  manifest = dict(line.split('=', 1) for line in (bundle / 'manifest.txt').read_text().splitlines())
+                  assert manifest['format'] == 'mariadb-logical-runtime-v2', 'unsupported format'
+                  assert manifest['base_tables'] == '73', 'table inventory differs'
+                  assert manifest['runtime_generation'] == expected_generation, 'bound generation differs'
+                  assert manifest['sql_sha256'] == expected_sql and digest(bundle / 'grimmory.sql') == expected_sql, 'SQL differs'
+                  assert manifest['runtime_manifest_sha256'] == expected_roster, 'runtime binding differs'
+                  metadata(escrow, 0, 0o2750)
+                  metadata(escrow / 'current', 0, 0o2750)
+                  metadata(escrow / 'COMPLETE', 0, 0o640)
+                  metadata(bundle / 'runtime', 568, 0o2700)
+                  for runtime, uid, mode in ((bundle / 'runtime', 568, 0o600), (escrow / 'current', 0, 0o640)):
+                      assert digest(runtime / 'runtime.sha256') == expected_roster, 'roster differs'
+                      metadata(runtime / 'runtime.sha256', uid, mode)
+                      roster = dict(line.split('  ', 1)[::-1] for line in (runtime / 'runtime.sha256').read_text().splitlines())
+                      assert roster == expected_runtime, 'runtime roster differs'
+                      for name, checksum in expected_runtime.items():
+                          metadata(runtime / name, uid, mode)
+                          assert digest(runtime / name) == checksum, 'runtime file differs'
+                  appdata = root / 'grimmory-data'
+                  rows = []
+                  for path in [appdata, *sorted(appdata.rglob('*'))]:
+                      details = path.lstat()
+                      assert not path.is_symlink() and (path.is_file() or path.is_dir()), 'unsupported tree entry'
+                      rows.append([str(path.relative_to(appdata)), stat.S_IMODE(details.st_mode), details.st_uid,
+                                   details.st_gid, digest(path) if path.is_file() else None])
+                  tree_hash = hashlib.sha256(json.dumps(rows).encode()).hexdigest()
+                  assert tree_hash == expected_tree, 'native app tree differs'
+                  # Read the bound archive only. Never extract or print original paths/bytes.
+                  with tarfile.open(bundle / 'runtime/books.tar') as archive:
+                      members = archive.getmembers()
+                      seen, books_rows = set(), []
+                      for member in members:
+                          name = pathlib.PurePosixPath(member.name)
+                          assert not name.is_absolute() and '..' not in name.parts, 'unsafe Books path'
+                          assert str(name) not in seen, 'duplicate Books entry'
+                          seen.add(str(name))
+                          assert member.isfile() or member.isdir(), 'unsupported Books entry'
+                          assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000), 'privileged Books entry'
+                          payload = archive.extractfile(member) if member.isfile() else None
+                          checksum = hashlib.file_digest(payload, 'sha256').hexdigest() if payload else None
+                          if payload:
+                              payload.close()
+                          books_rows.append([str(name), member.mode, member.uid, member.gid, checksum])
+                      assert len(books_rows) == 14 and sum(m.isfile() for m in members) == 11, 'Books inventory differs'
+                      assert any(str(pathlib.PurePosixPath(m.name)) == 'bookdrop' and m.isdir() for m in members), 'bookdrop absent'
+                      books_tree = hashlib.sha256(json.dumps(sorted(books_rows)).encode()).hexdigest()
+                      assert books_tree == expected_books_tree, 'Books bytes or metadata differ'
+                  receipts.append({'backend': backend, 'generation': expected_generation, 'base_tables': 73,
+                                   'sql_sha256': expected_sql, 'runtime_roster_sha256': expected_roster,
+                                   'app_tree_sha256': tree_hash, 'root_escrow_permissions_preserved': True,
+                                   'books_archive_sha256': expected_runtime['books.tar'], 'books_tree_sha256': books_tree,
+                                   'books_entries': 14, 'books_files': 11, 'shared_writer_fencing_qualified': False})
+              print(json.dumps({'controller_restored_originals_equal': True, 'results': receipts}))
+          except Exception:
+              sys.exit('controller Books original equality failed; private details withheld')
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+        volumeMounts:
+        - name: nas
+          mountPath: /nas
+          readOnly: true
+        - name: r2
+          mountPath: /r2
+          readOnly: true
+      volumes:
+      - name: nas
+        persistentVolumeClaim:
+          claimName: grimmory-k8s92-books-original-nas
+          readOnly: true
+      - name: r2
+        persistentVolumeClaim:
+          claimName: grimmory-k8s92-books-original-r2
+          readOnly: true
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/networkpolicy-v1.json
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grimmory-k8s92-books-proof
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grimmory-k8s92-books-proof
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []

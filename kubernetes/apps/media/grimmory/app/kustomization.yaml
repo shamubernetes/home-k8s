@@ -11,6 +11,7 @@ resources:
 - ./kopiur-original-restores.yaml
 - ./kopiur-books-restores.yaml
 - ./kopiur-original-proof.yaml
+- ./kopiur-books-proof.yaml
 - ./kopiur-replication.yaml
 - ../../../../templates/volsync
 - ./secret.sops.yaml

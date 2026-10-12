@@ -4,8 +4,9 @@ kind: SnapshotPolicy
 metadata:
   name: grimmory
 spec:
-  # Retained captures use the incumbent hourly cadence after original native proof.
-  suspend: false
+  # K8S-92/K8S-109: no backup-induced app stops and no hourly captures.
+  # Resume only with non-disruptive original recovery proof and approved cadence.
+  suspend: true
   repository:
     kind: Repository
     name: grimmory-nas-smb
@@ -70,10 +71,10 @@ spec:
   policyRef:
     name: grimmory
   schedule:
-    # Preserve the live VolSync NAS cadence. Do not run on creation.
+    # Keep the prior slot as history, suspended until the new contract passes.
     cron: "57 * * * *"
     runOnCreate: false
     concurrencyPolicy: Forbid
-    suspend: false
+    suspend: true
   deletion:
     onScheduleDelete: Retain

@@ -5,8 +5,9 @@ metadata:
   annotations:
     kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/38035330767
 spec:
-  # Independent original production NAS/R2 native recovery passed before activation.
-  suspend: false
+  # Disable outage-causing writer holds until non-disruptive capture is qualified.
+  # Retain original recovery points and the independent VolSync backup path.
+  suspend: true
   repository:
     kind: Repository
     name: whisparr-nas-smb
@@ -102,8 +103,8 @@ spec:
   policyRef:
     name: whisparr
   schedule:
-    suspend: false
-    # Preserve incumbent primary cadence; keep draft daily lane suspended.
+    suspend: true
+    # Reactivation requires non-disruptive capture and explicitly approved cadence.
     cron: "${VOLSYNC_SCHEDULE_WHISPARR}"
     jitter: 10m
     runOnCreate: true

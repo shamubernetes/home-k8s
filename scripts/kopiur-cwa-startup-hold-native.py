@@ -59,6 +59,18 @@ def native_ready(name):
                   ok=False).returncode == 0
 
 
+def service_states(name):
+    states = {}
+    for service in SERVICES:
+        result = docker('exec', name, 's6-svstat', '-o', 'up,wantedup,pid', '/run/service/' + service, ok=False)
+        values = result.stdout.decode().split()
+        if result.returncode or len(values) != 3 or not values[2].lstrip('-').isdigit():
+            states[service] = ['unavailable']
+        else:
+            states[service] = values[:2] if int(values[2]) > 1 else ['no-native-pid']
+    return states
+
+
 def cleanup(name, owner):
     listing = ('container', 'ls', '-a', '--filter', 'name=^/' + name + '$', '--format', '{{.ID}}')
     ids = docker(*listing).stdout.decode().split()
@@ -135,10 +147,14 @@ def exercise(replacement):
         assert not probe(name, first)
         wait(lambda:native_ready(name))
         states = {}
-        for service in SERVICES:
-            values = docker('exec', name, 's6-svstat', '-o', 'up,wantedup,pid', '/run/service/' + service).stdout.decode().split()
-            assert len(values) == 3 and values[:2] == ['true', 'true'] and int(values[2]) > 1
-            states[service] = values[:2]
+        def services_ready():
+            states.update(service_states(name))
+            return all(values == ['true', 'true'] for values in states.values())
+        try:
+            wait(services_ready)
+        except RuntimeError:
+            # Only service names and booleans, never native startup log content.
+            raise RuntimeError('CWA native services not ready: ' + json.dumps(states, sort_keys=True)) from None
         return {'replacement_rejected': replacement, 'startup_without_native_writers': True,
                 'absolute_expiry_native_init_resumed': True, 'http_status': 200,
                 'native_service_states': states, 'production_capture_qualified': False}

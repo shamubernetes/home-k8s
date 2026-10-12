@@ -162,6 +162,14 @@ class NativeProofTest(unittest.TestCase):
         with patch.object(self.native, 'marker', return_value=expected), patch.object(self.native, 'no_native_services', return_value=False), patch.object(self.native.time, 'time', return_value=100), patch.object(self.native.time, 'monotonic', return_value=50):
             with self.assertRaises(AssertionError):self.native.await_expiry('owned', expected)
 
+    def test_native_service_roster_can_finish_after_http_readiness(self):
+        from types import SimpleNamespace
+        first = [SimpleNamespace(returncode=0, stdout=b'false true -1') for _ in self.native.SERVICES]
+        second = [SimpleNamespace(returncode=0, stdout=b'true true 123') for _ in self.native.SERVICES]
+        with patch.object(self.native, 'docker', side_effect=first + second):
+            self.assertTrue(all(x == ['no-native-pid'] for x in self.native.service_states('owned').values()))
+            self.assertTrue(all(x == ['true', 'true'] for x in self.native.service_states('owned').values()))
+
     def test_transport_or_invalid_evidence_is_not_absence(self):
         from types import SimpleNamespace
         with patch.object(self.native, 'docker', return_value=SimpleNamespace(returncode=1)):

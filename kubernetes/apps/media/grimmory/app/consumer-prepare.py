@@ -8,10 +8,11 @@ import secrets
 import shlex
 import tarfile
 
-GENERATION = '8dbce9ee-1a02-4860-8fd0-eb2b26fbf461'
-SQL = '9d8acbaeff6acae287106f1c0a274035f0c629037477e189e0bb29a51097b685'
-ROSTER = 'f1e7245db66c0a37b35e71bc65138285de2134bc77852648f94d2fc4dbd6f8bf'
+GENERATION = 'd4628863-facf-417b-83b6-6e91e405f572'
+SQL = 'e2cd65afce4e8ecafe15c4462162f536b6dd2531ed709e63e1f84ba17493cb69'
+ROSTER = '959144d641d4a5b5ebf684563719e98596fe7bd98db61d73ec9e6740985cf93b'
 TREE = '4e1f1b2f56bfcb0ff57d15c2fdd01c856302e16591d7a76e29bbeb67c920bb87'
+BOOKS_TREE = 'b58648198e93325536b4b3746a720fa8c2d024d8c0404c547b0309f62357a0e3'
 
 
 def digest(path):
@@ -27,6 +28,24 @@ def tree(root):
         rows.append([str(path.relative_to(root)), details.st_mode & 0o7777, details.st_uid,
                      details.st_gid, digest(path) if path.is_file() else None])
     return rows
+
+
+def extract_archive(source, destination, *, app_owners=False):
+    with tarfile.open(source) as archive:
+        members = archive.getmembers()
+        seen = set()
+        assert sum(member.size for member in members) < 512 * 1024 * 1024
+        for member in members:
+            path = PurePosixPath(member.name)
+            assert not path.is_absolute() and '..' not in path.parts
+            assert str(path) not in seen
+            seen.add(str(path))
+            assert member.isdir() or member.isfile()
+            assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
+            if app_owners:
+                assert member.uid == 568 and member.gid == 568
+        # All paths/types/modes pass before extraction. Never resolve owner names.
+        archive.extractall(destination, filter='fully_trusted', numeric_owner=True)
 
 
 def prepare():
@@ -49,26 +68,20 @@ def prepare():
         assert name not in checks
         checks[name] = checksum
     assert set(checks) == {'application.env0', 'application.argv0', 'app-data.tar',
-                           'process-start.txt', 'runtime.txt'}
+                           'process-start.txt', 'runtime.txt', 'books.tar', 'books.txt'}
     assert all(digest(runtime / name) == checksum for name, checksum in checks.items())
     appdata = Path('/appdata')
-    with tarfile.open(runtime / 'app-data.tar') as archive:
-        members = archive.getmembers()
-        seen = set()
-        assert sum(member.size for member in members) < 512 * 1024 * 1024
-        for member in members:
-            path = PurePosixPath(member.name)
-            assert not path.is_absolute() and '..' not in path.parts
-            assert str(path) not in seen
-            seen.add(str(path))
-            assert member.isdir() or member.isfile()
-            assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
-            assert member.uid == 568 and member.gid == 568
-        # All paths, entry types, privilege bits and owners pass before extraction.
-        archive.extractall(appdata, filter='fully_trusted')
+    extract_archive(runtime / 'app-data.tar', appdata, app_owners=True)
     before = tree(root / 'grimmory-data')
     assert before == tree(appdata), 'original app tree metadata or bytes differ'
     assert hashlib.sha256(json.dumps(before).encode()).hexdigest() == TREE
+    books = Path('/books')
+    extract_archive(runtime / 'books.tar', books)
+    rows = tree(books)
+    assert len(rows) == 14 and sum(row[4] is not None for row in rows) == 11
+    # The archive root canonicalizes to '.', matching the independent ARC receipt.
+    assert hashlib.sha256(json.dumps(sorted(rows)).encode()).hexdigest() == BOOKS_TREE
+    assert (books / 'bookdrop').is_dir()
 
     tools = Path('/tools')
     os.chown(tools, 568, 568)

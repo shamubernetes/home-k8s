@@ -27,6 +27,7 @@ verify_data() {
   [[ $actual == "$expected" ]]
 }
 verify_data
+[[ $("${client[@]}" grimmory -e 'SELECT COUNT(*) FROM users') == 0 ]]
 printf '%s\n' "$expected" > /control/database-ready
 for ((attempt=0; attempt<450; attempt++)); do
   if [[ -f /control/check-data ]]; then

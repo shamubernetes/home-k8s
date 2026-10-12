@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import types
 import unittest
@@ -62,7 +63,20 @@ class ControllerTests(unittest.TestCase):
         self.assertNotEqual(c.epoch('database-epoch'), 'old')
 
     def test_restore_runtime_dependency_is_rendered(self):
-        result = subprocess.run(['kubectl', 'kustomize', str(HERE)],
+        # Retain the qualified implementation without keeping proof consumers live.
+        render = Path(self.temporary.name) / 'render'
+        render.mkdir()
+        files = ['consumer-prepare.py', 'consumer-verify.py', 'controller-app.sh',
+                 'controller-database.sh', 'controller-verify.py', 'restore.sh', 'runtime.sh']
+        for name in files + ['kopiur-controller-recovery.yaml']:
+            shutil.copyfile(HERE / name, render / name)
+        (render / 'kustomization.yaml').write_text(json.dumps({
+            'apiVersion': 'kustomize.config.k8s.io/v1beta1', 'kind': 'Kustomization',
+            'resources': ['kopiur-controller-recovery.yaml'],
+            'configMapGenerator': [{'name': 'grimmory-books-controller-recovery-contract',
+                                    'files': files,
+                                    'options': {'disableNameSuffixHash': True}}]}))
+        result = subprocess.run(['kubectl', 'kustomize', str(render)],
                                 capture_output=True, text=True, check=True)
         result = subprocess.run(['yq', '-o=json', '-I=0', '.'], input=result.stdout,
                                 capture_output=True, text=True, check=True)
@@ -99,6 +113,19 @@ class ControllerTests(unittest.TestCase):
                       d['metadata']['name'] == 'grimmory-k8s92-books-recovery')
         self.assertEqual(policy['spec']['ingress'], [])
         self.assertEqual(policy['spec']['egress'], [])
+
+    def test_production_keeps_originals_without_disposable_consumers(self):
+        result = subprocess.run(['kubectl', 'kustomize', str(HERE)],
+                                capture_output=True, text=True, check=True)
+        result = subprocess.run(['yq', '-o=json', '-I=0', '.'], input=result.stdout,
+                                capture_output=True, text=True, check=True)
+        resources = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        names = {d['metadata']['name'] for d in resources}
+        self.assertNotIn('grimmory-books-controller-recovery-contract', names)
+        self.assertFalse(any(n.startswith('grimmory-k8s92-books-recovery') for n in names))
+        self.assertIn('grimmory-k8s92-books-original-nas', names)
+        self.assertIn('grimmory-k8s92-books-original-r2', names)
+        self.assertIn('../../../../templates/volsync', (HERE / 'kustomization.yaml').read_text())
 
     def test_native_database_fault_selects_exact_daemon(self):
         source = (HERE / 'controller-database.sh').read_text()

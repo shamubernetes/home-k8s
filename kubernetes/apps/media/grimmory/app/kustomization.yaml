@@ -7,6 +7,7 @@ resources:
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-original.yaml
+- ./kopiur-books-original.yaml
 - ./kopiur-original-restores.yaml
 - ./kopiur-original-proof.yaml
 - ./kopiur-replication.yaml

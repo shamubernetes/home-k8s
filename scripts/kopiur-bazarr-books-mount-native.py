@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
 """Qualify Bazarr's disposable Books child mount and independent rollback."""
+import argparse
 import json
 import subprocess
 import uuid
 
 IMAGE = 'ghcr.io/home-operations/bazarr:1.6.2@sha256:17dc1cff22e99694ffbfb06555526cb47a66b362b4d6c982f06b557f7caae2bb'
 LABEL = 'k92.bazarr-books-owner'
+CONTRACTS = {
+    'bazarr': {'image': IMAGE, 'uid': 568, 'gid': 568, 'writable': ['Movies', 'TV']},
+    'listenarr': {
+        'image': 'ghcr.io/therobbiedavis/listenarr:canary-0.2.47@sha256:c917f40d7a79f89e10ecef754cf4fd189f018a55ad561f3a8f95f6766e47086b',
+        'uid': 0, 'gid': 0, 'writable': ['Audiobooks', 'Downloads'],
+    },
+}
 PROBE = r'''
 import errno,json,os,pathlib
-if os.getuid() != 568 or os.getgid() != 568:
+uid=int(os.environ['EXPECT_UID']); gid=int(os.environ['EXPECT_GID'])
+if os.getuid() != uid or os.getgid() != gid:
     raise RuntimeError('wrong native identity')
 root=pathlib.Path('/media')
-for name in ('Movies','TV'):
-    p=root/name/'subtitle.srt'
+for name in json.loads(os.environ['WRITABLE_DIRS']):
+    p=root/name/'disposable-write'
     p.write_text('disposable subtitle')
     p.rename(p.with_suffix('.tmp'))
     p.with_suffix('.tmp').unlink()
@@ -50,7 +59,7 @@ if readonly:
             raise RuntimeError('symlink bypass')
     finally:
         alias.unlink()
-print(json.dumps({'uid':568,'books_readonly':readonly,'movies_tv_subtitle_writes':True,'books_original_equal':True}))
+print(json.dumps({'uid':uid,'gid':gid,'books_readonly':readonly,'writable_paths':json.loads(os.environ['WRITABLE_DIRS']),'books_original_equal':True}))
 '''
 
 
@@ -93,10 +102,15 @@ def cleanup(containers, volumes, owner):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--app', choices=sorted(CONTRACTS), default='bazarr')
+    app = parser.parse_args().app
+    contract = CONTRACTS[app]
+    image = contract['image']
     docker('info')
-    docker('pull', '--platform=linux/amd64', IMAGE, timeout=600)
+    docker('pull', '--platform=linux/amd64', image, timeout=600)
     owner = uuid.uuid4().hex
-    media = 'k92-bazarr-' + owner + '-media'
+    media = 'k92-' + app + '-' + owner + '-media'
     containers = []
     volumes = []
     receipts = []
@@ -104,28 +118,31 @@ def main():
         for volume in (media,):
             volumes.append(volume)
             docker('volume', 'create', '--label', LABEL + '=' + owner, volume)
-        seed = 'k92-bazarr-' + owner + '-seed'
+        seed = 'k92-' + app + '-' + owner + '-seed'
         containers.append(seed)
         docker('run', '--name', seed, '--label', LABEL + '=' + owner,
                '--user=0:0', '--network=none', '--log-driver=none', '--cap-drop=ALL',
                '--security-opt=no-new-privileges', '--read-only',
                '--mount', 'type=volume,src=' + media + ',dst=/media',
-               '--entrypoint=python3', IMAGE, '-c',
+               '--entrypoint=python3', image, '-c',
                'import pathlib,os; r=pathlib.Path("/media"); os.chmod(r,0o777); '
-               '[(r/n).mkdir() for n in ("Movies","TV","Books")]; '
-               '[os.chmod(r/n,0o777) for n in ("Movies","TV","Books")]; '
+               '[(r/n).mkdir() for n in ("Movies","TV","Audiobooks","Downloads","Books")]; '
+               '[os.chmod(r/n,0o777) for n in ("Movies","TV","Audiobooks","Downloads","Books")]; '
                '(r/"Books"/"original").write_bytes(b"original"); os.chmod(r/"Books"/"original",0o666)')
         for readonly in (True, False):
-            name = 'k92-bazarr-' + owner + ('-guarded' if readonly else '-rollback')
+            name = 'k92-' + app + '-' + owner + ('-guarded' if readonly else '-rollback')
             containers.append(name)
             args = ['create', '--name', name, '--label', LABEL + '=' + owner,
-                    '--user=568:568', '--network=none', '--log-driver=none',
+                    '--user=' + str(contract['uid']) + ':' + str(contract['gid']), '--network=none', '--log-driver=none',
                     '--cap-drop=ALL', '--security-opt=no-new-privileges', '--read-only',
                     '--memory=512m', '--mount', 'type=volume,src=' + media + ',dst=/media',
-                    '-e', 'EXPECT_READONLY=' + str(readonly).lower()]
+                    '-e', 'EXPECT_READONLY=' + str(readonly).lower(),
+                    '-e', 'EXPECT_UID=' + str(contract['uid']),
+                    '-e', 'EXPECT_GID=' + str(contract['gid']),
+                    '-e', 'WRITABLE_DIRS=' + json.dumps(contract['writable'])]
             if readonly:
                 args += ['--mount', 'type=volume,src=' + media + ',dst=/media/Books,volume-subpath=Books,readonly']
-            args += ['--entrypoint=python3', IMAGE, '-c', 'import time; time.sleep(300)']
+            args += ['--entrypoint=python3', image, '-c', 'import time; time.sleep(300)']
             docker(*args)
             docker('start', name)
             for replacement in (False, True):
@@ -152,7 +169,7 @@ def main():
                 receipts.append(receipt)
     finally:
         cleanup(containers, volumes, owner)
-    print(json.dumps({'image': IMAGE, 'receipts': receipts, 'owned_cleanup_verified': True,
+    print(json.dumps({'app': app, 'image': image, 'receipts': receipts, 'owned_cleanup_verified': True,
                       'production_books_capture_qualified': False}, sort_keys=True))
 
 

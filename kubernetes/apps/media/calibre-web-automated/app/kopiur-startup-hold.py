@@ -44,7 +44,7 @@ def secure(path, directory=False):
 
 
 def read_marker(minimum):
-    if type(minimum) is not int or not 0 < minimum <= MAX_HOLD:
+    if minimum is not None and (type(minimum) is not int or not 0 < minimum <= MAX_HOLD):
         raise ValueError('invalid remaining time')
     secure(STATE, directory=True)
     secure(STATE / 'active.json')
@@ -59,7 +59,7 @@ def read_marker(minimum):
     if type(marker['deadline']) is not int or type(marker['monotonic_end']) not in (int, float) or not math.isfinite(marker['monotonic_end']):
         raise ValueError('invalid expiry')
     remaining = min(marker['deadline'] - time.time(), marker['monotonic_end'] - time.monotonic())
-    if not minimum <= remaining <= MAX_HOLD:
+    if minimum is not None and not minimum <= remaining <= MAX_HOLD:
         raise ValueError('hold expired or too short')
     return marker
 
@@ -90,11 +90,13 @@ def start(deadline):
     monotonic_end = time.monotonic() + duration
     marker = dict(identity(), nonce=secrets.token_hex(32), deadline=deadline,
                   monotonic_end=monotonic_end)
-    fd = os.open(STATE / 'active.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    pending = STATE / ('pending-' + marker['nonce'])
+    fd = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w') as stream:
         json.dump(marker, stream, sort_keys=True)
         stream.flush()
         os.fsync(stream.fileno())
+    os.replace(pending, STATE / 'active.json')
 
     def stop(signum, _frame):
         remove_marker()
@@ -117,6 +119,7 @@ def main():
     hold = sub.add_parser('start')
     hold.add_argument('deadline', type=int)
     sub.add_parser('status')
+    sub.add_parser('evidence', help='Identity-only evidence, not a capture guard')
     check = sub.add_parser('check')
     check.add_argument('expected', help='Exact nonsecret status JSON from this holder')
     check.add_argument('minimum', type=int)
@@ -125,6 +128,11 @@ def main():
         start(args.deadline)
     elif args.mode == 'status':
         print(json.dumps(read_marker(1), sort_keys=True))
+    elif args.mode == 'evidence':
+        try:
+            print(json.dumps(read_marker(None), sort_keys=True))
+        except FileNotFoundError:
+            raise SystemExit(3) from None
     elif read_marker(args.minimum) != json.loads(args.expected):
         raise ValueError('holder identity changed')
 

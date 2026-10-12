@@ -79,6 +79,17 @@ class StartupHoldTest(unittest.TestCase):
         self.write()
         with self.assertRaises(ValueError):hold.read_marker(1)
 
+    def test_final_second_evidence_is_not_a_capture_guard(self):
+        with patch.object(hold.time, 'time', return_value=199.5), patch.object(hold.time, 'monotonic', return_value=149.5):
+            self.assertEqual(hold.read_marker(None), self.marker)
+            with self.assertRaises(ValueError):hold.read_marker(1)
+
+    def test_absent_evidence_has_distinct_exit(self):
+        (self.state/'active.json').unlink()
+        with patch('sys.argv', ['hold', 'evidence']):
+            with self.assertRaises(SystemExit) as error:hold.main()
+            self.assertEqual(error.exception.code, 3)
+
     def test_permissions_and_symlinks_rejected(self):
         target = self.state / 'active.json'
         target.chmod(0o644)
@@ -150,6 +161,13 @@ class NativeProofTest(unittest.TestCase):
         expected = {'deadline':200, 'monotonic_end':150}
         with patch.object(self.native, 'marker', return_value=expected), patch.object(self.native, 'no_native_services', return_value=False), patch.object(self.native.time, 'time', return_value=100), patch.object(self.native.time, 'monotonic', return_value=50):
             with self.assertRaises(AssertionError):self.native.await_expiry('owned', expected)
+
+    def test_transport_or_invalid_evidence_is_not_absence(self):
+        from types import SimpleNamespace
+        with patch.object(self.native, 'docker', return_value=SimpleNamespace(returncode=1)):
+            with self.assertRaises(RuntimeError):self.native.marker('owned')
+        with patch.object(self.native, 'docker', return_value=SimpleNamespace(returncode=3)):
+            self.assertIsNone(self.native.marker('owned'))
 
     def test_cleanup_cannot_remove_other_owners(self):
         from types import SimpleNamespace

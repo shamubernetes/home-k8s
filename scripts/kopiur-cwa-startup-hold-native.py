@@ -34,8 +34,12 @@ def wait(check, seconds=300):
 
 
 def marker(name):
-    result = docker('exec', name, '/lsiopy/bin/python3', '/hold.py', 'status', ok=False)
-    return json.loads(result.stdout) if result.returncode == 0 else None
+    result = docker('exec', name, '/lsiopy/bin/python3', '/hold.py', 'evidence', ok=False)
+    if result.returncode == 3:
+        return None
+    if result.returncode:
+        raise RuntimeError('native evidence read failed, not confirmed absent')
+    return json.loads(result.stdout)
 
 
 def probe(name, expected, minimum=1):

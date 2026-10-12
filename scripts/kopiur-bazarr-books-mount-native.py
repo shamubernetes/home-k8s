@@ -17,6 +17,10 @@ CONTRACTS = {
         'image': 'ghcr.io/home-operations/sonarr:4.0.20.3012@sha256:1f19eb5e0f421418c1a956bbe01310a0141423afe28bd9a4b1dcb8629ff2bce2',
         'uid': 568, 'gid': 568, 'writable': ['TV'], 'shell_probe': True,
     },
+    'whisparr': {
+        'image': 'ghcr.io/shamubernetes/whisparr-eros:3.3.7-release.979@sha256:9002dd8e29471d65f0b1a03802a3bf48bb58212435a053bbbe8971f2d2253194',
+        'uid': 568, 'gid': 568, 'writable': ['Adult'], 'shell_probe': True,
+    },
     'listenarr': {
         'image': 'ghcr.io/therobbiedavis/listenarr:canary-0.2.47@sha256:c917f40d7a79f89e10ecef754cf4fd189f018a55ad561f3a8f95f6766e47086b',
         'uid': 0, 'gid': 0, 'writable': ['Audiobooks', 'Downloads'],
@@ -74,7 +78,7 @@ print(json.dumps({'uid':uid,'gid':gid,'books_readonly':readonly,'writable_paths'
 SHELL_SEED = r'''
 set -euo pipefail
 chmod 777 /media
-for path in Movies TV Audiobooks Downloads Books; do
+for path in Movies TV Adult Audiobooks Downloads Books; do
     mkdir "/media/$path"
     chmod 777 "/media/$path"
 done
@@ -87,7 +91,7 @@ export LC_ALL=C
 [[ $(id -u) == "$EXPECT_UID" && $(id -g) == "$EXPECT_GID" ]]
 root=/media
 directory=${SHELL_WRITABLE_DIR:-Movies}
-case "$directory" in Movies|TV) ;; *) exit 1 ;; esac
+case "$directory" in Movies|TV|Adult) ;; *) exit 1 ;; esac
 [[ $(cat "$root/Books/original") == original ]]
 before=$(sha256sum "$root/Books/original")
 printf 'disposable media' > "$root/$directory/disposable-write"

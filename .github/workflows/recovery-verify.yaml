@@ -40,6 +40,7 @@ on:
         - listenarr-books-mount
         - radarr-books-mount
         - sonarr-books-mount
+        - whisparr-books-mount
       nas_snapshot:
         description: "Exact original NAS manifest, required only for Whisparr original proof"
         type: string
@@ -88,7 +89,7 @@ jobs:
           postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-sonarr-original|postgres-whisparr|postgres-whisparr-original) ;;
           mixed-grimmory|mixed-tubearchivist) ;;
           identities|radarr-transport) ;;
-          cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount) ;;
+          cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount|whisparr-books-mount) ;;
           *) echo 'Unknown recovery suite' >&2; exit 1 ;;
         esac
         # GitHub can resolve fork objects by SHA. Require an actual branch tip
@@ -137,7 +138,7 @@ jobs:
         flux2 = "2.9.5"
         TOML
             ;;
-          mixed-*|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount)
+          mixed-*|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount|whisparr-books-mount)
             cat > "$RUNNER_TEMP/recovery-tools/mise.toml" <<'TOML'
         [tools]
         python = "3.14.7"
@@ -188,7 +189,7 @@ jobs:
           tunarr) tools=(python3 node yq kubectl helm jq flux) ;;
           deadlines) tools=(python3 yq kyverno) ;;
           postgres-*) tools=(python3 yq kustomize kubectl helm jq flux) ;;
-          mixed-*|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount) tools=(python3) ;;
+          mixed-*|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount|whisparr-books-mount) tools=(python3) ;;
           *) exit 1 ;;
         esac
         for tool in "${tools[@]}"; do
@@ -389,3 +390,12 @@ jobs:
       run: |
         python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_books_mount.py -v
         python3 scripts/kopiur-bazarr-books-mount-native.py --app sonarr
+
+
+    - name: Whisparr native Bash Books child mount and rollback prerequisite
+      if: ${{ inputs.suite == 'whisparr-books-mount' }}
+      env:
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+      run: |
+        python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_books_mount.py -v
+        python3 scripts/kopiur-bazarr-books-mount-native.py --app whisparr

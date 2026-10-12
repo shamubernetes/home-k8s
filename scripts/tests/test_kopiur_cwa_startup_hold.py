@@ -162,6 +162,15 @@ class NativeProofTest(unittest.TestCase):
         with patch.object(self.native, 'marker', return_value=expected), patch.object(self.native, 'no_native_services', return_value=False), patch.object(self.native.time, 'time', return_value=100), patch.object(self.native.time, 'monotonic', return_value=50):
             with self.assertRaises(AssertionError):self.native.await_expiry('owned', expected)
 
+    def test_fixture_expiry_starts_after_preparation_and_survives_restart(self):
+        source = (ROOT/'scripts/kopiur-cwa-startup-hold-native.py').read_text()
+        import ast
+        tree = ast.parse(source)
+        bootstrap = next(node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.startswith('if [ ! -e /fixture-deadline ]'))
+        self.assertIn('>/fixture-deadline; fi;', bootstrap)
+        self.assertIn('exec /lsiopy/bin/python3 /hold.py start "$(cat /fixture-deadline)"', bootstrap)
+        self.assertIn("assert second['deadline'] == first['deadline']", source)
+
     def test_native_service_roster_can_finish_after_http_readiness(self):
         from types import SimpleNamespace
         first = [SimpleNamespace(returncode=0, stdout=b'false true -1') for _ in self.native.SERVICES]

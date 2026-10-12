@@ -105,7 +105,6 @@ def exercise(replacement):
     owner = uuid.uuid4().hex
     name = 'k92-cwa-startup-' + owner
     pod_uid = str(uuid.uuid4())
-    deadline = int(time.time()) + 40
     attempted = False
     try:
         assert not docker('container', 'ls', '-a', '--filter', 'name=^/' + name + '$', '--format', '{{.ID}}').stdout.strip()
@@ -118,7 +117,12 @@ def exercise(replacement):
                '--tmpfs=/config:rw,size=128m', '--tmpfs=/calibre-library:rw,size=128m',
                '--tmpfs=/cwa-book-ingest:rw,size=8m', '-e', 'PUID=568', '-e', 'PGID=568',
                '-e', 'TZ=UTC', '-e', 'KOPIUR_POD_UID=' + pod_uid,
-               '--entrypoint=/lsiopy/bin/python3', IMAGE, '/hold.py', 'start', str(deadline))
+               # Fixture expiry begins after image/rootfs preparation. Production
+               # still requires a reviewed absolute expiry in the GitOps patch.
+               '--entrypoint=/bin/sh', IMAGE, '-ec',
+               'if [ ! -e /fixture-deadline ]; then '
+               '/lsiopy/bin/python3 -c "import time;print(int(time.time())+40)" >/fixture-deadline; fi; '
+               'exec /lsiopy/bin/python3 /hold.py start "$(cat /fixture-deadline)"')
         docker('cp', str(SOURCE), name + ':/hold.py')
         docker('start', name)
         wait(lambda:marker(name) is not None, seconds=15)
@@ -137,6 +141,7 @@ def exercise(replacement):
             second = marker(name)
             assert second and second['nonce'] != first['nonce']
             assert second['pid1_start'] != first['pid1_start']
+            assert second['deadline'] == first['deadline']
             assert not probe(name, first)
             assert probe(name, second, minimum=5) and no_native_services(name)
             expected = second

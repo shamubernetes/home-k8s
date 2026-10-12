@@ -97,15 +97,16 @@ class BooksMountTests(unittest.TestCase):
             result = subprocess.run(['bash', '-n'], input=source, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def shell_probe(self, readonly, uid=None):
+    def shell_probe(self, readonly, uid=None, directory='Movies'):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            for name in ('Books', 'Movies'):
+            for name in ('Books', directory):
                 (root / name).mkdir()
             (root / 'Books/original').write_text('original')
             source = module.SHELL_PROBE.replace('root=/media', 'root=' + temp)
             env = dict(os.environ, EXPECT_UID=str(os.getuid() if uid is None else uid),
-                       EXPECT_GID=str(os.getgid()), EXPECT_READONLY=str(readonly).lower())
+                       EXPECT_GID=str(os.getgid()), EXPECT_READONLY=str(readonly).lower(),
+                       SHELL_WRITABLE_DIR=directory)
             return subprocess.run(['bash', '-c', source], env=env, text=True, capture_output=True)
 
     def test_radarr_rollback_native_shell(self):
@@ -128,6 +129,27 @@ class BooksMountTests(unittest.TestCase):
         self.assertTrue(contract['shell_probe'])
         self.assertEqual(contract['uid'], 568)
         self.assertEqual(contract['writable'], ['Movies'])
+
+    def test_sonarr_rollback_preserves_tv_writes(self):
+        result = self.shell_probe(False, directory='TV')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['writable_paths'], ['TV'])
+
+    def test_sonarr_writable_books_rejected(self):
+        result = self.shell_probe(True, directory='TV')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Books is writable', result.stderr)
+
+    def test_shell_unsafe_writable_path_rejected(self):
+        self.assertNotEqual(self.shell_probe(False, directory='Unknown').returncode, 0)
+
+    def test_sonarr_exact_live_digest(self):
+        contract = module.CONTRACTS['sonarr']
+        manifest = (ROOT / 'kubernetes/apps/arrs/sonarr/app/helmrelease.yaml').read_text()
+        self.assertIn(contract['image'].split(':', 1)[1], manifest)
+        self.assertTrue(contract['shell_probe'])
+        self.assertEqual(contract['uid'], 568)
+        self.assertEqual(contract['writable'], ['TV'])
 
     def test_cleanup_continues_after_failure(self):
         seen = []

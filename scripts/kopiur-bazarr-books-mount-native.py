@@ -13,6 +13,10 @@ CONTRACTS = {
         'image': 'ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e',
         'uid': 568, 'gid': 568, 'writable': ['Movies'], 'shell_probe': True,
     },
+    'sonarr': {
+        'image': 'ghcr.io/home-operations/sonarr:4.0.20.3012@sha256:1f19eb5e0f421418c1a956bbe01310a0141423afe28bd9a4b1dcb8629ff2bce2',
+        'uid': 568, 'gid': 568, 'writable': ['TV'], 'shell_probe': True,
+    },
     'listenarr': {
         'image': 'ghcr.io/therobbiedavis/listenarr:canary-0.2.47@sha256:c917f40d7a79f89e10ecef754cf4fd189f018a55ad561f3a8f95f6766e47086b',
         'uid': 0, 'gid': 0, 'writable': ['Audiobooks', 'Downloads'],
@@ -82,11 +86,13 @@ set -euo pipefail
 export LC_ALL=C
 [[ $(id -u) == "$EXPECT_UID" && $(id -g) == "$EXPECT_GID" ]]
 root=/media
+directory=${SHELL_WRITABLE_DIR:-Movies}
+case "$directory" in Movies|TV) ;; *) exit 1 ;; esac
 [[ $(cat "$root/Books/original") == original ]]
 before=$(sha256sum "$root/Books/original")
-printf 'disposable movie' > "$root/Movies/disposable-write"
-mv "$root/Movies/disposable-write" "$root/Movies/disposable-write.tmp"
-rm "$root/Movies/disposable-write.tmp"
+printf 'disposable media' > "$root/$directory/disposable-write"
+mv "$root/$directory/disposable-write" "$root/$directory/disposable-write.tmp"
+rm "$root/$directory/disposable-write.tmp"
 reject_readonly() {
     local output
     if output=$("$@" 2>&1); then
@@ -114,7 +120,7 @@ else
     exit 1
 fi
 [[ $(sha256sum "$root/Books/original") == "$before" ]]
-printf '{"uid":%s,"gid":%s,"books_readonly":%s,"writable_paths":["Movies"],"books_original_equal":true}\n' "$EXPECT_UID" "$EXPECT_GID" "$EXPECT_READONLY"
+printf '{"uid":%s,"gid":%s,"books_readonly":%s,"writable_paths":["%s"],"books_original_equal":true}\n' "$EXPECT_UID" "$EXPECT_GID" "$EXPECT_READONLY" "$directory"
 '''
 
 
@@ -200,6 +206,9 @@ def main():
             if readonly:
                 args += ['--mount', 'type=volume,src=' + media + ',dst=/media/Books,volume-subpath=Books,readonly']
             if shell_probe:
+                if len(contract['writable']) != 1:
+                    raise RuntimeError('shell probe requires one writable directory')
+                args += ['-e', 'SHELL_WRITABLE_DIR=' + contract['writable'][0]]
                 args += ['--entrypoint=bash', image, '-c', 'exec sleep 300']
             else:
                 args += ['--entrypoint=python3', image, '-c', 'import time; time.sleep(300)']

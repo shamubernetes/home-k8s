@@ -10,3 +10,12 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
+configMapGenerator:
+- name: cwa-bdl-kopiur-startup
+  files:
+  # Byte-identical copy of the existing CWA guard, checked by startup-test.py.
+  # Keep the native BDL entrypoint adaptation in its separate two-line shim.
+  - startup-hold.py=kopiur-startup-hold.py
+  - native-init.sh=kopiur-init.sh
+generatorOptions:
+  disableNameSuffixHash: true

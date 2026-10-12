@@ -40,6 +40,11 @@ fi
 # not a child of app-writable /app/data. UID568 cannot rename its parent entry.
 root=/runtime-escrow
 proc=${GRIMMORY_PROC_ROOT:-/proc}/1
+if [ -f "$(dirname "$0")/fence.sh" ]; then
+  # Only the birth/UID/group-verified child of the native supervisor is valid.
+  native_pid=$(sh "$(dirname "$0")/fence.sh" process)
+  proc=${GRIMMORY_PROC_ROOT:-/proc}/$native_pid
+fi
 [ ! -L "$root" ] || exit 1
 mkdir -p "$root"
 # The native app UID must not redirect a root control-file write.

@@ -25,6 +25,7 @@ configMapGenerator:
   - backup.sh
   - runtime.sh
   - books.sh
+  - fence.sh
   options:
     disableNameSuffixHash: true
     annotations:

@@ -49,3 +49,6 @@ spec:
           sonarr:
             app:
             - path: /media
+            - path: /media/Books
+              subPath: Books
+              readOnly: true

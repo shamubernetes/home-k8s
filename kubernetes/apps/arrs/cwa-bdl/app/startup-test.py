@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import unittest
+from unittest.mock import patch
 
 APP = Path(__file__).resolve().parent
 ROOT = APP.parents[4]
@@ -59,8 +60,28 @@ class StartupDeploymentTest(unittest.TestCase):
         app = values['controllers']['cwa-bdl']['containers']['app']
         app.pop('command')
         app['env'].pop('KOPIUR_POD_UID')
-        values['persistence'] = self.baseline['spec']['values']['persistence']
-        self.assertEqual(candidate, self.baseline)
+        baseline = json.loads(json.dumps(self.baseline))
+        # Main may already contain this staging contract after merge. Compare
+        # unrelated fields symmetrically; dedicated tests require the guard.
+        baseline_app = baseline['spec']['values']['controllers']['cwa-bdl']['containers']['app']
+        baseline_app.pop('command', None)
+        baseline_app['env'].pop('KOPIUR_POD_UID', None)
+        values['persistence'] = baseline['spec']['values']['persistence']
+        self.assertEqual(candidate, baseline)
+
+    def test_parity_before_after_merge_still_rejects_image_change(self):
+        original = json.loads(json.dumps(self.baseline))
+        app = original['spec']['values']['controllers']['cwa-bdl']['containers']['app']
+        app.pop('command', None)
+        app['env'].pop('KOPIUR_POD_UID', None)
+        for baseline in (original, self.baseline):
+            with patch.object(self, 'baseline', baseline):
+                self.test_all_noncontract_release_fields_preserved()
+                changed = json.loads(json.dumps(self.release))
+                changed['spec']['values']['controllers']['cwa-bdl']['containers']['app']['image']['tag'] = 'changed'
+                with patch.object(self, 'release', changed):
+                    with self.assertRaises(AssertionError):
+                        self.test_all_noncontract_release_fields_preserved()
 
     def test_kustomize_emits_exact_guard_and_native_shim(self):
         rendered = subprocess.check_output(['kubectl','kustomize',str(APP)], text=True)

@@ -60,14 +60,15 @@ class BooksMountTests(unittest.TestCase):
         self.assertLess(source.index('cleanup(containers, volumes, owner)', source.index('def main')),
                         source.index("'owned_cleanup_verified': True"))
 
-    def exercise_probe(self, readonly):
+    def exercise_probe(self, readonly, app='bazarr'):
+        contract = module.CONTRACTS[app]
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            for name in ('Books', 'Movies', 'TV'):
+            for name in ['Books', *contract['writable']]:
                 (root / name).mkdir()
             (root / 'Books/original').write_bytes(b'original')
             source = module.PROBE.replace("'/media'", repr(temp))
-            with patch('os.getuid', return_value=568), patch('os.getgid', return_value=568), patch.dict(os.environ, EXPECT_READONLY=str(readonly).lower()):
+            with patch('os.getuid', return_value=contract['uid']), patch('os.getgid', return_value=contract['gid']), patch.dict(os.environ, EXPECT_READONLY=str(readonly).lower(), EXPECT_UID=str(contract['uid']), EXPECT_GID=str(contract['gid']), WRITABLE_DIRS=json.dumps(contract['writable'])):
                 exec(compile(source, '<native-probe>', 'exec'), {})
 
     def test_writable_books_rejected(self):
@@ -76,6 +77,20 @@ class BooksMountTests(unittest.TestCase):
 
     def test_rollback_probe(self):
         self.exercise_probe(False)
+
+    def test_listenarr_root_writable_books_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'Books is writable'):
+            self.exercise_probe(True, 'listenarr')
+
+    def test_listenarr_root_rollback_preserves_audiobook_writes(self):
+        self.exercise_probe(False, 'listenarr')
+
+    def test_listenarr_digest_matches_live_application(self):
+        contract = module.CONTRACTS['listenarr']
+        manifest = (ROOT / 'kubernetes/apps/arrs/listenarr/app/helmrelease.yaml').read_text()
+        self.assertIn(contract['image'].split(':', 1)[1], manifest)
+        self.assertEqual(contract['uid'], 0)
+        self.assertEqual(contract['writable'], ['Audiobooks', 'Downloads'])
 
     def test_cleanup_continues_after_failure(self):
         seen = []

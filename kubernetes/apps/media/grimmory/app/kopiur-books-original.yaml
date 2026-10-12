@@ -1,0 +1,13 @@
+# Original physical payload proof. Preserve every earlier recovery point.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-k8s92-books-original
+spec:
+  policyRef:
+    name: grimmory
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+  description: K8S-92 original Books and bookdrop payload bound to native SQL and runtime

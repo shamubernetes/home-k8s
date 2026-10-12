@@ -84,3 +84,9 @@ spec:
         path: /mnt/user/Media
         globalMounts:
         - path: /media
+        advancedMounts:
+          listenarr:
+            app:
+            - path: /media/Books
+              subPath: Books
+              readOnly: true

@@ -46,6 +46,20 @@ class BooksMountTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, '^Bazarr owned Docker operation failed$'):
                 module.docker('info')
 
+    def test_installed_docker_missing_volume(self):
+        with patch.object(module, 'docker', return_value=self.result(1, err='Error response from daemon: get name: no such volume')):
+            self.assertFalse(module.inspect_owned('volume', 'name', 'owner'))
+
+    def test_different_missing_kind_rejected(self):
+        with patch.object(module, 'docker', return_value=self.result(1, err='Error response from daemon: No such container: name')):
+            with self.assertRaisesRegex(RuntimeError, 'inspection'):
+                module.inspect_owned('volume', 'name', 'owner')
+
+    def test_success_receipt_follows_cleanup(self):
+        source = (ROOT / 'scripts/kopiur-bazarr-books-mount-native.py').read_text()
+        self.assertLess(source.index('cleanup(containers, volumes, owner)', source.index('def main')),
+                        source.index("'owned_cleanup_verified': True"))
+
     def exercise_probe(self, readonly):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

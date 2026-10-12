@@ -1,0 +1,100 @@
+# Existing Grimmory R2 copies. Preserve UID, manifest and source lineage.
+# Admission for future copies was delivered separately in PR5779.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-17d7523def698b2d-2cc0a0e8
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-2530ab5f6e05de1c-3ebdbc3b
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-7c55da4f5581bcb5-3b51ccfb
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-8dca3a2479888d16-7ee70429
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-9109454f6e2017b2-d29b0cf8
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-9e8ab7426caf8847-07bc925c
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-cff5bd4d27b08daf-92ef9c13
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-ed45277cd4bdb43e-1c9dc5f1
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-f4513670435aea08-c56119d5
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain

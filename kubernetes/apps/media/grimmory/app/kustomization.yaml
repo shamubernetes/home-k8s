@@ -13,6 +13,7 @@ resources:
 - ./kopiur-original-proof.yaml
 - ./kopiur-books-proof.yaml
 - ./kopiur-replication.yaml
+- ./kopiur-retained-copies.yaml
 - ../../../../templates/volsync
 - ./secret.sops.yaml
 - ./helmrelease.yaml

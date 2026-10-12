@@ -92,6 +92,43 @@ class BooksMountTests(unittest.TestCase):
         self.assertEqual(contract['uid'], 0)
         self.assertEqual(contract['writable'], ['Audiobooks', 'Downloads'])
 
+    def test_radarr_native_bash_syntax(self):
+        for source in (module.SHELL_SEED, module.SHELL_PROBE):
+            result = subprocess.run(['bash', '-n'], input=source, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def shell_probe(self, readonly, uid=None):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in ('Books', 'Movies'):
+                (root / name).mkdir()
+            (root / 'Books/original').write_text('original')
+            source = module.SHELL_PROBE.replace('root=/media', 'root=' + temp)
+            env = dict(os.environ, EXPECT_UID=str(os.getuid() if uid is None else uid),
+                       EXPECT_GID=str(os.getgid()), EXPECT_READONLY=str(readonly).lower())
+            return subprocess.run(['bash', '-c', source], env=env, text=True, capture_output=True)
+
+    def test_radarr_rollback_native_shell(self):
+        result = self.shell_probe(False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)['books_original_equal'])
+
+    def test_radarr_writable_books_rejected(self):
+        result = self.shell_probe(True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Books is writable', result.stderr)
+
+    def test_radarr_wrong_identity_rejected(self):
+        self.assertNotEqual(self.shell_probe(False, os.getuid() + 1).returncode, 0)
+
+    def test_radarr_exact_live_digest(self):
+        contract = module.CONTRACTS['radarr']
+        manifest = (ROOT / 'kubernetes/apps/arrs/radarr/app/helmrelease.yaml').read_text()
+        self.assertIn(contract['image'].split(':', 1)[1], manifest)
+        self.assertTrue(contract['shell_probe'])
+        self.assertEqual(contract['uid'], 568)
+        self.assertEqual(contract['writable'], ['Movies'])
+
     def test_cleanup_continues_after_failure(self):
         seen = []
         def inspect(kind, name, owner):

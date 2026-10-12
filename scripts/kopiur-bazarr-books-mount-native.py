@@ -9,6 +9,10 @@ IMAGE = 'ghcr.io/home-operations/bazarr:1.6.2@sha256:17dc1cff22e99694ffbfb065555
 LABEL = 'k92.bazarr-books-owner'
 CONTRACTS = {
     'bazarr': {'image': IMAGE, 'uid': 568, 'gid': 568, 'writable': ['Movies', 'TV']},
+    'radarr': {
+        'image': 'ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e',
+        'uid': 568, 'gid': 568, 'writable': ['Movies'], 'shell_probe': True,
+    },
     'listenarr': {
         'image': 'ghcr.io/therobbiedavis/listenarr:canary-0.2.47@sha256:c917f40d7a79f89e10ecef754cf4fd189f018a55ad561f3a8f95f6766e47086b',
         'uid': 0, 'gid': 0, 'writable': ['Audiobooks', 'Downloads'],
@@ -60,6 +64,57 @@ if readonly:
     finally:
         alias.unlink()
 print(json.dumps({'uid':uid,'gid':gid,'books_readonly':readonly,'writable_paths':json.loads(os.environ['WRITABLE_DIRS']),'books_original_equal':True}))
+'''
+
+
+SHELL_SEED = r'''
+set -euo pipefail
+chmod 777 /media
+for path in Movies TV Audiobooks Downloads Books; do
+    mkdir "/media/$path"
+    chmod 777 "/media/$path"
+done
+printf original > /media/Books/original
+chmod 666 /media/Books/original
+'''
+SHELL_PROBE = r'''
+set -euo pipefail
+export LC_ALL=C
+[[ $(id -u) == "$EXPECT_UID" && $(id -g) == "$EXPECT_GID" ]]
+root=/media
+[[ $(cat "$root/Books/original") == original ]]
+before=$(sha256sum "$root/Books/original")
+printf 'disposable movie' > "$root/Movies/disposable-write"
+mv "$root/Movies/disposable-write" "$root/Movies/disposable-write.tmp"
+rm "$root/Movies/disposable-write.tmp"
+reject_readonly() {
+    local output
+    if output=$("$@" 2>&1); then
+        printf 'Books is writable\n' >&2
+        return 1
+    fi
+    [[ $output == *'Read-only file system'* ]]
+}
+if [[ $EXPECT_READONLY == true ]]; then
+    reject_readonly bash -c 'printf probe > "$1/Books/new"' _ "$root"
+    reject_readonly bash -c 'printf original > "$1/Books/original"' _ "$root"
+    reject_readonly rm "$root/Books/original"
+    reject_readonly mv "$root/Books/original" "$root/Books/renamed"
+    ln -s "$root/Books" "$root/books-link"
+    trap 'rm -f "$root/books-link"' EXIT
+    reject_readonly bash -c 'printf probe > "$1/books-link/via-link"' _ "$root"
+    rm "$root/books-link"
+    trap - EXIT
+elif [[ $EXPECT_READONLY == false ]]; then
+    printf original > "$root/Books/original"
+    printf probe > "$root/Books/new"
+    mv "$root/Books/new" "$root/Books/renamed"
+    rm "$root/Books/renamed"
+else
+    exit 1
+fi
+[[ $(sha256sum "$root/Books/original") == "$before" ]]
+printf '{"uid":%s,"gid":%s,"books_readonly":%s,"writable_paths":["Movies"],"books_original_equal":true}\n' "$EXPECT_UID" "$EXPECT_GID" "$EXPECT_READONLY"
 '''
 
 
@@ -120,15 +175,17 @@ def main():
             docker('volume', 'create', '--label', LABEL + '=' + owner, volume)
         seed = 'k92-' + app + '-' + owner + '-seed'
         containers.append(seed)
+        shell_probe = contract.get('shell_probe', False)
+        seed_command = ['--entrypoint=bash', image, '-c', SHELL_SEED] if shell_probe else [
+            '--entrypoint=python3', image, '-c',
+            'import pathlib,os; r=pathlib.Path("/media"); os.chmod(r,0o777); '
+            '[(r/n).mkdir() for n in ("Movies","TV","Audiobooks","Downloads","Books")]; '
+            '[os.chmod(r/n,0o777) for n in ("Movies","TV","Audiobooks","Downloads","Books")]; '
+            '(r/"Books"/"original").write_bytes(b"original"); os.chmod(r/"Books"/"original",0o666)']
         docker('run', '--name', seed, '--label', LABEL + '=' + owner,
                '--user=0:0', '--network=none', '--log-driver=none', '--cap-drop=ALL',
                '--security-opt=no-new-privileges', '--read-only',
-               '--mount', 'type=volume,src=' + media + ',dst=/media',
-               '--entrypoint=python3', image, '-c',
-               'import pathlib,os; r=pathlib.Path("/media"); os.chmod(r,0o777); '
-               '[(r/n).mkdir() for n in ("Movies","TV","Audiobooks","Downloads","Books")]; '
-               '[os.chmod(r/n,0o777) for n in ("Movies","TV","Audiobooks","Downloads","Books")]; '
-               '(r/"Books"/"original").write_bytes(b"original"); os.chmod(r/"Books"/"original",0o666)')
+               '--mount', 'type=volume,src=' + media + ',dst=/media', *seed_command)
         for readonly in (True, False):
             name = 'k92-' + app + '-' + owner + ('-guarded' if readonly else '-rollback')
             containers.append(name)
@@ -142,7 +199,10 @@ def main():
                     '-e', 'WRITABLE_DIRS=' + json.dumps(contract['writable'])]
             if readonly:
                 args += ['--mount', 'type=volume,src=' + media + ',dst=/media/Books,volume-subpath=Books,readonly']
-            args += ['--entrypoint=python3', image, '-c', 'import time; time.sleep(300)']
+            if shell_probe:
+                args += ['--entrypoint=bash', image, '-c', 'exec sleep 300']
+            else:
+                args += ['--entrypoint=python3', image, '-c', 'import time; time.sleep(300)']
             docker(*args)
             docker('start', name)
             for replacement in (False, True):
@@ -164,7 +224,8 @@ def main():
                     raise RuntimeError('media mount mismatch')
                 if readonly and (mounts['/media/Books']['Name'] != media or mounts['/media/Books']['RW']):
                     raise RuntimeError('Books child mount mismatch')
-                receipt = json.loads(docker('exec', name, 'python3', '-c', PROBE).stdout)
+                probe_command = ['bash', '-c', SHELL_PROBE] if shell_probe else ['python3', '-c', PROBE]
+                receipt = json.loads(docker('exec', name, *probe_command).stdout)
                 receipt['replacement'] = replacement
                 receipts.append(receipt)
     finally:

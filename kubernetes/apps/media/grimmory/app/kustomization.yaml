@@ -20,6 +20,7 @@ configMapGenerator:
   files:
   - backup.sh
   - runtime.sh
+  - books.sh
   options:
     disableNameSuffixHash: true
     annotations:

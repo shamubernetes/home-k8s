@@ -45,6 +45,28 @@ class OriginalTests(unittest.TestCase):
         self.payload['original']['production_mutation'] = True
         with self.assertRaises(ValueError):original.validate_original(self.payload)
 
+    def test_checker_diagnostic_exports_line_only_and_fails_closed(self):
+        from unittest.mock import Mock,patch
+        drill=Mock()
+        def run_program(checker,program,data):
+            result=subprocess.run([sys.executable,'-c',program],input=data,
+                capture_output=True,text=True,timeout=10)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(result.stderr,'')
+            self.assertNotIn('private-value',result.stdout)
+            return result.stdout
+        drill.python.side_effect=run_program
+        with patch.object(original,'CHECK','raise ValueError("private-value")'):
+            with self.assertRaisesRegex(RuntimeError,'source line 1'):
+                original.checked_original(drill,'checker',{})
+        with patch.object(original,'CHECK','import json; print(json.dumps({"base_tables":73}))'):
+            self.assertEqual(original.checked_original(drill,'checker',{}),{'base_tables':73})
+        for value in ('private-value',True,-1,99999):
+            drill.python.side_effect=None
+            drill.python.return_value=json.dumps({'check_failed_line':value})
+            with self.assertRaisesRegex(RuntimeError,'invalid original checker diagnostic'):
+                original.checked_original(drill,'checker',{})
+
     def test_embedded_programs_compile(self):
         for script in (original.CHECK, original.BOOT):compile(script, '<isolated-original>', 'exec')
 

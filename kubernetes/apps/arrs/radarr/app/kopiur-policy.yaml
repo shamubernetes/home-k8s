@@ -5,8 +5,9 @@ metadata:
   annotations:
     kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/37981655593
 spec:
-  # Original production NAS/R2 native recovery passed before activation.
-  suspend: false
+  # K8S-109: capture stops the native application. Keep disabled until a
+  # non-disruptive backup has independent recovery proof and an approved cadence.
+  suspend: true
   repository:
     kind: Repository
     name: radarr-nas-smb
@@ -85,8 +86,9 @@ spec:
   policyRef:
     name: radarr
   schedule:
-    suspend: false
-    # Preserve the incumbent hourly primary cadence, not the draft daily cadence.
+    suspend: true
+    # K8S-109: hourly disruptive captures are not authorized. Retain the old
+    # slot only as history; suspension must remain until the contract is repaired.
     cron: "${VOLSYNC_SCHEDULE_RADARR}"
     jitter: 10m
     runOnCreate: true

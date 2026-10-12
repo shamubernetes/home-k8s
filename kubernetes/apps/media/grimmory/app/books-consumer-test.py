@@ -108,9 +108,10 @@ class BooksConsumerTests(unittest.TestCase):
         with patch.object(verify.urllib.request, 'urlopen', side_effect=RuntimeError('private')):
             self.assertFalse(verify.setup_status())
 
-    def test_rendered_consumers_are_isolated_and_mount_books(self):
-        render = subprocess.run(['kubectl', 'kustomize', str(HERE)], check=True, text=True, capture_output=True)
-        parsed = subprocess.run(['yq', '-o=json', '-I=0', '.'], input=render.stdout,
+    def test_retained_consumers_are_isolated_and_mount_books(self):
+        # Keep qualification manifests testable after their completed live Jobs are pruned.
+        parsed = subprocess.run(['yq', '-o=json', '-I=0', '.',
+                                 str(HERE / 'kopiur-controller-consumers.yaml')],
                                 check=True, text=True, capture_output=True)
         docs = [json.loads(line) for line in parsed.stdout.splitlines() if line.startswith('{')]
         jobs = [d for d in docs if d.get('kind') == 'Job' and
@@ -128,13 +129,25 @@ class BooksConsumerTests(unittest.TestCase):
             books = [v for v in app['volumeMounts'] if v['name'] == 'books']
             self.assertEqual({v['mountPath'] for v in books}, {'/books', '/bookdrop'})
             self.assertTrue(all(v['readOnly'] for v in books))
-        contract = next(d for d in docs if d.get('kind') == 'ConfigMap' and
-                        d['metadata']['name'] == 'grimmory-books-consumer-contract')
-        self.assertTrue({'restore.sh', 'runtime.sh', 'books.sh'} <= set(contract['data']))
+        for sibling in ['restore.sh', 'runtime.sh', 'books.sh']:
+            self.assertTrue((HERE / sibling).is_file())
         policy = next(d for d in docs if d.get('kind') == 'NetworkPolicy' and
                       d['metadata']['name'] == 'grimmory-k8s92-books-consumer')
         self.assertEqual(policy['spec']['ingress'], [])
         self.assertEqual(policy['spec']['egress'], [])
+
+    def test_production_prunes_only_disposable_consumers(self):
+        render = subprocess.run(['kubectl', 'kustomize', str(HERE)],
+                                check=True, text=True, capture_output=True)
+        parsed = subprocess.run(['yq', '-o=json', '-I=0', '.'], input=render.stdout,
+                                check=True, text=True, capture_output=True)
+        docs = [json.loads(line) for line in parsed.stdout.splitlines() if line.startswith('{')]
+        names = {d['metadata']['name'] for d in docs}
+        self.assertFalse(any(name.startswith('grimmory-k8s92-books-consumer') for name in names))
+        self.assertNotIn('grimmory-books-consumer-contract', names)
+        for name in ['grimmory-k8s92-books-original-nas', 'grimmory-k8s92-books-original-r2',
+                     'grimmory-hourly', 'grimmory-nas-to-r2', 'grimmory']:
+            self.assertIn(name, names)
 
 
 if __name__ == '__main__':

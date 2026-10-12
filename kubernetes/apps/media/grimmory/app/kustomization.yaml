@@ -12,7 +12,6 @@ resources:
 - ./kopiur-books-restores.yaml
 - ./kopiur-original-proof.yaml
 - ./kopiur-books-proof.yaml
-- ./kopiur-controller-consumers.yaml
 - ./kopiur-replication.yaml
 - ../../../../templates/volsync
 - ./secret.sops.yaml
@@ -23,19 +22,6 @@ configMapGenerator:
 - name: grimmory-backup-contract
   files:
   - backup.sh
-  - runtime.sh
-  - books.sh
-  options:
-    disableNameSuffixHash: true
-    annotations:
-      kustomize.toolkit.fluxcd.io/substitute: disabled
-- name: grimmory-books-consumer-contract
-  files:
-  - consumer-prepare.py
-  - consumer-verify.py
-  - consumer-database.sh
-  - consumer-app.sh
-  - restore.sh
   - runtime.sh
   - books.sh
   options:

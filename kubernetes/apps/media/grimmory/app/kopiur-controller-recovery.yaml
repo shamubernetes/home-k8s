@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: grimmory-k8s92-recovery-nas
+  name: grimmory-k8s92-books-recovery-nas
 spec:
   replicas: 1
   strategy:
@@ -11,14 +11,14 @@ spec:
   progressDeadlineSeconds: 900
   selector:
     matchLabels:
-      app.kubernetes.io/name: grimmory-k8s92-recovery
+      app.kubernetes.io/name: grimmory-k8s92-books-recovery
       k8s92-backend: nas
   template:
     metadata:
       annotations:
-        k8s92.home.arpa/controller-recovery-attempt: "native-probe-v2"
+        k8s92.home.arpa/controller-recovery-attempt: "books-native-probe-v3"
       labels:
-        app.kubernetes.io/name: grimmory-k8s92-recovery
+        app.kubernetes.io/name: grimmory-k8s92-books-recovery
         k8s92-backend: nas
     spec:
       restartPolicy: Always
@@ -41,6 +41,9 @@ spec:
             - name: appdata
               mountPath: /appdata
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: false
             - name: tools
               mountPath: /tools
               readOnly: false
@@ -57,6 +60,8 @@ spec:
                 - CHOWN
                 - FOWNER
                 - DAC_OVERRIDE
+                # Preserve the qualified foreign-GID SGID Books directories.
+                - FSETID
             runAsUser: 0
             runAsGroup: 568
             runAsNonRoot: false
@@ -170,6 +175,13 @@ spec:
             - name: appdata
               mountPath: /app/data
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: true
+            - name: books
+              mountPath: /bookdrop
+              subPath: bookdrop
+              readOnly: true
             - name: app-tmp
               mountPath: /tmp
             - name: private
@@ -257,11 +269,11 @@ spec:
       volumes:
         - name: original
           persistentVolumeClaim:
-            claimName: grimmory-k8s92-original-nas
+            claimName: grimmory-k8s92-books-original-nas
             readOnly: true
         - name: contract
           configMap:
-            name: grimmory-controller-recovery-contract
+            name: grimmory-books-controller-recovery-contract
             defaultMode: 292
         - name: tools
           emptyDir:
@@ -279,6 +291,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 512Mi
+        - name: books
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
         - name: app-tmp
           emptyDir:
             medium: Memory
@@ -292,7 +308,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: grimmory-k8s92-recovery-r2
+  name: grimmory-k8s92-books-recovery-r2
 spec:
   replicas: 1
   strategy:
@@ -300,14 +316,14 @@ spec:
   progressDeadlineSeconds: 900
   selector:
     matchLabels:
-      app.kubernetes.io/name: grimmory-k8s92-recovery
+      app.kubernetes.io/name: grimmory-k8s92-books-recovery
       k8s92-backend: r2
   template:
     metadata:
       annotations:
-        k8s92.home.arpa/controller-recovery-attempt: "native-probe-v2"
+        k8s92.home.arpa/controller-recovery-attempt: "books-native-probe-v3"
       labels:
-        app.kubernetes.io/name: grimmory-k8s92-recovery
+        app.kubernetes.io/name: grimmory-k8s92-books-recovery
         k8s92-backend: r2
     spec:
       restartPolicy: Always
@@ -330,6 +346,9 @@ spec:
             - name: appdata
               mountPath: /appdata
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: false
             - name: tools
               mountPath: /tools
               readOnly: false
@@ -346,6 +365,8 @@ spec:
                 - CHOWN
                 - FOWNER
                 - DAC_OVERRIDE
+                # Preserve the qualified foreign-GID SGID Books directories.
+                - FSETID
             runAsUser: 0
             runAsGroup: 568
             runAsNonRoot: false
@@ -459,6 +480,13 @@ spec:
             - name: appdata
               mountPath: /app/data
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: true
+            - name: books
+              mountPath: /bookdrop
+              subPath: bookdrop
+              readOnly: true
             - name: app-tmp
               mountPath: /tmp
             - name: private
@@ -546,11 +574,11 @@ spec:
       volumes:
         - name: original
           persistentVolumeClaim:
-            claimName: grimmory-k8s92-original-r2
+            claimName: grimmory-k8s92-books-original-r2
             readOnly: true
         - name: contract
           configMap:
-            name: grimmory-controller-recovery-contract
+            name: grimmory-books-controller-recovery-contract
             defaultMode: 292
         - name: tools
           emptyDir:
@@ -568,6 +596,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 512Mi
+        - name: books
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
         - name: app-tmp
           emptyDir:
             medium: Memory
@@ -581,11 +613,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: grimmory-k8s92-recovery
+  name: grimmory-k8s92-books-recovery
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: grimmory-k8s92-recovery
+      app.kubernetes.io/name: grimmory-k8s92-books-recovery
   policyTypes:
     - Ingress
     - Egress

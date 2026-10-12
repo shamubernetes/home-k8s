@@ -68,11 +68,11 @@ class ControllerTests(unittest.TestCase):
                                 capture_output=True, text=True, check=True)
         resources = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
         contract = next(d for d in resources if d.get('kind') == 'ConfigMap' and
-                        d['metadata']['name'] == 'grimmory-controller-recovery-contract')
+                        d['metadata']['name'] == 'grimmory-books-controller-recovery-contract')
         self.assertIn('runtime.sh', contract['data'])
         self.assertIn('restore.sh', contract['data'])
         for deployment in (d for d in resources if d.get('kind') == 'Deployment' and
-                           d['metadata']['name'].startswith('grimmory-k8s92-recovery-')):
+                           d['metadata']['name'].startswith('grimmory-k8s92-books-recovery-')):
             pod = deployment['spec']['template']['spec']
             self.assertFalse(pod['automountServiceAccountToken'])
             self.assertNotIn('fsGroup', pod['securityContext'])
@@ -82,6 +82,23 @@ class ControllerTests(unittest.TestCase):
             self.assertFalse(any('secret' in v or 'nfs' in v for v in pod['volumes']))
             application = next(c for c in pod['containers'] if c['name'] == 'application')
             self.assertEqual(application['livenessProbe']['httpGet']['path'], '/api/v1/healthcheck')
+            backend = deployment['metadata']['name'].rsplit('-', 1)[1]
+            self.assertEqual(original['persistentVolumeClaim']['claimName'],
+                             'grimmory-k8s92-books-original-' + backend)
+            books = [m for m in application['volumeMounts'] if m['name'] == 'books']
+            self.assertEqual({m['mountPath'] for m in books}, {'/books', '/bookdrop'})
+            self.assertTrue(all(m['readOnly'] for m in books))
+            self.assertEqual(next(m for m in books if m['mountPath'] == '/bookdrop')['subPath'], 'bookdrop')
+            prepare = pod['initContainers'][0]
+            self.assertIn('FSETID', prepare['securityContext']['capabilities']['add'])
+            self.assertEqual(next(v for v in pod['volumes'] if v['name'] == 'books')['emptyDir']['medium'], 'Memory')
+        self.assertEqual(sum(d.get('kind') == 'Deployment' and
+                             d['metadata']['name'].startswith('grimmory-k8s92-books-recovery-')
+                             for d in resources), 2)
+        policy = next(d for d in resources if d.get('kind') == 'NetworkPolicy' and
+                      d['metadata']['name'] == 'grimmory-k8s92-books-recovery')
+        self.assertEqual(policy['spec']['ingress'], [])
+        self.assertEqual(policy['spec']['egress'], [])
 
     def test_native_database_fault_selects_exact_daemon(self):
         source = (HERE / 'controller-database.sh').read_text()
@@ -106,6 +123,21 @@ class ControllerTests(unittest.TestCase):
                 if count == 1:
                     self.assertEqual(record.read_text(), '-STOP 100\n')
 
+    def test_failed_database_api_refuses_fault_and_receipt(self):
+        c = self.controller
+        (c.CONTROL / 'database-ready').write_text(c.native.EXPECTED_DATA)
+        def wait(check):
+            if not check():
+                raise TimeoutError('database-backed API failed')
+        with patch.object(c.native, 'wait_for', side_effect=wait), \
+                patch.object(c.native, 'health', return_value=True), \
+                patch.object(c.native, 'setup_status', return_value=False):
+            with self.assertRaises(TimeoutError):
+                c.qualify()
+        self.assertFalse((c.CONTROL / 'replace-database').exists())
+        self.assertFalse((c.CONTROL / 'controller-receipt.json').exists())
+        self.assertFalse((c.CONTROL / 'qualification-complete').exists())
+
     def test_suppressed_restart_epoch_cannot_pass(self):
         c = self.controller
         (c.CONTROL / 'database-ready').write_text(c.native.EXPECTED_DATA)
@@ -118,11 +150,12 @@ class ControllerTests(unittest.TestCase):
                 raise TimeoutError('replacement never happened')
         with patch.object(c.native, 'wait_for', side_effect=wait), \
                 patch.object(c.native, 'health', return_value=True), \
+                patch.object(c.native, 'setup_status', return_value=True), \
                 patch.object(c.native, 'check_database', Mock()):
             with self.assertRaises(TimeoutError), patch.dict(os.environ, {'BACKEND': 'nas'}):
                 c.qualify()
         self.assertFalse((c.CONTROL / 'qualification-complete').exists())
-        self.assertEqual(len(checks), 3)
+        self.assertEqual(len(checks), 4)
 
 
 if __name__ == '__main__':

@@ -51,6 +51,24 @@ class Restore(Original):
                    command=['python3','-c','import time;time.sleep(1800)'], user='568:568')
         return name
 
+    def start_consumer(self, kind, database, appdata, tools, books=None):
+        if books is None:
+            return self.start('app-'+kind, GRIMM, {appdata:'/app/data', tools:'/tools:ro'},
+                command=['/tools/boot.sh'], entrypoint='sh',
+                network='container:'+database, user='568:568')
+        # The same restored volume must appear twice, with bookdrop as a subpath.
+        # Keep this special mount contract local rather than changing other drills.
+        name = self.prefix + '-app-' + kind
+        self.containers.append(name)
+        native.docker('run', '-d', '--name', name, '--log-driver=none',
+            '--network', 'container:'+database, '--user', '568:568',
+            '--label', 'k8s92.pds='+self.prefix, '--read-only', '--cap-drop', 'ALL',
+            '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:rw,nosuid,uid=568,gid=568',
+            '-v', appdata+':/app/data', '-v', tools+':/tools:ro', '-v', books+':/books:ro',
+            '--mount', 'type=volume,src='+books+',dst=/bookdrop,volume-nocopy,volume-subpath=bookdrop,readonly',
+            '--entrypoint', 'sh', GRIMM, '/tools/boot.sh')
+        return name
+
 
 CHECK = '''import hashlib,json,pathlib,sys,tarfile,os,shlex
 expected=json.load(sys.stdin);root=pathlib.Path('/data/restored')
@@ -166,14 +184,33 @@ def wait(check):
     raise TimeoutError('original native readiness expired')
 
 
-def recreate_consumer(drill, app, database, kind, appdata, tools, expected):
+def verify_consumer_books(app, expected):
+    info=json.loads(native.docker('inspect',app))[0]
+    mounts={m['Destination']:m for m in info['Mounts']}
+    assert all(path in mounts and not mounts[path]['RW'] for path in ('/books','/bookdrop'))
+    assert mounts['/books']['Name']==mounts['/bookdrop']['Name']
+    program = '''import hashlib,json,os,pathlib,sys
+root=pathlib.Path('/books');rows=[]
+assert os.path.samefile(root/'bookdrop','/bookdrop')
+for p in [root,*sorted(root.rglob('*'))]:
+ s=p.lstat();assert not p.is_symlink() and (p.is_file() or p.is_dir())
+ h=hashlib.file_digest(p.open('rb'),'sha256').hexdigest() if p.is_file() else None
+ rows.append([str(p.relative_to(root)),s.st_mode&0o7777,s.st_uid,s.st_gid,h])
+assert hashlib.sha256(json.dumps(sorted(rows)).encode()).hexdigest()==sys.argv[1]
+'''
+    native.docker('run', '--rm', '--log-driver=none', '--network=none',
+        '--user', '568:568', '--read-only', '--cap-drop', 'ALL',
+        '--security-opt', 'no-new-privileges', '--volumes-from', app+':ro',
+        native.PYTHON, 'python3', '-c', program, expected)
+
+
+def recreate_consumer(drill, app, database, kind, appdata, tools, expected, books=None):
     # Docker replaces a restarted container's network namespace. Remove the
     # disposable consumer first and join the new namespace when recreating it.
     native.docker('rm','-f',app);drill.containers.remove(app)
     native.docker('restart',database)
     wait(lambda:data_digest(database)==expected)
-    app=drill.start('app-'+kind,GRIMM,{appdata:'/app/data',tools:'/tools:ro'},
-        command=['/tools/boot.sh'],entrypoint='sh',network='container:'+database,user='568:568')
+    app=drill.start_consumer(kind,database,appdata,tools,books)
     wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
     if data_digest(database)!=expected:raise ValueError('data differs after consumer recreation')
     return app
@@ -192,8 +229,10 @@ def exercise(identity, payload, deadline):
         for kind in ('nas','r2'):
             work, restored, appdata, tools, dbdata = [drill.volume(kind+'-'+s) for s in ('work','restored','app','tools','database')]
             checker_mounts={restored:'/data',appdata:'/appdata',tools:'/tools'}
+            books=None
             if 'books_sha256' in original:
-                checker_mounts[drill.volume(kind+'-books')]='/bookdata'
+                books=drill.volume(kind+'-books')
+                checker_mounts[books]='/bookdata'
             reader = drill.start('reader-'+kind,identity.IMAGE,
                 {work:'/work',restored:'/restored',identity.TOOLS:'/tools:ro'},
                 command=['sh','-c','/tools/sleep 1800'],entrypoint='/tools/busybox',network='bridge',user='568:568')
@@ -233,13 +272,17 @@ def exercise(identity, payload, deadline):
             native.docker('exec','-e','K8S92_ISOLATED_RESTORE=YES',database,'bash','/tools/restore.sh',
                           '/original/restored/mariadb-config/kopiur')
             if data_digest(database)!=original['data_sha256']:raise ValueError('original native data digest differs')
-            app=drill.start('app-'+kind,GRIMM,{appdata:'/app/data',tools:'/tools:ro'},
-                command=['/tools/boot.sh'],entrypoint='sh',network='container:'+database,user='568:568')
+            app=drill.start_consumer(kind,database,appdata,tools,books)
             wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
+            if books:verify_consumer_books(app,receipt['books_tree_sha256'])
             native.docker('restart',app)
             wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
+            if books:verify_consumer_books(app,receipt['books_tree_sha256'])
             if data_digest(database)!=original['data_sha256']:raise ValueError('data differs after native app restart')
-            app=recreate_consumer(drill,app,database,kind,appdata,tools,original['data_sha256'])
+            app=recreate_consumer(drill,app,database,kind,appdata,tools,original['data_sha256'],books)
+            if books:
+                verify_consumer_books(app,receipt['books_tree_sha256'])
+                receipt['native_consumer_books_mounts_equal']=True
             receipt.update(native_database_restart_equal=True,native_consumer_recreation_equal=True)
             database_id = json.loads(native.docker('inspect',database))[0]['Id']
             assert re.fullmatch(r'[0-9a-f]{64}', database_id)

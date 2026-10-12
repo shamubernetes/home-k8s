@@ -3,7 +3,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: grimmory-k8s92-original-proof
+  name: grimmory-k8s92-original-proof-python314
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   activeDeadlineSeconds: 300
   backoffLimit: 0

@@ -1,0 +1,93 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/restore_v1alpha1.json
+# Retained production originals qualified on ARC 38193532128. Never target the app PVC.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: grimmory-k8s92-books-original-nas
+spec:
+  source:
+    snapshotRef:
+      name: grimmory-k8s92-books-original
+  target:
+    pvc:
+      name: grimmory-k8s92-books-original-nas
+      capacity: 10Gi
+      storageClassName: ceph-block
+      accessModes: [ReadWriteOnce]
+  policy:
+    onMissingSnapshot: Fail
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+  mover:
+    # Preserve the root-owned, app-nonwritable runtime escrow as well as UID 568 data.
+    # The preceding namespace-only prerequisite enables the installed mover gate.
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 568
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+        add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: grimmory-k8s92-books-original-r2
+spec:
+  source:
+    snapshotRef:
+      name: grimmory-nas-to-r2-copy-ffe7bf1cfd6e0065-527aab70
+  target:
+    pvc:
+      name: grimmory-k8s92-books-original-r2
+      capacity: 10Gi
+      storageClassName: ceph-block
+      accessModes: [ReadWriteOnce]
+  policy:
+    onMissingSnapshot: Fail
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+  mover:
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 568
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+        add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault

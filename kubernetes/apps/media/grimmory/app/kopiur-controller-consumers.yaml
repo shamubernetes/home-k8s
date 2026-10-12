@@ -3,14 +3,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: grimmory-k8s92-consumer-nas
+  name: grimmory-k8s92-books-consumer-nas
 spec:
   activeDeadlineSeconds: 900
   backoffLimit: 0
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: grimmory-k8s92-consumer
+        app.kubernetes.io/name: grimmory-k8s92-books-consumer
         k8s92-backend: nas
     spec:
       restartPolicy: Never
@@ -33,6 +33,9 @@ spec:
             - name: appdata
               mountPath: /appdata
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: false
             - name: tools
               mountPath: /tools
               readOnly: false
@@ -49,6 +52,8 @@ spec:
                 - CHOWN
                 - FOWNER
                 - DAC_OVERRIDE
+                # Required to preserve the independently qualified foreign-GID SGID directory.
+                - FSETID
             runAsUser: 0
             runAsGroup: 568
             runAsNonRoot: false
@@ -130,6 +135,13 @@ spec:
             - name: appdata
               mountPath: /app/data
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: true
+            - name: books
+              mountPath: /bookdrop
+              subPath: bookdrop
+              readOnly: true
             - name: app-tmp
               mountPath: /tmp
             - name: private
@@ -186,11 +198,11 @@ spec:
       volumes:
         - name: original
           persistentVolumeClaim:
-            claimName: grimmory-k8s92-original-nas
+            claimName: grimmory-k8s92-books-original-nas
             readOnly: true
         - name: contract
           configMap:
-            name: grimmory-controller-consumer-contract
+            name: grimmory-books-consumer-contract
             defaultMode: 292
         - name: tools
           emptyDir:
@@ -204,6 +216,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 256Mi
+        - name: books
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
         - name: appdata
           emptyDir:
             medium: Memory
@@ -220,14 +236,14 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: grimmory-k8s92-consumer-r2
+  name: grimmory-k8s92-books-consumer-r2
 spec:
   activeDeadlineSeconds: 900
   backoffLimit: 0
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: grimmory-k8s92-consumer
+        app.kubernetes.io/name: grimmory-k8s92-books-consumer
         k8s92-backend: r2
     spec:
       restartPolicy: Never
@@ -250,6 +266,9 @@ spec:
             - name: appdata
               mountPath: /appdata
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: false
             - name: tools
               mountPath: /tools
               readOnly: false
@@ -266,6 +285,8 @@ spec:
                 - CHOWN
                 - FOWNER
                 - DAC_OVERRIDE
+                # Required to preserve the independently qualified foreign-GID SGID directory.
+                - FSETID
             runAsUser: 0
             runAsGroup: 568
             runAsNonRoot: false
@@ -347,6 +368,13 @@ spec:
             - name: appdata
               mountPath: /app/data
               readOnly: false
+            - name: books
+              mountPath: /books
+              readOnly: true
+            - name: books
+              mountPath: /bookdrop
+              subPath: bookdrop
+              readOnly: true
             - name: app-tmp
               mountPath: /tmp
             - name: private
@@ -403,11 +431,11 @@ spec:
       volumes:
         - name: original
           persistentVolumeClaim:
-            claimName: grimmory-k8s92-original-r2
+            claimName: grimmory-k8s92-books-original-r2
             readOnly: true
         - name: contract
           configMap:
-            name: grimmory-controller-consumer-contract
+            name: grimmory-books-consumer-contract
             defaultMode: 292
         - name: tools
           emptyDir:
@@ -421,6 +449,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 256Mi
+        - name: books
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
         - name: appdata
           emptyDir:
             medium: Memory
@@ -437,11 +469,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: grimmory-k8s92-consumer
+  name: grimmory-k8s92-books-consumer
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: grimmory-k8s92-consumer
+      app.kubernetes.io/name: grimmory-k8s92-books-consumer
   policyTypes:
     - Ingress
     - Egress

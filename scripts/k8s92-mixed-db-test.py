@@ -90,7 +90,7 @@ def health(container):
 
 
 def helpers(container):
-    for name in ('backup.sh', 'restore.sh', 'runtime.sh'):
+    for name in ('backup.sh', 'restore.sh', 'runtime.sh', 'books.sh'):
         if (HELPERS / name).exists():
             docker('cp', str(HELPERS / name), container + ':/' + name)
 
@@ -110,17 +110,23 @@ def grimmory():
     application_env = {'DATABASE_URL': 'jdbc:mariadb://127.0.0.1:3306/grimmory',
                        'DATABASE_USERNAME': 'grimmory', 'DATABASE_PASSWORD': database_env['MYSQL_PASSWORD'],
                        'USER_ID': '568', 'GROUP_ID': '568', 'FORCE_DISABLE_OIDC': 'true',
+                       # Disposable fixture aliases the exact Books subtree.
+                       # Production separately proves both NFS mounts and writers.
+                       'GRIMMORY_BOOKDROP': '/books/bookdrop',
                        'JAVA_TOOL_OPTIONS': '-Xmx384m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 --enable-preview'}
     dbdata, appdata, runtime_data = volume('source-db'), volume('source-app'), volume('source-runtime')
+    booksdata = volume('source-books')
     database = start('database-source', MARIA, net, database_env,
                      ((dbdata, '/config', False), (runtime_data, '/runtime-escrow', True)))
     wait(lambda: sql(database, 'SELECT 1', ok=False).returncode == 0)
     app = start('app-source', GRIMM, 'container:' + database, application_env,
                 ((appdata, '/app/data', False), (dbdata, '/database-state', True),
-                 (runtime_data, '/runtime-escrow', False)))
+                 (runtime_data, '/runtime-escrow', False), (booksdata, '/books', False)))
     wait(lambda: health(app))
     helpers(database)
     helpers(app)
+    docker('exec', app, 'sh', '-c',
+           'mkdir -p /books/bookdrop; printf "synthetic-book" >/books/bookdrop/fixture.txt')
     sql(database, "CREATE TABLE grimmory.lane_fixture(id INT PRIMARY KEY, body VARBINARY(64), text_value VARCHAR(64)) ENGINE=InnoDB;"
                   "INSERT INTO grimmory.lane_fixture VALUES(1,UNHEX('0001FEFF'),'fixture-雪');"
                   "CREATE VIEW grimmory.lane_view AS SELECT id FROM grimmory.lane_fixture;"
@@ -191,27 +197,35 @@ def grimmory():
         env0 = (SCRATCH / 'bundle/runtime/application.env0').read_bytes()
         application_env = dict(item.decode().split('=', 1) for item in env0.split(b'\0') if item)
     restored_appdata = volume('restore-app')
+    restored_booksdata = volume('restore-books')
     if runtime:
         import tarfile
-        with tarfile.open(SCRATCH / 'bundle/runtime/app-data.tar') as archive:
-            for member in archive.getmembers():
-                path = Path(member.name)
-                assert not path.is_absolute() and '..' not in path.parts
-                assert member.isdir() or member.isfile()
+        for payload in ('app-data.tar', 'books.tar'):
+            with tarfile.open(SCRATCH / 'bundle/runtime' / payload) as archive:
+                for member in archive.getmembers():
+                    path = Path(member.name)
+                    assert not path.is_absolute() and '..' not in path.parts
+                    assert member.isdir() or member.isfile()
+                    assert not member.mode & 0o4000
+                    assert member.isdir() or not member.mode & 0o2000
         # Extract into the fresh disposable volume while the native app is absent.
         tool = PREFIX + '-unpack'
         CONTAINERS.append(tool)
         docker('create', '--name', tool, '--network', 'none', '--entrypoint', 'sleep',
-               '-v', restored_appdata + ':/app/data', GRIMM, 'infinity')
+               '-v', restored_appdata + ':/app/data', '-v', restored_booksdata + ':/books',
+               GRIMM, 'infinity')
         docker('start', tool)
         docker('cp', str(SCRATCH / 'bundle/runtime/app-data.tar'), tool + ':/app-data.tar')
         docker('exec', tool, 'tar', '-xf', '/app-data.tar', '-C', '/app/data')
+        docker('cp', str(SCRATCH / 'bundle/runtime/books.tar'), tool + ':/books.tar')
+        docker('exec', tool, 'tar', '-xf', '/books.tar', '-C', '/books')
         remove(tool)
     restored_app = start('app-restored', GRIMM, 'container:' + restored, application_env,
-                         ((restored_appdata, '/app/data', False),))
+                         ((restored_appdata, '/app/data', False), (restored_booksdata, '/books', True)))
     wait(lambda: health(restored_app))
     if runtime:
         assert docker('exec', restored_app, 'cat', '/app/data/native-config/value').stdout == b'synthetic-config'
+        assert docker('exec', restored_app, 'cat', '/books/bookdrop/fixture.txt').stdout == b'synthetic-book'
     assert sql(restored, 'SELECT HEX(body),text_value FROM grimmory.lane_fixture').stdout == original
     print(json.dumps({'suite': 'mixed-grimmory', 'scope': 'synthetic prerequisite, not original NAS/R2',
                       'production_images': True, 'runtime_bundle': runtime,
@@ -227,6 +241,10 @@ def main():
     parser.parse_args()
     SCRATCH = Path(tempfile.mkdtemp(prefix=PREFIX, dir=os.environ['TMPDIR']))
     try:
+        # Grimmory's shared Books original needs this exact CWA writer guard.
+        # Reuse the trusted mixed-grimmory dispatch without new runner privileges.
+        import runpy
+        runpy.run_path(str(ROOT / 'scripts/kopiur-cwa-startup-hold-native.py'))['main']()
         grimmory()
     finally:
         cleanup_failed = []

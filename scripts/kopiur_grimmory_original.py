@@ -24,13 +24,14 @@ HELPERS = Path(__file__).resolve().parent.parent / 'kubernetes/apps/media/grimmo
 
 def validate_original(payload):
     original = payload['original']
-    if set(original) != {'snapshots', 'generation', 'sql_sha256', 'runtime_sha256', 'data_sha256'}:
+    required = {'snapshots', 'generation', 'sql_sha256', 'runtime_sha256', 'data_sha256'}
+    if set(original) not in (required, required | {'books_sha256'}):
         raise ValueError('unexpected Grimmory original contract')
     points = original['snapshots']
     if set(points) != {'nas', 'r2'} or points['nas'] == points['r2'] or not all(
             isinstance(x, str) and re.fullmatch(r'[0-9a-f]{32}', x) for x in points.values()):
         raise ValueError('exact distinct original IDs required')
-    for key in ('sql_sha256', 'runtime_sha256', 'data_sha256'):
+    for key in ('sql_sha256', 'runtime_sha256', 'data_sha256', *(['books_sha256'] if 'books_sha256' in original else [])):
         if not re.fullmatch(r'[0-9a-f]{64}', original[key]):
             raise ValueError('exact original digest required')
     if not re.fullmatch(r'[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}', original['generation']):
@@ -66,17 +67,25 @@ assert m['base_tables']=='73'
 checks={}
 for line in (r/'runtime.sha256').read_text().splitlines():
  h,n=line.split('  ',1);assert n not in checks;checks[n]=h
-assert set(checks)=={'application.env0','application.argv0','app-data.tar','process-start.txt','runtime.txt'}
+roster={'application.env0','application.argv0','app-data.tar','process-start.txt','runtime.txt'}
+if 'books_sha256' in expected:roster.update({'books.tar','books.txt'})
+assert set(checks)==roster
 assert all(digest(r/n)==h for n,h in checks.items())
+def unpack(filename,point):
+ with tarfile.open(filename) as archive:
+  members=archive.getmembers();seen=set();rows=[]
+  assert sum(m.size for m in members)<512*1024*1024
+  for member in members:
+   p=pathlib.PurePosixPath(member.name);name=str(p)
+   assert not p.is_absolute() and '..' not in p.parts and name not in seen;seen.add(name)
+   assert member.isdir() or member.isfile()
+   assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
+   data=archive.extractfile(member) if member.isfile() else None
+   rows.append([name,member.mode,member.uid,member.gid,hashlib.file_digest(data,'sha256').hexdigest() if data else None])
+  archive.extractall(point,filter='fully_trusted')
+ return members,rows
 source=root/'grimmory-data';point=pathlib.Path('/appdata');point.mkdir(exist_ok=True)
-with tarfile.open(r/'app-data.tar') as archive:
- members=archive.getmembers();seen=set()
- assert sum(m.size for m in members)<512*1024*1024
- for member in members:
-  p=pathlib.PurePosixPath(member.name);assert not p.is_absolute() and '..' not in p.parts
-  assert str(p) not in seen;seen.add(str(p));assert member.isdir() or member.isfile()
-  assert not member.mode & 0o4000 and (member.isdir() or not member.mode & 0o2000)
- archive.extractall(point,filter='fully_trusted')
+unpack(r/'app-data.tar',point)
 def tree(root):
  rows=[]
  for p in [root,*sorted(root.rglob('*'))]:
@@ -84,8 +93,23 @@ def tree(root):
   rows.append([str(p.relative_to(root)),s.st_mode&0o7777,s.st_uid,s.st_gid,digest(p)if p.is_file()else None])
  return rows
 before,after=tree(source),tree(point);assert before==after,'original app tree metadata or bytes differ'
-print(json.dumps({'base_tables':73,'runtime_sha256':checks,'app_entries':len(before),
- 'app_tree_sha256':hashlib.sha256(json.dumps(before).encode()).hexdigest()}))
+receipt={'base_tables':73,'runtime_sha256':checks,'app_entries':len(before),
+ 'app_tree_sha256':hashlib.sha256(json.dumps(before).encode()).hexdigest()}
+if 'books_sha256' in expected:
+ assert digest(r/'books.tar')==expected['books_sha256']
+ runtime=dict(line.split('=',1)for line in (r/'runtime.txt').read_text().splitlines())
+ assert runtime['format']=='grimmory-runtime-books-v2'
+ assert (r/'books.txt').read_text()=='format=grimmory-books-v1\\nsource=/books\\nbookdrop_subpath=bookdrop\\nconsistency=repeated-byte-metadata-stability-not-writer-fenced\\n'
+ books=pathlib.Path('/bookdata');books.mkdir(exist_ok=True)
+ members,rows=unpack(r/'books.tar',books)
+ assert sorted(rows)==sorted(tree(books)), 'original Books bytes or metadata differ'
+ assert (books/'bookdrop').is_dir() and not (books/'bookdrop').is_symlink()
+ receipt.update(books_entries=len(rows),books_files=sum(m.isfile()for m in members),
+  books_archive_sha256=expected['books_sha256'],
+  books_tree_sha256=hashlib.sha256(json.dumps(sorted(rows)).encode()).hexdigest(),
+  bookdrop_subtree_restored=True,books_original_bytes_metadata_equal=True,
+  shared_writer_fencing_qualified=False)
+print(json.dumps(receipt))
 '''
 
 BOOT = '''import json,pathlib,sys,shlex,os
@@ -167,6 +191,9 @@ def exercise(identity, payload, deadline):
             native.docker('pull','--platform','linux/amd64',image,timeout=600)
         for kind in ('nas','r2'):
             work, restored, appdata, tools, dbdata = [drill.volume(kind+'-'+s) for s in ('work','restored','app','tools','database')]
+            checker_mounts={restored:'/data',appdata:'/appdata',tools:'/tools'}
+            if 'books_sha256' in original:
+                checker_mounts[drill.volume(kind+'-books')]='/bookdata'
             reader = drill.start('reader-'+kind,identity.IMAGE,
                 {work:'/work',restored:'/restored',identity.TOOLS:'/tools:ro'},
                 command=['sh','-c','/tools/sleep 1800'],entrypoint='/tools/busybox',network='bridge',user='568:568')
@@ -185,7 +212,7 @@ def exercise(identity, payload, deadline):
             if not re.fullmatch(r'[A-Za-z0-9]+',obj):raise ValueError('invalid original root')
             transport.exec(reader,'k snapshot restore '+shlex.quote(obj)+' /restored/restored >/dev/null\n',password=password)
             native.docker('rm','-f',reader);drill.containers.remove(reader)
-            checker=drill.start('checker-'+kind,native.PYTHON,{restored:'/data',appdata:'/appdata',tools:'/tools'},
+            checker=drill.start('checker-'+kind,native.PYTHON,checker_mounts,
                 command=['python3','-c','import time;time.sleep(1800)'],user='0:568',capabilities=('CHOWN','FOWNER','DAC_OVERRIDE'))
             drill.native_python={checker}
             receipt=json.loads(drill.python(checker,CHECK,json.dumps(original)))
@@ -227,6 +254,9 @@ def exercise(identity, payload, deadline):
             for c in (app,database):native.docker('rm','-f',c);drill.containers.remove(c)
         for key in ('runtime_sha256','app_tree_sha256','original_data_sha256','original_runtime_hash','start_time','end_time'):
             if results[0][key]!=results[1][key]:raise ValueError('independent originals differ: '+key)
+        if 'books_sha256' in original:
+            for key in ('books_entries','books_files','books_archive_sha256','books_tree_sha256'):
+                if results[0][key]!=results[1][key]:raise ValueError('independent Books originals differ: '+key)
     finally:
         native.COMMAND_DEADLINE.set(min(deadline,time.monotonic()+90))
         try:drill.clean()

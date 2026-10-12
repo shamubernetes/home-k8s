@@ -46,7 +46,19 @@ spec:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
               tag: latest@sha256:4ef757349c3c7a7d90ba95b1e2a46ce4dd460a4776efbcf2aa1b1c476e7d5de5
+            # Stage the unchanged qualified holder with an expired deadline.
+            # /init below execs the pinned image's native dumb-init command.
+            # A future coordinated Books capture needs a separate fixed expiry.
+            command:
+              - /app/.venv/bin/python3
+              - /backup-contract/startup-hold.py
+              - start
+              - "0"
             env:
+              KOPIUR_POD_UID:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.uid
               TZ: ${TIMEZONE}
               PUID: "568"
               PGID: "568"
@@ -148,14 +160,44 @@ spec:
           http:
             port: *port
     persistence:
+      backup-contract:
+        type: configMap
+        name: cwa-bdl-kopiur-startup
+        defaultMode: 365 # 0555
+        advancedMounts:
+          cwa-bdl:
+            app:
+              - path: /backup-contract
+                readOnly: true
+              - path: /init
+                subPath: native-init.sh
+                readOnly: true
       config:
         existingClaim: cwa-bdl
-        globalMounts:
-        - path: /config
+        advancedMounts:
+          cwa-bdl:
+            app:
+              - path: /config
+            books-monitor:
+              - path: /config
+                readOnly: true
+            books-canary:
+              - path: /config
+                readOnly: true
       books:
         type: nfs
         server: "${IPAM_IP_NFS}"
         path: /mnt/user/Media
-        globalMounts:
-        - path: /books
-          subPath: Books/ingest
+        advancedMounts:
+          cwa-bdl:
+            app:
+              - path: /books
+                subPath: Books/ingest
+            books-monitor:
+              - path: /books
+                subPath: Books/ingest
+                readOnly: true
+            books-canary:
+              - path: /books
+                subPath: Books/ingest
+                readOnly: true

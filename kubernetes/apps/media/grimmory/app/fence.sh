@@ -86,6 +86,9 @@ case ${1:-} in
     mkdir -p "$state"
     chown 0:0 "$state"
     chmod 700 "$state"
+    # PVC fsGroup parents legitimately carry SGID, chmod 700 preserves that bit.
+    # Control state has its own root-only contract, clear inherited SGID here.
+    chmod g-s "$state"
     secure || reject
     rm -f "$state/active" "$state/child" "$state/pending"
     # A replacement never starts a writer during a retained absolute hold.

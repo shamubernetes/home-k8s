@@ -49,3 +49,6 @@ spec:
           radarr3d:
             app:
             - path: /media
+            - path: /media/Books
+              subPath: Books
+              readOnly: true

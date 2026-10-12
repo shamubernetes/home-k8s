@@ -11,3 +11,15 @@ spec:
   failurePolicy:
     activeDeadlineSeconds: 3600
   description: K8S-92 original Books and bookdrop payload bound to native SQL and runtime
+---
+# Adopt only the exact copied original, preserving controller UID and manifest.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-nas-to-r2-copy-ffe7bf1cfd6e0065-527aab70
+spec:
+  repository:
+    kind: Repository
+    name: grimmory-r2
+    namespace: media
+  deletionPolicy: Retain

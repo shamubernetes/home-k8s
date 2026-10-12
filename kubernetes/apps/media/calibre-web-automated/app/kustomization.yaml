@@ -7,3 +7,11 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
+configMapGenerator:
+- name: calibre-web-automated-kopiur-startup
+  files:
+  - startup-hold.py=kopiur-startup-hold.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

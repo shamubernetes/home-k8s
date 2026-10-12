@@ -49,3 +49,6 @@ spec:
           radarr:
             app:
             - path: /media
+            - path: /media/Books
+              subPath: Books
+              readOnly: true

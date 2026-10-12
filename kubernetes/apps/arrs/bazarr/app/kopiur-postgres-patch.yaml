@@ -49,6 +49,10 @@ spec:
           bazarr:
             app:
             - path: /media
+            # Bazarr writes subtitles under Movies/TV, never the shared Books tree.
+            - path: /media/Books
+              subPath: Books
+              readOnly: true
       add-ons:
         globalMounts: null
         advancedMounts:

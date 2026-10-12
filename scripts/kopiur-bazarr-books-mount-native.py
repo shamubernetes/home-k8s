@@ -64,7 +64,7 @@ def docker(*args, check=True, timeout=60):
 def inspect_owned(kind, name, owner):
     result = docker(kind, 'inspect', name, check=False)
     if result.returncode:
-        if 'No such' in result.stderr:
+        if 'no such ' + kind in result.stderr.lower():
             return False
         raise RuntimeError('owned resource inspection failed')
     info = json.loads(result.stdout)[0]
@@ -150,9 +150,10 @@ def main():
                 receipt = json.loads(docker('exec', name, 'python3', '-c', PROBE).stdout)
                 receipt['replacement'] = replacement
                 receipts.append(receipt)
-        print(json.dumps({'image': IMAGE, 'receipts': receipts, 'production_books_capture_qualified': False}, sort_keys=True))
     finally:
         cleanup(containers, volumes, owner)
+    print(json.dumps({'image': IMAGE, 'receipts': receipts, 'owned_cleanup_verified': True,
+                      'production_books_capture_qualified': False}, sort_keys=True))
 
 
 if __name__ == '__main__':

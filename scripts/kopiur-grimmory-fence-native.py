@@ -113,6 +113,8 @@ def exercise():
                       'fence-sql', statement, check=check)
 
     wait(lambda: sql('SELECT 1', False).returncode == 0)
+    # Kubernetes fsGroup can legitimately leave SGID on runtime escrow parents.
+    docker('exec', db, 'sh', '-c', 'chown 0:568 /fixture-runtime; chmod 2750 /fixture-runtime; mkdir /fixture-runtime/fence; chown 0:0 /fixture-runtime/fence; chmod 2700 /fixture-runtime/fence')
     create(app, IMAGE, 'container:' + db, app_env,
            ('-v', app_volume + ':/app/data', '-v', books_volume + ':/books',
             '--tmpfs=/bookdrop:rw,uid=568,gid=568,size=16m', '-v', runtime_volume + ':/runtime-escrow',

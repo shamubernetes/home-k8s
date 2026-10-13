@@ -73,7 +73,7 @@ spec:
               memory: 512Mi
       containers:
         - name: database
-          image: docker.io/linuxserver/mariadb:11.8.8@sha256:fa63c6ff84bd6bab0a188d68e1b4cd1e4e1b34c22101fc52d544a53dfd502d45
+          image: docker.io/linuxserver/mariadb:11.8.8@sha256:fbcaa0806a41c80824978de600005b2620567fd557963ea53990de528c310f1f
           command:
             - bash
             - -c
@@ -378,7 +378,7 @@ spec:
               memory: 512Mi
       containers:
         - name: database
-          image: docker.io/linuxserver/mariadb:11.8.8@sha256:fa63c6ff84bd6bab0a188d68e1b4cd1e4e1b34c22101fc52d544a53dfd502d45
+          image: docker.io/linuxserver/mariadb:11.8.8@sha256:fbcaa0806a41c80824978de600005b2620567fd557963ea53990de528c310f1f
           command:
             - bash
             - -c

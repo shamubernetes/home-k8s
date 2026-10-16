@@ -5,6 +5,7 @@ resources:
 - ./externalsecret-firecrawl.yaml
 - ./cluster.yaml
 - ./topology.yaml
+- ./kanvil.yaml
 - ./networkpolicy.yaml
 - ./servicemonitor.yaml
 - ./prometheusrule.yaml

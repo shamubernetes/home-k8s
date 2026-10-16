@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-kanvil-user
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: rabbitmq-kanvil-user
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        username: "{{ .RABBITMQ_USER }}"
+        password: "{{ .RABBITMQ_PASSWORD }}"
+  data:
+  - secretKey: RABBITMQ_USER
+    remoteRef: {key: kanvil, property: RABBITMQ_USER}
+  - secretKey: RABBITMQ_PASSWORD
+    remoteRef: {key: kanvil, property: RABBITMQ_PASSWORD}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Vhost
+metadata:
+  name: kanvil
+spec:
+  name: kanvil
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: kanvil
+spec:
+  importCredentialsSecret:
+    name: rabbitmq-kanvil-user
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: kanvil
+spec:
+  vhost: kanvil
+  user: kanvil
+  permissions:
+    configure: ".*"
+    write: ".*"
+    read: ".*"
+  rabbitmqClusterReference:
+    name: rabbitmq

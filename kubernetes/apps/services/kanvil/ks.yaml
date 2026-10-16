@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kanvil-prereqs
+  namespace: flux-system
+spec:
+  targetNamespace: services
+  dependsOn:
+  - name: cloudnative-pg-cluster
+  - name: external-secrets-secret-store
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m
+  path: ./kubernetes/apps/services/kanvil/prereqs
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: home-kubernetes
+  wait: true
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: &app kanvil
+  namespace: flux-system
+spec:
+  targetNamespace: services
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: *app
+  dependsOn:
+  - name: kanvil-prereqs
+  - name: rabbitmq-cluster
+  - name: elasticsearch
+  - name: external-secrets-secret-store
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m
+  path: ./kubernetes/apps/services/kanvil/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: home-kubernetes
+  wait: true
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: Secret
+      name: cluster-secrets
+    - kind: ConfigMap
+      name: cluster-ipam

@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app kanvil
+spec:
+  interval: 10m
+  timeout: 10m
+  chartRef:
+    kind: OCIRepository
+    name: kanvil
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      kanvil:
+        replicas: 1
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/maudecode/kanvil
+              tag: 0.1.2@sha256:395cc77542c319844bb3e4acb0c03e25279f4b329475c9051892ccdc100684f6
+            envFrom:
+            - secretRef:
+                name: kanvil-secret
+            env:
+              NODE_ENV: production
+              HOST: 0.0.0.0
+              PORT: "5180"
+              KANVIL_URL: https://kanvil.${HOME_DOMAIN}
+              KANVIL_STORAGE_PROVIDER: local
+              KANVIL_SEARCH_PROVIDER: elasticsearch
+              ELASTICSEARCH_URL: http://elasticsearch.database.svc.cluster.local:9200
+              ELASTICSEARCH_INDEX: kanvil
+              ELASTICSEARCH_AUTH: apiKey
+              KANVIL_BROKER_PROVIDER: rabbitmq
+              RABBITMQ_EXCHANGE: kanvil.events
+              OIDC_DISCOVERY_URL: https://sso.${HOME_DOMAIN}/.well-known/openid-configuration
+              OIDC_NAME: Pocket ID
+              KANVIL_PUSH_ENABLED: "false"
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: &port 5180
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 6
+              readiness: &health
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              startup:
+                <<: *health
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: *port
+                  periodSeconds: 5
+                  timeoutSeconds: 5
+                  failureThreshold: 120
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests: {cpu: 100m, memory: 256Mi}
+              limits: {memory: 1Gi}
+    defaultPodOptions:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: *app
+        ports:
+          http:
+            port: *port
+    persistence:
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

@@ -1,0 +1,88 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/batch/cronjob_v1.json
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: renovate-fast
+spec:
+  schedule: "* * * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 45
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1200
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: renovate-fast
+        spec:
+          serviceAccountName: renovate-fast
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 12021
+            runAsGroup: 0
+            fsGroup: 0
+            seccompProfile: {type: RuntimeDefault}
+          initContainers:
+          - name: kubectl
+            image: docker.io/bitnami/kubectl:latest@sha256:999d5eb28f404b45f15117f2a110ff23c6164f76edac261d75d783b6e88252b7
+            command: [/bin/sh, -ec]
+            args: ["cp /opt/bitnami/kubectl/bin/kubectl /tools/kubectl"]
+            securityContext:
+              runAsUser: 1001
+              allowPrivilegeEscalation: false
+              capabilities: {drop: [ALL]}
+            resources:
+              requests: {cpu: 10m, memory: 32Mi}
+              limits: {memory: 128Mi}
+            volumeMounts:
+            - name: tools
+              mountPath: /tools
+          containers:
+          - name: renovate
+            image: ghcr.io/mend/renovate-ce:15.7.0-full@sha256:e7d054de8a8fd0ec368a44e68f8b29fe5c191788e0e00f24d0ef3c1bd87fd56f
+            command: [/usr/local/renovate/node, /config/fast-update-runner.cjs]
+            env:
+            - name: MEND_RNV_GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef: {name: renovate-secret, key: MEND_RNV_GITHUB_APP_ID}
+            - name: MEND_RNV_GITHUB_APP_KEY
+              valueFrom:
+                secretKeyRef: {name: renovate-secret, key: MEND_RNV_GITHUB_APP_KEY}
+            - name: RENOVATE_BASE_DIR
+              value: /tmp/renovate-fast
+            - name: KUBECTL_BIN
+              value: /tools/kubectl
+            - name: ALERTMANAGER_URLS
+              value: http://alertmanager-kube-prometheus-stack-0.alertmanager-operated.observability.svc.cluster.local:9093,http://alertmanager-kube-prometheus-stack-1.alertmanager-operated.observability.svc.cluster.local:9093
+            - name: FAST_UPDATE_BASELINE_ALERTS
+              value: '["alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda","alertname=KopiurBackupStale,namespace=arrs,policy=radarr-k8s92-original","alertname=KopiurLastBackupFailed,namespace=media,policy=grimmory","alertname=KopiurSnapshotFailed,namespace=media,name=grimmory-hourly-20261012195700,policy=grimmory"]'
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: [ALL]}
+            resources:
+              requests: {cpu: 250m, memory: 512Mi}
+              limits: {memory: 1536Mi, ephemeral-storage: 2Gi}
+            volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: tools
+              mountPath: /tools
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          volumes:
+          - name: config
+            configMap:
+              name: renovate-fast-config
+          - name: tools
+            emptyDir: {}
+          - name: tmp
+            emptyDir:
+              sizeLimit: 1536Mi

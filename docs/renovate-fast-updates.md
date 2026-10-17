@@ -18,7 +18,7 @@ Add one rule to `kubernetes/apps/renovate/renovate/app/config/fast-updates.json`
 
 `enabled: false` is intentional. Regular Renovate imports this preset and excludes that exact image/file pair. The fast worker reads the same preset and enables only its entries. Do not maintain a separate exclusion list or add wildcard entries. Adding a target still follows the normal protected GitOps publication path.
 
-The initial implementation supports one public GHCR image per app-template HelmRelease, with a stable `major.minor.patch@sha256:...` pin, an owning Flux Kustomization and a Deployment. The app must expose the HTTP readiness path and numeric port declared in its values through a Service named after the Helm release. Unsupported layouts fail closed rather than guessing. Other images in the same file remain disabled. No application source or upstream release workflow needs changing.
+The initial implementation supports one public GHCR image per app-template HelmRelease, with a stable `major.minor.patch@sha256:...` pin, an owning Flux Kustomization named after its application directory and a Deployment. The app must expose the HTTP readiness path and numeric port declared in its values through a Service named after the Helm release. Unsupported layouts fail closed rather than guessing. Other images in the same file remain disabled. No application source or upstream release workflow needs changing.
 
 Run these checks before publication:
 
@@ -42,7 +42,7 @@ kubectl kustomize kubernetes/apps/renovate/renovate/access
 
 Kubernetes prevents overlapping runs with `concurrencyPolicy: Forbid`. A rollout can therefore delay subsequent checks. Registry visibility, GitHub limits, protected CI and rollout time also affect delivery latency; the minute schedule is a check cadence, not a one-minute deployment guarantee.
 
-The worker can read workload/Flux status but cannot modify workloads. Its only Kubernetes mutation permission is the existing maintenance coordination Lease in `observability`.
+The worker explicitly configures Kubernetes access through the projected service-account token file and CA, without copying the token or passing it in command arguments. It softly prefers the regular server's node for its already-cached image, but can schedule elsewhere if that server is absent. Immutable utility images use `IfNotPresent`. The worker can read workload/Flux status but cannot modify workloads. Its only Kubernetes mutation permission is the existing maintenance coordination Lease in `observability`.
 
 ## Observe and disable
 

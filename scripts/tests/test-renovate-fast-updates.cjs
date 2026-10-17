@@ -101,6 +101,19 @@ test('semantic merge guard rejects other images, config edits and downgrades', (
   assert.equal(runner.imageOnlyChange(before, before, image), false);
 });
 
+test('runtime Kubernetes client references the projected identity, never localhost or a copied token', () => {
+  const config = runner.inClusterConfig('10.96.0.1', '443');
+  assert.equal(config.clusters[0].cluster.server, 'https://10.96.0.1:443');
+  assert.equal(config.clusters[0].cluster['certificate-authority'], '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt');
+  assert.deepEqual(config.users[0].user, { tokenFile: '/var/run/secrets/kubernetes.io/serviceaccount/token' });
+  assert.equal(config['current-context'], config.contexts[0].name);
+  assert.equal(runner.inClusterConfig('fd00::1', '443').clusters[0].cluster.server, 'https://[fd00::1]:443');
+  const cron = fs.readFileSync(path.join(root, 'kubernetes/apps/renovate/renovate/app/fast-update-cronjob.yaml'), 'utf8');
+  assert(cron.includes('preferredDuringSchedulingIgnoredDuringExecution:'));
+  assert(!cron.includes('requiredDuringSchedulingIgnoredDuringExecution:'));
+  assert(cron.includes('imagePullPolicy: IfNotPresent'));
+});
+
 test('maintenance admission requires two active members and ten minutes remaining', () => {
   const now = 1000000;
   const status = { silenceId: 'owned', state: 'active', memberStates: { a: 'active', b: 'active' }, endsAt: new Date(now + 1800000).toISOString() };
@@ -121,7 +134,7 @@ function rolloutFixture(revision = 'a'.repeat(40)) {
     read: async () => JSON.stringify(hr),
     observe: async kind => {
       if (kind.startsWith('gitrepositories')) return { status: { artifact: { revision: 'main@sha1:' + revision } } };
-      if (kind.startsWith('kustomizations')) return { items: [{ ...ready, spec: { path: './kubernetes/apps/services/kanvil/app', targetNamespace: 'services' }, status: { ...ready.status, lastAppliedRevision: 'main@sha1:' + revision } }] };
+      if (kind.startsWith('kustomizations')) return { ...ready, spec: { path: './kubernetes/apps/services/kanvil/app', targetNamespace: 'services' }, status: { ...ready.status, lastAppliedRevision: 'main@sha1:' + revision } };
       if (kind.startsWith('helmreleases')) return ready;
       if (kind === 'deployments') return { items: [{ metadata: { generation: 1 }, spec: { replicas: 1, template: { spec: { containers: [{ image: image + ':' + pin }] } } }, status: { observedGeneration: 1, availableReplicas: 1, updatedReplicas: 1 } }] };
       throw new Error('Unexpected resource');
@@ -134,7 +147,11 @@ function rolloutFixture(revision = 'a'.repeat(40)) {
 }
 
 test('rollout accepts the exact merged revision with expected image and health', async () => {
-  const f = rolloutFixture(), result = await f.run();
+  const f = rolloutFixture(), observe = f.options.observe, calls = [];
+  f.options.observe = async (...args) => { calls.push(args); return observe(...args); };
+  const result = await f.run();
+  assert(calls.some(args => args[0].startsWith('kustomizations') && args[2] === 'kanvil'));
+  assert(calls.some(args => args[0] === 'deployments' && args[3] === 'app.kubernetes.io/instance=kanvil'));
   assert.equal(result.revision, f.merge);
   assert.equal(result.health, 200);
   assert.equal(f.apiCalls(), 0);

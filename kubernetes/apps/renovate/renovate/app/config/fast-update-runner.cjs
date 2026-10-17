@@ -102,8 +102,26 @@ function checksPass(checks, sha) {
   return REQUIRED_CHECKS.every(name => checks.some(c => c.name === name && c.head_sha === sha && c.app?.id === 15368 && c.status === 'completed' && c.conclusion === 'success'));
 }
 
-function kget(kind, namespace, name) {
-  return JSON.parse(execFileSync(kubectl, ['-n', namespace, 'get', kind, ...(name ? [name] : []), '-o', 'json'], { timeout: 30000, encoding: 'utf8' }));
+function inClusterConfig(host = process.env.KUBERNETES_SERVICE_HOST || 'kubernetes.default.svc', port = process.env.KUBERNETES_SERVICE_PORT_HTTPS || process.env.KUBERNETES_SERVICE_PORT || '443') {
+  const endpoint = host.includes(':') && !host.startsWith('[') ? '[' + host + ']' : host;
+  return {
+    apiVersion: 'v1', kind: 'Config',
+    clusters: [{ name: 'in-cluster', cluster: { server: 'https://' + endpoint + ':' + port, 'certificate-authority': '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' } }],
+    users: [{ name: 'service-account', user: { tokenFile: '/var/run/secrets/kubernetes.io/serviceaccount/token' } }],
+    contexts: [{ name: 'in-cluster', context: { cluster: 'in-cluster', user: 'service-account' } }],
+    'current-context': 'in-cluster'
+  };
+}
+
+function kget(kind, namespace, name, selector) {
+  const configPath = path.join(WORK, 'in-cluster-kubeconfig.json');
+  if (!fs.existsSync(configPath)) {
+    assert(fs.existsSync('/var/run/secrets/kubernetes.io/serviceaccount/token'), 'Projected service-account token is missing');
+    fs.mkdirSync(WORK, { recursive: true, mode: 0o700 });
+    // Reference the rotating projected token; never copy it or pass it in argv.
+    fs.writeFileSync(configPath, JSON.stringify(inClusterConfig()), { mode: 0o600 });
+  }
+  return JSON.parse(execFileSync(kubectl, ['--kubeconfig', configPath, '--cache-dir', path.join(WORK, 'kube-cache'), '--request-timeout=15s', '-n', namespace, 'get', kind, ...(name ? [name] : []), ...(selector ? ['--selector', selector] : []), '-o', 'json'], { timeout: 30000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' }));
 }
 
 async function github(url, token, method = 'GET', body) {
@@ -203,6 +221,7 @@ async function verifyRollout(target, mergeSha, token, yaml, options = {}) {
   assert(hr.spec?.values?.controllers && hr.metadata?.name, 'Fast targets require an app-template HelmRelease');
   const release = hr.spec.releaseName || hr.metadata.name;
   const root = './' + path.posix.dirname(target.file);
+  const ownerName = path.posix.basename(path.posix.dirname(path.posix.dirname(target.file)));
   const matches = Object.values(hr.spec.values.controllers).flatMap(c => Object.values(c.containers || {})).filter(c => c.image?.repository === target.image);
   assert.equal(matches.length, 1, 'Expected exactly one allowlisted container');
   const container = matches[0];
@@ -234,14 +253,14 @@ async function verifyRollout(target, mergeSha, token, yaml, options = {}) {
       stage = 'observe-source';
       const source = await observe('gitrepositories.source.toolkit.fluxcd.io', 'flux-system', 'home-kubernetes');
       stage = 'observe-kustomization';
-      const ks = (await observe('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system')).items.find(k => k.spec.path === root);
+      const ks = await observe('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system', ownerName);
       stage = 'verify-ancestry';
-      if (ks && ready(ks) && await containsChange(source.status?.artifact?.revision) && await containsChange(ks.status?.lastAppliedRevision)) {
+      if (ks?.spec?.path === root && ready(ks) && await containsChange(source.status?.artifact?.revision) && await containsChange(ks.status?.lastAppliedRevision)) {
         const namespace = ks.spec.targetNamespace;
         stage = 'observe-helmrelease';
         const live = await observe('helmreleases.helm.toolkit.fluxcd.io', namespace, hr.metadata.name);
         stage = 'observe-deployment';
-        const deployments = (await observe('deployments', namespace)).items.filter(d => d.spec.template.spec.containers.some(c => c.image === expected));
+        const deployments = (await observe('deployments', namespace, undefined, 'app.kubernetes.io/instance=' + release)).items.filter(d => d.spec.template.spec.containers.some(c => c.image === expected));
         const deployed = deployments.length > 0 && deployments.every(d => d.status.observedGeneration === d.metadata.generation && (d.status.availableReplicas || 0) === d.spec.replicas && (d.status.updatedReplicas || 0) === d.spec.replicas);
         if (ready(live) && deployed) {
           stage = 'observe-health';
@@ -320,7 +339,7 @@ async function main() {
   }
 }
 
-module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, verifyRollout };
+module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, verifyRollout, inClusterConfig };
 if (require.main === module) main().catch(error => {
   // Error objects from HTTP clients or child processes can contain credentials.
   report({ phase: 'failed', errorType: error.name, message: error instanceof assert.AssertionError || error.name === 'RolloutVerificationTimeout' ? error.message : 'Fast-update run failed; inspect private Pod diagnostics' });

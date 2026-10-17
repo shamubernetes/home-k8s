@@ -22,6 +22,17 @@ spec:
         spec:
           serviceAccountName: renovate-fast
           restartPolicy: Never
+          # Prefer the already-cached image without requiring the server to run.
+          affinity:
+            podAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  topologyKey: kubernetes.io/hostname
+                  namespaces: [renovate]
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: renovate
           securityContext:
             runAsNonRoot: true
             runAsUser: 12021
@@ -31,6 +42,7 @@ spec:
           initContainers:
           - name: kubectl
             image: docker.io/bitnami/kubectl:latest@sha256:999d5eb28f404b45f15117f2a110ff23c6164f76edac261d75d783b6e88252b7
+            imagePullPolicy: IfNotPresent
             command: [/bin/sh, -ec]
             args: ["cp /opt/bitnami/kubectl/bin/kubectl /tools/kubectl"]
             securityContext:

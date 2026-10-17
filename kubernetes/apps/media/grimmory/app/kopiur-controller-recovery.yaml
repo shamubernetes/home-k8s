@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: prepare
-          image: docker.io/library/python:3.15-alpine@sha256:1afb480ba8d3b3b7a8439a84f2365ce5c75ac45a79cf07daa091b49235cbe27b
+          image: docker.io/library/python:3.15-alpine@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
           command:
             - python3
             - -B
@@ -226,7 +226,7 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 60
         - name: verify
-          image: docker.io/library/python:3.15-alpine@sha256:1afb480ba8d3b3b7a8439a84f2365ce5c75ac45a79cf07daa091b49235cbe27b
+          image: docker.io/library/python:3.15-alpine@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
           command:
             - python3
             - -B
@@ -334,7 +334,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: prepare
-          image: docker.io/library/python:3.15-alpine@sha256:1afb480ba8d3b3b7a8439a84f2365ce5c75ac45a79cf07daa091b49235cbe27b
+          image: docker.io/library/python:3.15-alpine@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
           command:
             - python3
             - -B
@@ -531,7 +531,7 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 60
         - name: verify
-          image: docker.io/library/python:3.15-alpine@sha256:1afb480ba8d3b3b7a8439a84f2365ce5c75ac45a79cf07daa091b49235cbe27b
+          image: docker.io/library/python:3.15-alpine@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
           command:
             - python3
             - -B

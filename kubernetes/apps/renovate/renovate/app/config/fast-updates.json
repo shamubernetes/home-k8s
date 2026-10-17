@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "description": "Kanvil is managed by the opt-in fast-update lane",
+      "matchDatasources": ["docker"],
+      "matchFileNames": ["kubernetes/apps/services/kanvil/app/helmrelease.yaml"],
+      "matchPackageNames": ["ghcr.io/maudecode/kanvil"],
+      "enabled": false
+    }
+  ]
+}

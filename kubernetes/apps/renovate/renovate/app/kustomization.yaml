@@ -7,10 +7,15 @@ resources:
 # - ./objectbucketclaim.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./fast-update-rbac.yaml
+- ./fast-update-cronjob.yaml
 configMapGenerator:
 - name: renovate-config
   files:
   - config.js=config/config.js
   - onboardingConfig=config/onboardingConfig.json5
+- name: renovate-fast-config
+  files:
+  - fast-update-runner.cjs=config/fast-update-runner.cjs
 generatorOptions:
   disableNameSuffixHash: true

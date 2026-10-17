@@ -40,6 +40,21 @@ spec:
       mode: Ephemeral
       capacity: 8Gi
       storageClassName: ceph-block
+    # Replication still uses local caches in Kopiur 0.10.13. Prefer a different
+    # node from other verify/replication movers without capping concurrency.
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/managed-by: kopiur
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values: [verify, snapshot-replication]
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568

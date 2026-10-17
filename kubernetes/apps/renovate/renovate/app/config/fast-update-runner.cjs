@@ -175,36 +175,91 @@ function maintenance(helper, action, args = []) {
   return JSON.parse(raw);
 }
 
-async function verifyRollout(target, mergeSha, token, yaml) {
-  const text = await readFileAt(target.file, mergeSha, token);
+function maintenanceActive(status, silenceId, now = Date.now()) {
+  const states = Object.values(status.memberStates || {});
+  return status.silenceId === silenceId && status.state === 'active' &&
+    states.length >= 2 && states.every(state => state === 'active') &&
+    Date.parse(status.endsAt) - now >= 600000;
+}
+
+async function verifyRollout(target, mergeSha, token, yaml, options = {}) {
+  const observe = options.observe || kget;
+  const read = options.read || readFileAt;
+  const api = options.api || github;
+  const request = options.request || fetch;
+  const pause = options.pause || sleep;
+  const now = options.now || Date.now;
+  const deadline = now() + (options.timeoutMs ?? 480000);
+  let lastObservation = 'waiting for merged manifest', text;
+  while (text === undefined && now() < deadline) {
+    try { text = await read(target.file, mergeSha, token); }
+    catch (error) { lastObservation = 'observe-manifest: ' + error.name; await pause(options.intervalMs ?? 5000); }
+  }
+  if (text === undefined) {
+    const error = new Error('Rollout verification timed out (' + lastObservation + ')');
+    error.name = 'RolloutVerificationTimeout'; throw error;
+  }
   const hr = yaml.parse(text);
+  assert(hr.spec?.values?.controllers && hr.metadata?.name, 'Fast targets require an app-template HelmRelease');
   const release = hr.spec.releaseName || hr.metadata.name;
   const root = './' + path.posix.dirname(target.file);
-  const deadline = Date.now() + 480000;
-  while (Date.now() < deadline) {
-    const source = kget('gitrepositories.source.toolkit.fluxcd.io', 'flux-system', 'home-kubernetes');
-    const ks = kget('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system').items.find(k => k.spec.path === root);
-    const ready = object => object?.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True' && c.observedGeneration === object.metadata.generation);
-    if (source.status?.artifact?.revision?.endsWith(mergeSha) && ks?.status?.lastAppliedRevision?.endsWith(mergeSha) && ready(ks)) {
-      const namespace = ks.spec.targetNamespace;
-      const live = kget('helmreleases.helm.toolkit.fluxcd.io', namespace, hr.metadata.name);
-      const controllers = hr.spec.values.controllers;
-      const container = Object.values(controllers).flatMap(c => Object.values(c.containers || {})).find(c => c.image?.repository === target.image);
-      assert(container?.image?.tag, 'Allowlisted image missing in merged manifest');
-      const expected = `$${target.image}:$${container.image.tag}`;
-      const deployments = kget('deployments', namespace).items.filter(d => d.spec.template.spec.containers.some(c => c.image === expected));
-      const deployed = deployments.length > 0 && deployments.every(d => d.status.observedGeneration === d.metadata.generation && (d.status.availableReplicas || 0) === d.spec.replicas && (d.status.updatedReplicas || 0) === d.spec.replicas);
-      if (ready(live) && deployed) {
-        const probe = container.probes?.readiness?.spec?.httpGet;
-        assert(probe && Number.isInteger(probe.port) && probe.path.startsWith('/'), 'Fast targets require an explicit HTTP readiness probe');
-        const health = await fetch(`http://$${release}.$${namespace}.svc.cluster.local:$${probe.port}$${probe.path}`, { signal: AbortSignal.timeout(10000) });
-        assert(health.ok, 'Application health request failed');
-        return { revision: mergeSha, release, namespace, image: expected, health: health.status };
-      }
+  const matches = Object.values(hr.spec.values.controllers).flatMap(c => Object.values(c.containers || {})).filter(c => c.image?.repository === target.image);
+  assert.equal(matches.length, 1, 'Expected exactly one allowlisted container');
+  const container = matches[0];
+  assert(container.image.tag, 'Allowlisted image pin missing');
+  const expected = `$${target.image}:$${container.image.tag}`;
+  const probe = container.probes?.readiness?.spec?.httpGet;
+  assert(probe && Number.isInteger(probe.port) && probe.path.startsWith('/') && (!probe.scheme || probe.scheme === 'HTTP'), 'Fast targets require an explicit HTTP readiness probe');
+  const revisionCache = new Map();
+  const containsChange = async revision => {
+    const sha = revision?.match(/(?:^|:)([a-f0-9]{40})$/)?.[1];
+    if (sha === mergeSha) return true;
+    if (!sha) return false;
+    if (revisionCache.has(sha)) return revisionCache.get(sha);
+    const comparison = await api(`/repos/$${REPOSITORY}/compare/$${mergeSha}...$${sha}`, token);
+    let accepted = comparison.status === 'ahead' && comparison.merge_base_commit?.sha === mergeSha;
+    if (accepted) {
+      const later = yaml.parse(await read(target.file, sha, token));
+      const pins = Object.values(later.spec?.values?.controllers || {}).flatMap(c => Object.values(c.containers || {})).filter(c => c.image?.repository === target.image).map(c => c.image.tag);
+      accepted = pins.length === 1 && pins[0] === container.image.tag;
     }
-    await sleep(5000);
+    revisionCache.set(sha, accepted);
+    return accepted;
+  };
+  const ready = object => object?.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True' && c.observedGeneration === object.metadata.generation);
+  let stage = 'observe-source';
+  lastObservation = 'waiting for Flux';
+  while (now() < deadline) {
+    try {
+      stage = 'observe-source';
+      const source = await observe('gitrepositories.source.toolkit.fluxcd.io', 'flux-system', 'home-kubernetes');
+      stage = 'observe-kustomization';
+      const ks = (await observe('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system')).items.find(k => k.spec.path === root);
+      stage = 'verify-ancestry';
+      if (ks && ready(ks) && await containsChange(source.status?.artifact?.revision) && await containsChange(ks.status?.lastAppliedRevision)) {
+        const namespace = ks.spec.targetNamespace;
+        stage = 'observe-helmrelease';
+        const live = await observe('helmreleases.helm.toolkit.fluxcd.io', namespace, hr.metadata.name);
+        stage = 'observe-deployment';
+        const deployments = (await observe('deployments', namespace)).items.filter(d => d.spec.template.spec.containers.some(c => c.image === expected));
+        const deployed = deployments.length > 0 && deployments.every(d => d.status.observedGeneration === d.metadata.generation && (d.status.availableReplicas || 0) === d.spec.replicas && (d.status.updatedReplicas || 0) === d.spec.replicas);
+        if (ready(live) && deployed) {
+          stage = 'observe-health';
+          const health = await request(`http://$${release}.$${namespace}.svc.cluster.local:$${probe.port}$${probe.path}`, { signal: AbortSignal.timeout(10000) });
+          if (health.ok) return { revision: mergeSha, sourceRevision: source.status.artifact.revision, appliedRevision: ks.status.lastAppliedRevision, release, namespace, image: expected, health: health.status };
+          lastObservation = `observe-health: HTTP $${health.status}`;
+        } else lastObservation = 'waiting for ready HelmRelease and expected Deployment image';
+      } else lastObservation = 'waiting for Flux revisions containing the intended unchanged image pin';
+    } catch (error) {
+      // Observe again within the deadline. Never emit HTTP/client error objects.
+      const code = error.code || error.cause?.code;
+      lastObservation = `$${stage}: $${error.name}$${typeof code === 'string' && /^[A-Z_]+$/.test(code) ? ' ' + code : ''}`;
+    }
+    await pause(options.intervalMs ?? 5000);
   }
-  throw new Error('Exact-revision rollout verification timed out');
+  const error = new Error(`Rollout verification timed out ($${lastObservation})`);
+  error.name = 'RolloutVerificationTimeout';
+  throw error;
 }
 
 async function main() {
@@ -243,7 +298,8 @@ async function main() {
   report({ phase: 'maintenance', pull: candidate.pr.number, silenceId: window.silenceId });
   let merged = false;
   try {
-    maintenance(helper, 'status', ['--id', window.silenceId]);
+    const active = maintenance(helper, 'status', ['--id', window.silenceId]);
+    assert(maintenanceActive(active, window.silenceId), 'Maintenance window is not active with at least ten minutes remaining');
     const result = await github(`/repos/$${REPOSITORY}/pulls/$${candidate.pr.number}/merge`, token, 'PUT', { merge_method: 'squash', sha: candidate.pr.head.sha });
     assert(result.merged && result.sha, 'Protected merge rejected'); merged = true;
     report({ phase: 'merged', pull: candidate.pr.number, revision: result.sha });
@@ -264,9 +320,9 @@ async function main() {
   }
 }
 
-module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken };
+module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, verifyRollout };
 if (require.main === module) main().catch(error => {
   // Error objects from HTTP clients or child processes can contain credentials.
-  report({ phase: 'failed', errorType: error.name, message: error instanceof assert.AssertionError ? error.message : 'Fast-update run failed; inspect private Pod diagnostics' });
+  report({ phase: 'failed', errorType: error.name, message: error instanceof assert.AssertionError || error.name === 'RolloutVerificationTimeout' ? error.message : 'Fast-update run failed; inspect private Pod diagnostics' });
   process.exitCode = 1;
 });

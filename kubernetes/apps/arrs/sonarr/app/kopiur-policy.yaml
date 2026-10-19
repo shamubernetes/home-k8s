@@ -49,7 +49,8 @@ spec:
         cron: "45 8 * * *"
         jitter: 30m
       parallel: 4
-      fileParallelism: 2
+      # Full-history verification is I/O-bound; keep coverage and deadline intact.
+      fileParallelism: 8
       maxErrors: 0
     deep:
       schedule:

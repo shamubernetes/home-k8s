@@ -623,3 +623,38 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+
+  - name: preserve-adguard-root-source-metadata
+    match:
+      any:
+      - resources:
+          kinds: ["batch/v1/Job"]
+          operations: ["CREATE"]
+          namespaces: ["adguard-home"]
+          selector:
+            matchLabels:
+              app.kubernetes.io/managed-by: kopiur
+            matchExpressions:
+            - key: kopiur.home-operations.com/config
+              operator: In
+              values: ["adguard-home-native", "adguard-home-nas-smb", "adguard-home-r2"]
+    preconditions:
+      all:
+      - key: "{{ request.object.spec.template.spec.securityContext.runAsUser || `-1` }}"
+        operator: Equals
+        value: 0
+      - key: "{{ request.object.spec.template.spec.securityContext.runAsGroup || `-1` }}"
+        operator: Equals
+        value: 0
+      - key: "{{ request.object.spec.template.spec.securityContext.fsGroup || `0` }}"
+        operator: Equals
+        value: 65532
+      - key: "{{ request.object.spec.template.spec.securityContext.fsGroupChangePolicy || '' }}"
+        operator: Equals
+        value: OnRootMismatch
+    mutate:
+      patchesJson6902: |-
+        - op: remove
+          path: /spec/template/spec/securityContext/fsGroup
+        - op: remove
+          path: /spec/template/spec/securityContext/fsGroupChangePolicy

@@ -206,6 +206,8 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: sabnzbd-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-20T22:45:25Z"
 spec:
   sourceRef:
     kind: Repository
@@ -226,8 +228,7 @@ spec:
   migrate:
     parallel: 2
     policies: none
+  # Preserve existing history while qualifying the effective production original.
   pruning:
-    retention:
-      keepDaily: 7
-      keepWeekly: 4
+    none: {}
   suspend: false

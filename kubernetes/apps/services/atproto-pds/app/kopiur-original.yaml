@@ -33,7 +33,7 @@ spec:
     name: atproto-pds
   schedule:
     suspend: false
-    # Original NAS/R2 native recovery passed; preserve the incumbent hourly cadence.
+    # Preserve the app's existing daily 17 1 * * * capture cadence.
     cron: "${VOLSYNC_SCHEDULE}"
     jitter: 10m
     runOnCreate: false

@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-k8s92-online-original-v2
+spec:
+  policyRef:
+    name: whisparr
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    backoffLimit: 0
+    activeDeadlineSeconds: 1800
+  description: K8S-92 online original with all diagnostic logs retained and native state stable

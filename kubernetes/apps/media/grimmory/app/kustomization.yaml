@@ -17,19 +17,10 @@ resources:
 - ./kopiur-online-proof.yaml
 - ./kopiur-replication.yaml
 - ./kopiur-retained-copies.yaml
-- ../../../../templates/volsync
 - ./secret.sops.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
-patches:
-- target:
-    kind: PersistentVolumeClaim
-  patch: |-
-    - op: add
-      path: /metadata/annotations
-      value:
-        kustomize.toolkit.fluxcd.io/prune: disabled
 configMapGenerator:
 - name: grimmory-backup-contract
   files:

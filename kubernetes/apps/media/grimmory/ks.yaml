@@ -13,7 +13,6 @@ spec:
   - name: kopiur
   - name: snapshot-controller
   - name: rook-ceph-cluster
-  - name: volsync
   - name: external-secrets-secret-store
   path: ./kubernetes/apps/media/grimmory/app
   prune: true
@@ -47,6 +46,3 @@ spec:
       NAMESPACE: *namespace
       GATUS_INTERNAL_PORT: "6060"
       GATUS_PATH: /api/v1/healthcheck
-      VOLSYNC_CAPACITY: 10Gi
-      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_GRIMMORY}"
-      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_GRIMMORY}"

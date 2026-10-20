@@ -2,6 +2,9 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: adguard-home-native-nas-to-r2
+  annotations:
+    kopiur.home.arpa/original-copy-only: "true"
+    kopiur.home-operations.com/run-requested: "2026-10-20T21:21:21Z"
 spec:
   sourceRef:
     kind: Repository
@@ -25,4 +28,4 @@ spec:
     policies: none
   pruning:
     none: {}
-  suspend: true
+  suspend: false

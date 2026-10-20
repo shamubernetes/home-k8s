@@ -16,6 +16,7 @@ resources:
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-online-original.yaml
+- ./kopiur-online-original-v2.yaml
 - ./kopiur-original-snapshot.yaml
 - ./kopiur-original-retry-snapshot.yaml
 - ./kopiur-bundle-original-snapshot.yaml

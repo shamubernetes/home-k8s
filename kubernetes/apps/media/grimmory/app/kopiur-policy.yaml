@@ -4,9 +4,9 @@ kind: SnapshotPolicy
 metadata:
   name: grimmory
 spec:
-  # K8S-92/K8S-109: no backup-induced app stops and no hourly captures.
-  # Resume only with non-disruptive original recovery proof and approved cadence.
-  suspend: true
+  # K8S-92: native NAS/R2 originals and controller byte/ownership proofs passed.
+  # Online runtime/transactional SQL/Books hooks never stop or hold the app.
+  suspend: false
   repository:
     kind: Repository
     name: grimmory-nas-smb
@@ -87,10 +87,11 @@ spec:
   policyRef:
     name: grimmory
   schedule:
-    # Retain the old schedule identity, but never its rejected hourly cadence.
-    cron: "${VOLSYNC_SCHEDULE_GRIMMORY}"
+    # Keep the existing object UID and retained history; capture once daily.
+    cron: "45 16 * * *"
+    timezone: UTC
     runOnCreate: false
     concurrencyPolicy: Forbid
-    suspend: true
+    suspend: false
   deletion:
     onScheduleDelete: Retain

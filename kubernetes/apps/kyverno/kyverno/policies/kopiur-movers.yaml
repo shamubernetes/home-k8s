@@ -308,6 +308,14 @@ spec:
           activeDeadlineSeconds: 3600
 
   - name: cap-system-adguard-home
+    preconditions:
+      any:
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: Equals
+        value: 0
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: GreaterThan
+        value: 3600
     match:
       any:
         - resources:
@@ -379,6 +387,14 @@ spec:
         spec:
           activeDeadlineSeconds: 3600
   - name: cap-system-home-assistant
+    preconditions:
+      any:
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: Equals
+        value: 0
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: GreaterThan
+        value: 3600
     match:
       any:
         - resources:
@@ -450,6 +466,14 @@ spec:
         spec:
           activeDeadlineSeconds: 3600
   - name: cap-system-pocket-id
+    preconditions:
+      any:
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: Equals
+        value: 0
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: GreaterThan
+        value: 3600
     match:
       any:
         - resources:
@@ -521,6 +545,14 @@ spec:
         spec:
           activeDeadlineSeconds: 3600
   - name: cap-system-openviking
+    preconditions:
+      any:
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: Equals
+        value: 0
+      - key: "{{ request.object.spec.activeDeadlineSeconds || `0` }}"
+        operator: GreaterThan
+        value: 3600
     match:
       any:
         - resources:

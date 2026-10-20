@@ -36,7 +36,25 @@ spec:
               HOST: 0.0.0.0
               PORT: "5180"
               KANVIL_URL: https://kanvil.${HOME_DOMAIN}
-              KANVIL_STORAGE_PROVIDER: local
+              KANVIL_STORAGE_PROVIDER: s3
+              S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
+              S3_REGION: us-east-1
+              S3_FORCE_PATH_STYLE: "true"
+              S3_BUCKET:
+                valueFrom:
+                  configMapKeyRef:
+                    name: kanvil-bucket
+                    key: BUCKET_NAME
+              S3_ACCESS_KEY_ID:
+                valueFrom:
+                  secretKeyRef:
+                    name: kanvil-bucket
+                    key: AWS_ACCESS_KEY_ID
+              S3_SECRET_ACCESS_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: kanvil-bucket
+                    key: AWS_SECRET_ACCESS_KEY
               KANVIL_SEARCH_PROVIDER: elasticsearch
               ELASTICSEARCH_URL: http://elasticsearch.database.svc.cluster.local:9200
               ELASTICSEARCH_INDEX: kanvil

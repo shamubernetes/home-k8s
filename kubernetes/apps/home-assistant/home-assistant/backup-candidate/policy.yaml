@@ -1,0 +1,208 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: home-assistant-native
+spec:
+  repository:
+    kind: Repository
+    name: home-assistant-nas-smb
+  identity:
+    username: home-assistant
+    hostname: home-assistant
+  sources:
+    - pvc:
+        name: home-assistant
+      sourcePathOverride: /pvc/home-assistant
+    - pvc:
+        name: home-assistant-git
+      sourcePathOverride: /pvc/home-assistant-git
+    - pvc:
+        name: home-assistant-kopiur-capture
+      sourcePathOverride: /pvc/home-assistant-kopiur-capture
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+  verification:
+    quick:
+      schedule:
+        cron: 10 21 * * *
+        jitter: 10m
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 10 22 * * 0
+        jitter: 10m
+      capacity: 2Gi
+      storageClassName: ceph-block
+    successExpr: snapshot != null && stats.errors == 0
+    verifyFilesPercent: 100
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 600
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  backup.home.arpa/cohort: k92-system
+                  backup.home.arpa/app: home-assistant
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                securityContext:
+                  runAsUser: 568
+                  runAsGroup: 568
+                  fsGroup: 568
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                initContainers:
+                  - name: prepare
+                    image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+                    command:
+                      - sh
+                      - -ec
+                      - umask 077; rm -rf /capture/pending; mkdir -m 700 /capture/pending
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: capture
+                        mountPath: /capture
+                      - name: tmp
+                        mountPath: /tmp
+                  - name: native-config
+                    image: ghcr.io/home-operations/home-assistant:2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+                    command:
+                      - python
+                      - /scripts/capture
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: capture
+                        mountPath: /capture
+                        subPath: pending
+                      - name: tmp
+                        mountPath: /tmp
+                      - name: script
+                        mountPath: /scripts
+                        readOnly: true
+                      - name: credentials
+                        mountPath: /credentials
+                        readOnly: true
+                    env:
+                      - name: RECORDER_BACKEND_QUALIFIED
+                        value: postgresql
+                containers:
+                  - name: database
+                    image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+                    command:
+                      - sh
+                      - -ec
+                      - |
+                        set -eu
+                        umask 077
+                        mkdir -p /capture/pending
+                        pg_dump --format=custom --no-owner --no-privileges --file=/capture/pending/database.dump 2>/dev/null || { printf 'online database export failed\n' >&2; exit 1; }
+                        pg_restore --list /capture/pending/database.dump >/dev/null 2>&1
+                        test -s /capture/pending/homeassistant.tar
+                        test -s /capture/pending/native.json
+                        rm -rf /capture/previous
+                        if test -d /capture/current; then mv /capture/current /capture/previous; fi
+                        mv /capture/pending /capture/current
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: capture
+                        mountPath: /capture
+                      - name: tmp
+                        mountPath: /tmp
+                    env:
+                      - name: PGHOST
+                        value: postgres17-rw.database.svc.cluster.local
+                      - name: PGPORT
+                        value: "5432"
+                      - name: PGSSLMODE
+                        value: require
+                      - name: PGCONNECT_TIMEOUT
+                        value: "15"
+                      - name: PGUSER
+                        valueFrom:
+                          secretKeyRef:
+                            name: home-assistant-kopiur-postgres
+                            key: PGUSER
+                      - name: PGPASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: home-assistant-kopiur-postgres
+                            key: PGPASSWORD
+                      - name: PGDATABASE
+                        valueFrom:
+                          secretKeyRef:
+                            name: home-assistant-kopiur-postgres
+                            key: PGDATABASE
+                volumes:
+                  - name: capture
+                    persistentVolumeClaim:
+                      claimName: home-assistant-kopiur-capture
+                  - name: tmp
+                    emptyDir: {}
+                  - name: script
+                    configMap:
+                      name: home-assistant-native-capture
+                  - name: credentials
+                    secret:
+                      secretName: home-assistant-kopiur-api
+          timeout: 12m
+          continueOnFailure: false

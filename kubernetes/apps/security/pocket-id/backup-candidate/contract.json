@@ -1,0 +1,18 @@
+{
+  "application": "pocket-id",
+  "namespace": "security",
+  "status": "unregistered-draft-candidate",
+  "source_pvcs": [
+    "pocket-id-kopiur-capture"
+  ],
+  "credentials_provisioned": false,
+  "dedicated_credentials_required": [
+    "pocket-id-kopiur-nas",
+    "pocket-id-kopiur-r2",
+    "pocket-id-kopiur-postgres"
+  ],
+  "original_nas_restore_qualified": false,
+  "original_r2_restore_qualified": false,
+  "native_application_boot_qualified": false,
+  "global_consistency_qualified": false
+}

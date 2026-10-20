@@ -1,0 +1,167 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/restore_v1alpha1.json
+# Independent retained-original recovery into disposable PVCs, never production.
+{
+  "apiVersion": "kopiur.home-operations.com/v1alpha1",
+  "kind": "Restore",
+  "metadata": {
+    "name": "sabnzbd-k92-d-20261020-nas",
+    "namespace": "arrs",
+    "labels": {
+      "home-operations.com/qualification": "k92-cohort-d"
+    }
+  },
+  "spec": {
+    "repository": {
+      "kind": "Repository",
+      "name": "sabnzbd-nas-smb"
+    },
+    "source": {
+      "identity": {
+        "username": "sabnzbd",
+        "hostname": "arrs",
+        "sourcePath": "/pvc/sabnzbd",
+        "snapshotID": "fbbf9fc553ebd3e58a44fe299e736bd3"
+      }
+    },
+    "target": {
+      "pvc": {
+        "name": "sabnzbd-k92-d-20261020-nas",
+        "capacity": "3Gi",
+        "storageClassName": "ceph-block",
+        "accessModes": [
+          "ReadWriteOnce"
+        ]
+      }
+    },
+    "policy": {
+      "onMissingSnapshot": "Fail",
+      "waitTimeout": "1m"
+    },
+    "credentialProjection": {
+      "enabled": false
+    },
+    "failurePolicy": {
+      "activeDeadlineSeconds": 1800,
+      "backoffLimit": 0,
+      "podStartupDeadlineSeconds": 300
+    },
+    "options": {
+      "ignoreErrors": false,
+      "ignorePermissionErrors": false,
+      "enableFileDeletion": false,
+      "skipOwners": true,
+      "skipPermissions": true,
+      "skipTimes": true,
+      "writeFilesAtomically": true,
+      "parallel": 2
+    },
+    "mover": {
+      "podSecurityContext": {
+        "runAsUser": 568,
+        "runAsGroup": 568,
+        "fsGroup": 568,
+        "runAsNonRoot": true
+      },
+      "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+          "drop": [
+            "ALL"
+          ]
+        }
+      },
+      "resources": {
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "limits": {
+          "memory": "1Gi"
+        }
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "kopiur.home-operations.com/v1alpha1",
+  "kind": "Restore",
+  "metadata": {
+    "name": "sabnzbd-k92-d-20261020-r2",
+    "namespace": "arrs",
+    "labels": {
+      "home-operations.com/qualification": "k92-cohort-d"
+    }
+  },
+  "spec": {
+    "repository": {
+      "kind": "Repository",
+      "name": "sabnzbd-r2"
+    },
+    "source": {
+      "identity": {
+        "username": "sabnzbd",
+        "hostname": "arrs",
+        "sourcePath": "/pvc/sabnzbd",
+        "snapshotID": "e30320386852f742001e7876efa69be6"
+      }
+    },
+    "target": {
+      "pvc": {
+        "name": "sabnzbd-k92-d-20261020-r2",
+        "capacity": "3Gi",
+        "storageClassName": "ceph-block",
+        "accessModes": [
+          "ReadWriteOnce"
+        ]
+      }
+    },
+    "policy": {
+      "onMissingSnapshot": "Fail",
+      "waitTimeout": "1m"
+    },
+    "credentialProjection": {
+      "enabled": false
+    },
+    "failurePolicy": {
+      "activeDeadlineSeconds": 1800,
+      "backoffLimit": 0,
+      "podStartupDeadlineSeconds": 300
+    },
+    "options": {
+      "ignoreErrors": false,
+      "ignorePermissionErrors": false,
+      "enableFileDeletion": false,
+      "skipOwners": true,
+      "skipPermissions": true,
+      "skipTimes": true,
+      "writeFilesAtomically": true,
+      "parallel": 2
+    },
+    "mover": {
+      "podSecurityContext": {
+        "runAsUser": 568,
+        "runAsGroup": 568,
+        "fsGroup": 568,
+        "runAsNonRoot": true
+      },
+      "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+          "drop": [
+            "ALL"
+          ]
+        }
+      },
+      "resources": {
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "limits": {
+          "memory": "1Gi"
+        }
+      }
+    }
+  }
+}

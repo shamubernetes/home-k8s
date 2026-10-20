@@ -3,3 +3,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./restores.yaml
+- ./native-proof.yaml
+configMapGenerator:
+- name: sabnzbd-k92-original-native-contract
+  files:
+  - verify-original.py
+  - native-proof.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
+    reloader.stakater.com/ignore: "true"

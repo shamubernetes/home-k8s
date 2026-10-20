@@ -103,7 +103,10 @@ class OriginalQualificationTests(unittest.TestCase):
             self.assertFalse(spec['credentialProjection']['enabled'])
             self.assertEqual(spec['failurePolicy']['backoffLimit'], 0)
         kustomization = (QUAL.parent / 'app/kustomization.yaml').read_text()
-        self.assertNotIn('qualification', kustomization)
+        self.assertIn('- ../qualification', kustomization)
+        qualification = (QUAL / 'kustomization.yaml').read_text()
+        self.assertIn('- ./restores.yaml', qualification)
+        self.assertIn('- ./native-proof.yaml', qualification)
         self.assertIn('../../../../templates/volsync', kustomization)
 
 

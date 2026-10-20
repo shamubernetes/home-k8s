@@ -104,7 +104,8 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(result.stdout, script)
         subprocess.run(["sh", "-n"], input=script, check=True)
 
-    def assert_capture_activation(self, app, policy, schedule, replication):
+    def assert_capture_activation(self, app, policy, schedule, replication, *,
+                                  qualification_suspended=False, schedule_suspended=False):
         # Each named original production receipt admits only its own app.
         # Synthetic suites and every other application remain suspended.
         evidence = policy.get("metadata", {}).get("annotations", {}).get("kopiur.home.arpa/original-native-recovery")
@@ -118,14 +119,15 @@ class ManifestTests(unittest.TestCase):
             }
             self.assertIn(app, original_receipts)
             self.assertEqual(evidence, original_receipts[app])
-        suspended = evidence is None
+        # A historical receipt never forces a newly changed producer active.
+        suspended = evidence is None or qualification_suspended
         self.assertIs(policy["spec"]["suspend"], suspended)
-        self.assertIs(schedule["spec"]["schedule"]["suspend"], suspended)
+        self.assertIs(schedule["spec"]["schedule"]["suspend"], suspended or schedule_suspended)
         staged_r2 = replication.get("metadata", {}).get("annotations", {}).get(
             "kopiur.home.arpa/awaiting-first-scheduled-point") == "true"
         if staged_r2:
             self.assertIn(app, ("radarr", "radarr-3d", "sonarr", "whisparr"))
-            self.assertFalse(suspended)
+            self.assertIsNotNone(evidence)
         self.assertIs(replication["spec"]["suspend"], suspended or staged_r2)
         self.assertEqual(policy["spec"]["defaultDeletionPolicy"], "Retain")
         self.assertEqual(replication["spec"]["migrate"]["policies"], "none")
@@ -199,7 +201,7 @@ class ManifestTests(unittest.TestCase):
     def test_whisparr_original_receipt_never_admits_another_application(self):
         directory = REPO / "kubernetes/apps/arrs/whisparr/app"
         policy, schedule, replication = capture_resources(directory)
-        self.assert_capture_activation("whisparr", policy, schedule, replication)
+        self.assert_capture_activation("whisparr", policy, schedule, replication, qualification_suspended=True)
         policy["metadata"]["annotations"] = {
             "kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/38035330767"}
         policy["spec"]["suspend"] = schedule["spec"]["schedule"]["suspend"] = False
@@ -225,7 +227,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(set(schedules), {"radarr-daily", "radarr-primary"})
         self.assertTrue(schedules["radarr-daily"]["spec"]["schedule"]["suspend"])
         primary = schedules["radarr-primary"]["spec"]["schedule"]
-        self.assertFalse(primary["suspend"])
+        self.assertTrue(primary["suspend"])
         self.assertEqual(primary["cron"], "${VOLSYNC_SCHEDULE_RADARR}")
         self.assertTrue(primary["runOnCreate"])
         self.assertEqual(primary["concurrencyPolicy"], "Forbid")
@@ -234,12 +236,28 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(policy["spec"]["verification"]["deep"]["capacity"], "24Gi")
         self.assertEqual(policy["spec"]["hooks"]["beforeSnapshot"][0]["workloadExec"]["timeout"], "13m")
 
+    def test_changed_producer_stays_suspended_despite_historical_receipt(self):
+        policy, schedule, replication = capture_resources(REPO / "kubernetes/apps/arrs/radarr/app")
+        self.assert_capture_activation("radarr", policy, schedule, replication,
+                                       qualification_suspended=True)
+        policy["spec"]["suspend"] = False
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("radarr", policy, schedule, replication,
+                                           qualification_suspended=True)
+        policy["spec"]["suspend"] = True
+        policy["metadata"]["annotations"]["kopiur.home.arpa/original-native-recovery"] = "synthetic"
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("radarr", policy, schedule, replication,
+                                           qualification_suspended=True)
+
     def test_each_policy_exports_database_before_pvc(self):
         for app in APPS:
             with self.subTest(app=app):
                 directory = REPO / "kubernetes/apps/arrs" / app / "app"
                 policy, schedule, replication = capture_resources(directory)
-                self.assert_capture_activation(app, policy, schedule, replication)
+                self.assert_capture_activation(app, policy, schedule, replication,
+                                               qualification_suspended=app == "radarr",
+                                               schedule_suspended=app == "sonarr")
                 self.assertNotIn("suspend", schedule["spec"])
                 spec = policy["spec"]
                 self.assertEqual(spec["copyMethod"], "Snapshot")
@@ -247,8 +265,11 @@ class ManifestTests(unittest.TestCase):
                 hook = spec["hooks"]["beforeSnapshot"][0]["workloadExec"]
                 self.assertEqual(hook["container"], "kopiur-postgres")
                 self.assertFalse(hook["continueOnFailure"])
-                bounded_runtime = app == "sonarr" or app == "radarr" and not policy["spec"]["suspend"]
-                expected = ["sh", "/kopiur/recurring-capture.sh"] if bounded_runtime else ["timeout", "600", "sh", "/kopiur/capture.sh"]
+                if app == "radarr":
+                    # Kustomize injects the reviewed hot-delivered online helper.
+                    expected = ["timeout", "--kill-after=30", "600", "sh", "-c", ""]
+                else:
+                    expected = ["sh", "/kopiur/recurring-capture.sh"] if app == "sonarr" else ["timeout", "600", "sh", "/kopiur/capture.sh"]
                 self.assertEqual(hook["command"], expected)
                 self.assertEqual(spec["verification"]["successExpr"], "stats.files > 0 && stats.errors == 0")
 

@@ -8,7 +8,6 @@ resources:
 - ./kopiur-policy.yaml
 - ./kopiur-original.yaml
 - ./kopiur-books-original.yaml
-- ./kopiur-online-original.yaml
 - ./kopiur-online-original-v2.yaml
 - ./kopiur-original-restores.yaml
 - ./kopiur-books-restores.yaml

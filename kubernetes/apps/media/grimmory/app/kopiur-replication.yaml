@@ -13,8 +13,8 @@ spec:
     kind: Repository
     name: grimmory-r2
   schedule:
-    cron: "${VOLSYNC_R2_SCHEDULE_GRIMMORY}"
-    # The legacy mover runs at 04:04Z; the repository default is not UTC.
+    # Follow the 16:45Z daily capture, with time for upload and verification.
+    cron: "15 17 * * *"
     timezone: UTC
   selection:
     identities:

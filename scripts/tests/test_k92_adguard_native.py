@@ -15,6 +15,20 @@ SPEC.loader.exec_module(PROOF)
 
 
 class OriginalSafety(unittest.TestCase):
+    def test_ranked_statistics_preserve_data_without_tie_order(self):
+        keys = ("top_queried_domains", "top_clients", "top_blocked_domains",
+                "top_upstreams_responses", "top_upstreams_avg_time")
+        left: dict[str, list] = {key: [{"a.example.invalid": 2}, {"b.example.invalid": 2}] for key in keys}
+        left["dns_queries"] = [3, 1]
+        right = {key: list(reversed(value)) if key in keys else value for key, value in left.items()}
+        self.assertEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
+        self.assertNotEqual(left, right)
+        right["top_clients"] = [{"a.example.invalid": 3}, {"b.example.invalid": 2}]
+        self.assertNotEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
+        right = dict(left, dns_queries=[1, 3])
+        self.assertNotEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
+        self.assertEqual(left["dns_queries"], [3, 1])
+
     def test_roster_tracks_bytes_and_permissions(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

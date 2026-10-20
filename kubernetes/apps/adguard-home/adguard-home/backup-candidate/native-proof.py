@@ -20,6 +20,20 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
+def statistics_data(value):
+    # AdGuard v0.107.79 internal/stats/unit.go ranks map entries by count only.
+    # Equal-count rows have no stable order. Preserve every name/count exactly,
+    # but canonicalize only the five ranked maps, never chronological counters.
+    result = dict(value)
+    for key in ("top_queried_domains", "top_clients", "top_blocked_domains",
+                "top_upstreams_responses", "top_upstreams_avg_time"):
+        rows = result[key]
+        if not isinstance(rows, list) or any(not isinstance(row, dict) or len(row) != 1 for row in rows):
+            raise ValueError("unexpected ranked native statistics")
+        result[key] = sorted(rows, key=lambda row: json.dumps(row, sort_keys=True))
+    return result
+
+
 def roster(root):
     result = {}
     for tree in (root / "conf", root / "work"):
@@ -166,7 +180,7 @@ def native(root, binary, yq):
                         time.sleep(1)
                 if boot == 0:
                     history = api("querylog?limit=5")
-                    statistics = api("stats")
+                    statistics = statistics_data(api("stats"))
                     profile = api("profile")
                     if not history.get("data") or statistics.get("num_dns_queries", 0) <= 0:
                         raise ValueError("captured nonempty native history was not consumed")

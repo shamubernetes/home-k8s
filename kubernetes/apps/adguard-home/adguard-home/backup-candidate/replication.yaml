@@ -3,7 +3,6 @@ kind: SnapshotReplication
 metadata:
   name: adguard-home-native-nas-to-r2
   annotations:
-    kopiur.home.arpa/original-copy-only: "true"
     kopiur.home-operations.com/run-requested: "2026-10-20T21:21:21Z"
 spec:
   sourceRef:
@@ -14,7 +13,7 @@ spec:
     name: adguard-home-r2
   schedule:
     timezone: UTC
-    cron: 20 22 * * *
+    cron: 40 23 * * *
     jitter: 10m
   selection:
     identities:

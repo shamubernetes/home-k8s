@@ -6,9 +6,9 @@ spec:
   policyRef:
     name: adguard-home-native
   schedule:
-    suspend: true
+    suspend: false
     timezone: UTC
-    cron: 0 22 * * *
+    cron: 20 23 * * *
     jitter: 10m
     runOnCreate: false
     concurrencyPolicy: Forbid

@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
 - namespace.yaml
 - adguard-home/ks.yaml
+- adguard-home/backup-ks.yaml

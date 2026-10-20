@@ -1,0 +1,16 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: adguard-home-native-daily
+spec:
+  policyRef:
+    name: adguard-home-native
+  schedule:
+    suspend: true
+    timezone: UTC
+    cron: 0 22 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3

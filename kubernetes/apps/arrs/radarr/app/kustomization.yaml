@@ -26,8 +26,22 @@ patches:
 - path: ./kopiur-recurring-runtime-patch.yaml
 configMapGenerator:
 - name: radarr-kopiur-recurring
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
   files:
   - recurring.sh=./recurring.sh
   - recurring-capture.sh=./recurring-capture.sh
 generatorOptions:
   disableNameSuffixHash: true
+replacements:
+- source:
+    kind: ConfigMap
+    name: radarr-kopiur-recurring
+    fieldPath: data.recurring-capture\.sh
+  targets:
+  - select:
+      kind: SnapshotPolicy
+      name: radarr
+    fieldPaths:
+    - spec.hooks.beforeSnapshot.0.workloadExec.command.5

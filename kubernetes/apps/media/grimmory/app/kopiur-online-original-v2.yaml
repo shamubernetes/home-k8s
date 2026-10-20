@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: grimmory-k8s92-online-original-v2
+spec:
+  policyRef:
+    name: grimmory
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    backoffLimit: 0
+    activeDeadlineSeconds: 900
+  description: K8S-92 no-stop original after verified transient-control exclusions

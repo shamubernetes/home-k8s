@@ -104,7 +104,7 @@ metadata:
   annotations:
     # Copy-only original qualification. Producer and capture schedule stay suspended.
     kopiur.home.arpa/original-copy-only: "true"
-    kopiur.home-operations.com/run-requested: "2026-10-20T17:21:53Z"
+    kopiur.home-operations.com/run-requested: "2026-10-20T19:31:35Z"
 spec:
   sourceRef:
     kind: Repository
@@ -122,13 +122,12 @@ spec:
       - username: radarr
         hostname: arrs
         sourcePath: /pvc/radarr
-    latestOnly: false
+    latestOnly: true
   migrate:
     parallel: 2
     policies: none
-  # Keep the full-history selector and every copied point. One bounded retry
-  # qualifies the newly pinned original; prior 1h deadline failures remain
-  # unresolved until an actual copy completes. No capture or retirement approval.
+  # Copy the current accepted identity point, not unrelated retained history.
+  # Keep every existing NAS/R2 point and all retention policy ownership in place.
   pruning:
     none: {}
   suspend: false

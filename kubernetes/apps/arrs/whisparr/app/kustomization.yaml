@@ -29,6 +29,13 @@ components:
 patches:
 - path: ./kopiur-postgres-patch.yaml
 - path: ./kopiur-recurring-runtime-patch.yaml
+- target:
+    kind: PersistentVolumeClaim
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        kustomize.toolkit.fluxcd.io/prune: disabled
 configMapGenerator:
 - name: whisparr-kopiur-recurring
   options:

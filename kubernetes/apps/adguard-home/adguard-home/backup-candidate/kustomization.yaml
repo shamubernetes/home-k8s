@@ -10,3 +10,4 @@ resources:
   - replication.yaml
   - original.yaml
   - original-v2.yaml
+  - restore-nas-v2.yaml

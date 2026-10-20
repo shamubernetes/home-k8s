@@ -8,9 +8,18 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
+- ./externalsecret-kopiur.yaml
+- ./kopiur-repositories.yaml
+- ./kopiur-policy.yaml
 configMapGenerator:
 - name: romm-configmap
   files:
   - config.yml=./resources/config.yml
+- name: romm-kopiur-native
+  files:
+  - capture.sh
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
 generatorOptions:
   disableNameSuffixHash: true

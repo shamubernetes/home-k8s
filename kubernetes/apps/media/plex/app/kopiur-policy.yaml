@@ -1,0 +1,178 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: plex
+spec:
+  suspend: true
+  repository:
+    kind: Repository
+    name: plex-nas-smb
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  identity:
+    username: plex
+    hostname: media
+  sources:
+    - pvc:
+        name: plex
+      sourcePathOverride: /pvc/plex
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          timeout: 12m
+          continueOnFailure: false
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 660
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: plex-kopiur-capture
+              spec:
+                automountServiceAccountToken: false
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 568
+                  runAsGroup: 568
+                  seccompProfile:
+                    type: RuntimeDefault
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: plex
+                            app.kubernetes.io/controller: plex
+                        topologyKey: kubernetes.io/hostname
+                containers:
+                  - name: capture
+                    image: ghcr.io/home-operations/plex:1.43.4.10903@sha256:fdc6fe82bc7d8acd08fc0aa581fcb76722803ba5905e2537135a697347dd6149
+                    command:
+                      - timeout
+                      - "600"
+                      - bash
+                      - /kopiur/capture.sh
+                    env: []
+                    volumeMounts:
+                      - name: source
+                        mountPath: /config
+                      - name: helper
+                        mountPath: /kopiur
+                        readOnly: true
+                      - name: tmp
+                        mountPath: /tmp
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: plex
+                  - name: helper
+                    configMap:
+                      name: plex-kopiur-native
+                  - name: tmp
+                    emptyDir: {}
+  mover:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      seccompProfile:
+        type: RuntimeDefault
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+      parallel: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      capacity: 150Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: plex-daily
+spec:
+  policyRef:
+    name: plex
+  schedule:
+    cron: 0 18 * * *
+    timezone: America/New_York
+    jitter: 5m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: plex-nas-to-r2
+spec:
+  suspend: true
+  sourceRef:
+    kind: Repository
+    name: plex-nas-smb
+  destinationRef:
+    kind: Repository
+    name: plex-r2
+  schedule:
+    cron: 0 19 * * *
+    jitter: 5m
+  selection:
+    identities:
+      include:
+        - username: plex
+          hostname: media
+          sourcePath: /pvc/plex
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4

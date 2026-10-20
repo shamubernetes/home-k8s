@@ -8,3 +8,15 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
+- ./externalsecret-kopiur.yaml
+- ./kopiur-repositories.yaml
+- ./kopiur-policy.yaml
+configMapGenerator:
+- name: tubearchivist-kopiur-native
+  files:
+  - capture.py
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
+generatorOptions:
+  disableNameSuffixHash: true

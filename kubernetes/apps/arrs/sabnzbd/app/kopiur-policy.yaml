@@ -192,6 +192,7 @@ spec:
   policyRef:
     name: sabnzbd
   schedule:
+    suspend: false
     cron: 10 2 * * *
     jitter: 10m
     runOnCreate: false

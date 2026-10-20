@@ -22,15 +22,28 @@ def digest(value):
 
 def statistics_data(value):
     # AdGuard v0.107.79 internal/stats/unit.go ranks map entries by count only.
-    # Equal-count rows have no stable order. Preserve every name/count exactly,
-    # but canonicalize only the five ranked maps, never chronological counters.
+    # Equal-count rows and names tied at its top-100 cutoff are unstable.
+    # Compare the stable ranked data without changing chronological counters.
     result = dict(value)
     for key in ("top_queried_domains", "top_clients", "top_blocked_domains",
                 "top_upstreams_responses", "top_upstreams_avg_time"):
         rows = result[key]
         if not isinstance(rows, list) or any(not isinstance(row, dict) or len(row) != 1 for row in rows):
             raise ValueError("unexpected ranked native statistics")
-        result[key] = sorted(rows, key=lambda row: json.dumps(row, sort_keys=True))
+        ordered = sorted(rows, key=lambda row: json.dumps(row, sort_keys=True))
+        if len(rows) > 100:
+            raise ValueError("native ranked statistics exceed upstream limit")
+        if len(rows) == 100:
+            # The upstream count-only sort also truncates to 100. A tie at the
+            # boundary selects arbitrary names on each process boot. Compare
+            # every above-cutoff identity/count, the cutoff count and its slot
+            # count. Complete original stats-file bytes remain strictly equal.
+            cutoff = min(next(iter(row.values())) for row in rows)
+            above = [row for row in ordered if next(iter(row.values())) > cutoff]
+            result[key] = {"above_cutoff": above, "cutoff_value": cutoff,
+                           "cutoff_slots": len(rows) - len(above), "limit": 100}
+        else:
+            result[key] = ordered
     return result
 
 

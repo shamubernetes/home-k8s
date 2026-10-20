@@ -29,6 +29,20 @@ class OriginalSafety(unittest.TestCase):
         self.assertNotEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
         self.assertEqual(left["dns_queries"], [3, 1])
 
+    def test_top_limit_ties_keep_every_stable_identity_and_count(self):
+        keys = ("top_queried_domains", "top_clients", "top_blocked_domains",
+                "top_upstreams_responses", "top_upstreams_avg_time")
+        left = {key: [{"stable.example.invalid": 10}] +
+                [{f"a{i}.example.invalid": 1} for i in range(99)] for key in keys}
+        right = {key: [{"stable.example.invalid": 10}] +
+                 [{f"b{i}.example.invalid": 1} for i in range(99)] for key in keys}
+        self.assertEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
+        right["top_clients"][0] = {"different.example.invalid": 10}
+        self.assertNotEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
+        right["top_clients"] = [{"stable.example.invalid": 10}] + [
+            {f"b{i}.example.invalid": 2} for i in range(99)]
+        self.assertNotEqual(PROOF.statistics_data(left), PROOF.statistics_data(right))
+
     def test_roster_tracks_bytes_and_permissions(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

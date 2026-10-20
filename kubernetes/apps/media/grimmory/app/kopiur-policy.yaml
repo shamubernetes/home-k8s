@@ -26,6 +26,15 @@ spec:
     storageClassName: ceph-block
     accessModes: [ReadWriteOnce]
   defaultDeletionPolicy: Retain
+  verification:
+    # Full file-content verification, in addition to independent native originals.
+    # The first eligible reconciliation catches up; later runs stay daily.
+    quick:
+      schedule:
+        cron: "35 18 * * *"
+        timezone: UTC
+    verifyFilesPercent: 100
+    successExpr: "stats.files > 0 && stats.errors == 0"
   files:
     # Explicit lists replace the installed defaults; preserve those first.
     ignoreRules:

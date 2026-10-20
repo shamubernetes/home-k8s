@@ -174,11 +174,11 @@ class OriginalTests(unittest.TestCase):
                 self.assertEqual(restorer[-1], "4200" if app == "whisparr" else "1800")
                 self.assertTrue(any(args[:3] == ("docker", "rm", "-fv") for args in calls))
 
-    def test_whisparr_original_ids_are_exact_distinct_and_do_not_change_other_apps(self):
+    def test_whisparr_exact_distinct_ids_and_reviewed_optional_originals(self):
         from unittest import mock
         with mock.patch.dict(M["os"].environ, {"ORIGINAL_NAS_SNAPSHOT": "a" * 32, "ORIGINAL_R2_SNAPSHOT": "b" * 32}):
             self.assertEqual(M["originals_for"]("whisparr"), {"nas": "a" * 32, "r2": "b" * 32})
-            self.assertEqual(M["originals_for"]("bazarr"), M["ORIGINALS"])
+            self.assertEqual(M["originals_for"]("bazarr"), {"nas": "a" * 32, "r2": "b" * 32})
             for value in ("", "b" * 31, "B" * 32, "a" * 32, "../escape"):
                 with mock.patch.dict(M["os"].environ, {"ORIGINAL_R2_SNAPSHOT": value}), self.assertRaises(ValueError):
                     M["originals_for"]("whisparr")

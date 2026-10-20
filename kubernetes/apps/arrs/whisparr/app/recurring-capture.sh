@@ -35,6 +35,7 @@ started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 [ "$PGDATABASES" = 'whisparrv3_main whisparrv3_logs' ] || exit 1
 capture_mode=online-per-database-stable-filetree
 printf 'format=2\nstarted_at=%s\nconsistency=%s\n' "$started" "$capture_mode" >"$root/pending/metadata"
+printf 'filetree_stability_excludes=diagnostic-text-logs; all-log-bytes-archived\n' >>"$root/pending/metadata"
 configure_bundle_ignore() {
   ignore_config=$1
   mode=$2
@@ -68,10 +69,17 @@ case "$(printenv KOPIUR_BUNDLE_ONLY || printf true)" in
   *) exit 1 ;;
 esac
 filetree_inventory() {
-  # NUL field boundaries preserve paths with whitespace. Never follow links.
-  find /config -path "$root" -prune -o -printf '%P\0%y\0%D\0%i\0%n\0%m\0%U\0%G\0%s\0%T@\0%C@\0'
+  # Text diagnostics are archived below, but are not transactional application
+  # state. Keep config, keys, metadata and every other source inode strict.
+  find /config -path "$root" -prune -o -path /config/logs -prune -o -printf '%P\0%y\0%D\0%i\0%n\0%m\0%U\0%G\0%s\0%T@\0%C@\0'
 }
 filetree_qualify() {
+  if [ -e /config/logs ] || [ -L /config/logs ]; then
+    [ -d /config/logs ] && [ ! -L /config/logs ] || return 1
+    find /config/logs -type f ! -name '*.txt' -print -quit >"$root/pending/unknown-log-state"
+    [ ! -s "$root/pending/unknown-log-state" ] || return 1
+    rm "$root/pending/unknown-log-state"
+  fi
   # Submounts and special objects cannot be silently skipped by an archive.
   find /config -path "$root" -prune -o -printf '%D\n' >"$root/pending/devices"
   [ "$(sort -u "$root/pending/devices")" = "$(stat -c %d /config)" ]

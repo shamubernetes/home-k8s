@@ -170,7 +170,8 @@ class AdditionalNativeImages(unittest.TestCase):
             mounts = []
             for path, mount in zip(paths, ['/config', '/data', '/plugins', '/scrapers']):
                 mounts += ['-v', str(path) + ':' + mount]
-            mounts += ['-v', str(paths[1] / 'blobs') + ':/blobs', '-v', str(paths[1] / 'metadata') + ':/metadata']
+            mounts += ['-v', str(paths[1] / 'blobs') + ':/blobs', '-v', str(paths[1] / 'metadata') + ':/metadata',
+                       '-v', str(passwd) + ':/etc/passwd:ro']
             options = []
             variables = {'HOME': '/config', 'STASH_CONFIG_FILE': '/config/config.yml', 'STASH_DATABASE': '/config/stash-go.sqlite',
                          'STASH_BLOBS_PATH': '/blobs', 'STASH_BLOBS_STORAGE': 'FILESYSTEM', 'STASH_METADATA': '/metadata',
@@ -193,6 +194,15 @@ class AdditionalNativeImages(unittest.TestCase):
                     time.sleep(1)
         with tempfile.TemporaryDirectory(prefix=prefix, dir=os.environ.get('TMPDIR')) as temporary:
             root = Path(temporary)
+            # Native Go requires the fixture owner's UID in the passwd database.
+            passwd = root / 'fixture-passwd'
+            accounts = command(['docker', 'run', '--rm', '--network=none',
+                                '--entrypoint=/bin/cat', image, '/etc/passwd'], timeout=600)
+            if not any(line.split(':')[2] == str(os.getuid())
+                       for line in accounts.splitlines() if len(line.split(':')) >= 3):
+                accounts += ('\nfixture:x:' + str(os.getuid()) + ':' + str(os.getgid())
+                             + ':isolated fixture:/config:/usr/sbin/nologin\n')
+            passwd.write_text(accounts)
             paths = [root / p for p in ['config', 'data', 'plugins', 'scrapers']]
             for path in paths:
                 path.mkdir()
@@ -235,7 +245,7 @@ class AdditionalNativeImages(unittest.TestCase):
                 for label in ['source', 'restored']:
                     name = prefix + '-' + label
                     owned.append(name)
-                    command(['docker', 'run', '-d', '--name', name, '--network=none', '--memory=1200m',
+                    command(['docker', 'run', '-d', '--name', name, '--network=none', '--hostname=localhost', '--memory=1200m',
                              '-e', 'discovery.type=single-node', '-e', 'xpack.security.enabled=false',
                              '-e', 'ES_JAVA_OPTS=-Xms256m -Xmx256m', es], timeout=600)
                     require_fixture_running(name)

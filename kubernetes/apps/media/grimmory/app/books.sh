@@ -5,6 +5,11 @@ set -eu
 umask 077
 books=${GRIMMORY_BOOKS:-/books}
 bookdrop=${GRIMMORY_BOOKDROP:-/bookdrop}
+# Some native containers expose only the canonical subtree. Never replace an
+# explicit override or an existing alias, including a dangling symlink.
+if [ -z "${GRIMMORY_BOOKDROP+x}" ] && [ ! -e "$bookdrop" ] && [ ! -L "$bookdrop" ]; then
+  bookdrop=$books/bookdrop
+fi
 output=${1:?pass private staging archive path}
 [ -d "$books" ] && [ ! -L "$books" ] || exit 1
 [ -d "$bookdrop" ] && [ ! -L "$bookdrop" ] || exit 1

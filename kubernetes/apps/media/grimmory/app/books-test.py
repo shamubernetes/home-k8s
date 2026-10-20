@@ -75,6 +75,31 @@ class BooksTests(unittest.TestCase):
             (self.books / 'a file.txt').chmod(mode)
             self.assertNotEqual(self.run_helper().returncode, 0)
 
+    def test_absent_default_alias_uses_complete_canonical_subtree(self):
+        if Path('/bookdrop').exists() or Path('/bookdrop').is_symlink():
+            self.skipTest('runner has a real default alias')
+        self.env.pop('GRIMMORY_BOOKDROP')
+        (self.books / 'bookdrop' / 'pending.txt').write_bytes(b'pending physical payload')
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with tarfile.open(self.output) as archive:
+            payload = archive.extractfile('./bookdrop/pending.txt')
+            if payload is None:
+                self.fail('canonical bookdrop payload missing')
+            self.assertEqual(payload.read(), b'pending physical payload')
+
+    def test_explicit_missing_alias_is_not_replaced(self):
+        self.env['GRIMMORY_BOOKDROP'] = str(self.root / 'missing')
+        result = self.run_helper()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.output.exists())
+
+    def test_absent_canonical_subtree_is_not_omitted(self):
+        (self.books / 'bookdrop').rmdir()
+        result = self.run_helper()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.output.exists())
+
     def test_wrong_bookdrop_mount_rejected(self):
         other = self.root / 'other'
         other.mkdir()

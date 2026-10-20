@@ -92,9 +92,11 @@ Liveness checks the real native HTTP health path, never a hold exemption.
 Do not deliver during an incumbent hold. Parent must prove no outstanding
 request/active file and continued native process availability.
 
-Daily capture remains `17 1 * * *`, replication `17 4 * * *`, with unchanged
-jitter, concurrency and retention. Source preparation does not activate or run
-anything. The historical Snapshot description remains historical.
+The retained daily capture cron is `17 1 * * *`, replication `17 4 * * *`, with
+unchanged jitter, concurrency and retention. The policy and capture schedule
+remain suspended during actively owned K8S-92 qualification. Resume only after
+format-2 original recovery passes, then collect a natural daily witness. The
+historical Snapshot description remains historical.
 
 ## Remaining parent gates
 
@@ -117,5 +119,5 @@ anything. The historical Snapshot description remains historical.
 - Verify a natural daily capture and replication receipt. Keep legacy protection,
   all retained history and rollback paths until these independent gates pass.
 
-No merge, live capture, secret access, resource mutation or native recovery was
-performed in this source-only worktree.
+Helper delivery, a successful CSI capture, original native recovery and recurring
+protection are separate gates. No stage implies the next one passed.

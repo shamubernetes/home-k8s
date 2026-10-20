@@ -225,6 +225,10 @@ for(const name of ['fsyncSync','renameSync']) {
         self.assertIn('continueOnFailure: false', policy)
         self.assertIn('flock -n', policy)
         self.assertNotIn('ignoreErrors', policy)
+        self.assertIn('  suspend: true', policy)
+        schedule = (APP / 'kopiur-original.yaml').read_text().split('kind: SnapshotSchedule', 1)[1].split('---', 1)[0]
+        self.assertIn('    suspend: true', schedule)
+        self.assertIn('runOnCreate: false', schedule)
 
 
 if __name__ == '__main__':

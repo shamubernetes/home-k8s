@@ -7,8 +7,9 @@ metadata:
     # Format-1 stopped-bundle qualification does not qualify this online contract.
     kopiur.home.arpa/capture-contract: online-csi-crash-consistent-pds-volume
 spec:
-  # One original capture first. Recurring protection waits for original recovery.
-  suspend: false
+  # K8S-92 owns active online replacement. Native original NAS/R2 proof must
+  # qualify the new format before automatic capture resumes.
+  suspend: true
   repository:
     kind: Repository
     name: atproto-pds-nas-smb

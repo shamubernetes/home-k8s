@@ -32,8 +32,8 @@ spec:
   policyRef:
     name: atproto-pds
   schedule:
-    suspend: false
-    # Preserve the app's existing daily 17 1 * * * capture cadence.
+    suspend: true
+    # Retain daily cadence; qualify format-2 original recovery before resuming.
     cron: "${VOLSYNC_SCHEDULE}"
     jitter: 10m
     runOnCreate: false

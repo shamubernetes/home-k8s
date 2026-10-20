@@ -23,6 +23,21 @@ class BooksTests(unittest.TestCase):
         self.assertIn('path: /backup-contract', mount)
         self.assertNotIn('subPath:', mount)
 
+    def test_snapshot_excludes_only_transient_runtime_control(self):
+        policy = (HERE / 'kopiur-policy.yaml').read_text()
+        block = policy.split('  files:\n', 1)[1].split('  errorHandling:\n', 1)[0]
+        rules = [line.strip()[2:].strip("'\"") for line in block.splitlines()
+                 if line.startswith('    - ')]
+        self.assertEqual(rules, ['/lost+found', 'System Volume Information',
+                                '$RECYCLE.BIN', '@eaDir', '.snapshot',
+                                '/grimmory-runtime/fence', '/grimmory-runtime/.capture.*'])
+        errors = policy.split('  errorHandling:\n', 1)[1].split('  hooks:\n', 1)[0]
+        self.assertEqual({line.strip() for line in errors.splitlines()},
+                         {'ignoreDirErrors: false', 'ignoreFileErrors: false',
+                          'ignoreUnknownTypes: false'})
+        self.assertIn('runAsUser: 568', policy)
+        self.assertIn('continueOnFailure: false', policy)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR'))
         self.root = Path(self.temp.name)

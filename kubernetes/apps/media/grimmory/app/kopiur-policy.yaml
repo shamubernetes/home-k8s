@@ -26,6 +26,22 @@ spec:
     storageClassName: ceph-block
     accessModes: [ReadWriteOnce]
   defaultDeletionPolicy: Retain
+  files:
+    # Explicit lists replace the installed defaults; preserve those first.
+    ignoreRules:
+    - /lost+found
+    - System Volume Information
+    - $RECYCLE.BIN
+    - '@eaDir'
+    - .snapshot
+    # Root-only coordination and incomplete exports are not recovery payloads.
+    # Keep all completed runtime, native SQL, app-data and Books archives.
+    - /grimmory-runtime/fence
+    - /grimmory-runtime/.capture.*
+  errorHandling:
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
   hooks:
     beforeSnapshot:
     - workloadExec:

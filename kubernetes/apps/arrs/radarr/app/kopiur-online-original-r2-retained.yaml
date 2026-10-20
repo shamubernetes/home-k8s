@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+# Actual NASf190cc78a149253a0d607f5387e052d8 -> R2088a1bde61f93477d8964cf6a851cc1f.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: radarr-nas-to-r2-copy-088a1bde61f93477-18c3ad77
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  repository:
+    kind: Repository
+    name: radarr-r2
+    namespace: arrs

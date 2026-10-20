@@ -306,3 +306,288 @@ spec:
       patchStrategicMerge:
         spec:
           activeDeadlineSeconds: 3600
+
+  - name: cap-system-adguard-home
+    match:
+      any:
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - adguard-home
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/config
+                  operator: In
+                  values:
+                    - adguard-home-native
+                    - adguard-home-nas-smb
+                    - adguard-home-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - adguard-home
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/maintenance
+                  operator: In
+                  values:
+                    - adguard-home-nas-smb
+                    - adguard-home-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - adguard-home
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/verify
+                  operator: In
+                  values:
+                    - adguard-home-native
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - adguard-home
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/snapshot-replication
+                  operator: In
+                  values:
+                    - adguard-home-native-nas-to-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - adguard-home
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+                kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
+  - name: cap-system-home-assistant
+    match:
+      any:
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - home-assistant
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/config
+                  operator: In
+                  values:
+                    - home-assistant-native
+                    - home-assistant-nas-smb
+                    - home-assistant-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - home-assistant
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/maintenance
+                  operator: In
+                  values:
+                    - home-assistant-nas-smb
+                    - home-assistant-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - home-assistant
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/verify
+                  operator: In
+                  values:
+                    - home-assistant-native
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - home-assistant
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/snapshot-replication
+                  operator: In
+                  values:
+                    - home-assistant-native-nas-to-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - home-assistant
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+                kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
+  - name: cap-system-pocket-id
+    match:
+      any:
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - security
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/config
+                  operator: In
+                  values:
+                    - pocket-id-native
+                    - pocket-id-nas-smb
+                    - pocket-id-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - security
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/maintenance
+                  operator: In
+                  values:
+                    - pocket-id-nas-smb
+                    - pocket-id-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - security
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/verify
+                  operator: In
+                  values:
+                    - pocket-id-native
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - security
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/snapshot-replication
+                  operator: In
+                  values:
+                    - pocket-id-native-nas-to-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - security
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+                kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600
+  - name: cap-system-openviking
+    match:
+      any:
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - tools
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/config
+                  operator: In
+                  values:
+                    - openviking-native
+                    - openviking-nas-smb
+                    - openviking-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - tools
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/maintenance
+                  operator: In
+                  values:
+                    - openviking-nas-smb
+                    - openviking-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - tools
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/verify
+                  operator: In
+                  values:
+                    - openviking-native
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - tools
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+              matchExpressions:
+                - key: kopiur.home-operations.com/snapshot-replication
+                  operator: In
+                  values:
+                    - openviking-native-nas-to-r2
+        - resources:
+            kinds:
+              - batch/v1/Job
+            namespaces:
+              - tools
+            selector:
+              matchLabels:
+                app.kubernetes.io/managed-by: kopiur
+                kopiur.home-operations.com/op: snapshot-delete-batch
+    mutate:
+      patchStrategicMerge:
+        spec:
+          activeDeadlineSeconds: 3600

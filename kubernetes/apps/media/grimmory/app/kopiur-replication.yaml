@@ -4,7 +4,7 @@ kind: SnapshotReplication
 metadata:
   name: grimmory-nas-to-r2
   annotations:
-    kopiur.home-operations.com/run-requested: "2026-10-12T01:24:00Z"
+    kopiur.home-operations.com/run-requested: "2026-10-20T14:03:36Z"
 spec:
   sourceRef:
     kind: Repository

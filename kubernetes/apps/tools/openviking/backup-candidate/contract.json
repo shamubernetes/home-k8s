@@ -1,0 +1,19 @@
+{
+  "application": "openviking",
+  "namespace": "tools",
+  "status": "unregistered-draft-candidate",
+  "source_pvcs": [
+    "openviking",
+    "openviking-auth",
+    "openviking-models"
+  ],
+  "credentials_provisioned": false,
+  "dedicated_credentials_required": [
+    "openviking-kopiur-nas",
+    "openviking-kopiur-r2"
+  ],
+  "original_nas_restore_qualified": false,
+  "original_r2_restore_qualified": false,
+  "native_application_boot_qualified": false,
+  "global_consistency_qualified": false
+}

@@ -1,0 +1,52 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: adguard-home-native
+spec:
+  repository:
+    kind: Repository
+    name: adguard-home-nas-smb
+  identity:
+    username: adguard-home
+    hostname: adguard-home
+  sources:
+    - pvc:
+        name: data-adguard-home-0
+      sourcePathOverride: /pvc/data-adguard-home-0
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  mover:
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+  verification:
+    quick:
+      schedule:
+        cron: 0 21 * * *
+        jitter: 10m
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 22 * * 0
+        jitter: 10m
+      capacity: 2Gi
+      storageClassName: ceph-block
+    successExpr: snapshot != null && stats.errors == 0
+    verifyFilesPercent: 100

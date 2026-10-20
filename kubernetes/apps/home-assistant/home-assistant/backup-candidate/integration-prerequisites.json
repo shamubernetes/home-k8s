@@ -1,0 +1,54 @@
+{
+  "application": "home-assistant",
+  "namespace": "home-assistant",
+  "registered": false,
+  "backend_identities_provisioned_and_verified": true,
+  "cluster_secret_sync_verified": false,
+  "provisioning_metadata_source": "acceleration-provision-handoff.json",
+  "required_secrets": {
+    "home-assistant-kopiur-nas": [
+      "KOPIA_PASSWORD",
+      "KOPIA_RCLONE_CONFIG"
+    ],
+    "home-assistant-kopiur-r2": [
+      "KOPIA_PASSWORD",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY"
+    ],
+    "home-assistant-kopiur-postgres": [
+      "PGUSER",
+      "PGPASSWORD",
+      "PGDATABASE"
+    ],
+    "home-assistant-kopiur-api": [
+      "token"
+    ]
+  },
+  "shared_deadline_delta": {
+    "file": "kubernetes/apps/kyverno/kyverno/policies/kopiur-movers.yaml",
+    "namespace": "home-assistant",
+    "managed_by": "kopiur",
+    "activeDeadlineSeconds": 3600,
+    "labels": {
+      "config": [
+        "home-assistant-native",
+        "home-assistant-nas-smb",
+        "home-assistant-r2"
+      ],
+      "maintenance": [
+        "home-assistant-nas-smb",
+        "home-assistant-r2"
+      ],
+      "verify": [
+        "home-assistant-native"
+      ],
+      "snapshot-replication": [
+        "home-assistant-native-nas-to-r2"
+      ]
+    },
+    "deletion_op": "snapshot-delete-batch"
+  },
+  "prerequisites_verified": false,
+  "production_original_recovery_qualified": false,
+  "hook_deadline_seconds": 600
+}

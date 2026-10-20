@@ -1,0 +1,32 @@
+http:
+  address: 127.0.0.1:13080
+dns:
+  bind_hosts:
+    - 127.0.0.1
+  port: 15353
+  upstream_dns:
+    - 127.0.0.1:15354
+  bootstrap_dns:
+    - 127.0.0.1
+  fallback_dns: []
+  ratelimit: 0
+  use_private_ptr_resolvers: false
+  local_ptr_upstreams: []
+filtering:
+  protection_enabled: true
+  filtering_enabled: true
+  rewrites_enabled: true
+  rewrites:
+    - domain: restore.example.invalid
+      answer: 192.0.2.17
+      enabled: true
+filters: []
+whitelist_filters: []
+clients:
+  runtime_sources:
+    whois: false
+    arp: false
+    rdns: false
+    dhcp: false
+    hosts: false
+schema_version: 34

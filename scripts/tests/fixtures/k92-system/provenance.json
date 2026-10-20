@@ -1,0 +1,15 @@
+{
+  "ha_source_url": "https://github.com/home-assistant/core/blob/2026.8.0/homeassistant/components/backup/manager.py",
+  "ha_source_sha256": "012acda4854a93e5bef6ba5ad47b9b8166cb3f7bdd2395058b2e64ad247a13ae",
+  "securetar": "2026.4.1",
+  "ha_native_method": "_mkdir_and_generate_backup_contents",
+  "ha_fixture_sha256": "4fabcaf7246c70843b66d694940b9c22a03f8d775374984059d793a562c998b6",
+  "pocket_id_commit": "40cb14f89309286dcafaa62dac82a88a4b5ac583",
+  "pocket_id_migrations": 68,
+  "pocket_id_sql_sha256": "d8b25cdaf1165d5cf0c1a2af34e10aaf505d42cb158237cb545923b62f972813",
+  "adguard_version": "v0.107.79",
+  "adguard_darwin_arm64_archive_sha256": "916f50bcc16b452c63ab8289f523a3c637e84933460a0ae7525fec03e31de867",
+  "adguard_native_test_scope": "matching-version macOS process boot/DNS and independent fixture copy, not production Linux-original recovery",
+  "production_data": false,
+  "native_application_boot": false
+}

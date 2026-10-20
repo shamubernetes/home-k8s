@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+resources:
+  - policy.yaml
+  - repositories.yaml
+  - externalsecret.yaml
+  - capture-pvc.yaml
+  - schedule.yaml
+  - replication.yaml
+configMapGenerator:
+  - name: pocket-id-native-validation
+    files:
+      - validate.py=validate.py
+      - references.sql=references.sql
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tools
+resources:
+  - policy.yaml
+  - repositories.yaml
+  - externalsecret.yaml
+  - schedule.yaml
+  - replication.yaml
+configMapGenerator:
+  - name: openviking-native-capture
+    files:
+      - capture=capture.py
+generatorOptions:
+  disableNameSuffixHash: true
+replacements:
+  - source:
+      kind: ConfigMap
+      name: openviking-native-capture
+      fieldPath: data.capture
+    targets:
+      - select:
+          kind: SnapshotPolicy
+          name: openviking-native
+        fieldPaths:
+          - spec.hooks.beforeSnapshot.0.workloadExec.command.2

@@ -12,3 +12,4 @@ resources:
 - ./grimmory/ks.yaml
 - ./pasta/ks.yaml
 - ./tunarr/ks.yaml
+- ./tunarr/backups-ks.yaml

@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/volsync.backube/replicationsource_v1alpha1.json
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: tunarr
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  # Preserve the frozen rollback's existing backend and copy recipe by value.
+  sourcePVC: tunarr
+  trigger:
+    schedule: "${VOLSYNC_SCHEDULE}"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 14
+    repository: tunarr-volsync-secret
+    volumeSnapshotClassName: csi-ceph-blockpool
+    cacheCapacity: 2Gi
+    cacheStorageClassName: ceph-block
+    cacheAccessModes: [ReadWriteOnce]
+    storageClassName: ceph-block
+    accessModes: [ReadWriteOnce]
+    moverSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    retain:
+      # Existing history policy, not an hourly capture trigger.
+      hourly: 24
+      daily: 7

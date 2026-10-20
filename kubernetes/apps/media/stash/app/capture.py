@@ -116,6 +116,25 @@ if __name__ == '__main__':
     signal.alarm(540)
     try:
         capture()
-    except Exception:
-        # Driver and filesystem exceptions may contain private application data.
+    except Exception as error:
+        # Never expose exception text, filenames, configuration or record values.
+        import traceback
+        frames = [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
+                  if frame.filename == __file__]
+        category = next((value for value in (
+            'no such collation sequence', 'readonly database', 'unable to open database',
+            'database disk image is malformed', 'no space left on device', 'permission denied')
+            if value in str(error).lower()), None)
+        details = {'failed': True, 'class': type(error).__name__,
+                   'source_line': frames[-1] if frames else 0,
+                   'errno': getattr(error, 'errno', None), 'category': category,
+                   'uid': os.getuid(), 'gid': os.getgid()}
+        try:
+            info = Path('/data').stat()
+            details['data_root'] = {'uid': info.st_uid, 'gid': info.st_gid,
+                                    'mode': stat.S_IMODE(info.st_mode),
+                                    'writable': os.access('/data', os.W_OK)}
+        except OSError:
+            pass
+        print(json.dumps(details, sort_keys=True), flush=True)
         raise SystemExit('native Stash capture failed') from None

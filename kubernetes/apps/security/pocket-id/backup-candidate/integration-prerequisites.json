@@ -1,0 +1,61 @@
+{
+  "application": "pocket-id",
+  "namespace": "security",
+  "registered": false,
+  "provisioning_metadata_source": "acceleration-provision-handoff.json",
+  "required_secrets": {
+    "pocket-id-kopiur-nas": [
+      "KOPIA_PASSWORD",
+      "KOPIA_RCLONE_CONFIG"
+    ],
+    "pocket-id-kopiur-r2": [
+      "KOPIA_PASSWORD",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY"
+    ],
+    "pocket-id-kopiur-postgres": [
+      "PGUSER",
+      "PGPASSWORD",
+      "PGDATABASE"
+    ]
+  },
+  "shared_deadline_delta": {
+    "file": "kubernetes/apps/kyverno/kyverno/policies/kopiur-movers.yaml",
+    "namespace": "security",
+    "managed_by": "kopiur",
+    "activeDeadlineSeconds": 3600,
+    "labels": {
+      "config": [
+        "pocket-id-native",
+        "pocket-id-nas-smb",
+        "pocket-id-r2"
+      ],
+      "maintenance": [
+        "pocket-id-nas-smb",
+        "pocket-id-r2"
+      ],
+      "verify": [
+        "pocket-id-native"
+      ],
+      "snapshot-replication": [
+        "pocket-id-native-nas-to-r2"
+      ]
+    },
+    "deletion_op": "snapshot-delete-batch"
+  },
+  "prerequisites_verified": false,
+  "production_original_recovery_qualified": false,
+  "hook_deadline_seconds": 600,
+  "existing_application_references": {
+    "Secret/pocket-id-secret": [
+      "ENCRYPTION_KEY"
+    ],
+    "Secret/pocket-id-bucket": [
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY"
+    ],
+    "ConfigMap/pocket-id-bucket": [
+      "BUCKET_NAME"
+    ]
+  }
+}

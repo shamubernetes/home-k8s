@@ -1,0 +1,17 @@
+{
+  "application": "adguard-home",
+  "namespace": "adguard-home",
+  "status": "unregistered-draft-candidate",
+  "source_pvcs": [
+    "data-adguard-home-0"
+  ],
+  "credentials_provisioned": false,
+  "dedicated_credentials_required": [
+    "adguard-home-kopiur-nas",
+    "adguard-home-kopiur-r2"
+  ],
+  "original_nas_restore_qualified": false,
+  "original_r2_restore_qualified": false,
+  "native_application_boot_qualified": false,
+  "global_consistency_qualified": false
+}

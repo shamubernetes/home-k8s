@@ -1,0 +1,48 @@
+{
+  "application": "adguard-home",
+  "namespace": "adguard-home",
+  "registered": false,
+  "provisioning_metadata_source": "acceleration-provision-handoff.json",
+  "required_secrets": {
+    "adguard-home-kopiur-nas": [
+      "KOPIA_PASSWORD",
+      "KOPIA_RCLONE_CONFIG"
+    ],
+    "adguard-home-kopiur-r2": [
+      "KOPIA_PASSWORD",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY"
+    ]
+  },
+  "shared_deadline_delta": {
+    "file": "kubernetes/apps/kyverno/kyverno/policies/kopiur-movers.yaml",
+    "namespace": "adguard-home",
+    "managed_by": "kopiur",
+    "activeDeadlineSeconds": 3600,
+    "labels": {
+      "config": [
+        "adguard-home-native",
+        "adguard-home-nas-smb",
+        "adguard-home-r2"
+      ],
+      "maintenance": [
+        "adguard-home-nas-smb",
+        "adguard-home-r2"
+      ],
+      "verify": [
+        "adguard-home-native"
+      ],
+      "snapshot-replication": [
+        "adguard-home-native-nas-to-r2"
+      ]
+    },
+    "deletion_op": "snapshot-delete-batch"
+  },
+  "prerequisites_verified": false,
+  "production_original_recovery_qualified": false,
+  "namespace_admission_requirement": {
+    "kopiur.home-operations.com/privileged-movers": "true",
+    "actual_private_source_read_required": true,
+    "dac_capability_not_assumed": true
+  }
+}

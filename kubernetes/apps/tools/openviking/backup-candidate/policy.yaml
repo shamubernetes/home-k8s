@@ -1,0 +1,72 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: openviking-native
+spec:
+  repository:
+    kind: Repository
+    name: openviking-nas-smb
+  identity:
+    username: openviking
+    hostname: tools
+  sources:
+    - pvc:
+        name: openviking
+      sourcePathOverride: /pvc/openviking
+    - pvc:
+        name: openviking-auth
+      sourcePathOverride: /pvc/openviking-auth
+    - pvc:
+        name: openviking-models
+      sourcePathOverride: /pvc/openviking-models
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+  verification:
+    quick:
+      schedule:
+        cron: 30 21 * * *
+        jitter: 10m
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 30 22 * * 0
+        jitter: 10m
+      capacity: 2Gi
+      storageClassName: ceph-block
+    successExpr: snapshot != null && stats.errors == 0
+    verifyFilesPercent: 100
+  hooks:
+    beforeSnapshot:
+      - workloadExec:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: openviking
+              app.kubernetes.io/controller: openviking
+          container: app
+          command:
+            - python
+            - -c
+            - REPLACED_BY_KUSTOMIZE
+          timeout: 10m
+          continueOnFailure: false

@@ -15,6 +15,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-current-r2-retained.yaml
 - ./kopiur-original-snapshot.yaml
 - ./kopiur-original-replication.yaml
 - ./kopiur-original-restores.yaml
@@ -22,6 +23,13 @@ components:
 - ../../../../components/kopiur-postgres
 patches:
 - path: ./kopiur-postgres-patch.yaml
+- target:
+    kind: PersistentVolumeClaim
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        kustomize.toolkit.fluxcd.io/prune: disabled
 configMapGenerator:
 - name: bazarr-scripts
   files:

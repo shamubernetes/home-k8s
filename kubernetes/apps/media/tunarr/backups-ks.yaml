@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tunarr-backups
+  namespace: "${KS_NAMESPACE}"
+spec:
+  targetNamespace: media
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: tunarr
+  dependsOn:
+  - name: volsync
+  # The old app Kustomization stays suspended and reconcile-disabled.
+  # This root owns only its retained rollback volume's existing primary backup.
+  path: ./kubernetes/apps/media/tunarr/backups
+  prune: false
+  deletionPolicy: Orphan
+  sourceRef:
+    kind: GitRepository
+    name: "${KS_GIT_REPO_NAME}"
+  wait: false
+  interval: "${KS_INTERVAL}"
+  retryInterval: "${KS_RETRY_INTERVAL}"
+  timeout: "${KS_TIMEOUT}"
+  postBuild:
+    substitute:
+      APP: tunarr
+      VOLSYNC_SCHEDULE: "43 2 * * *"

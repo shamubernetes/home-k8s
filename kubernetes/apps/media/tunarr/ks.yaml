@@ -4,7 +4,11 @@ kind: Kustomization
 metadata:
   name: &app tunarr
   namespace: "${KS_NAMESPACE}"
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
 spec:
+  # The active ZooTV service is on the NAS. Retain this old rollback only.
+  suspend: true
   targetNamespace: &namespace media
   commonMetadata:
     labels:

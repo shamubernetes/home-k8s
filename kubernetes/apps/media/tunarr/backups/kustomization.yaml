@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization.json
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../../../templates/volsync/nfs-replicationsource.yaml
+patches:
+- target:
+    group: volsync.backube
+    kind: ReplicationSource
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        kustomize.toolkit.fluxcd.io/prune: disabled

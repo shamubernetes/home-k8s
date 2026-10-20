@@ -58,6 +58,25 @@ class CadenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             resolve('${LOOP}', {'LOOP': '${LOOP}'})
 
+    def test_tunarr_retained_backup_root_does_not_own_the_app(self):
+        app = ROOT / 'kubernetes/apps/media/tunarr'
+        legacy, = yaml_json('.', [app / 'ks.yaml'])
+        self.assertTrue(legacy['spec']['suspend'])
+        self.assertEqual(legacy['metadata']['annotations']['kustomize.toolkit.fluxcd.io/reconcile'], 'disabled')
+        owner, = yaml_json('.', [app / 'backups-ks.yaml'])
+        self.assertEqual(owner['spec']['path'], './kubernetes/apps/media/tunarr/backups')
+        self.assertFalse(owner['spec']['prune'])
+        self.assertEqual(owner['spec']['deletionPolicy'], 'Orphan')
+        root, = yaml_json('.', [app / 'backups/kustomization.yaml'])
+        self.assertEqual(root['resources'], ['../../../../templates/volsync/nfs-replicationsource.yaml'])
+        resource, = yaml_json('.', [ROOT / 'kubernetes/templates/volsync/nfs-replicationsource.yaml'])
+        self.assertEqual(resource['kind'], 'ReplicationSource')
+        self.assertEqual(resource['spec']['sourcePVC'], '${APP}')
+        self.assertEqual(resource['spec']['restic']['copyMethod'], '${VOLSYNC_COPYMETHOD:-Snapshot}')
+        patch, = root['patches']
+        self.assertEqual(patch['target']['kind'], 'ReplicationSource')
+        self.assertIn('kustomize.toolkit.fluxcd.io/prune: disabled', patch['patch'])
+
     def test_all_declared_backup_cadences(self):
         common_path = ROOT / 'kubernetes/flux/vars/volsync-schedules.yaml'
         common, = yaml_json('.data', [common_path])
@@ -67,7 +86,7 @@ class CadenceTests(unittest.TestCase):
                 self.assertTrue(at_most_daily(resolve(value, common)), value)
 
         app_root = ROOT / 'kubernetes/apps'
-        paths = list(app_root.rglob('ks.yaml'))
+        paths = list(app_root.rglob('ks.yaml')) + list(app_root.rglob('*-ks.yaml'))
         for tree in (app_root, ROOT / 'kubernetes/templates/volsync'):
             for path in tree.rglob('*.yaml'):
                 text = path.read_text()

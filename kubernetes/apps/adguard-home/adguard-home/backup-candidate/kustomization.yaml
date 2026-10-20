@@ -11,3 +11,13 @@ resources:
   - original.yaml
   - original-v2.yaml
   - restore-nas-v2.yaml
+  - original-r2-v2.yaml
+  - restore-r2-v2.yaml
+  - native-proof-job.yaml
+configMapGenerator:
+  - name: adguard-home-k92-native-proof
+    files:
+      - native-proof.py
+    options:
+      annotations:
+        reloader.stakater.com/ignore: "true"

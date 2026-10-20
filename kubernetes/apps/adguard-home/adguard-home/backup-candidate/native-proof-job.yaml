@@ -1,0 +1,119 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adguard-home-k92-native-originals-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  suspend: true
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adguard-home-k92-native-originals
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: native-binary
+          image: adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0
+          command: [/bin/cp, /opt/adguardhome/AdGuardHome, /native/AdGuardHome]
+          securityContext: &restricted
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: native
+              mountPath: /native
+        - name: yaml-binary
+          image: docker.io/mikefarah/yq:4.45.4@sha256:1f1fff606492a2661f969d857b2770f891b9aac201d0c87b83bb26d8a4dd2c84
+          command: [/bin/cp, /usr/bin/yq, /native/yq]
+          securityContext: *restricted
+          volumeMounts:
+            - name: native
+              mountPath: /native
+      containers:
+        - name: proof
+          image: docker.io/library/python:3.14.7-alpine@sha256:4677924bcc0e94505a3270e87cb1601c2af54cd92d021b8dc306618a14333bbe
+          command: [python3, /proof/native-proof.py]
+          securityContext: *restricted
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: ORIGIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: adguard-home
+                  key: ORIGIN_USERNAME
+            - name: ORIGIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: adguard-home
+                  key: ORIGIN_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 8Gi
+            limits:
+              memory: 1Gi
+              ephemeral-storage: 10Gi
+          volumeMounts:
+            - name: nas
+              mountPath: /originals/nas
+              readOnly: true
+            - name: r2
+              mountPath: /originals/r2
+              readOnly: true
+            - name: native
+              mountPath: /native
+              readOnly: true
+            - name: proof
+              mountPath: /proof
+              readOnly: true
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: adguard-home-k92-primary-nas-v2
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: adguard-home-k92-primary-r2-v2
+            readOnly: true
+        - name: native
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: proof
+          configMap:
+            name: adguard-home-k92-native-proof
+            defaultMode: 0400
+        - name: work
+          emptyDir:
+            sizeLimit: 8Gi
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/cilium.io/ciliumnetworkpolicy_v2.json
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: adguard-home-k92-native-isolation
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: adguard-home-k92-native-originals
+  ingressDeny:
+    - fromEntities: [all]
+  egressDeny:
+    - toEntities: [all]

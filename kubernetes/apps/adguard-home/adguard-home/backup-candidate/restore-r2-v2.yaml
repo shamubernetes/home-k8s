@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/restore_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: adguard-home-k92-primary-r2-v2
+spec:
+  source:
+    snapshotRef:
+      name: adguard-home-native-nas-to-r2-copy-c6c009373b1f77a6-1158392e
+  target:
+    pvc:
+      name: adguard-home-k92-primary-r2-v2
+      storageClassName: ceph-block
+      accessModes: [ReadWriteOnce]
+      capacity: 5Gi
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 5m
+  failurePolicy:
+    activeDeadlineSeconds: 1800
+    backoffLimit: 0
+  mover:
+    privilegedMode: true
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      runAsNonRoot: false
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      runAsNonRoot: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false

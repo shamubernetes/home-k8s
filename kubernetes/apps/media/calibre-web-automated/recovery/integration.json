@@ -1,0 +1,29 @@
+{
+  "pvc": "calibre-web-automated",
+  "namespace": "media",
+  "selector": {
+    "app.kubernetes.io/name": "calibre-web-automated",
+    "app.kubernetes.io/controller": "calibre-web-automated"
+  },
+  "container": "app",
+  "native": "online-sqlite.py",
+  "daily_cron": "15 21 * * *",
+  "dependencies": [
+    "Use existing /lsiopy/bin/python3. Captures five live-observed databases independently with SQLite online backup, not a cross-database transaction.",
+    "Library is local PVC /config/calibre-library mounted again at /calibre-library, NOT the NAS Books library. /cwa-book-ingest is NFS Books/ingest.",
+    "CWA, cwa-bdl and Chaptarr have writable ingest/Books access; Grimmory has writable parent Books. Read-only submounts on other arrs do not by themselves prove no parent-path writer.",
+    "Pair per-DB copies with library file bytes from the immutable CSI clone and an independently retained NAS ingest point. Require accepted DB/file/ingest skew and reconciliation for moves or deletions. No global writer fence.",
+    "Do not make CWA shared Books qualification a dependency of independent Tunarr or Victoria rollouts."
+  ],
+  "cohort": "E",
+  "status": "draft-prerequisites",
+  "schedule_enabled": false,
+  "timezone": "America/New_York",
+  "run_on_create": false,
+  "shared_integration_requirements": [
+    "Provision dedicated per-app NAS and R2 Kopiur credentials in 1Password and ExternalSecrets; no existing scoped Repository was found. Do not reuse volsync-template or another app credential.",
+    "Parent must extend shared mover deadline selectors for capture, replication, verify, maintenance and discovery; retain strict read errors.",
+    "Parent must wire reviewed helpers without PodTemplate changes, qualify native NAS and exact-lineage R2 restores, then enable one daily schedule and retire VolSync separately. No legacy histories may be deleted."
+  ],
+  "production_recovery_verified": false
+}

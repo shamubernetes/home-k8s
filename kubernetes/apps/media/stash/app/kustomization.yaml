@@ -11,6 +11,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-original-data.yaml
 configMapGenerator:
 - name: stash-kopiur-native
   files:

@@ -175,6 +175,23 @@ class NativeTests(unittest.TestCase):
                             "/config/.kopiur-postgres/current/" + db + ".dump", check=True)
                     self.assertEqual(self.sql(target, "SELECT count(*), count(DISTINCT value) FROM items"), "64|1")
 
+    def test_diagnostic_text_log_changes_are_still_archived(self):
+        self.reset_files()
+        self.ex("sh", "-c", "mkdir /config/logs; printf before >/config/logs/system.txt", check=True)
+        prefix = 'pg_dump() { printf changed >>/config/logs/system.txt; command pg_dump "$@"; }; '
+        result = self.capture("whisparr", prefix=prefix)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        archived = self.ex("tar", "-xOf", "/config/.kopiur-postgres/current/application-state.tar", "./logs/system.txt")
+        self.assertEqual(archived.returncode, 0)
+        self.assertEqual(archived.stdout, "beforechangedchanged")
+        self.assertIn("all-log-bytes-archived", self.ex("cat", "/config/.kopiur-postgres/current/metadata").stdout)
+
+    def test_non_text_state_in_log_directory_is_not_exempted(self):
+        self.reset_files()
+        self.ex("sh", "-c", "mkdir /config/logs; printf native-state >/config/logs/state.db", check=True)
+        self.assertNotEqual(self.capture("whisparr").returncode, 0)
+        self.assertNotEqual(self.ex("test", "-e", "/config/.kopiur-postgres/COMPLETE").returncode, 0)
+
     def test_mutating_files_fail_without_publishing(self):
         for app in APPS:
             self.reset_files()

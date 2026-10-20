@@ -1,0 +1,193 @@
+# Exact effective-history original pair; strict replay into new disposable PVCs only.
+{
+  "apiVersion": "kopiur.home-operations.com/v1alpha1",
+  "kind": "Snapshot",
+  "metadata": {
+    "name": "sabnzbd-nas-to-r2-copy-d424cbd8fe4c805b-9747df18",
+    "annotations": {
+      "kustomize.toolkit.fluxcd.io/prune": "disabled"
+    }
+  },
+  "spec": {
+    "deletionPolicy": "Retain",
+    "repository": {
+      "kind": "Repository",
+      "name": "sabnzbd-r2",
+      "namespace": "arrs"
+    }
+  }
+}
+---
+{
+  "apiVersion": "kopiur.home-operations.com/v1alpha1",
+  "kind": "Restore",
+  "metadata": {
+    "name": "sabnzbd-k92-effective-v2-nas",
+    "namespace": "arrs",
+    "labels": {
+      "home-operations.com/qualification": "k92-cohort-d"
+    }
+  },
+  "spec": {
+    "repository": {
+      "kind": "Repository",
+      "name": "sabnzbd-nas-smb"
+    },
+    "source": {
+      "identity": {
+        "username": "sabnzbd",
+        "hostname": "arrs",
+        "sourcePath": "/pvc/sabnzbd",
+        "snapshotID": "8fc3f183d613d3c850b86aa5fcaafdbe"
+      }
+    },
+    "target": {
+      "pvc": {
+        "name": "sabnzbd-k92-effective-v2-nas",
+        "capacity": "3Gi",
+        "storageClassName": "ceph-block",
+        "accessModes": [
+          "ReadWriteOnce"
+        ]
+      }
+    },
+    "policy": {
+      "onMissingSnapshot": "Fail",
+      "waitTimeout": "1m"
+    },
+    "credentialProjection": {
+      "enabled": false
+    },
+    "failurePolicy": {
+      "activeDeadlineSeconds": 3600,
+      "backoffLimit": 0,
+      "podStartupDeadlineSeconds": 300
+    },
+    "options": {
+      "ignoreErrors": false,
+      "ignorePermissionErrors": false,
+      "enableFileDeletion": false,
+      "skipOwners": false,
+      "skipPermissions": false,
+      "skipTimes": false,
+      "writeFilesAtomically": true,
+      "parallel": 2
+    },
+    "mover": {
+      "podSecurityContext": {
+        "runAsUser": 568,
+        "runAsGroup": 568,
+        "runAsNonRoot": true
+      },
+      "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+          "drop": [
+            "ALL"
+          ],
+          "add": [
+            "CHOWN",
+            "FOWNER",
+            "DAC_OVERRIDE"
+          ]
+        }
+      },
+      "resources": {
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "limits": {
+          "memory": "1Gi"
+        }
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "kopiur.home-operations.com/v1alpha1",
+  "kind": "Restore",
+  "metadata": {
+    "name": "sabnzbd-k92-effective-v2-r2",
+    "namespace": "arrs",
+    "labels": {
+      "home-operations.com/qualification": "k92-cohort-d"
+    }
+  },
+  "spec": {
+    "repository": {
+      "kind": "Repository",
+      "name": "sabnzbd-r2"
+    },
+    "source": {
+      "identity": {
+        "username": "sabnzbd",
+        "hostname": "arrs",
+        "sourcePath": "/pvc/sabnzbd",
+        "snapshotID": "d424cbd8fe4c805bb45675881198c549"
+      }
+    },
+    "target": {
+      "pvc": {
+        "name": "sabnzbd-k92-effective-v2-r2",
+        "capacity": "3Gi",
+        "storageClassName": "ceph-block",
+        "accessModes": [
+          "ReadWriteOnce"
+        ]
+      }
+    },
+    "policy": {
+      "onMissingSnapshot": "Fail",
+      "waitTimeout": "1m"
+    },
+    "credentialProjection": {
+      "enabled": false
+    },
+    "failurePolicy": {
+      "activeDeadlineSeconds": 3600,
+      "backoffLimit": 0,
+      "podStartupDeadlineSeconds": 300
+    },
+    "options": {
+      "ignoreErrors": false,
+      "ignorePermissionErrors": false,
+      "enableFileDeletion": false,
+      "skipOwners": false,
+      "skipPermissions": false,
+      "skipTimes": false,
+      "writeFilesAtomically": true,
+      "parallel": 2
+    },
+    "mover": {
+      "podSecurityContext": {
+        "runAsUser": 568,
+        "runAsGroup": 568,
+        "runAsNonRoot": true
+      },
+      "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+          "drop": [
+            "ALL"
+          ],
+          "add": [
+            "CHOWN",
+            "FOWNER",
+            "DAC_OVERRIDE"
+          ]
+        }
+      },
+      "resources": {
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "limits": {
+          "memory": "1Gi"
+        }
+      }
+    }
+  }
+}

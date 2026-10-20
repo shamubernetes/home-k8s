@@ -1,0 +1,147 @@
+# Activate only after both exact effective-original Restores are Completed/Ready.
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "sabnzbd-k92-effective-native-v5"
+  },
+  "spec": {
+    "activeDeadlineSeconds": 600,
+    "backoffLimit": 0,
+    "template": {
+      "metadata": {
+        "labels": {
+          "app.kubernetes.io/name": "sabnzbd-k92-effective-native-v5"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 568,
+          "runAsGroup": 568,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "verify",
+            "image": "ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104",
+            "command": [
+              "python3",
+              "-B",
+              "/contract/native-proof.py"
+            ],
+            "env": [
+              {
+                "name": "PYTHONDONTWRITEBYTECODE",
+                "value": "1"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              },
+              "limits": {
+                "memory": "1Gi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "contract",
+                "mountPath": "/contract",
+                "readOnly": true
+              },
+              {
+                "name": "nas",
+                "mountPath": "/nas",
+                "readOnly": true
+              },
+              {
+                "name": "r2",
+                "mountPath": "/r2",
+                "readOnly": true
+              },
+              {
+                "name": "work",
+                "mountPath": "/work"
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "contract",
+            "configMap": {
+              "name": "sabnzbd-k92-original-native-contract"
+            }
+          },
+          {
+            "name": "nas",
+            "persistentVolumeClaim": {
+              "claimName": "sabnzbd-k92-effective-v2-nas",
+              "readOnly": true
+            }
+          },
+          {
+            "name": "r2",
+            "persistentVolumeClaim": {
+              "claimName": "sabnzbd-k92-effective-v2-r2",
+              "readOnly": true
+            }
+          },
+          {
+            "name": "work",
+            "emptyDir": {
+              "sizeLimit": "1Gi"
+            }
+          },
+          {
+            "name": "tmp",
+            "emptyDir": {
+              "sizeLimit": "128Mi"
+            }
+          }
+        ]
+      }
+    },
+    "suspend": true
+  }
+}
+---
+{
+  "apiVersion": "networking.k8s.io/v1",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "sabnzbd-k92-effective-native-v5"
+  },
+  "spec": {
+    "podSelector": {
+      "matchLabels": {
+        "app.kubernetes.io/name": "sabnzbd-k92-effective-native-v5"
+      }
+    },
+    "policyTypes": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [],
+    "egress": []
+  }
+}

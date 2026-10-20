@@ -1,0 +1,82 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: adguard-home-nas-smb
+spec:
+  backend:
+    rclone:
+      remotePath: mnemosyne:kopiur-adguard-home
+      configSecretRef:
+        name: adguard-home-kopiur-nas
+      startupTimeout: 2m
+  encryption:
+    passwordSecretRef:
+      name: adguard-home-kopiur-nas
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: UTC
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: false
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: adguard-home-r2
+spec:
+  backend:
+    s3:
+      bucket: kopiur-adguard-home
+      prefix: kopiur/adguard-home/r2/
+      endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
+      region: auto
+      auth:
+        secretRef:
+          name: adguard-home-kopiur-r2
+  encryption:
+    passwordSecretRef:
+      name: adguard-home-kopiur-r2
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: UTC
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: true
+      interval: 5m
+      failureThreshold: 3
+      onFailure: Degrade
+  maintenance:
+    enabled: false
+  moverDefaults:
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi

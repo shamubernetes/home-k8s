@@ -20,10 +20,7 @@ spec:
     storageClassName: ceph-block
     accessModes:
     - ReadWriteOnce
-  defaultDeletionPolicy: Delete
-  retention:
-    keepDaily: 7
-    keepWeekly: 4
+  defaultDeletionPolicy: Retain
   hooks:
     beforeSnapshot:
     - workloadExec:

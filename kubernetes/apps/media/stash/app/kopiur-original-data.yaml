@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: stash-k92-native-data-original-v1
+spec:
+  policyRef:
+    name: stash
+  source:
+    sourceIndex: 1
+    target:
+      pvc:
+        name: stash-data
+        namespace: media
+  deletionPolicy: Retain
+  pin: true
+  description: K8S-92 self-contained online native config/database/blobs/metadata/extensions original
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

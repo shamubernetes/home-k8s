@@ -68,14 +68,13 @@ class CadenceTests(unittest.TestCase):
         self.assertFalse(owner['spec']['prune'])
         self.assertEqual(owner['spec']['deletionPolicy'], 'Orphan')
         root, = yaml_json('.', [app / 'backups/kustomization.yaml'])
-        self.assertEqual(root['resources'], ['../../../../templates/volsync/nfs-replicationsource.yaml'])
-        resource, = yaml_json('.', [ROOT / 'kubernetes/templates/volsync/nfs-replicationsource.yaml'])
+        self.assertEqual(root['resources'], ['./replicationsource.yaml'])
+        self.assertTrue((app / 'backups' / root['resources'][0]).resolve().is_relative_to(app / 'backups'))
+        resource, = yaml_json('.', [app / 'backups/replicationsource.yaml'])
         self.assertEqual(resource['kind'], 'ReplicationSource')
-        self.assertEqual(resource['spec']['sourcePVC'], '${APP}')
-        self.assertEqual(resource['spec']['restic']['copyMethod'], '${VOLSYNC_COPYMETHOD:-Snapshot}')
-        patch, = root['patches']
-        self.assertEqual(patch['target']['kind'], 'ReplicationSource')
-        self.assertIn('kustomize.toolkit.fluxcd.io/prune: disabled', patch['patch'])
+        self.assertEqual(resource['spec']['sourcePVC'], 'tunarr')
+        self.assertEqual(resource['spec']['restic']['copyMethod'], 'Snapshot')
+        self.assertEqual(resource['metadata']['annotations']['kustomize.toolkit.fluxcd.io/prune'], 'disabled')
 
     def test_all_declared_backup_cadences(self):
         common_path = ROOT / 'kubernetes/flux/vars/volsync-schedules.yaml'

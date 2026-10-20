@@ -25,5 +25,4 @@ spec:
   timeout: "${KS_TIMEOUT}"
   postBuild:
     substitute:
-      APP: tunarr
       VOLSYNC_SCHEDULE: "43 2 * * *"

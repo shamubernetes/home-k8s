@@ -86,8 +86,8 @@ spec:
   policyRef:
     name: sonarr
   schedule:
-    suspend: false
-    # Preserve incumbent primary cadence; keep draft daily lane suspended.
+    # Native capture stops the application. Require non-disruptive recovery proof.
+    suspend: true
     cron: "${VOLSYNC_SCHEDULE_SONARR}"
     jitter: 10m
     runOnCreate: true

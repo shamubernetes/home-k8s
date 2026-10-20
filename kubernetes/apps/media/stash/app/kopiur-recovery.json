@@ -1,0 +1,65 @@
+{
+  "cohort": "C",
+  "application": "media/stash",
+  "status": "implemented-not-rolled-out-draft",
+  "native_bundle": "/pvc/stash-data/.kopiur-native/current",
+  "dependencies": [
+    {
+      "state": "SQLite and effective application configuration",
+      "location": "stash PVC /config",
+      "capture": "online SQLite backup plus config.yml in stash-data native bundle",
+      "gate": "Native Stash boot and original identity/data equality"
+    },
+    {
+      "state": "File-backed blobs and metadata",
+      "location": "stash-data PVC",
+      "capture": "stable state.tar in self-contained stash-data native bundle; raw stash and stash-data CSI copies are explicitly independent",
+      "gate": "Original recovery must use the exact stash-data native bundle and matching NAS/R2 lineage, not combine independently captured raw SQLite trees; full private-file traversal as UID1000"
+    },
+    {
+      "state": "Plugins and scrapers",
+      "location": "stash-plugins and stash-scrapers openebs-hostpath PVCs",
+      "capture": "Read-only same-node runJob mounts; included in native state.tar",
+      "gate": "Complete files and modes match originals in isolated native boot"
+    },
+    {
+      "state": "Generated assets and cache",
+      "location": "stash-data/generated and emptyDir",
+      "capture": "Generated data retained in raw stash-data snapshot but excluded from self-contained native bundle",
+      "gate": "Regenerate with native Stash; validate no unique files are stored here"
+    },
+    {
+      "state": "Media bytes",
+      "location": "NFS /mnt/user/Media",
+      "capture": "NOT included by PVC policy",
+      "gate": "Bind independent original NAS/R2 recovery of media bytes"
+    }
+  ],
+  "credential_item": "kopiur-stash",
+  "activation_gates": [
+    "Keep Repository, SnapshotPolicy and SnapshotReplication suspended until dedicated credentials and first-capture admission are verified",
+    "Coordinator owns maintenance, any activation, controlled online capture and exact-head rollout",
+    "Prove Job same-node affinity, RWO coexistence, no live fsGroup permission rewrites and full strict source traversal",
+    "Confirm native bundle capacity plus two retained generations, and all mover/verify/replication Job deadlines",
+    "Prove native process lifetime and functional availability across capture, no stops/freezes/restarts",
+    "Select one exact NAS manifest and its exact R2 lineage, restore each independently into isolated targets",
+    "Verify bundle checksums/COMPLETE and original application-level state equality; repository verification and Ready are insufficient",
+    "Keep every VolSync source and original repository/history intact until separate per-workload retirement acceptance"
+  ],
+  "safe_original_recovery_command": "test \"$RECOVERY_TARGET\" = isolated && test -n \"$BUNDLE\" && python3 -c 'import os,sqlite3; from pathlib import Path; p=Path(os.environ[\"BUNDLE\"])/\"stash-go.sqlite\"; c=sqlite3.connect(p.as_uri()+\"?mode=ro\",uri=True); assert c.execute(\"PRAGMA integrity_check\").fetchall()==[(\"ok\",)]'",
+  "recovery_command_gate": [
+    "Execute only against new isolated recovery target, never production volume/database/service",
+    "Obtain BUNDLE from exact completed Kopiur Restore target; do not synthesize or substitute a fixture",
+    "Verify every bundle checksum and terminal Restore phase Completed before running native command",
+    "For Tube Archivist precreate exact reviewed catalog with restored mappings/settings/aliases in new ES, inspect bulk response errors/items, restore Django SQL and original auth; this command alone is not acceptance",
+    "For Plex/Stash extract state archive into empty target and replay native DB copies, never raw live DB/WAL files",
+    "For RomM restore assets/resources, effective config and original auth key before isolated native boot"
+  ],
+  "unproven": [
+    "production source capture",
+    "independent same-point NAS original restore",
+    "independent matching R2 original restore",
+    "complete external NFS and shared service recovery",
+    "native pinned-image fixture execution blocked locally by Docker ENOSPC"
+  ]
+}

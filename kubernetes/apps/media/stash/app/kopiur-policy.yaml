@@ -1,0 +1,205 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: stash
+spec:
+  suspend: true
+  repository:
+    kind: Repository
+    name: stash-nas-smb
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  identity:
+    username: stash
+    hostname: media
+  sources:
+    - pvc:
+        name: stash
+      sourcePathOverride: /pvc/stash
+    - pvc:
+        name: stash-data
+      sourcePathOverride: /pvc/stash-data
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          timeout: 12m
+          continueOnFailure: false
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 660
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: stash-kopiur-capture
+              spec:
+                automountServiceAccountToken: false
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1000
+                  seccompProfile:
+                    type: RuntimeDefault
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: stash
+                            app.kubernetes.io/controller: stash
+                        topologyKey: kubernetes.io/hostname
+                containers:
+                  - name: capture
+                    image: ghcr.io/jfroy/stash:v0.28.1-cudajellyfin.4@sha256:0e4b5eb7971ddadc0e482fd9799a5fd621160359ce67da4bdda990ccc67e06c2
+                    command:
+                      - python3
+                      - /kopiur/capture.py
+                    env: []
+                    volumeMounts:
+                      - name: source
+                        mountPath: /config
+                        readOnly: true
+                      - name: helper
+                        mountPath: /kopiur
+                        readOnly: true
+                      - name: stash-data
+                        mountPath: /data
+                        readOnly: false
+                      - name: stash-plugins
+                        mountPath: /plugins
+                        readOnly: true
+                      - name: stash-scrapers
+                        mountPath: /scrapers
+                        readOnly: true
+                      - name: tmp
+                        mountPath: /tmp
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: stash
+                  - name: helper
+                    configMap:
+                      name: stash-kopiur-native
+                  - name: stash-data
+                    persistentVolumeClaim:
+                      claimName: stash-data
+                  - name: stash-plugins
+                    persistentVolumeClaim:
+                      claimName: stash-plugins
+                  - name: stash-scrapers
+                    persistentVolumeClaim:
+                      claimName: stash-scrapers
+                  - name: tmp
+                    emptyDir: {}
+  mover:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+      parallel: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      capacity: 200Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+  # Raw PVC copies are independent. Original native recovery MUST use the
+  # self-contained bundle on stash-data, never pair the two live SQLite trees.
+  # The live cluster has no VolumeGroupSnapshotClass, so do not imply CSI atomicity.
+  groupBy: None
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: stash-daily
+spec:
+  policyRef:
+    name: stash
+  schedule:
+    cron: 0 19 * * *
+    timezone: America/New_York
+    jitter: 5m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: stash-nas-to-r2
+spec:
+  suspend: true
+  sourceRef:
+    kind: Repository
+    name: stash-nas-smb
+  destinationRef:
+    kind: Repository
+    name: stash-r2
+  schedule:
+    cron: 0 20 * * *
+    jitter: 5m
+  selection:
+    identities:
+      include:
+        - username: stash
+          hostname: media
+          sourcePath: /pvc/stash
+        - username: stash
+          hostname: media
+          sourcePath: /pvc/stash-data
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4

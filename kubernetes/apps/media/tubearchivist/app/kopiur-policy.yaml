@@ -1,0 +1,192 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: tubearchivist
+spec:
+  suspend: true
+  repository:
+    kind: Repository
+    name: tubearchivist-nas-smb
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  identity:
+    username: tubearchivist
+    hostname: media
+  sources:
+    - pvc:
+        name: tubearchivist
+      sourcePathOverride: /pvc/tubearchivist
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          timeout: 12m
+          continueOnFailure: false
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 660
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: tubearchivist-kopiur-capture
+              spec:
+                automountServiceAccountToken: false
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 568
+                  runAsGroup: 568
+                  seccompProfile:
+                    type: RuntimeDefault
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: tubearchivist
+                            app.kubernetes.io/controller: tubearchivist
+                        topologyKey: kubernetes.io/hostname
+                containers:
+                  - name: capture
+                    image: bbilly1/tubearchivist:v0.5.12@sha256:ba1c846ddd0c6fdd0f040727129d2466e03b7a0c26499223839d450c7586ac09
+                    command:
+                      - python3
+                      - /kopiur/capture.py
+                    env:
+                      - name: ES_CAPTURE_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: tubearchivist-kopiur-native
+                            key: ES_CAPTURE_USER
+                      - name: ES_CAPTURE_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: tubearchivist-kopiur-native
+                            key: ES_CAPTURE_PASSWORD
+                    volumeMounts:
+                      - name: source
+                        mountPath: /cache
+                      - name: helper
+                        mountPath: /kopiur
+                        readOnly: true
+                      - name: runtime
+                        mountPath: /runtime
+                        readOnly: true
+                      - name: tmp
+                        mountPath: /tmp
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: tubearchivist
+                  - name: helper
+                    configMap:
+                      name: tubearchivist-kopiur-native
+                  - name: runtime
+                    secret:
+                      secretName: tubearchivist-kopiur-native
+                  - name: tmp
+                    emptyDir: {}
+  mover:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      seccompProfile:
+        type: RuntimeDefault
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+      parallel: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      capacity: 20Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: tubearchivist-daily
+spec:
+  policyRef:
+    name: tubearchivist
+  schedule:
+    cron: 0 20 * * *
+    timezone: America/New_York
+    jitter: 5m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: tubearchivist-nas-to-r2
+spec:
+  suspend: true
+  sourceRef:
+    kind: Repository
+    name: tubearchivist-nas-smb
+  destinationRef:
+    kind: Repository
+    name: tubearchivist-r2
+  schedule:
+    cron: 0 21 * * *
+    jitter: 5m
+  selection:
+    identities:
+      include:
+        - username: tubearchivist
+          hostname: media
+          sourcePath: /pvc/tubearchivist
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4

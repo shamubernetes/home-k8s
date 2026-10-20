@@ -25,6 +25,10 @@ RADARR_QUIESCE = ROOT / "scripts/kopiur-radarr-quiesce"
 RADARR_RECURRING = ROOT / "scripts/kopiur-radarr-recurring"
 PG_IMAGE = "postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
 RADARR_IMAGE = "ghcr.io/home-operations/radarr:6.4.4.10685@sha256:be53998a2d39cfa3c3315b70c7509a6a1f2a10c3aee9337653efc9f4c970430e"
+WHISPARR_CONSISTENCY = (
+    "consistency=quiesced-whisparr-stable-filetree",
+    "consistency=online-per-database-stable-filetree",
+)
 PAIRED_APPS = ("bazarr", "radarr", "radarr-3d", "sonarr", "whisparr")
 CONTRACTS = {
     "radarr": (RADARR_IMAGE, ["radarr_main"], "RADARR", 7878, "/config/config.xml"),
@@ -69,11 +73,14 @@ def verify_bundle(root):
     if not databases or len(set(databases)) != len(databases):
         raise ValueError("missing or duplicate database inventory")
     required = {"application-config", "metadata"}
-    whisparr = "consistency=quiesced-whisparr-stable-filetree" in metadata
+    consistency = [line for line in metadata if line.startswith("consistency=")]
+    if len(consistency) != 1:
+        raise ValueError("missing or ambiguous consistency contract")
+    whisparr = consistency[0] in WHISPARR_CONSISTENCY
     coherent = "format=2" in metadata and ("consistency=single-db-stable-filetree" in metadata or whisparr)
     if coherent:
         if whisparr and databases != ["whisparrv3_main", "whisparrv3_logs"]:
-            raise ValueError("quiesced bundle has an unexpected database inventory")
+            raise ValueError("Whisparr bundle has an unexpected database inventory")
         if not whisparr and len(databases) != 1:
             raise ValueError("coherent bundle contains multiple databases")
         required.update(("application-state.tar", "filetree.sha256"))
@@ -665,10 +672,10 @@ def restore_pvc(source, app_name, *, config_mib=1024, database_mib=4096, memory_
     bundle = source / ".kopiur-postgres"
     databases = verify_bundle(bundle)
     metadata = (bundle / "current/metadata").read_text().splitlines()
+    accepted_contracts = WHISPARR_CONSISTENCY if app_name == "whisparr" else (
+        "consistency=single-db-stable-filetree",)
     if app_name in PAIRED_APPS and not (
-            "format=2" in metadata and
-            ("consistency=quiesced-whisparr-stable-filetree" if app_name == "whisparr" else
-             "consistency=single-db-stable-filetree") in metadata):
+            "format=2" in metadata and any(contract in metadata for contract in accepted_contracts)):
         raise ValueError(app_name + " requires the paired stable-filetree recovery contract")
     drill = DockerDrill(app_name, config_mib=config_mib, database_mib=database_mib, memory_mib=memory_mib)
     if databases != drill.databases:

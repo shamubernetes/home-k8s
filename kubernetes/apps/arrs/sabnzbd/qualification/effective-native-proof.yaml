@@ -121,7 +121,7 @@
         ]
       }
     },
-    "suspend": true
+    "suspend": false
   }
 }
 ---

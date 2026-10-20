@@ -17,3 +17,11 @@ resources:
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
+patches:
+- target:
+    kind: PersistentVolumeClaim
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        kustomize.toolkit.fluxcd.io/prune: disabled

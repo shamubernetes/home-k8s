@@ -79,7 +79,10 @@ def extract_original(archive, destination, *, database="bazarr", capacity=2 * 10
     filenames = ["application-config", "application-state.tar", "filetree.sha256", "metadata"]
     filenames += [db + suffix for db in databases for suffix in (".dump", ".toc")]
     allowed.update(".kopiur-postgres/current/" + name for name in filenames)
+    # Default 16KiB writes took 614s for the actual 13GB bundle on ARC storage.
+    # Keep the same validation and replay, but amortize its filesystem I/O.
     with tarfile.open(archive) as bundle:
+        setattr(bundle, "copybufsize", 1024 * 1024)
         members = bundle.getmembers()
         if len(members) > len(allowed) or sum(m.size for m in members) > capacity:
             raise ValueError("original transfer exceeds existing restore capacity")
@@ -238,6 +241,10 @@ def qualify(fields, app="bazarr"):
                 proof.update(snapshot_id=snapshot, bundle_checksums_sha256=checksum, metadata=metadata,
                              original_backend_readonly=True, networked_restorer_removed_before_boot=True)
                 results[kind] = proof
+                # A later backend timeout must not discard an already verified point.
+                print(json.dumps({"native_original_backend_receipt": proof, "app": app,
+                                  "candidate": os.environ["QUALIFICATION_COMMIT"],
+                                  "backend": kind}), flush=True)
         compare_results(results)
         return {"app": app, "candidate": os.environ["QUALIFICATION_COMMIT"],
                 "runner": os.environ["RUNNER_NAME"], "results": results,

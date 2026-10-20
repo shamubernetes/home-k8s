@@ -5,6 +5,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-effective-original.yaml
 - ../qualification
 - ./ocirepository.yaml
 - ./externalsecret.yaml

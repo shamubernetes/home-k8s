@@ -39,12 +39,24 @@ fi
 # This is a dedicated PVC subPath mount beneath the root-owned container root,
 # not a child of app-writable /app/data. UID568 cannot rename its parent entry.
 root=/runtime-escrow
-proc=${GRIMMORY_PROC_ROOT:-/proc}/1
-if [ -f "$(dirname "$0")/fence.sh" ]; then
-  # Only the birth/UID/group-verified child of the native supervisor is valid.
-  native_pid=$(sh "$(dirname "$0")/fence.sh" process)
-  proc=${GRIMMORY_PROC_ROOT:-/proc}/$native_pid
-fi
+# Discover the running native Java process without a fence child/request marker.
+# Both the native entrypoint and the retained supervisor are supported.
+process_identity() {
+  found=
+  for candidate in "${GRIMMORY_PROC_ROOT:-/proc}"/[0-9]*; do
+    [ -f "$candidate/comm" ] || continue
+    [ "$(cat "$candidate/comm")" = java ] || continue
+    [ -z "$found" ] || return 1
+    [ "$(awk '/^Uid:/{print $2":"$3":"$4":"$5}' "$candidate/status")" = 568:568:568:568 ] || return 1
+    fields=$(sed 's/.*) //' "$candidate/stat")
+    case "$(printf '%s\n' "$fields" | awk '{print $1}')" in R|S|D|I) ;; *) return 1 ;; esac
+    birth=$(printf '%s\n' "$fields" | awk '{print $20}')
+    printf '%s\n' "$birth" | grep -Eq '^[0-9]+$' || return 1
+    found="$candidate:$birth"
+  done
+  [ -n "$found" ] || return 1
+  printf '%s\n' "$found"
+}
 [ ! -L "$root" ] || exit 1
 mkdir -p "$root"
 # The native app UID must not redirect a root control-file write.
@@ -61,9 +73,25 @@ exec 9>"$root/.lock"
 chown 0:568 "$root/.lock"
 chmod 640 "$root/.lock"
 flock -n 9 || { printf 'runtime capture already running\n' >&2; exit 1; }
-[ "$(cat "$proc/comm")" = java ] || exit 1
+case "$mode" in capture|verify) ;; *) exit 1 ;; esac
+# Invalidate on every failed capture/verification, including process discovery.
+# SQL is mounted read-only here. Removing the runtime marker invalidates the pair.
+accepted=0
+stage=
+cleanup() {
+  if [ "$accepted" != 1 ]; then
+    rm -f "$root/COMPLETE"
+  fi
+  [ -z "$stage" ] || rm -rf -- "$stage"
+}
+trap cleanup EXIT
+generation=
+if [ "$mode" = verify ]; then generation=$(cat "$root/COMPLETE"); fi
+# Invalidate before discovery/reads, including timeout or untrappable termination.
+rm -f "$root/COMPLETE"
+identity=$(process_identity)
+proc=${identity%:*}
 stage=$(mktemp -d "$root/.capture.XXXXXX")
-trap 'rm -rf -- "$stage"' EXIT
 # Do not echo any environment, command arguments or configuration content.
 copy_effective() {
   # Java runs as UID568 and is nondumpable after the entrypoint changes UID.
@@ -78,9 +106,23 @@ copy_effective() {
   cmp -s "$stage/application.argv0" "$stage/check.argv0"
   rm "$stage/check.env0" "$stage/check.argv0"
   # /app/data is independent of the shared /books and /bookdrop stores.
-  tar -C "${GRIMMORY_APP_DATA:-/app/data}" -cf "$stage/app-data.tar" .
+  for archive in app-data.tar check-data.tar; do
+    if ! tar -C "${GRIMMORY_APP_DATA:-/app/data}" -cf "$stage/$archive" . 2>"$stage/errors"; then
+      printf 'Application data archive failed\n' >&2; exit 1
+    fi
+    [ ! -s "$stage/errors" ] || exit 1
+  done
+  cmp -s "$stage/app-data.tar" "$stage/check-data.tar"
+  rm "$stage/check-data.tar" "$stage/errors"
   sh "$(dirname "$0")/books.sh" "$stage/books.tar"
   printf 'format=grimmory-books-v1\nsource=/books\nbookdrop_subpath=bookdrop\nconsistency=repeated-byte-metadata-stability-not-writer-fenced\n' >"$stage/books.txt"
+  # Bracket the full source read, not only the two procfs reads above.
+  [ "$(process_identity)" = "$identity" ]
+  su-exec 568:568 cat "$proc/environ" >"$stage/check.env0"
+  su-exec 568:568 cat "$proc/cmdline" >"$stage/check.argv0"
+  cmp -s "$stage/application.env0" "$stage/check.env0"
+  cmp -s "$stage/application.argv0" "$stage/check.argv0"
+  rm "$stage/check.env0" "$stage/check.argv0"
 }
 case "$mode" in
   capture)
@@ -89,7 +131,7 @@ case "$mode" in
     copy_effective
     generation=$(cat "${GRIMMORY_PROC_ROOT:-/proc}/sys/kernel/random/uuid")
     printf '%s\n' "$generation" | LC_ALL=C grep -Eq '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-    printf 'format=grimmory-runtime-books-v2\ngeneration=%s\ncaptured_epoch=%s\n' "$generation" "$(date +%s)" >"$stage/runtime.txt"
+    printf 'format=grimmory-runtime-books-v2\ngeneration=%s\ncaptured_epoch=%s\nprocess_identity=%s:%s\n' "$generation" "$(date +%s)" "${proc##*/}" "${identity##*:}" >"$stage/runtime.txt"
     # stat contains counters that vary. Record only the Java process birth tick.
     sed 's/.*) //' "$stage/process.stat" | awk '{print $20}' >"$stage/process-start.txt"
     rm "$stage/process.stat"
@@ -100,14 +142,17 @@ case "$mode" in
     rm -rf -- "$root/previous"
     if [ -e "$root/current" ]; then mv "$root/current" "$root/previous"; fi
     mv "$stage" "$root/current"
-    printf '%s\n' "$generation" >"$root/COMPLETE"
-    chown 0:568 "$root/COMPLETE"
-    chmod 640 "$root/COMPLETE"
-    sync
     ;;
   verify)
-    [ -f "$root/COMPLETE" ] && [ ! -L "$root/current" ] || exit 1
+    [ -n "$generation" ] && [ ! -L "$root/current" ] || exit 1
     sh "$0" --bounded validate "$root/current"
+    [ "$(sed -n 's/^generation=//p' "$root/current/runtime.txt")" = "$generation" ]
+    # Old retained formats remain valid, but new captures also bind the PID.
+    recorded=$(sed -n 's/^process_identity=//p' "$root/current/runtime.txt")
+    [ -z "$recorded" ] || [ "$recorded" = "${proc##*/}:${identity##*:}" ]
+    captured=$(sed -n 's/^captured_epoch=//p' "$root/current/runtime.txt")
+    now=$(date +%s)
+    [ "$now" -ge "$captured" ] && [ "$((now-captured))" -le 180 ]
     copy_effective
     for name in application.env0 application.argv0 app-data.tar; do
       cmp -s "$stage/$name" "$root/current/$name"
@@ -122,13 +167,18 @@ case "$mode" in
     cmp -s "$stage/process-start.txt" "$root/current/process-start.txt"
     bundle=${GRIMMORY_DB_BUNDLE:-/database-capture}
     sh "$0" --bounded validate "$bundle/runtime"
-    [ "$(cat "$bundle/COMPLETE")" = "$(cat "$root/COMPLETE")" ]
+    [ "$(cat "$bundle/COMPLETE")" = "$generation" ]
     cmp -s "$bundle/runtime/runtime.sha256" "$root/current/runtime.sha256"
     (cd "$bundle" && sha256sum -c grimmory.sql.sha256 >/dev/null)
-    [ "$(sed -n 's/^runtime_generation=//p' "$bundle/manifest.txt")" = "$(cat "$root/COMPLETE")" ]
+    [ "$(sed -n 's/^runtime_generation=//p' "$bundle/manifest.txt")" = "$generation" ]
     [ "$(sha256sum "$bundle/runtime/runtime.sha256" | cut -d' ' -f1)" = "$(sed -n 's/^runtime_manifest_sha256=//p' "$bundle/manifest.txt")" ]
     [ "$(sha256sum "$bundle/grimmory.sql" | cut -d' ' -f1)" = "$(sed -n 's/^sql_sha256=//p' "$bundle/manifest.txt")" ]
     ;;
   *) exit 1 ;;
 esac
+printf '%s\n' "$generation" >"$root/COMPLETE"
+chown 0:568 "$root/COMPLETE"
+chmod 640 "$root/COMPLETE"
+sync
+accepted=1
 printf 'Grimmory effective runtime escrow %s passed\n' "$mode"

@@ -40,11 +40,23 @@ mkdir "$stage/runtime"
 cp "$runtime/current/"* "$stage/runtime/"
 (cd "$stage/runtime" && sha256sum -c runtime.sha256 >/dev/null)
 started=$(date -u +%FT%TZ)
+# Native schema inventories bracket the transaction. They detect observed DDL,
+# not an external writer fence. Ignore volatile AUTO_INCREMENT create options.
+schema() {
+  mariadb-dump --protocol=tcp --host=127.0.0.1 --port=3306 --user="$MYSQL_USER" \
+    --no-data --skip-comments --skip-create-options --skip-lock-tables \
+    --routines --events --triggers --databases grimmory >"$1"
+  [[ -s $1 ]]
+}
+schema "$stage/schema.before"
 # Do not suppress routines/events or retry with an incomplete dump on permission errors.
 mariadb-dump --protocol=tcp --host=127.0.0.1 --port=3306 --user="$MYSQL_USER" \
   --single-transaction --quick --skip-lock-tables \
   --routines --events --triggers --hex-blob --databases grimmory >"$stage/grimmory.sql"
 [[ -s $stage/grimmory.sql ]] || exit 1
+schema "$stage/schema.after"
+cmp -s "$stage/schema.before" "$stage/schema.after" || { printf 'schema changed during capture\n' >&2; exit 1; }
+[[ $("${client[@]}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='grimmory' AND table_type='BASE TABLE' AND engine <> 'InnoDB'") == 0 ]] || exit 1
 (cd "$stage" && sha256sum grimmory.sql >grimmory.sql.sha256)
 printf 'format=mariadb-logical-runtime-v2\nserver=%s\nbase_tables=%s\nstarted_utc=%s\ncaptured_utc=%s\nconsistency=single-transaction-no-concurrent-DDL\nruntime_generation=%s\nruntime_manifest_sha256=%s\nsql_sha256=%s\n' \
   "$version" "$tables" "$started" "$(date -u +%FT%TZ)" "$generation" "$(sha256sum "$stage/runtime/runtime.sha256" | cut -d' ' -f1)" "$(sha256sum "$stage/grimmory.sql" | cut -d' ' -f1)" >"$stage/manifest.txt"

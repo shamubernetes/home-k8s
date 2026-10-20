@@ -30,3 +30,5 @@ configMapGenerator:
     disableNameSuffixHash: true
     annotations:
       kustomize.toolkit.fluxcd.io/substitute: disabled
+      # Helpers update through the projected directory, not an application restart.
+      reloader.stakater.com/ignore: "true"

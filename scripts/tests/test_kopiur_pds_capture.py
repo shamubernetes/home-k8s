@@ -114,11 +114,13 @@ fi
         self.assertNotEqual(self.run_capture().returncode, 0)
         self.assertFalse((self.store / '.kopiur-pds/COMPLETE').exists())
 
-    def test_deployed_scripts_match_arc_qualified_sources(self):
+    def test_legacy_sources_remain_separate_from_online_deployed_helper(self):
+        # These tests intentionally retain the historical stopped-bundle reader.
+        # The new format cannot reuse its application-state.tar extraction path.
         app = SCRIPT.parent.parent / 'kubernetes/apps/services/atproto-pds/app/kopiur-runtime'
-        self.assertEqual(SCRIPT.read_bytes(), (app / 'capture.cjs').read_bytes())
-        self.assertEqual((SCRIPT.parent / 'kopiur-pds-recurring').read_bytes(),
-                         (app / 'recurring.sh').read_bytes())
+        self.assertIn("contract: 'stopped-pds-whole-store'", SCRIPT.read_text())
+        self.assertIn("'online-csi-crash-consistent-pds-volume'", (app / 'capture.cjs').read_text())
+        self.assertNotIn('child_process', (app / 'capture.cjs').read_text())
 
     def test_embedded_native_python_compiles(self):
         tree = ast.parse((SCRIPT.parent / 'kopiur_pds_native.py').read_text())

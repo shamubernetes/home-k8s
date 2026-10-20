@@ -68,5 +68,44 @@ class NativeProofTests(unittest.TestCase):
         self.assertIn('sys.exc_info()[0] is None', source)
 
 
+    def test_exact_empty_rss_native_upgrade_preserves_all_original_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            original, restored = [Path(temporary) / name for name in ('original.db', 'restored.db')]
+            for path in (original, restored):
+                with sqlite3.connect(path) as connection:
+                    connection.execute('CREATE TABLE history(id INTEGER, payload BLOB)')
+                    connection.execute('INSERT INTO history VALUES(1,?)', (b'original',))
+                    connection.execute('PRAGMA user_version=7')
+            with sqlite3.connect(restored) as connection:
+                connection.execute('CREATE TABLE rss(id INTEGER)')
+                connection.execute('PRAGMA user_version=8')
+            result = native.native_database_equality(original, restored)
+            self.assertTrue(result['originalRecordsEqual'])
+            self.assertEqual(result['addedEmptyNativeTables'], ['rss'])
+            with sqlite3.connect(restored) as connection:
+                connection.execute('INSERT INTO rss VALUES(1)')
+            with self.assertRaises(ValueError):
+                native.native_database_equality(original, restored)
+            with sqlite3.connect(restored) as connection:
+                connection.execute('DELETE FROM rss')
+                connection.execute('DELETE FROM history')
+            with self.assertRaises(ValueError):
+                native.native_database_equality(original, restored)
+
+    def test_unknown_native_schema_change_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            original, restored = [Path(temporary) / name for name in ('original.db', 'restored.db')]
+            for path in (original, restored):
+                with sqlite3.connect(path) as connection:
+                    connection.execute('CREATE TABLE history(id INTEGER)')
+                    connection.execute('INSERT INTO history VALUES(1)')
+                    connection.execute('PRAGMA user_version=8')
+            with sqlite3.connect(restored) as connection:
+                connection.execute('CREATE TABLE rss(id INTEGER)')
+                connection.execute('PRAGMA user_version=9')
+            with self.assertRaises(ValueError):
+                native.native_database_equality(original, restored)
+
+
 if __name__ == '__main__':
     unittest.main()

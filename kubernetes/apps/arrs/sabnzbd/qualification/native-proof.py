@@ -38,6 +38,33 @@ def db_digest(path, summary=False):
         return hashlib.sha256(json.dumps(inventory).encode()).hexdigest()
 
 
+def native_database_equality(original, restored):
+    before = db_digest(original, summary=True)
+    after = db_digest(restored, summary=True)
+    versions = []
+    for database in (original, restored):
+        with contextlib.closing(sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)) as connection:
+            versions.append(connection.execute('PRAGMA user_version').fetchone()[0])
+    if versions[0] > 8 or versions[1] != 8:
+        raise ValueError('unexpected pinned native database version')
+    migration = []
+    if before != after:
+        # Exact pinned SABnzbd database.py upgrades pre-v8 history by adding an
+        # empty RSS table. Every original table and record must remain identical.
+        if not (versions[0] < 8 and versions[1] == 8 and
+                [row['table'] for row in before] == ['history']):
+            raise ValueError('unsupported native database change')
+        rss = [row for row in after if row['table'] == 'rss']
+        retained = [row for row in after if row['table'] != 'rss']
+        empty_hash = hashlib.sha256(b'[]').hexdigest()
+        if retained != before or rss != [{'table': 'rss', 'rows': 0, 'dataSha256': empty_hash}]:
+            raise ValueError('original records changed during native recovery')
+        migration = ['rss']
+    return {'originalRecordsEqual': True, 'sourceDataSha256': db_digest(original),
+            'sourceUserVersion': versions[0], 'restoredUserVersion': versions[1],
+            'addedEmptyNativeTables': migration}
+
+
 def prepare(original, destination):
     from configobj import ConfigObj
     if destination.exists():
@@ -103,7 +130,8 @@ def run_native(destination, cfg, expected):
             queue = json.load(reply)['queue']
         if queue.get('paused') is not True:
             raise ValueError('disposable downloader not paused')
-        return {'version': version, 'paused': True, 'apiHealthy': True}
+        result = {'version': version, 'paused': True, 'apiHealthy': True}
+        return result
     finally:
         if proc.poll() is None:
             proc.terminate()
@@ -114,12 +142,11 @@ def run_native(destination, cfg, expected):
             proc.wait(timeout=5)
         # Application is now stopped only in this isolated disposable recovery test.
         database = destination / 'admin/history1.db'
-        if sys.exc_info()[0] is None and db_digest(database) != expected:
+        if sys.exc_info()[0] is None:
             original = Path('/nas/.kopiur-consistent/database.sqlite3')
-            print(json.dumps({'nativeDatabaseEqualityRejected': True,
-                              'before': db_digest(original, summary=True),
-                              'after': db_digest(database, summary=True)}), flush=True)
-            raise ValueError('native persisted history changed')
+            if db_digest(original) != expected:
+                raise ValueError('original source changed')
+            result['databaseEquality'] = native_database_equality(original, database)
 
 
 STAGE = "startup"

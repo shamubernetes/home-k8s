@@ -34,4 +34,4 @@ spec:
       VOLSYNC_PGID: "1000"
       VOLSYNC_PUID: "1000"
       VOLSYNC_R2_SCHEDULE: "17 4 * * *"
-      VOLSYNC_SCHEDULE: "17 * * * *"
+      VOLSYNC_SCHEDULE: "17 1 * * *"

@@ -33,7 +33,7 @@ PAIRED_APPS = ("bazarr", "radarr", "radarr-3d", "sonarr", "whisparr")
 CONTRACTS = {
     "radarr": (RADARR_IMAGE, ["radarr_main"], "RADARR", 7878, "/config/config.xml"),
     "radarr-3d": (RADARR_IMAGE, ["radarr_3d_main"], "RADARR", 7878, "/config/config.xml"),
-    "sonarr": ("ghcr.io/home-operations/sonarr:4.0.20.3012@sha256:1f19eb5e0f421418c1a956bbe01310a0141423afe28bd9a4b1dcb8629ff2bce2", ["sonarr_main"], "SONARR", 7878, "/config/config.xml"),
+    "sonarr": ("ghcr.io/home-operations/sonarr:5.0.0.2569@sha256:b699df6b4b10e71ce23fb6fd8944653171f49164f79020cb0ea09e46b51b0517", ["sonarr_main"], "SONARR", 7878, "/config/config.xml"),
     "whisparr": ("ghcr.io/shamubernetes/whisparr-eros:3.3.7-release.979@sha256:9002dd8e29471d65f0b1a03802a3bf48bb58212435a053bbbe8971f2d2253194", ["whisparrv3_main", "whisparrv3_logs"], "WHISPARR", 7878, "/config/config.xml"),
     "bazarr": ("ghcr.io/home-operations/bazarr:1.6.2@sha256:17dc1cff22e99694ffbfb06555526cb47a66b362b4d6c982f06b557f7caae2bb", ["bazarr"], "BAZARR", 6767, "/config/config/config.yaml"),
 }

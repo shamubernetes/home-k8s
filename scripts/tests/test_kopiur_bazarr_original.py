@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Fail-closed contract regressions for Bazarr's retained originals."""
 import copy
+import contextlib
+import io
+import socket
 import json
 from pathlib import Path
 import runpy
@@ -12,6 +15,24 @@ M = runpy.run_path(str(SCRIPT))
 
 
 class OriginalTests(unittest.TestCase):
+    def test_completed_receipt_survives_disconnected_private_peer(self):
+        receipt = {"format": "synthetic-unit-receipt", "verified": True}
+        writer, reader = socket.socketpair()
+        reader.close()
+        output = io.StringIO()
+        with writer, contextlib.redirect_stdout(output), self.assertRaises(BrokenPipeError):
+            M["deliver_receipt"](writer, receipt)
+        self.assertEqual(json.loads(output.getvalue()), receipt)
+
+    def test_completed_receipt_delivered_unchanged(self):
+        receipt = {"format": "synthetic-unit-receipt", "verified": True}
+        writer, reader = socket.socketpair()
+        output = io.StringIO()
+        with writer, reader, contextlib.redirect_stdout(output):
+            M["deliver_receipt"](writer, receipt)
+            self.assertEqual(json.loads(reader.recv(4096)), receipt)
+        self.assertEqual(json.loads(output.getvalue()), receipt)
+
     def fields(self):
         return {"NAS_RCLONE_CONFIG": "[mnemosyne]\ntype=smb\nhost=10.100.47.100\nuser=kp-bazarr\npass=synthetic\ndomain=WORKGROUP\n",
                 "NAS_KOPIA_PASSWORD": "synthetic-nas", "R2_KOPIA_PASSWORD": "synthetic-r2",

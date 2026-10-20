@@ -252,6 +252,13 @@ def qualify(fields, app="bazarr"):
         run("docker", "volume", "rm", tools)
 
 
+def deliver_receipt(connection, receipt):
+    # CI logs must retain verified results even if the private client disconnected.
+    encoded = json.dumps(receipt)
+    print(encoded, flush=True)
+    connection.sendall(encoded.encode())
+
+
 def main():
     arguments = sys.argv[1:]
     app = arguments[2] if len(arguments) == 3 and arguments[:2] == ["--serve", "--app"] else "bazarr"
@@ -289,8 +296,7 @@ def main():
                     if len(data) > 65536 or time.monotonic() > deadline:
                         raise ValueError("transport payload exceeds bounds")
                 receipt = qualify(json.loads(data), app)
-                connection.sendall(json.dumps(receipt).encode())
-                print(json.dumps(receipt), flush=True)
+                deliver_receipt(connection, receipt)
     finally:
         if os.path.exists(path):
             os.unlink(path)

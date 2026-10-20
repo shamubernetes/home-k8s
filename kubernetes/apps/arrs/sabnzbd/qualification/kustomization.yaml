@@ -4,6 +4,8 @@ kind: Kustomization
 resources:
 - ./restores.yaml
 - ./native-proof.yaml
+- ./effective-restores.yaml
+- ./effective-native-proof.yaml
 configMapGenerator:
 - name: sabnzbd-k92-original-native-contract
   files:

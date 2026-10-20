@@ -34,6 +34,8 @@ class CohortTests(unittest.TestCase):
             cls.policies[app] = docs[0]
 
     def fixture(self, app, root):
+        if app == 'sabnzbd':
+            root = root.resolve()  # Do not introduce host TMPDIR symlinks into the native path fixture.
         policy = self.policies[app]
         hook = policy["spec"]["hooks"]["beforeSnapshot"][0]
         code = hook["workloadExec"]["command"][2]
@@ -53,6 +55,13 @@ class CohortTests(unittest.TestCase):
         connection.execute("INSERT INTO state VALUES (1, 'committed-wal-state')")
         connection.commit()
         self.addCleanup(connection.close)
+        if app == 'sabnzbd':
+            # SAB's database is selected by the running native API, not a fixed
+            # config-tree location. Keep other application fixtures unchanged.
+            from test_k92_sabnzbd_runtime import RuntimeAPI
+            api = RuntimeAPI(dbpath.parent)
+            self.addCleanup(api.close)
+            code = 'import os; os.environ.update(' + repr(api.environment) + ')\n' + code
         return code, settings, dbpath, connection
 
     def run_hook(self, code):

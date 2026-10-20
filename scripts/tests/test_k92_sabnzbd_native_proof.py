@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Native proof safety and real SQLite equality regression checks."""
+import hashlib
 import importlib.util
 from pathlib import Path
 import sqlite3
@@ -14,6 +15,19 @@ spec.loader.exec_module(native)
 
 
 class NativeProofTests(unittest.TestCase):
+    def test_recovered_keys_bound_to_captured_runtime_not_just_self_consistent(self):
+        misc = {'api_key': 'synthetic-api-key', 'nzb_key': 'synthetic-nzb-key'}
+        manifest = {'version': 2, 'runtimeKeySha256': {
+            field: hashlib.sha256(value.encode()).hexdigest() for field, value in misc.items()}}
+        self.assertTrue(native.runtime_key_equality(misc, manifest))
+        self.assertFalse(native.runtime_key_equality(misc, {'version': 1}))
+        for field in misc:
+            changed = dict(misc, **{field: 'different-synthetic-key'})
+            with self.assertRaises(ValueError):
+                native.runtime_key_equality(changed, manifest)
+        with self.assertRaises(ValueError):
+            native.runtime_key_equality(misc, {'version': 2})
+
     def test_database_rows_not_physical_layout(self):
         with tempfile.TemporaryDirectory() as temporary:
             paths = [Path(temporary) / name for name in ('a.db', 'b.db')]

@@ -39,15 +39,18 @@
     "arrs/sabnzbd-r2"
   ],
   "gates": {
-    "lineage": "controller-recorded same-point NAS/R2 Succeeded, native bytes not read",
-    "restores": "pending parent execution; both must reach Completed",
-    "nativeEquality": "pending verify-original.py on independently restored roots",
-    "isolatedAppBoot": "pending exact digest, deny-all networking, no production mounts, downloading/scheduling disabled in disposable copy only, version API and persisted history equality",
-    "runtimeAndKeys": "pending protected runtime/secret-reference version escrow and original config equality",
-    "availability": "pending native PID/start identity continuity and read-only API observations bracketing ordinary daily capture",
+    "lineage": "passed for retained v1 pair; preserve exact manifest identities",
+    "restores": "both current-generation Restores Completed/ReadyTrue on distinct disposable PVCs; owners/permissions/times deliberately skipped",
+    "nativeEquality": "passed for retained v1 original full trees/config/standalone SQLite and all 207 original history rows",
+    "isolatedAppBoot": "native v4 Job db100e4f-9c94-4549-bc23-fbed5ab243ea passed four 5.1.3 paused boots at merge 71533c63ae6d00cfd08f24cf0e18592f74dc9b99; this is NOT recovery of the effective 47909-row runtime database",
+    "runtimeAndKeys": "both effective keys equal archived ini, whose SHA256 equals current live ini; other declared settings and pinned-image default mapped; corrected generation native key replay still pending",
+    "effectiveDatabase": "FAILED prior capture source: fixed config-tree DB has 207 rows/schema5 versus native-open external admin DB 47909 rows/schema8; source candidate now resolves effective native admin_dir and binds config/provenance",
+    "metadataReplay": "pending separate native restore with skipOwners/skipPermissions/skipTimes false and exact retained manifest metadata comparison; do not change completed original proof resources",
+    "externalDownloads": "not covered by this PVC policy: incomplete/completed/admin/NZB archive/watch/scripts/config-backup paths; bytes and independent NAS/offsite recovery remain required, not excluded or recreatable",
+    "availability": "read-only audit saw one native process and zero Pod restarts; natural daily corrected capture plus bracketed continuity remains pending",
     "retirement": "separate parent-controlled scoped change only after every preceding gate passes"
   },
-  "captureFixRequired": false,
+  "captureFixRequired": true,
   "scheduleChangeRequired": false,
   "retainHistory": true
 }

@@ -31,7 +31,7 @@ def inspect(root):
         else:
             raise ValueError('unsafe restore member')
     manifest = json.loads((root / '.kopiur-consistent/manifest.json').read_text())
-    if (manifest.get('version') != 1 or manifest.get('database') != 'admin/history1.db'
+    if (manifest.get('version') not in (1, 2) or manifest.get('database') != 'admin/history1.db'
             or manifest.get('integrity_check') != 'ok'):
         raise ValueError('unexpected recovery contract')
     db = root / '.kopiur-consistent/database.sqlite3'
@@ -43,6 +43,16 @@ def inspect(root):
     config = root / 'sabnzbd.ini'
     if not config.is_file() or config.stat().st_size == 0:
         raise ValueError('missing application configuration')
+    if manifest['version'] == 2:
+        if digest(config) != manifest.get('configSha256'):
+            raise ValueError('runtime generation mismatch')
+        keys = manifest.get('runtimeKeySha256')
+        if not isinstance(keys, dict) or set(keys) != {'api_key', 'nzb_key'}:
+            raise ValueError('missing runtime key binding')
+        hashes = [manifest.get(field) for field in ('sourceDatabasePathSha256', 'effectiveRuntimeSha256')]
+        for value in [*hashes, *keys.values()]:
+            if not isinstance(value, str) or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+                raise ValueError('missing effective source provenance')
     # immutable is safe only for the hook's standalone, completed online copy.
     # Never use it against the source DB or its live WAL.
     uri = db.resolve().as_uri() + '?mode=ro&immutable=1'

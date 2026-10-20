@@ -1,0 +1,219 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: romm
+spec:
+  suspend: true
+  repository:
+    kind: Repository
+    name: romm-nas-smb
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  identity:
+    username: romm
+    hostname: games
+  sources:
+    - pvc:
+        name: romm
+      sourcePathOverride: /pvc/romm
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          timeout: 12m
+          continueOnFailure: false
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 660
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: romm-kopiur-capture
+              spec:
+                automountServiceAccountToken: false
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 568
+                  runAsGroup: 568
+                  seccompProfile:
+                    type: RuntimeDefault
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: romm
+                            app.kubernetes.io/controller: romm
+                        topologyKey: kubernetes.io/hostname
+                containers:
+                  - name: capture
+                    image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+                    command:
+                      - timeout
+                      - "600"
+                      - bash
+                      - /kopiur/capture.sh
+                    env:
+                      - name: PGHOST
+                        value: postgres17-rw.database.svc.cluster.local
+                      - name: PGPORT
+                        value: "5432"
+                      - name: PGDATABASES
+                        value: romm
+                      - name: CAPTURE_MODE
+                        value: single-db-stable-filetree
+                      - name: PGSSLMODE
+                        value: require
+                      - name: CONFIG_FILE
+                        value: /runtime/config.yml
+                      - name: PGUSER
+                        valueFrom:
+                          secretKeyRef:
+                            name: romm-kopiur-native
+                            key: PGUSER
+                      - name: PGPASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: romm-kopiur-native
+                            key: PGPASSWORD
+                    volumeMounts:
+                      - name: source
+                        mountPath: /config
+                      - name: helper
+                        mountPath: /kopiur
+                        readOnly: true
+                      - name: runtime
+                        mountPath: /runtime
+                        readOnly: true
+                      - name: app-config
+                        mountPath: /runtime/config.yml
+                        subPath: config.yml
+                        readOnly: true
+                      - name: postgres-helper
+                        mountPath: /kopiur-postgres
+                        readOnly: true
+                      - name: tmp
+                        mountPath: /tmp
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: romm
+                  - name: helper
+                    configMap:
+                      name: romm-kopiur-native
+                  - name: runtime
+                    secret:
+                      secretName: romm-kopiur-native
+                  - name: app-config
+                    configMap:
+                      name: romm-configmap
+                  - name: postgres-helper
+                    configMap:
+                      name: romm-kopiur-postgres
+                  - name: tmp
+                    emptyDir: {}
+  mover:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      seccompProfile:
+        type: RuntimeDefault
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+  verification:
+    quick:
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+      parallel: 2
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      capacity: 10Gi
+      storageClassName: ceph-block
+      parallel: 2
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: romm-daily
+spec:
+  policyRef:
+    name: romm
+  schedule:
+    cron: 0 21 * * *
+    timezone: America/New_York
+    jitter: 5m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: romm-nas-to-r2
+spec:
+  suspend: true
+  sourceRef:
+    kind: Repository
+    name: romm-nas-smb
+  destinationRef:
+    kind: Repository
+    name: romm-r2
+  schedule:
+    cron: 0 22 * * *
+    jitter: 5m
+  selection:
+    identities:
+      include:
+        - username: romm
+          hostname: games
+          sourcePath: /pvc/romm
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4

@@ -1,0 +1,65 @@
+{
+  "cohort": "C",
+  "application": "media/tubearchivist",
+  "status": "implemented-not-rolled-out-draft",
+  "native_bundle": "/pvc/tubearchivist/.kopiur-native/current",
+  "dependencies": [
+    {
+      "state": "Django auth/tasks database",
+      "location": "tubearchivist PVC /cache/db.sqlite3",
+      "capture": "SQLite online backup, reject DB/sidecar mutation across the complete capture",
+      "gate": "Native Django/Tube Archivist boot and authentication using original effective key material"
+    },
+    {
+      "state": "All ta_* physical Elasticsearch indices including ta_config, mappings, aliases and settings",
+      "location": "shared database/elasticsearch",
+      "capture": "One native PIT across ta_*, exact hit counts, strict shard/error/timeout checks, native bulk NDJSON and catalog escrow",
+      "gate": "Dedicated ta_* read/view_index_metadata role; bind live catalog and app ownership; native independent ES restore and application queries for each original backend"
+    },
+    {
+      "state": "Cookies, import and download state plus original application auth derivation material",
+      "location": "/cache/ytdlp, /cache/import, /cache/download; dedicated private runtime escrow projection",
+      "capture": "Stable cache-state.tar and runtime.json inside encrypted repository only",
+      "gate": "Parent provisions exact effective TA_USERNAME/TA_PASSWORD escrow, not a replacement identity; validate before activation"
+    },
+    {
+      "state": "Queue and cached transient state",
+      "location": "shared Dragonfly DB15 and ta: namespace",
+      "capture": "NOT exported by this application policy",
+      "gate": "Parent must confirm queue is reconstructible from protected Django/ES state, otherwise qualify shared native Dragonfly backup and paired original recovery"
+    },
+    {
+      "state": "Downloaded videos, subtitles and thumbnails",
+      "location": "NFS /mnt/user/Media/TubeArchivist plus regeneratable /cache/channels,videos,playlists",
+      "capture": "NFS media NOT included; cache PVC protected raw, regeneratable cache omitted from bundle",
+      "gate": "Independent original NAS/R2 media-byte protection is mandatory"
+    }
+  ],
+  "credential_item": "kopiur-tubearchivist",
+  "activation_gates": [
+    "Keep Repository, SnapshotPolicy and SnapshotReplication suspended until dedicated credentials and first-capture admission are verified",
+    "Coordinator owns maintenance, any activation, controlled online capture and exact-head rollout",
+    "Prove Job same-node affinity, RWO coexistence, no live fsGroup permission rewrites and full strict source traversal",
+    "Confirm native bundle capacity plus two retained generations, and all mover/verify/replication Job deadlines",
+    "Prove native process lifetime and functional availability across capture, no stops/freezes/restarts",
+    "Select one exact NAS manifest and its exact R2 lineage, restore each independently into isolated targets",
+    "Verify bundle checksums/COMPLETE and original application-level state equality; repository verification and Ready are insufficient",
+    "Keep every VolSync source and original repository/history intact until separate per-workload retirement acceptance"
+  ],
+  "safe_original_recovery_command": "test \"$RECOVERY_TARGET\" = isolated && test -n \"$BUNDLE\" && curl --disable --fail --silent --show-error --noproxy '*' --config /run/isolated-es-curl.conf -H 'Content-Type: application/x-ndjson' --data-binary @\"$BUNDLE/elasticsearch.ndjson\" http://127.0.0.1:19200/_bulk",
+  "recovery_command_gate": [
+    "Execute only against new isolated recovery target, never production volume/database/service",
+    "Obtain BUNDLE from exact completed Kopiur Restore target; do not synthesize or substitute a fixture",
+    "Verify every bundle checksum and terminal Restore phase Completed before running native command",
+    "For Tube Archivist precreate exact reviewed catalog with restored mappings/settings/aliases in new ES, inspect bulk response errors/items, restore Django SQL and original auth; this command alone is not acceptance",
+    "For Plex/Stash extract state archive into empty target and replay native DB copies, never raw live DB/WAL files",
+    "For RomM restore assets/resources, effective config and original auth key before isolated native boot"
+  ],
+  "unproven": [
+    "production source capture",
+    "independent same-point NAS original restore",
+    "independent matching R2 original restore",
+    "complete external NFS and shared service recovery",
+    "native pinned-image fixture execution blocked locally by Docker ENOSPC"
+  ]
+}

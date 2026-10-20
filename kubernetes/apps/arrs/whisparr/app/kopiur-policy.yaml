@@ -46,9 +46,9 @@ spec:
             app.kubernetes.io/name: whisparr
             app.kubernetes.io/controller: whisparr
         container: kopiur-postgres
-        command: [sh, /kopiur/recurring-capture.sh]
-        # 120s acknowledgement + 1200s capture + 180s hashing/escalation.
-        # Keep the independent native watchdog at its qualified absolute 1800s.
+        # Embed the helper at render time, bypassing stale subPath file mounts.
+        command: [timeout, --kill-after=30, "1200", sh, -c, ""]
+        # Native online capture plus escalation and cleanup, never a writer hold.
         timeout: 25m
         continueOnFailure: false
   mover:

@@ -34,8 +34,9 @@ spec:
             app.kubernetes.io/name: radarr
             app.kubernetes.io/controller: radarr
         container: kopiur-postgres
-        command: [sh, /kopiur/recurring-capture.sh]
-        # 120s acknowledgement + 600s capture + 30s escalation, with cleanup.
+        # Embed the helper at render time, bypassing stale subPath file mounts.
+        command: [timeout, --kill-after=30, "600", sh, -c, ""]
+        # Native online capture plus escalation and cleanup, never a writer hold.
         timeout: 13m
         continueOnFailure: false
   mover:

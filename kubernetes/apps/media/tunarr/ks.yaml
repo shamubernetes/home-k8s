@@ -25,7 +25,7 @@ spec:
       APP: *app
       NAMESPACE: *namespace
       VOLSYNC_CAPACITY: 5Gi
-      VOLSYNC_SCHEDULE: "43 * * * *"
+      VOLSYNC_SCHEDULE: "43 2 * * *"
       VOLSYNC_R2_SCHEDULE: "43 5 * * *"
       GATUS_INTERNAL_PORT: "8000"
       GATUS_PATH: /api/version

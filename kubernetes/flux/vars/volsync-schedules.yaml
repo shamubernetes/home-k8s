@@ -6,40 +6,40 @@ metadata:
   namespace: flux-system
 data:
   # ============================================================================
-  # VolSync Backup Schedules
+  # Daily backup cadence shared by Kopiur and remaining VolSync consumers
   # Staggered to prevent I/O storms on Ceph cluster
   # ============================================================================
 
-  # --- Hourly NFS Backups (spread across the hour, ~3min apart) ---
-  VOLSYNC_SCHEDULE_ADGUARD_HOME: "0 * * * *"
-  VOLSYNC_SCHEDULE_HOME_ASSISTANT: "3 * * * *"
-  VOLSYNC_SCHEDULE_SABNZBD: "6 * * * *"
-  VOLSYNC_SCHEDULE_WIZARR: "9 * * * *"
-  VOLSYNC_SCHEDULE_WHISPARR: "12 * * * *"
-  VOLSYNC_SCHEDULE_PROFILARR: "15 * * * *"
-  VOLSYNC_SCHEDULE_SEERR: "18 * * * *"
-  VOLSYNC_SCHEDULE_RADARR_3D: "21 * * * *"
-  VOLSYNC_SCHEDULE_ROMM: "24 * * * *"
-  VOLSYNC_SCHEDULE_SONARR: "27 * * * *"
-  VOLSYNC_SCHEDULE_STASH: "30 * * * *"
-  VOLSYNC_SCHEDULE_STASH_DATA: "33 * * * *"
-  VOLSYNC_SCHEDULE_BAZARR: "36 * * * *"
-  VOLSYNC_SCHEDULE_RADARR: "39 * * * *"
-  VOLSYNC_SCHEDULE_TAUTULLI: "42 * * * *"
-  VOLSYNC_SCHEDULE_CALIBRE_WEB_AUTOMATED: "45 * * * *"
-  VOLSYNC_SCHEDULE_CWA_BDL: "48 * * * *"
-  VOLSYNC_SCHEDULE_AUDIOBOOKSHELF: "51 * * * *"
-  VOLSYNC_SCHEDULE_LISTENARR: "54 * * * *"
-  VOLSYNC_SCHEDULE_GRIMMORY: "57 * * * *"
-  VOLSYNC_SCHEDULE_CHAPTARR: "59 * * * *"
-  VOLSYNC_SCHEDULE_VICTORIA_METRICS_HA: "1 * * * *"
-  VOLSYNC_SCHEDULE_VICTORIA_TRACES: "4 * * * *"
-  VOLSYNC_SCHEDULE_KOMETA: "7 * * * *"
+  # --- Daily NFS backups (01:00-01:59, preserving the minute staggering) ---
+  VOLSYNC_SCHEDULE_ADGUARD_HOME: "0 1 * * *"
+  VOLSYNC_SCHEDULE_HOME_ASSISTANT: "3 1 * * *"
+  VOLSYNC_SCHEDULE_SABNZBD: "6 1 * * *"
+  VOLSYNC_SCHEDULE_WIZARR: "9 1 * * *"
+  VOLSYNC_SCHEDULE_WHISPARR: "12 1 * * *"
+  VOLSYNC_SCHEDULE_PROFILARR: "15 1 * * *"
+  VOLSYNC_SCHEDULE_SEERR: "18 1 * * *"
+  VOLSYNC_SCHEDULE_RADARR_3D: "21 1 * * *"
+  VOLSYNC_SCHEDULE_ROMM: "24 1 * * *"
+  VOLSYNC_SCHEDULE_SONARR: "27 1 * * *"
+  VOLSYNC_SCHEDULE_STASH: "30 1 * * *"
+  VOLSYNC_SCHEDULE_STASH_DATA: "33 1 * * *"
+  VOLSYNC_SCHEDULE_BAZARR: "36 1 * * *"
+  VOLSYNC_SCHEDULE_RADARR: "39 1 * * *"
+  VOLSYNC_SCHEDULE_TAUTULLI: "42 1 * * *"
+  VOLSYNC_SCHEDULE_CALIBRE_WEB_AUTOMATED: "45 1 * * *"
+  VOLSYNC_SCHEDULE_CWA_BDL: "48 1 * * *"
+  VOLSYNC_SCHEDULE_AUDIOBOOKSHELF: "51 1 * * *"
+  VOLSYNC_SCHEDULE_LISTENARR: "54 1 * * *"
+  VOLSYNC_SCHEDULE_GRIMMORY: "57 1 * * *"
+  VOLSYNC_SCHEDULE_CHAPTARR: "59 1 * * *"
+  VOLSYNC_SCHEDULE_VICTORIA_METRICS_HA: "1 1 * * *"
+  VOLSYNC_SCHEDULE_VICTORIA_TRACES: "4 1 * * *"
+  VOLSYNC_SCHEDULE_KOMETA: "7 1 * * *"
   # Plex is large (~77GiB) - daily only at 4 AM
   VOLSYNC_SCHEDULE_PLEX: "0 4 * * *"
 
   # --- Daily R2 Backups (offsite, at 3:45-4:59 AM) ---
-  # Uses minutes :45-:59 to avoid clashing with hourly NFS backups (:00-:42)
+  # Offsite slots follow the primary capture window; Plex keeps its later slot.
   VOLSYNC_R2_SCHEDULE_ADGUARD_HOME: "45 3 * * *"
   VOLSYNC_R2_SCHEDULE_SABNZBD: "46 3 * * *"
   VOLSYNC_R2_SCHEDULE_WIZARR: "47 3 * * *"

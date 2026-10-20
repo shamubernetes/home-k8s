@@ -132,6 +132,7 @@ jobs:
 
     - name: Run validation fixtures
       run: |
+        python scripts/tests/test_backup_cadence.py
         python scripts/tests/test-cluster-maintenance.py
         python scripts/tests/test-home-assistant-renovate-guard.py
         python scripts/tests/test-renovate-ceph-guard.py

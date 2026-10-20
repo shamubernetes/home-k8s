@@ -71,8 +71,8 @@ spec:
   policyRef:
     name: grimmory
   schedule:
-    # Keep the prior slot as history, suspended until the new contract passes.
-    cron: "57 * * * *"
+    # Retain the old schedule identity, but never its rejected hourly cadence.
+    cron: "${VOLSYNC_SCHEDULE_GRIMMORY}"
     runOnCreate: false
     concurrencyPolicy: Forbid
     suspend: true

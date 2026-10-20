@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import traceback
 import urllib.parse
 import urllib.request
 
@@ -112,20 +113,28 @@ def run_native(destination, cfg, expected):
             raise ValueError('native persisted history changed')
 
 
+STAGE = "startup"
+
+
 def main():
+    global STAGE
     spec = spec_from_file_location('original', '/contract/verify-original.py')
     if spec is None or spec.loader is None:
         raise ValueError('missing original verification contract')
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
+    STAGE = 'original-pair-verification'
     pair = module.verify('/nas', '/r2')
     expected = db_digest(Path('/nas/.kopiur-consistent/database.sqlite3'))
     results = []
     for backend in ('nas', 'r2'):
         source = Path('/' + backend)
         destination = Path('/work') / backend
+        STAGE = backend + '-disposable-prepare'
         cfg = prepare(source, destination)
+        STAGE = backend + '-initial-native-boot'
         initial = run_native(destination, cfg, expected)
+        STAGE = backend + '-restart-native-boot'
         restarted = run_native(destination, cfg, expected)
         results.append({'backend': backend, 'initial': initial, 'restarted': restarted,
                         'nativeDatabaseDataSha256': expected})
@@ -139,5 +148,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except Exception:
-        sys.exit('isolated SABnzbd original native proof failed; private details withheld')
+    except Exception as error:
+        frames = traceback.extract_tb(error.__traceback__)
+        line = frames[-1].lineno if frames else 0
+        sys.exit(f'isolated SABnzbd proof rejected stage={STAGE} code={type(error).__name__} line={line}; private details withheld')

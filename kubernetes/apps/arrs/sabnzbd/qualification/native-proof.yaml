@@ -2,14 +2,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: sabnzbd-k92-original-native-proof
+  name: sabnzbd-k92-original-native-proof-v2
 spec:
   activeDeadlineSeconds: 600
   backoffLimit: 0
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: sabnzbd-k92-original-native-proof
+        app.kubernetes.io/name: sabnzbd-k92-original-native-proof-v2
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
@@ -75,11 +75,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: sabnzbd-k92-original-native-proof
+  name: sabnzbd-k92-original-native-proof-v2
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: sabnzbd-k92-original-native-proof
+      app.kubernetes.io/name: sabnzbd-k92-original-native-proof-v2
   policyTypes: [Ingress, Egress]
   ingress: []
   egress: []

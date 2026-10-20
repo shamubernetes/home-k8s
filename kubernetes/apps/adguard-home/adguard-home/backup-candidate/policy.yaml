@@ -3,7 +3,7 @@ kind: SnapshotPolicy
 metadata:
   name: adguard-home-native
 spec:
-  suspend: true
+  suspend: false
   repository:
     kind: Repository
     name: adguard-home-nas-smb

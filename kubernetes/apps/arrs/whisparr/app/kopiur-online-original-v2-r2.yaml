@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+# Actual copiedFrom NAS0b29b45c67766b496f1a561ff16892e3, R2c25e32fda71caf7dfc6438d92cb32218.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-nas-to-r2-copy-c25e32fda71caf7d-9ddc46b5
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  repository:
+    kind: Repository
+    name: whisparr-r2
+    namespace: arrs

@@ -118,6 +118,33 @@ class OriginalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check(response, 1, "table_shows", "sonarrSeriesId", lambda query: "")
 
+    def test_complete_transfer_uses_large_copy_blocks_without_changing_bytes(self):
+        import tarfile
+        import tempfile
+        from unittest import mock
+        names = ["COMPLETE", "current", "current/SHA256SUMS"]
+        names += ["current/" + n for n in ("bazarr.dump", "bazarr.toc", "application-config",
+                                            "application-state.tar", "filetree.sha256", "metadata")]
+        payload = b"x" * (2 * 1024 * 1024 + 7)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "complete.tar"
+            with tarfile.open(archive, "w") as bundle:
+                for name in names:
+                    member = tarfile.TarInfo(".kopiur-postgres/" + name)
+                    data = payload if name.endswith("application-state.tar") else b"x"
+                    if name == "current":
+                        member.type = tarfile.DIRTYPE
+                    else:
+                        member.size = len(data)
+                    bundle.addfile(member, io.BytesIO(data) if member.isfile() else None)
+            with mock.patch.object(tarfile, "copyfileobj", wraps=getattr(tarfile, "copyfileobj")) as copied:
+                M["extract_original"](archive, root / "restored")
+            self.assertTrue(copied.call_args_list)
+            self.assertTrue(all(call.args[4] == 1024 * 1024
+                                for call in copied.call_args_list))
+            self.assertEqual((root / "restored/.kopiur-postgres/current/application-state.tar").read_bytes(), payload)
+
     def test_tmpfs_transfer_has_an_exact_safe_inventory(self):
         import io
         import tarfile

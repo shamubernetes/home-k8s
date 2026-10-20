@@ -1,0 +1,28 @@
+{
+  "pvc": "server-volume-victoria-traces-0",
+  "namespace": "observability",
+  "selector": {
+    "app.kubernetes.io/instance": "victoria-traces",
+    "app.kubernetes.io/name": "vt-single"
+  },
+  "container": "vtraces",
+  "native": "disk-point.py",
+  "daily_cron": "45 21 * * *",
+  "dependencies": [
+    "Deployed v0.12.0 has no VM /snapshot/create API. Its documented two-pass rsync requires partition detach, which is forbidden here. Never call that path.",
+    "Use an immutable whole-volume consistent CSI storage point through an existing Retain RBD snapshot class, which is currently absent. No partition detach or process stop.",
+    "Source renderer labels recovery unqualified. Coordinator must prove actual recoverability of this online disk point with version-exact isolated restore and known trace/query equality before enabling daily capture.",
+    "If crash-consistent CSI does not pass native recovery, an upstream supported online stable-point mechanism is a real prerequisite. Do not claim disk snapshot readiness proves trace recovery."
+  ],
+  "cohort": "E",
+  "status": "draft-prerequisites",
+  "schedule_enabled": false,
+  "timezone": "America/New_York",
+  "run_on_create": false,
+  "shared_integration_requirements": [
+    "Provision dedicated per-app NAS and R2 Kopiur credentials in 1Password and ExternalSecrets; no existing scoped Repository was found. Do not reuse volsync-template or another app credential.",
+    "Parent must extend shared mover deadline selectors for capture, replication, verify, maintenance and discovery; retain strict read errors.",
+    "Parent must wire reviewed helpers without PodTemplate changes, qualify native NAS and exact-lineage R2 restores, then enable one daily schedule and retire VolSync separately. No legacy histories may be deleted."
+  ],
+  "production_recovery_verified": false
+}

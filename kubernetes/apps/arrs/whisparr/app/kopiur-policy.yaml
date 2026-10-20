@@ -117,8 +117,9 @@ kind: SnapshotReplication
 metadata:
   name: whisparr-nas-to-r2
   annotations:
-    # Observe native full-history progress after original NAS/R2 recovery passed.
-    kopiur.home-operations.com/run-requested: "2026-10-11T05:16:10Z"
+    # Current-point qualification only; capture remains suspended.
+    kopiur.home.arpa/original-copy-only: "true"
+    kopiur.home-operations.com/run-requested: "2026-10-20T19:31:35Z"
 spec:
   sourceRef:
     kind: Repository
@@ -128,6 +129,7 @@ spec:
     name: whisparr-r2
   schedule:
     cron: "${VOLSYNC_R2_SCHEDULE_WHISPARR}"
+    timezone: UTC
     jitter: 10m
   selection:
     identities:
@@ -135,14 +137,12 @@ spec:
       - username: whisparr
         hostname: arrs
         sourcePath: /pvc/whisparr
-    latestOnly: false
+    latestOnly: true
   migrate:
     parallel: 2
     policies: none
   pruning:
     none: {}
-  # Suspended 2026-10-12: the morning mover burst cannot finish the full-history
-  # R2 copy inside the deployed 1h Job deadline; three consecutive cycles
-  # hit DeadlineExceeded (KubeJobFailed). Scoped K8S-92 gate repair; unsuspend
-  # after the deadline repair.
-  suspend: true
+  # Qualify the accepted current point within the existing bounded mover.
+  # No old NAS or R2 point is pruned or relocated as a prerequisite.
+  suspend: false

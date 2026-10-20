@@ -207,9 +207,11 @@ class OriginalTests(unittest.TestCase):
         def wait(check):self.assertTrue(check())
         with patch.object(original.native, 'docker', side_effect=docker), \
                 patch.object(original, 'wait', side_effect=wait), \
-                patch.object(original, 'data_digest', return_value='c'*64):
+                patch.object(original, 'data_digest', return_value='c'*64), \
+                patch.object(original, 'database_backed_setup_status', return_value=True) as setup:
             self.assertEqual(original.recreate_consumer(drill,'old-app','database',
                 'nas','app-volume','tools-volume','c'*64), 'new-app')
+        setup.assert_called_once_with(drill, 'new-app', 'database')
 
     def test_consumer_recreation_rejects_data_drift(self):
         from unittest.mock import Mock, patch
@@ -219,7 +221,8 @@ class OriginalTests(unittest.TestCase):
         drill.http.return_value = {}
         with patch.object(original.native, 'docker'), \
                 patch.object(original, 'wait', side_effect=lambda check: check()), \
-                patch.object(original, 'data_digest', side_effect=['c'*64, 'd'*64]):
+                patch.object(original, 'data_digest', side_effect=['c'*64, 'd'*64]), \
+                patch.object(original, 'database_backed_setup_status', return_value=True):
             with self.assertRaisesRegex(ValueError, 'data differs'):
                 original.recreate_consumer(drill,'old-app','database','nas','app','tools','c'*64)
 
@@ -267,9 +270,11 @@ class OriginalTests(unittest.TestCase):
         from unittest.mock import Mock,patch
         drill=Mock();drill.containers=['old','db'];drill.start_consumer.return_value='new'
         with patch.object(original.native,'docker'),patch.object(original,'wait',side_effect=lambda check:check()), \
-                patch.object(original,'data_digest',return_value='c'*64):
+                patch.object(original,'data_digest',return_value='c'*64), \
+                patch.object(original,'database_backed_setup_status',return_value=True) as setup:
             original.recreate_consumer(drill,'old','db','nas','app','tools','c'*64,'books')
         drill.start_consumer.assert_called_once_with('nas','db','app','tools','books')
+        setup.assert_called_once_with(drill, 'new', 'db')
 
     def test_reader_and_boot_boundaries(self):
         source = Path(original.__file__).read_text()

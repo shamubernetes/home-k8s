@@ -173,7 +173,9 @@ def native(root, binary, yq):
                     baseline = {"history": digest(history), "statistics": digest(statistics),
                                 "profile": digest(profile), "version": status["version"],
                                 "history_sample_count": len(history.get("data", [])),
-                                "native_query_count": statistics["num_dns_queries"]}
+                                "native_query_count": statistics["num_dns_queries"],
+                                "statistics_fields": {key: digest(value) for key, value in statistics.items()},
+                                "history_fields": {key: digest(value) for key, value in history.items()}}
                 dns_probe(domain, rewrite["answer"])
             finally:
                 process.terminate()
@@ -193,9 +195,14 @@ def main():
     config = original["nas"]["conf/AdGuardHome.yaml"]
     if config["mode"] != 0o600 or config["uid"] != 0 or config["gid"] != 0:
         raise ValueError("captured private configuration metadata changed")
-    proofs = {name: native(path, Path("/native/AdGuardHome"), Path("/native/yq"))
-              for name, path in roots.items()}
+    proofs = {}
+    for name, path in roots.items():
+        proofs[name] = native(path, Path("/native/AdGuardHome"), Path("/native/yq"))
+        # Only aggregate counts and hashes, never a query, user or configuration.
+        print(json.dumps({"native_backend": name, "result": proofs[name]}), flush=True)
     if proofs["nas"] != proofs["r2"]:
+        changed = [key for key in proofs["nas"] if proofs["nas"][key] != proofs["r2"][key]]
+        print(json.dumps({"native_data_mismatch_fields": changed}), flush=True)
         raise ValueError("independent native data differs")
     if {name: roster(path) for name, path in roots.items()} != original:
         raise ValueError("read-only originals changed")

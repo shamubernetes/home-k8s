@@ -1,0 +1,75 @@
+{
+  "cohort": "C",
+  "application": "games/romm",
+  "status": "source-candidate-native-execution-pending",
+  "native_bundle": "/pvc/romm/.kopiur-postgres/current",
+  "dependencies": [
+    {
+      "state": "RomM PostgreSQL database",
+      "location": "shared CNPG PG17 database romm",
+      "capture": "App-local atomic PG17 single-db-stable-filetree capture; direct writer service with TLS",
+      "gate": "Dedicated non-elevated role restricted to romm, full schema SELECT, actual native pg_restore and equality"
+    },
+    {
+      "state": "Assets, resources and effective configuration",
+      "location": "romm PVC plus romm-configmap",
+      "capture": "Existing application-state.tar and application-config from readonly projection, fail on filetree changes",
+      "gate": "Verify exact effective mounted config and no independent mutable config omitted"
+    },
+    {
+      "state": "Original ROMM_AUTH_SECRET_KEY",
+      "location": "dedicated private escrow projection",
+      "capture": "Original auth key is copied before pg_dump into pending, projection stability verified, and key/config/archive checksummed before the only COMPLETE publication",
+      "gate": "Parent supplies original effective key via approved service, no runtime superuser Secret reuse"
+    },
+    {
+      "state": "Library ROMs, uploaded files and saves",
+      "location": "NFS /mnt/user/Media/Games/romm",
+      "capture": "NOT included by this PVC policy",
+      "gate": "Parent qualifies independent original NAS/R2 byte recovery and database/file reference equality"
+    },
+    {
+      "state": "Transient scans and cache",
+      "location": "shared Dragonfly DB12",
+      "capture": "NOT included",
+      "gate": "Confirm reconstructible from SQL/library or bind shared Dragonfly original recovery"
+    }
+  ],
+  "credential_item": "kopiur-romm",
+  "activation_gates": [
+    "Keep Repository, SnapshotPolicy and SnapshotReplication suspended until dedicated credentials and first-capture admission are verified",
+    "Coordinator owns maintenance, any activation, controlled online capture and exact-head rollout",
+    "Prove Job same-node affinity, RWO coexistence, no live fsGroup permission rewrites and full strict source traversal",
+    "Confirm native bundle capacity plus two retained generations, and all mover/verify/replication Job deadlines",
+    "Prove native process lifetime and functional availability across capture, no stops/freezes/restarts",
+    "Select one exact NAS manifest and its exact R2 lineage, restore each independently into isolated targets",
+    "Verify bundle checksums/COMPLETE and original application-level state equality; repository verification and Ready are insufficient",
+    "Keep every VolSync source and original repository/history intact until separate per-workload retirement acceptance"
+  ],
+  "safe_original_recovery_command": "test \"$RECOVERY_TARGET\" = isolated && test -n \"$BUNDLE\" && test \"$PGHOST\" = /run/isolated-postgresql && cd \"$BUNDLE\" && sha256sum -c SHA256SUMS && pg_restore --exit-on-error --no-owner --no-privileges --dbname=romm_recovery ./romm.dump",
+  "recovery_command_gate": [
+    "Execute only against new isolated recovery target, never production volume/database/service",
+    "Obtain BUNDLE from exact completed Kopiur Restore target; do not synthesize or substitute a fixture",
+    "Verify every bundle checksum and terminal Restore phase Completed before running native command",
+    "For Tube Archivist precreate exact reviewed catalog with restored mappings/settings/aliases in new ES, inspect bulk response errors/items, restore Django SQL and original auth; this command alone is not acceptance",
+    "For Plex/Stash extract state archive into empty target and replay native DB copies, never raw live DB/WAL files",
+    "For RomM restore assets/resources, effective config and original auth key before isolated native boot"
+  ],
+  "unproven": [
+    "production source capture",
+    "independent same-point NAS original restore",
+    "independent matching R2 original restore",
+    "complete external NFS and shared service recovery",
+    "native pinned-image fixture execution blocked locally by Docker ENOSPC",
+    "actual native application boot and original application-level data equality"
+  ],
+  "source_candidate_only": true,
+  "backend_identity": {
+    "item": "kopiur-romm",
+    "nas_remote": "mnemosyne:kopiur-romm",
+    "nas_config_field": "NAS_RCLONE_CONFIG",
+    "r2_bucket": "kopiur-romm",
+    "dedicated_backend_metadata_verified": true,
+    "native_credentials_verified": false
+  }
+}

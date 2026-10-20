@@ -1,0 +1,69 @@
+{
+  "cohort": "C",
+  "application": "media/plex",
+  "status": "source-candidate-native-execution-pending",
+  "native_bundle": "/pvc/plex/.kopiur-native/current",
+  "dependencies": [
+    {
+      "state": "Plex library and blobs SQLite pair",
+      "location": "plex PVC, Plug-in Support/Databases",
+      "capture": "Plex SQLite .backup, native integrity_check, reject database-directory mutation across pair",
+      "gate": "Both copies restore in the pinned Plex build, original library equality and process continuity required"
+    },
+    {
+      "state": "Preferences.xml, Metadata, Plug-ins, Scanners and remaining persistent configuration",
+      "location": "plex PVC",
+      "capture": "state.tar with stable metadata inventory and strict archive errors",
+      "gate": "Retain original auth settings privately and boot isolated Plex with external discovery disabled"
+    },
+    {
+      "state": "Media library",
+      "location": "NFS /mnt/user/Media",
+      "capture": "NOT included by this PVC policy",
+      "gate": "Parent must prove original NAS/R2 media-byte recovery or explicitly bind independent existing protection"
+    },
+    {
+      "state": "Cache and generated previews",
+      "location": "NFS .plex-cache and .plex-previews; legacy plex-cache/plex-media PVCs are not mounted",
+      "capture": "Regeneratable, omitted from native bundle",
+      "gate": "Confirm effective mount inventory, preserve legacy PVCs"
+    }
+  ],
+  "credential_item": "kopiur-plex",
+  "activation_gates": [
+    "Keep Repository, SnapshotPolicy and SnapshotReplication suspended until dedicated credentials and first-capture admission are verified",
+    "Coordinator owns maintenance, any activation, controlled online capture and exact-head rollout",
+    "Prove Job same-node affinity, RWO coexistence, no live fsGroup permission rewrites and full strict source traversal",
+    "Confirm native bundle capacity plus two retained generations, and all mover/verify/replication Job deadlines",
+    "Prove native process lifetime and functional availability across capture, no stops/freezes/restarts",
+    "Select one exact NAS manifest and its exact R2 lineage, restore each independently into isolated targets",
+    "Verify bundle checksums/COMPLETE and original application-level state equality; repository verification and Ready are insufficient",
+    "Keep every VolSync source and original repository/history intact until separate per-workload retirement acceptance"
+  ],
+  "safe_original_recovery_command": "test \"$RECOVERY_TARGET\" = isolated && test -n \"$BUNDLE\" && cd \"$BUNDLE\" && sha256sum -c SHA256SUMS && '/usr/lib/plexmediaserver/Plex SQLite' -readonly ./com.plexapp.plugins.library.db 'PRAGMA integrity_check;' && '/usr/lib/plexmediaserver/Plex SQLite' -readonly ./com.plexapp.plugins.library.blobs.db 'PRAGMA integrity_check;'",
+  "recovery_command_gate": [
+    "Execute only against new isolated recovery target, never production volume/database/service",
+    "Obtain BUNDLE from exact completed Kopiur Restore target; do not synthesize or substitute a fixture",
+    "Verify every bundle checksum and terminal Restore phase Completed before running native command",
+    "For Tube Archivist precreate exact reviewed catalog with restored mappings/settings/aliases in new ES, inspect bulk response errors/items, restore Django SQL and original auth; this command alone is not acceptance",
+    "For Plex/Stash extract state archive into empty target and replay native DB copies, never raw live DB/WAL files",
+    "For RomM restore assets/resources, effective config and original auth key before isolated native boot"
+  ],
+  "unproven": [
+    "production source capture",
+    "independent same-point NAS original restore",
+    "independent matching R2 original restore",
+    "complete external NFS and shared service recovery",
+    "native pinned-image fixture execution blocked locally by Docker ENOSPC",
+    "actual native application boot and original application-level data equality"
+  ],
+  "source_candidate_only": true,
+  "backend_identity": {
+    "item": "kopiur-plex",
+    "nas_remote": "mnemosyne:kopiur-plex",
+    "nas_config_field": "NAS_RCLONE_CONFIG",
+    "r2_bucket": "kopiur-plex",
+    "dedicated_backend_metadata_verified": true,
+    "native_credentials_verified": null
+  }
+}

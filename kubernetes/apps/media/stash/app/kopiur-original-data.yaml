@@ -2,7 +2,7 @@
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: stash-k92-native-data-original-v2
+  name: stash-k92-native-data-original-v3
 spec:
   policyRef:
     name: stash

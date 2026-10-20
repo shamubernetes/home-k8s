@@ -73,7 +73,9 @@ spec:
                     volumeMounts:
                       - name: source
                         mountPath: /config
-                        readOnly: true
+                        # mode=ro SQLite still needs WAL/SHM bookkeeping here.
+                        # No SQL write connection or application writer hold.
+                        readOnly: false
                       - name: helper
                         mountPath: /kopiur
                         readOnly: true

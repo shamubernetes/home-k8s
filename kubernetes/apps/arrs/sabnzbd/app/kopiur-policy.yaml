@@ -47,10 +47,55 @@ spec:
           import sqlite3
           import tempfile
           import time
+          import urllib.parse
+          import urllib.request
+          import sys
 
+          def rejected(kind, value, trace):
+              while trace and trace.tb_next:
+                  trace = trace.tb_next
+              line = trace.tb_lineno if trace else 0
+              print('SABnzbd capture rejected stage=online-copy class=' + kind.__name__ +
+                    ' line=' + str(line), file=sys.stderr)
+
+          sys.excepthook = rejected
           root = Path(ROOT)
-          source = root / DATABASE
-          for relative in [DATABASE, *REQUIRED_FILES]:
+
+          def effective_runtime():
+              environment = {key: value for key, value in os.environ.items()
+                             if key.startswith('SABNZBD__') or key == 'TZ'}
+              key = environment.get('SABNZBD__API_KEY')
+              if not key:
+                  raise ValueError('runtime key unavailable')
+              query = urllib.parse.urlencode({'mode': 'get_config', 'section': 'misc',
+                                              'output': 'json', 'apikey': key})
+              port = int(environment.get('SABNZBD__PORT', '80'))
+              # Never let proxy environment forward the API key off Pod loopback.
+              opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+              with opener.open('http://127.0.0.1:' + str(port) + '/api?' + query, timeout=10) as reply:
+                  misc = json.load(reply)['config']['misc']
+              if not isinstance(misc, dict) or not isinstance(misc.get('admin_dir'), str) or not misc['admin_dir']:
+                  raise ValueError('effective configuration unavailable')
+              for name, field in [('SABNZBD__API_KEY', 'api_key'), ('SABNZBD__NZB_KEY', 'nzb_key')]:
+                  if not environment.get(name) or environment[name] != misc.get(field):
+                      raise ValueError('effective runtime key mismatch')
+              return {'environment': environment, 'misc': misc}
+
+          # The retained /config/admin/history1.db is not necessarily the running
+          # database. Resolve the native API's effective admin directory instead.
+          runtime = effective_runtime()
+          admin = Path(runtime['misc']['admin_dir'])
+          if not admin.is_absolute():
+              admin = root / admin
+          source = admin / 'history1.db'
+          allowed = (root, Path('/mnt/media/Downloads/sabnzbd'))
+          if not any(source.is_relative_to(base) for base in allowed):
+              raise ValueError('effective database outside declared storage')
+          if '..' in source.parts or any(path.is_symlink() for path in [source, *source.parents]):
+              raise ValueError('unsafe effective database path')
+          if not source.is_file() or source.stat().st_size == 0:
+              raise ValueError('effective database missing')
+          for relative in REQUIRED_FILES:
               path = root / relative
               if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
                   raise RuntimeError("required application state missing or unsafe: " + relative)
@@ -58,6 +103,7 @@ spec:
                   with path.open() as handle:
                       json.load(handle)
 
+          config_digest = hashlib.sha256((root / 'sabnzbd.ini').read_bytes()).hexdigest()
           backup_dir = root / ".kopiur-consistent"
           if backup_dir.is_symlink():
               raise RuntimeError("unsafe consistent-backup directory")
@@ -81,8 +127,20 @@ spec:
               with open(temporary, "rb") as handle:
                   os.fsync(handle.fileno())
                   digest = hashlib.file_digest(handle, "sha256").hexdigest() if hasattr(hashlib, "file_digest") else hashlib.sha256(handle.read()).hexdigest()
+              if (effective_runtime() != runtime or
+                      hashlib.sha256((root / 'sabnzbd.ini').read_bytes()).hexdigest() != config_digest):
+                  raise ValueError('runtime changed across online copy')
               os.replace(temporary, backup_dir / "database.sqlite3")
-              manifest = {"version": 1, "database": DATABASE, "sha256": digest, "integrity_check": "ok"}
+              # DATABASE is the logical recovery target, not the native source.
+              # Keys already live in the complete config tree. Do not duplicate
+              # them into a second credential archive.
+              manifest = {"version": 2, "database": DATABASE, "sha256": digest, "integrity_check": "ok",
+                          "configSha256": config_digest,
+                          "runtimeKeySha256": {field: hashlib.sha256(runtime['environment'][name].encode()).hexdigest()
+                                               for name, field in [('SABNZBD__API_KEY', 'api_key'),
+                                                                   ('SABNZBD__NZB_KEY', 'nzb_key')]},
+                          "sourceDatabasePathSha256": hashlib.sha256(str(source).encode()).hexdigest(),
+                          "effectiveRuntimeSha256": hashlib.sha256(json.dumps(runtime, sort_keys=True).encode()).hexdigest()}
               fd, manifest_tmp = tempfile.mkstemp(prefix="manifest-", suffix=".tmp", dir=backup_dir)
               try:
                   with os.fdopen(fd, "w") as handle:

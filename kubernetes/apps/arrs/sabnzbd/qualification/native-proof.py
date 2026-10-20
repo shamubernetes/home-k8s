@@ -65,6 +65,20 @@ def native_database_equality(original, restored):
             'addedEmptyNativeTables': migration}
 
 
+def runtime_key_equality(misc, manifest):
+    """Bind recovered config keys to the effective captured runtime, without values in receipts."""
+    if manifest['version'] == 1:
+        return False  # Retained v1 keys require independent runtime evidence.
+    expected = manifest.get('runtimeKeySha256')
+    if not isinstance(expected, dict) or set(expected) != {'api_key', 'nzb_key'}:
+        raise ValueError('missing captured runtime key binding')
+    for field, checksum in expected.items():
+        value = misc.get(field)
+        if not isinstance(value, str) or not value or hashlib.sha256(value.encode()).hexdigest() != checksum:
+            raise ValueError('recovered key differs from captured runtime')
+    return True
+
+
 def prepare(original, destination):
     from configobj import ConfigObj
     if destination.exists():
@@ -84,6 +98,7 @@ def prepare(original, destination):
                  'complete_dir': str(destination / 'complete'),
                  'admin_dir': str(admin), 'log_dir': str(destination / 'logs'),
                  'nzb_backup_dir': str(destination / 'nzb-backup'),
+                 'backup_dir': str(destination / 'backups'),
                  'dirscan_dir': '', 'email_endjob': '0', 'email_full': '0',
                  'check_new_rel': '0', 'auto_browser': '0',
                  'history_retention': '', 'history_retention_option': 'all'})
@@ -103,8 +118,11 @@ def run_native(destination, cfg, expected):
     command = [sys.executable, '/app/SABnzbd.py', '--config-file',
                str(destination / 'sabnzbd.ini'), '--server', '127.0.0.1:8080',
                '--browser', '0', '--pause', '--disable-file-log', '--console']
+    environment = {'PATH': os.environ['PATH'], 'HOME': '/work', 'TMPDIR': '/tmp'}
+    manifest = json.loads((destination / '.kopiur-consistent/manifest.json').read_text())
+    keys_bound = runtime_key_equality(cfg['misc'], manifest)
     proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                            env={'PATH': os.environ['PATH'], 'HOME': '/work', 'TMPDIR': '/tmp'})
+                            env=environment)
     try:
         deadline = time.monotonic() + 90
         version = None
@@ -130,7 +148,16 @@ def run_native(destination, cfg, expected):
             queue = json.load(reply)['queue']
         if queue.get('paused') is not True:
             raise ValueError('disposable downloader not paused')
-        result = {'version': version, 'paused': True, 'apiHealthy': True}
+        query = urllib.parse.urlencode({'mode': 'get_config', 'section': 'misc', 'output': 'json',
+                                        'apikey': cfg['misc']['api_key']})
+        with urllib.request.urlopen('http://127.0.0.1:8080/api?' + query, timeout=3) as reply:
+            effective = json.load(reply)['config']['misc']
+        if any(not cfg['misc'].get(field) or effective.get(field) != cfg['misc'][field]
+               for field in ('api_key', 'nzb_key')):
+            raise ValueError('recovered runtime keys changed')
+        result = {'version': version, 'paused': True, 'apiHealthy': True,
+                  'runtimeKeysEqual': True, 'capturedRuntimeKeysBound': keys_bound,
+                  'runtimeBundleVersion': manifest['version']}
         return result
     finally:
         if proc.poll() is None:

@@ -3,7 +3,7 @@
   "apiVersion": "batch/v1",
   "kind": "Job",
   "metadata": {
-    "name": "sabnzbd-k92-effective-native-v5"
+    "name": "sabnzbd-k92-effective-native-v6"
   },
   "spec": {
     "activeDeadlineSeconds": 600,
@@ -11,7 +11,7 @@
     "template": {
       "metadata": {
         "labels": {
-          "app.kubernetes.io/name": "sabnzbd-k92-effective-native-v5"
+          "app.kubernetes.io/name": "sabnzbd-k92-effective-native-v6"
         }
       },
       "spec": {
@@ -95,14 +95,14 @@
           {
             "name": "nas",
             "persistentVolumeClaim": {
-              "claimName": "sabnzbd-k92-effective-v2-nas",
+              "claimName": "sabnzbd-k92-effective-v3-nas",
               "readOnly": true
             }
           },
           {
             "name": "r2",
             "persistentVolumeClaim": {
-              "claimName": "sabnzbd-k92-effective-v2-r2",
+              "claimName": "sabnzbd-k92-effective-v3-r2",
               "readOnly": true
             }
           },
@@ -129,12 +129,12 @@
   "apiVersion": "networking.k8s.io/v1",
   "kind": "NetworkPolicy",
   "metadata": {
-    "name": "sabnzbd-k92-effective-native-v5"
+    "name": "sabnzbd-k92-effective-native-v6"
   },
   "spec": {
     "podSelector": {
       "matchLabels": {
-        "app.kubernetes.io/name": "sabnzbd-k92-effective-native-v5"
+        "app.kubernetes.io/name": "sabnzbd-k92-effective-native-v6"
       }
     },
     "policyTypes": [

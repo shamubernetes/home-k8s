@@ -22,7 +22,7 @@
   "apiVersion": "kopiur.home-operations.com/v1alpha1",
   "kind": "Restore",
   "metadata": {
-    "name": "sabnzbd-k92-effective-v2-nas",
+    "name": "sabnzbd-k92-effective-v3-nas",
     "namespace": "arrs",
     "labels": {
       "home-operations.com/qualification": "k92-cohort-d"
@@ -43,7 +43,7 @@
     },
     "target": {
       "pvc": {
-        "name": "sabnzbd-k92-effective-v2-nas",
+        "name": "sabnzbd-k92-effective-v3-nas",
         "capacity": "3Gi",
         "storageClassName": "ceph-block",
         "accessModes": [
@@ -75,11 +75,14 @@
     },
     "mover": {
       "podSecurityContext": {
-        "runAsUser": 568,
-        "runAsGroup": 568,
-        "runAsNonRoot": true
+        "runAsUser": 0,
+        "runAsGroup": 0,
+        "runAsNonRoot": false
       },
       "securityContext": {
+        "runAsUser": 0,
+        "runAsGroup": 0,
+        "runAsNonRoot": false,
         "allowPrivilegeEscalation": false,
         "capabilities": {
           "drop": [
@@ -109,7 +112,7 @@
   "apiVersion": "kopiur.home-operations.com/v1alpha1",
   "kind": "Restore",
   "metadata": {
-    "name": "sabnzbd-k92-effective-v2-r2",
+    "name": "sabnzbd-k92-effective-v3-r2",
     "namespace": "arrs",
     "labels": {
       "home-operations.com/qualification": "k92-cohort-d"
@@ -130,7 +133,7 @@
     },
     "target": {
       "pvc": {
-        "name": "sabnzbd-k92-effective-v2-r2",
+        "name": "sabnzbd-k92-effective-v3-r2",
         "capacity": "3Gi",
         "storageClassName": "ceph-block",
         "accessModes": [
@@ -162,11 +165,14 @@
     },
     "mover": {
       "podSecurityContext": {
-        "runAsUser": 568,
-        "runAsGroup": 568,
-        "runAsNonRoot": true
+        "runAsUser": 0,
+        "runAsGroup": 0,
+        "runAsNonRoot": false
       },
       "securityContext": {
+        "runAsUser": 0,
+        "runAsGroup": 0,
+        "runAsNonRoot": false,
         "allowPrivilegeEscalation": false,
         "capabilities": {
           "drop": [

@@ -17,7 +17,7 @@ import urllib.request
 from importlib.util import module_from_spec, spec_from_file_location
 
 
-def db_digest(path):
+def db_digest(path, summary=False):
     uri = path.resolve().as_uri() + '?mode=ro'
     with contextlib.closing(sqlite3.connect(uri, uri=True)) as connection:
         if connection.execute('PRAGMA integrity_check').fetchall() != [('ok',)]:
@@ -30,6 +30,11 @@ def db_digest(path):
             encoded = [json.dumps(list(row), default=lambda v: {'bytes': v.hex()},
                                   separators=(',', ':'), sort_keys=True) for row in rows]
             inventory.append([table, sorted(encoded)])
+        if summary:
+            return [{'table': name if name in ('history', 'rss', 'sqlite_sequence') else 'other',
+                     'rows': len(rows),
+                     'dataSha256': hashlib.sha256(json.dumps(rows).encode()).hexdigest()}
+                    for name, rows in inventory]
         return hashlib.sha256(json.dumps(inventory).encode()).hexdigest()
 
 
@@ -53,9 +58,9 @@ def prepare(original, destination):
                  'admin_dir': str(admin), 'log_dir': str(destination / 'logs'),
                  'nzb_backup_dir': str(destination / 'nzb-backup'),
                  'dirscan_dir': '', 'email_endjob': '0', 'email_full': '0',
-                 'check_new_rel': '0', 'auto_browser': '0'})
+                 'check_new_rel': '0', 'auto_browser': '0',
+                 'history_retention': '', 'history_retention_option': 'all'})
     cfg['servers'] = {}
-    cfg['rss'] = {}
     misc['schedlines'] = []
     misc['script_dir'] = ''
     for section in ('ncenter', 'acenter', 'ntfosd', 'prowl', 'pushover',
@@ -109,7 +114,11 @@ def run_native(destination, cfg, expected):
             proc.wait(timeout=5)
         # Application is now stopped only in this isolated disposable recovery test.
         database = destination / 'admin/history1.db'
-        if db_digest(database) != expected:
+        if sys.exc_info()[0] is None and db_digest(database) != expected:
+            original = Path('/nas/.kopiur-consistent/database.sqlite3')
+            print(json.dumps({'nativeDatabaseEqualityRejected': True,
+                              'before': db_digest(original, summary=True),
+                              'after': db_digest(database, summary=True)}), flush=True)
             raise ValueError('native persisted history changed')
 
 

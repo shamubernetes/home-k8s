@@ -63,6 +63,9 @@ class NativeProofTests(unittest.TestCase):
         self.assertIn("'--pause'", source)
         self.assertIn("'retirementAllowed': False", source)
         self.assertIn("module.verify('/nas', '/r2') != pair", source)
+        self.assertIn("'history_retention_option': 'all'", source)
+        self.assertNotIn("cfg['rss'] = {}", source)
+        self.assertIn('sys.exc_info()[0] is None', source)
 
 
 if __name__ == '__main__':

@@ -9,3 +9,4 @@ resources:
   - schedule.yaml
   - replication.yaml
   - original.yaml
+  - original-v2.yaml

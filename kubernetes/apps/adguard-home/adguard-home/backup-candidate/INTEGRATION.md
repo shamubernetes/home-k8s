@@ -6,8 +6,11 @@ original. The policy, daily schedule and replication stay suspended until origin
 recovery acceptance. Production PodTemplates and incumbent VolSync stay unchanged.
 Backend ExternalSecrets use the existing dedicated item. Require actual ESO sync,
 repository readiness and the retained original before claiming capture success.
-Root movers match the observed native owner UID 0. Do not set fsGroup, because
-that would change staging-clone metadata. Both repository defaults use UTC.
+Root movers match the observed native owner UID 0. The controller adds fsGroup
+65532 even when omitted. The CREATE-only AdGuard admission rule removes that
+specific artificial group before mounting the clone. Verify the actual Job has
+no fsGroup or fsGroupChangePolicy. Retain v1 as an unqualified-metadata artifact;
+v2 requests the corrected point. Both repository defaults use UTC.
 The explicit daily slots are 22:00 and 22:20 UTC, initially suspended. Enable them
 only after original acceptance and observe their natural same-point execution.
 

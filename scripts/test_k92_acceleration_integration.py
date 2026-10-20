@@ -164,7 +164,7 @@ class AdditionalNativeImages(unittest.TestCase):
             code = "import json,sys,urllib.request; q=urllib.request.Request('http://127.0.0.1:9999/graphql',data=json.dumps({'query':sys.argv[1]}).encode(),headers={'Content-Type':'application/json'}); print(json.dumps(json.load(urllib.request.urlopen(q,timeout=5))))"
             result = json.loads(command(['docker', 'exec', name, 'python3', '-c', code, query], timeout=10))
             if result.get('errors'):
-                raise AssertionError('native Stash GraphQL failed')
+                raise AssertionError('isolated native Stash GraphQL failed: ' + json.dumps(result['errors']))
             return result['data']
         def start(name, paths):
             mounts = []
@@ -185,13 +185,22 @@ class AdditionalNativeImages(unittest.TestCase):
                      '-v', str(appdir('stash')) + ':/helpers:ro', image], timeout=600)
             for attempt in range(120):
                 try:
-                    graphql(name, '{ systemStatus { status } }')
-                    return
+                    status = graphql(name, '{ systemStatus { status } }')['systemStatus']['status']
+                    if status == 'SETUP':
+                        graphql(name, 'mutation { setup(input:{configLocation:"/config/config.yml",'
+                                'stashes:[],databaseFile:"/config/stash-go.sqlite",'
+                                'generatedLocation:"/tmp/generated",cacheLocation:"/tmp/cache",'
+                                'storeBlobsInDatabase:false,blobsLocation:"/blobs"}) }')
+                    elif status == 'OK':
+                        return
+                    else:
+                        raise AssertionError('isolated Stash readiness: ' + str(status))
                 except (AssertionError, KeyError, json.JSONDecodeError):
                     require_fixture_running(name)
                     if attempt == 119:
                         raise
                     time.sleep(1)
+            raise AssertionError('isolated Stash never reached operational readiness')
         with tempfile.TemporaryDirectory(prefix=prefix, dir=os.environ.get('TMPDIR')) as temporary:
             root = Path(temporary)
             # Native Go requires the fixture owner's UID in the passwd database.

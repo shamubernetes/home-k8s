@@ -228,10 +228,16 @@ def validate_setup_response(status, body):
 def database_backed_setup_status(drill, app, database):
     # The pinned SetupController reads UserRepository.count(). This original
     # has zero users; never create an owner or forge a token to qualify it.
+    # Prove the restored catalog has no file-backed references. The complete
+    # physical Books/bookdrop archive is still required and checked separately;
+    # this does not qualify other applications or global shared-writer atomicity.
     command = ('MYSQL_PWD="$MYSQL_PASSWORD" mariadb --protocol=tcp -h127.0.0.1 '
-               '-u"$MYSQL_USER" -N -B grimmory -e "SELECT COUNT(*) FROM users"')
-    users = native.docker('exec', database, 's6-setuidgid', 'abc', 'bash', '-c', command)
-    if users.strip() != '0':
+               '-u"$MYSQL_USER" -N -B grimmory -e "SELECT '
+               '(SELECT COUNT(*) FROM users),(SELECT COUNT(*) FROM book),'
+               '(SELECT COUNT(*) FROM book_file),(SELECT COUNT(*) FROM bookdrop_file),'
+               '(SELECT COUNT(*) FROM library_path)"')
+    counts = native.docker('exec', database, 's6-setuidgid', 'abc', 'bash', '-c', command)
+    if counts.split() != ['0'] * 5:
         raise ValueError('original requires a different database-backed API contract')
     program = ('import json,urllib.request\n' + inspect.getsource(validate_setup_response) +
                "\nwith urllib.request.urlopen('http://127.0.0.1:6060/api/v1/setup/status', timeout=5) as reply:\n" +
@@ -331,6 +337,8 @@ def exercise(identity, payload, deadline):
             receipt.update(backend=kind,snapshot_id=point['id'],start_time=point['startTime'],end_time=point['endTime'],
                 original_data_sha256=original['data_sha256'],original_runtime_config_equal=True,
                 native_health=True,database_backed_setup_status_equal=True,restored_users=0,
+                restored_books=0,restored_book_files=0,restored_bookdrop_files=0,restored_library_paths=0,
+                grimmory_native_books_recovery_qualified=('books_sha256' in original),
                 native_container_restart_equal=True,networked_reader_removed_before_boot=True,
                 native_database_network='none',production_repository_readonly=True)
             results.append(receipt)

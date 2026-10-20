@@ -37,14 +37,18 @@ class DatabaseApiTests(unittest.TestCase):
                     result = subprocess.run([sys.executable, '-c', setup + program],
                                             capture_output=True, text=True, timeout=10, check=True)
                     return result.stdout
-            with mock.patch.object(original.native, 'docker', return_value='0\n'):
+            with mock.patch.object(original.native, 'docker', return_value='0\t0\t0\t0\t0\n'):
                 self.assertIs(original.database_backed_setup_status(Drill(), 'app', 'database'), expected)
 
     def test_nonempty_original_requires_its_own_api_contract(self):
         drill = mock.Mock()
-        with mock.patch.object(original.native, 'docker', return_value='1\n'):
-            with self.assertRaises(ValueError):
-                original.database_backed_setup_status(drill, 'app', 'database')
+        for index in range(5):
+            counts = ['0'] * 5
+            counts[index] = '1'
+            with self.subTest(nonempty_count=index), mock.patch.object(
+                    original.native, 'docker', return_value='\t'.join(counts) + '\n'):
+                with self.assertRaises(ValueError):
+                    original.database_backed_setup_status(drill, 'app', 'database')
         drill.python.assert_not_called()
 
 

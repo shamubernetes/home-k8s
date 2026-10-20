@@ -12,6 +12,17 @@ HERE = Path(__file__).resolve().parent
 
 
 class BooksTests(unittest.TestCase):
+    def test_helpers_hot_update_without_application_reload(self):
+        contract = (HERE / 'kustomization.yaml').read_text().split('configMapGenerator:\n', 1)[1]
+        self.assertIn('name: grimmory-backup-contract', contract)
+        self.assertIn('disableNameSuffixHash: true', contract)
+        self.assertIn('reloader.stakater.com/ignore: "true"', contract)
+        self.assertIn('kustomize.toolkit.fluxcd.io/substitute: disabled', contract)
+        mount = (HERE / 'helmrelease.yaml').read_text().split('      backup-contract:\n', 1)[1].split('      config:\n', 1)[0]
+        self.assertIn('name: grimmory-backup-contract', mount)
+        self.assertIn('path: /backup-contract', mount)
+        self.assertNotIn('subPath:', mount)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR'))
         self.root = Path(self.temp.name)

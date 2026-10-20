@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "pvc": "arrs/sabnzbd",
+  "sourcePVCUID": "624725f0-e8c9-4e35-81db-749eee46468e",
+  "retirementAllowed": false,
+  "automaticActivation": false,
+  "sourcePair": {
+    "nasResource": "arrs/sabnzbd-daily-20261020061415",
+    "nasResourceUid": "a84f89ac-9a76-4390-9d7e-b1e409b8d730",
+    "nasSnapshotID": "fbbf9fc553ebd3e58a44fe299e736bd3",
+    "r2Resource": "arrs/sabnzbd-nas-to-r2-copy-e30320386852f742-c7d69f71",
+    "r2ResourceUid": "8e708853-c138-40a7-b945-e11fa437934d",
+    "r2SnapshotID": "e30320386852f742001e7876efa69be6",
+    "identityEqual": true,
+    "sourceTiming": {
+      "durationSeconds": 0,
+      "endTime": "2026-10-20T06:14:50.777314162+00:00",
+      "startTime": "2026-10-20T06:14:50.413300899+00:00"
+    },
+    "hookReceipt": {
+      "preCompletedAt": "2026-10-20T06:14:17.844335219+00:00"
+    },
+    "nasStaging": {
+      "copyMethod": "Snapshot",
+      "pvcName": "sabnzbd-daily-20261020061415-src",
+      "ready": true,
+      "stagingTimeoutSeconds": 600,
+      "storageClassName": "ceph-block",
+      "volumeSnapshotName": "sabnzbd-daily-20261020061415-snap"
+    },
+    "sourceCreatedAt": "2026-10-20T06:14:15Z",
+    "replicaCatalogCreatedAt": "2026-10-20T12:17:24Z",
+    "nasPhase": "Succeeded",
+    "r2Phase": "Succeeded"
+  },
+  "runtimeImage": "ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104",
+  "legacyResourcesToRetain": [
+    "arrs/sabnzbd",
+    "arrs/sabnzbd-r2"
+  ],
+  "gates": {
+    "lineage": "controller-recorded same-point NAS/R2 Succeeded, native bytes not read",
+    "restores": "pending parent execution; both must reach Completed",
+    "nativeEquality": "pending verify-original.py on independently restored roots",
+    "isolatedAppBoot": "pending exact digest, deny-all networking, no production mounts, downloading/scheduling disabled in disposable copy only, version API and persisted history equality",
+    "runtimeAndKeys": "pending protected runtime/secret-reference version escrow and original config equality",
+    "availability": "pending native PID/start identity continuity and read-only API observations bracketing ordinary daily capture",
+    "retirement": "separate parent-controlled scoped change only after every preceding gate passes"
+  },
+  "captureFixRequired": false,
+  "scheduleChangeRequired": false,
+  "retainHistory": true
+}

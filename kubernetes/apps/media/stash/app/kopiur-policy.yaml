@@ -148,7 +148,10 @@ spec:
       parallel: 2
     successExpr: stats.errors == 0 && stats.files > 0
     verifyFilesPercent: 100
-  groupBy: VolumeGroupSnapshot
+  # Raw PVC copies are independent. Original native recovery MUST use the
+  # self-contained bundle on stash-data, never pair the two live SQLite trees.
+  # The live cluster has no VolumeGroupSnapshotClass, so do not imply CSI atomicity.
+  groupBy: None
 
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1

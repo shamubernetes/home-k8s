@@ -13,8 +13,8 @@
     {
       "state": "File-backed blobs and metadata",
       "location": "stash-data PVC",
-      "capture": "stable state.tar in stash-data native bundle; raw stash and stash-data VGS source coverage",
-      "gate": "Prove VGS support and same-point source identity for all PVCs, full private-file traversal as UID1000"
+      "capture": "stable state.tar in self-contained stash-data native bundle; raw stash and stash-data CSI copies are explicitly independent",
+      "gate": "Original recovery must use the exact stash-data native bundle and matching NAS/R2 lineage, not combine independently captured raw SQLite trees; full private-file traversal as UID1000"
     },
     {
       "state": "Plugins and scrapers",

@@ -65,6 +65,8 @@ class Contracts(unittest.TestCase):
                 self.assertNotIn('fsGroup', job['template']['spec']['securityContext'])
                 expected = ['stash', 'stash-data'] if app == 'stash' else [app]
                 self.assertEqual([s['pvc']['name'] for s in policy['sources']], expected)
+                if app == 'stash':
+                    self.assertEqual(policy['groupBy'], 'None')
                 for d in docs:
                     if d.get('kind') in ['Repository', 'SnapshotReplication']:
                         self.assertTrue(d['spec']['suspend'])

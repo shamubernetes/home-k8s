@@ -5,9 +5,8 @@ metadata:
   annotations:
     kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/38035330767
 spec:
-  # Disable outage-causing writer holds until non-disruptive capture is qualified.
-  # Retain original recovery points and the independent VolSync backup path.
-  suspend: true
+  # Actual current original NAS/R2 native recovery passed without writer holds.
+  suspend: false
   repository:
     kind: Repository
     name: whisparr-nas-smb
@@ -103,9 +102,9 @@ spec:
   policyRef:
     name: whisparr
   schedule:
-    suspend: true
-    # Reactivation requires non-disruptive capture and explicitly approved cadence.
-    cron: "${VOLSYNC_SCHEDULE_WHISPARR}"
+    suspend: false
+    timezone: UTC
+    cron: "50 23 * * *"
     jitter: 10m
     runOnCreate: true
     concurrencyPolicy: Forbid
@@ -117,8 +116,6 @@ kind: SnapshotReplication
 metadata:
   name: whisparr-nas-to-r2
   annotations:
-    # Current-point qualification only; capture remains suspended.
-    kopiur.home.arpa/original-copy-only: "true"
     kopiur.home-operations.com/run-requested: "2026-10-20T19:31:35Z"
 spec:
   sourceRef:
@@ -128,7 +125,7 @@ spec:
     kind: Repository
     name: whisparr-r2
   schedule:
-    cron: "${VOLSYNC_R2_SCHEDULE_WHISPARR}"
+    cron: "30 0 * * *"
     timezone: UTC
     jitter: 10m
   selection:

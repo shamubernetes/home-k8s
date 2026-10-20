@@ -8,20 +8,22 @@ invented 1Password item. No credentials were read or provisioned in this work.
 
 ## Shared prerequisites
 
-Provision independent encryption/backend identities for this application before
-registration, using the approved 1Password and External Secrets operator path.
-The candidate intentionally references required Secret contracts only:
+Dedicated backend identities were provisioned and verified by the independent
+identity lane. This candidate consumes only its nonsecret metadata, uses the exact
+private NAS share and dedicated R2 bucket, and includes narrowly templated backend
+ExternalSecrets. It remains unregistered and ESO sync is not claimed. Native
+API/DB credentials and shared admission remain separate activation gates:
 
 | Namespace | Secret | Required keys | Scope |
 |---|---|---|---|
-| security | pocket-id-kopiur-nas | KOPIA_PASSWORD, KOPIA_RCLONE_CONFIG | Unique NAS Kopia password and SMB identity restricted to Backups/kopiur/pocket-id-smb |
-| security | pocket-id-kopiur-r2 | KOPIA_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY | Independent R2 Kopia password and identity restricted to storage-backup/kopiur/pocket-id/r2/ |
+| security | pocket-id-kopiur-nas | KOPIA_PASSWORD, KOPIA_RCLONE_CONFIG | Unique NAS Kopia password and SMB identity restricted to private share kopiur-pocket-id |
+| security | pocket-id-kopiur-r2 | KOPIA_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY | Independent R2 Kopia password and identity restricted to kopiur-pocket-id/kopiur/pocket-id/r2/ |
 
 Generate passwords independently, keep original decryption keys in durable
 escrow, and verify item/field metadata and resulting Secret key presence without
 printing values. No `volsync-template` extraction, guest SMB identity or shared
-API token is assumed. Secret absence cannot be solved by deploying a broken
-ExternalSecret. Dedicated identity provisioning is a real unresolved prerequisite.
+API token is assumed. `backend-identity.json` records verified item/field metadata
+from the provisioning handoff. No missing native API or DB-role Secret is invented.
 The R2 endpoint follows the current Kopiur peer backend host, without a URL
 scheme. Dedicated identity permissions still require real backend qualification.
 

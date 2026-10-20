@@ -54,9 +54,24 @@ class CandidateTests(unittest.TestCase):
             for name in ["ks.yaml", "app/kustomization.yaml"]:
                 self.assertNotIn("backup-candidate", (ROOT / "kubernetes/apps" / rel / name).read_text())
 
-    def test_no_speculative_externalsecrets(self):
-        for rows in self.rendered.values():
-            self.assertNotIn("ExternalSecret", [x["kind"] for x in rows])
+    def test_only_verified_backend_externalsecrets(self):
+        for app, rows in self.rendered.items():
+            proof = json.loads((candidate(app) / "backend-identity.json").read_text())
+            self.assertEqual(proof["status"], "provisioned-and-verified")
+            self.assertIs(proof["secret_values_accessed_by_this_lane"], False)
+            secrets = [x for x in rows if x["kind"] == "ExternalSecret"]
+            self.assertEqual({x["spec"]["target"]["name"] for x in secrets}, set(proof["projection"]))
+            for secret in secrets:
+                spec = secret["spec"]
+                self.assertEqual(spec["secretStoreRef"], {"kind": "ClusterSecretStore", "name": "op-secret-store"})
+                self.assertEqual(spec["target"]["creationPolicy"], "Owner")
+                self.assertEqual(spec["target"]["template"]["mergePolicy"], "Replace")
+                self.assertEqual(spec["dataFrom"], [{"extract": {"key": proof["item_title"]}}])
+                expected = {key: "{{ ." + field + " }}" for key, field in proof["projection"][spec["target"]["name"]].items()}
+                self.assertEqual(spec["target"]["template"]["data"], expected)
+            repos = [x for x in rows if x["kind"] == "Repository"]
+            self.assertEqual(next(x for x in repos if "rclone" in x["spec"]["backend"])["spec"]["backend"]["rclone"]["remotePath"], proof["nas_remotePath"])
+            self.assertEqual(next(x for x in repos if "s3" in x["spec"]["backend"])["spec"]["backend"]["s3"]["bucket"], proof["r2_bucket"])
 
     def test_daily_capture_not_hourly(self):
         for app in APPS:

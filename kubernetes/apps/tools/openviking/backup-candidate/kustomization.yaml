@@ -5,6 +5,7 @@ namespace: tools
 resources:
   - policy.yaml
   - repositories.yaml
+  - externalsecret.yaml
   - schedule.yaml
   - replication.yaml
 configMapGenerator:

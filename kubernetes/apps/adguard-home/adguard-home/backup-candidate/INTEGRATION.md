@@ -2,7 +2,8 @@
 
 This is an unregistered source-only candidate. Do not register the root while its
 prerequisites remain false. Existing PodTemplates and VolSync resources are
-unchanged. No ExternalSecret has been invented or registered.
+unchanged. Backend ExternalSecrets now reference verified provisioned fields only.
+They are source manifests in this unregistered root, not proven live ESO sync.
 
 `integration-prerequisites.json` is the exact nonsecret Secret/key and minimal
 shared deadline delta contract. Consume only verified provider/item/field metadata

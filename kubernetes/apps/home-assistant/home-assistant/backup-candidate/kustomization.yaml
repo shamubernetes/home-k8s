@@ -5,6 +5,7 @@ namespace: home-assistant
 resources:
   - policy.yaml
   - repositories.yaml
+  - externalsecret.yaml
   - capture-pvc.yaml
   - schedule.yaml
   - replication.yaml

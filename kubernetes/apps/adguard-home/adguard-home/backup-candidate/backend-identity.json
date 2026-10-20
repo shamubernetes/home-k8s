@@ -1,0 +1,25 @@
+{
+  "application": "adguard-home",
+  "status": "provisioned-and-verified",
+  "metadata_source": "acceleration-provision-handoff.json",
+  "item_title": "kopiur-adguard-home",
+  "item_uuid": "27iq7yogiziuosfogkjk6y6ld4",
+  "vault": "Kubernetes",
+  "nas_remotePath": "mnemosyne:kopiur-adguard-home",
+  "r2_bucket": "kopiur-adguard-home",
+  "r2_prefix": "kopiur/adguard-home/r2/",
+  "r2_endpoint": "0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com",
+  "projection": {
+    "adguard-home-kopiur-nas": {
+      "KOPIA_PASSWORD": "NAS_KOPIA_PASSWORD",
+      "KOPIA_RCLONE_CONFIG": "NAS_RCLONE_CONFIG"
+    },
+    "adguard-home-kopiur-r2": {
+      "KOPIA_PASSWORD": "R2_KOPIA_PASSWORD",
+      "AWS_ACCESS_KEY_ID": "R2_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY": "R2_SECRET_ACCESS_KEY"
+    }
+  },
+  "secret_values_accessed_by_this_lane": false,
+  "cluster_external_secret_sync_verified": false
+}

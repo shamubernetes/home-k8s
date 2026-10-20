@@ -2,6 +2,8 @@
   "application": "home-assistant",
   "namespace": "home-assistant",
   "registered": false,
+  "backend_identities_provisioned_and_verified": true,
+  "cluster_secret_sync_verified": false,
   "provisioning_metadata_source": "acceleration-provision-handoff.json",
   "required_secrets": {
     "home-assistant-kopiur-nas": [

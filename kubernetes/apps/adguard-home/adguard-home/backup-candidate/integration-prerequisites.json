@@ -2,6 +2,8 @@
   "application": "adguard-home",
   "namespace": "adguard-home",
   "registered": false,
+  "backend_identities_provisioned_and_verified": true,
+  "cluster_secret_sync_verified": false,
   "provisioning_metadata_source": "acceleration-provision-handoff.json",
   "required_secrets": {
     "adguard-home-kopiur-nas": [

@@ -5,7 +5,7 @@ metadata:
 spec:
   backend:
     rclone:
-      remotePath: mnemosyne:Backups/kopiur/pocket-id-smb
+      remotePath: mnemosyne:kopiur-pocket-id
       configSecretRef:
         name: pocket-id-kopiur-nas
       startupTimeout: 2m
@@ -47,7 +47,7 @@ metadata:
 spec:
   backend:
     s3:
-      bucket: storage-backup
+      bucket: kopiur-pocket-id
       prefix: kopiur/pocket-id/r2/
       endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
       region: auto

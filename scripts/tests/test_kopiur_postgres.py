@@ -128,7 +128,16 @@ class ManifestTests(unittest.TestCase):
         if staged_r2:
             self.assertIn(app, ("radarr", "radarr-3d", "sonarr", "whisparr"))
             self.assertIsNotNone(evidence)
-        self.assertIs(replication["spec"]["suspend"], suspended or staged_r2)
+        copy_only = replication.get("metadata", {}).get("annotations", {}).get(
+            "kopiur.home.arpa/original-copy-only") == "true"
+        if copy_only:
+            # Offsite qualification copies a retained original, never activates capture.
+            self.assertTrue(qualification_suspended)
+            self.assertTrue(policy["spec"]["suspend"])
+            self.assertTrue(schedule["spec"]["schedule"]["suspend"])
+            self.assertFalse(replication["spec"]["suspend"])
+        else:
+            self.assertIs(replication["spec"]["suspend"], suspended or staged_r2)
         self.assertEqual(policy["spec"]["defaultDeletionPolicy"], "Retain")
         self.assertEqual(replication["spec"]["migrate"]["policies"], "none")
 
@@ -246,6 +255,17 @@ class ManifestTests(unittest.TestCase):
                                            qualification_suspended=True)
         policy["spec"]["suspend"] = True
         policy["metadata"]["annotations"]["kopiur.home.arpa/original-native-recovery"] = "synthetic"
+        with self.assertRaises(AssertionError):
+            self.assert_capture_activation("radarr", policy, schedule, replication,
+                                           qualification_suspended=True)
+
+    def test_original_offsite_qualification_never_activates_the_producer(self):
+        policy, schedule, replication = capture_resources(REPO / "kubernetes/apps/arrs/radarr/app")
+        replication.setdefault("metadata", {}).setdefault("annotations", {})["kopiur.home.arpa/original-copy-only"] = "true"
+        replication["spec"]["suspend"] = False
+        self.assert_capture_activation("radarr", policy, schedule, replication,
+                                       qualification_suspended=True)
+        schedule["spec"]["schedule"]["suspend"] = False
         with self.assertRaises(AssertionError):
             self.assert_capture_activation("radarr", policy, schedule, replication,
                                            qualification_suspended=True)

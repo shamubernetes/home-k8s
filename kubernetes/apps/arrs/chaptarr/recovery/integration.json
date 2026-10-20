@@ -1,0 +1,28 @@
+{
+  "pvc": "chaptarr",
+  "namespace": "arrs",
+  "selector": {
+    "app.kubernetes.io/name": "chaptarr",
+    "app.kubernetes.io/controller": "chaptarr"
+  },
+  "container": "app",
+  "native": "online-postgres.py",
+  "daily_cron": "0 21 * * *",
+  "dependencies": [
+    "Existing chaptarr-secret CHAPTARR__POSTGRES__USER/PASSWORD and host references, export through dedicated least-privilege pg17 exporter; never use INIT_POSTGRES_SUPER_PASS.",
+    "chaptarr_main, chaptarr_log, chaptarr_cache are PostgreSQL databases on shared CNPG postgres17. PVC-only backup misses them. Native API backup is not assumed to include PostgreSQL.",
+    "Pair config.xml and all required /config state with three pg_dump archives, record per-DB skew and independently pg_restore into isolated PostgreSQL 17. pg_restore --list is not restore proof.",
+    "NFS /media, /audiobooks, /ebooks and /downloads remain independent NAS dependencies; no writer holds."
+  ],
+  "cohort": "E",
+  "status": "draft-prerequisites",
+  "schedule_enabled": false,
+  "timezone": "America/New_York",
+  "run_on_create": false,
+  "shared_integration_requirements": [
+    "Provision dedicated per-app NAS and R2 Kopiur credentials in 1Password and ExternalSecrets; no existing scoped Repository was found. Do not reuse volsync-template or another app credential.",
+    "Parent must extend shared mover deadline selectors for capture, replication, verify, maintenance and discovery; retain strict read errors.",
+    "Parent must wire reviewed helpers without PodTemplate changes, qualify native NAS and exact-lineage R2 restores, then enable one daily schedule and retire VolSync separately. No legacy histories may be deleted."
+  ],
+  "production_recovery_verified": false
+}

@@ -19,6 +19,7 @@ on:
         options:
         - tunarr
         - deadlines
+        - media-native
         # One native fixture per dispatch, never seven sequential apps in 45 minutes.
         - postgres-bazarr
         - postgres-bazarr-original
@@ -43,11 +44,11 @@ on:
         - sonarr-books-mount
         - whisparr-books-mount
       nas_snapshot:
-        description: "Exact original NAS manifest, required only for Whisparr original proof"
+        description: "Exact original NAS manifest, optional for Bazarr/Radarr/Radarr-3D, required for Whisparr original proof"
         type: string
         default: ""
       r2_snapshot:
-        description: "Exact copied R2 manifest, required only for Whisparr original proof"
+        description: "Exact copied R2 manifest, optional for Bazarr/Radarr/Radarr-3D, required for Whisparr original proof"
         type: string
         default: ""
 
@@ -79,14 +80,14 @@ jobs:
         R2_SNAPSHOT: ${{ inputs.r2_snapshot }}
       run: |
         set -euo pipefail
-        if [[ $SUITE == postgres-whisparr-original ]]; then
+        if [[ $SUITE == postgres-whisparr-original || ( ( $SUITE == postgres-bazarr-original || $SUITE == postgres-radarr-original || $SUITE == postgres-radarr-3d-original ) && ( -n $NAS_SNAPSHOT || -n $R2_SNAPSHOT ) ) ]]; then
           [[ $NAS_SNAPSHOT =~ ^[0-9a-f]{32}$ && $R2_SNAPSHOT =~ ^[0-9a-f]{32}$ && $NAS_SNAPSHOT != "$R2_SNAPSHOT" ]] || exit 1
         else
           [[ -z $NAS_SNAPSHOT && -z $R2_SNAPSHOT ]] || exit 1
         fi
         [[ $COMMIT =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected an exact lowercase commit SHA' >&2; exit 1; }
         case "$SUITE" in
-          tunarr|deadlines) ;;
+          tunarr|deadlines|media-native) ;;
           postgres-bazarr|postgres-bazarr-original|postgres-radarr|postgres-radarr-original|postgres-radarr-3d|postgres-radarr-3d-original|postgres-sonarr|postgres-sonarr-original|postgres-whisparr|postgres-whisparr-original) ;;
           mixed-grimmory|mixed-tubearchivist|grimmory-fence) ;;
           identities|radarr-transport) ;;
@@ -107,7 +108,7 @@ jobs:
         # mise-action writes its mise_toml input in the checkout, not working_directory.
         # Keep the trusted config beside the tools installation instead.
         case "$SUITE" in
-          tunarr)
+          tunarr|media-native)
             cat > "$RUNNER_TEMP/recovery-tools/mise.toml" <<'TOML'
         [tools]
         python = "3.14.7"
@@ -187,7 +188,7 @@ jobs:
         set -euo pipefail
         [[ $(python3 --version) == 'Python 3.14.7' ]]
         case "$SUITE" in
-          tunarr) tools=(python3 node yq kubectl helm jq flux) ;;
+          tunarr|media-native) tools=(python3 node yq kubectl helm jq flux) ;;
           deadlines) tools=(python3 yq kyverno) ;;
           postgres-*) tools=(python3 yq kustomize kubectl helm jq flux) ;;
           mixed-*|grimmory-fence|identities|radarr-transport|cwa-bdl-startup|chaptarr-startup|bazarr-books-mount|listenarr-books-mount|radarr-books-mount|sonarr-books-mount|whisparr-books-mount) tools=(python3) ;;
@@ -408,3 +409,13 @@ jobs:
       run: |
         python3 -m unittest discover -s scripts/tests -p test_kopiur_bazarr_books_mount.py -v
         python3 scripts/kopiur-bazarr-books-mount-native.py --app whisparr
+
+    - name: Cohort C exact-image native fixture integration
+      if: ${{ inputs.suite == 'media-native' }}
+      env:
+        K92_MEDIA_NATIVE_DOCKER: "1"
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: |
+        docker info >/dev/null
+        python3 scripts/test_k92_acceleration_integration.py

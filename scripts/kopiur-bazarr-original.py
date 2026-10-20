@@ -95,12 +95,15 @@ def extract_original(archive, destination, *, database="bazarr", capacity=2 * 10
 
 
 def originals_for(app):
-    if app == "whisparr":
-        originals = {kind: os.environ.get("ORIGINAL_" + kind.upper() + "_SNAPSHOT", "") for kind in ("nas", "r2")}
+    explicit = {kind: os.environ.get("ORIGINAL_" + kind.upper() + "_SNAPSHOT", "") for kind in ("nas", "r2")}
+    if app == "whisparr" or any(explicit.values()):
+        if app not in ("bazarr", "radarr", "radarr-3d", "whisparr"):
+            raise ValueError("explicit original points unsupported for this application")
+        originals = explicit
         if not all(re.fullmatch(r"[0-9a-f]{32}", value) for value in originals.values()):
-            raise ValueError("missing exact original Whisparr snapshot IDs")
+            raise ValueError("missing exact original snapshot IDs")
         if originals["nas"] == originals["r2"]:
-            raise ValueError("original Whisparr backends must have distinct manifests")
+            raise ValueError("original backends must have distinct manifests")
         return originals
     return {"bazarr": ORIGINALS, "radarr": RADARR_ORIGINALS, "radarr-3d": RADARR_3D_ORIGINALS,
             "sonarr": SONARR_ORIGINALS}[app]

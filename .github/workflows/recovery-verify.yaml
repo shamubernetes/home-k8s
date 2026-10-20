@@ -156,7 +156,8 @@ jobs:
         repository: shamubernetes/home-k8s
         ref: ${{ inputs.commit }}
         persist-credentials: false
-        fetch-depth: 1
+        # Media contracts compare the immutable pre-migration PodTemplate baseline.
+        fetch-depth: ${{ inputs.suite == 'media-native' && '0' || '1' }}
 
     - name: Verify checkout identity
       env:

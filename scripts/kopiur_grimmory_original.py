@@ -5,6 +5,7 @@ Production bytes remain in ARC-owned tmpfs. Reuse the existing private identity
 channel and native Docker mechanics; never mutate or purge either repository.
 """
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -218,6 +219,26 @@ assert hashlib.sha256(json.dumps(sorted(rows)).encode()).hexdigest()==sys.argv[1
         native.PYTHON, 'python3', '-c', program, expected)
 
 
+def validate_setup_response(status, body):
+    return (type(status) is int and status == 200 and isinstance(body, dict) and
+            type(body.get('status')) is int and body['status'] == 200 and
+            body.get('data') is False)
+
+
+def database_backed_setup_status(drill, app, database):
+    # The pinned SetupController reads UserRepository.count(). This original
+    # has zero users; never create an owner or forge a token to qualify it.
+    command = ('MYSQL_PWD="$MYSQL_PASSWORD" mariadb --protocol=tcp -h127.0.0.1 '
+               '-u"$MYSQL_USER" -N -B grimmory -e "SELECT COUNT(*) FROM users"')
+    users = native.docker('exec', database, 's6-setuidgid', 'abc', 'bash', '-c', command)
+    if users.strip() != '0':
+        raise ValueError('original requires a different database-backed API contract')
+    program = ('import json,urllib.request\n' + inspect.getsource(validate_setup_response) +
+               "\nwith urllib.request.urlopen('http://127.0.0.1:6060/api/v1/setup/status', timeout=5) as reply:\n" +
+               '    print(json.dumps(validate_setup_response(reply.status, json.load(reply))))\n')
+    return json.loads(drill.python(app, program)) is True
+
+
 def recreate_consumer(drill, app, database, kind, appdata, tools, expected, books=None):
     # Docker replaces a restarted container's network namespace. Remove the
     # disposable consumer first and join the new namespace when recreating it.
@@ -226,6 +247,7 @@ def recreate_consumer(drill, app, database, kind, appdata, tools, expected, book
     wait(lambda:data_digest(database)==expected)
     app=drill.start_consumer(kind,database,appdata,tools,books)
     wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
+    wait(lambda:database_backed_setup_status(drill, app, database))
     if data_digest(database)!=expected:raise ValueError('data differs after consumer recreation')
     return app
 
@@ -289,9 +311,11 @@ def exercise(identity, payload, deadline):
             if data_digest(database)!=original['data_sha256']:raise ValueError('original native data digest differs')
             app=drill.start_consumer(kind,database,appdata,tools,books)
             wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
+            wait(lambda:database_backed_setup_status(drill, app, database))
             if books:verify_consumer_books(app,receipt['books_tree_sha256'])
             native.docker('restart',app)
             wait(lambda:drill.http(app,'/api/v1/healthcheck',port=6060) is not None)
+            wait(lambda:database_backed_setup_status(drill, app, database))
             if books:verify_consumer_books(app,receipt['books_tree_sha256'])
             if data_digest(database)!=original['data_sha256']:raise ValueError('data differs after native app restart')
             app=recreate_consumer(drill,app,database,kind,appdata,tools,original['data_sha256'],books)
@@ -306,7 +330,8 @@ def exercise(identity, payload, deadline):
                 verify_network(info, database_id, database=c==database)
             receipt.update(backend=kind,snapshot_id=point['id'],start_time=point['startTime'],end_time=point['endTime'],
                 original_data_sha256=original['data_sha256'],original_runtime_config_equal=True,
-                native_health=True,native_container_restart_equal=True,networked_reader_removed_before_boot=True,
+                native_health=True,database_backed_setup_status_equal=True,restored_users=0,
+                native_container_restart_equal=True,networked_reader_removed_before_boot=True,
                 native_database_network='none',production_repository_readonly=True)
             results.append(receipt)
             for c in (app,database):native.docker('rm','-f',c);drill.containers.remove(c)

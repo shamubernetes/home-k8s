@@ -1,0 +1,35 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: home-assistant-native-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: home-assistant-nas-smb
+  destinationRef:
+    kind: Repository
+    name: home-assistant-r2
+  schedule:
+    cron: 10 20 * * *
+    jitter: 10m
+  selection:
+    identities:
+      include:
+        - username: home-assistant
+          hostname: home-assistant
+          sourcePath: /pvc/home-assistant
+        - username: home-assistant
+          hostname: home-assistant
+          sourcePath: /pvc/home-assistant-git
+        - username: home-assistant
+          hostname: home-assistant
+          sourcePath: /pvc/home-assistant-kopiur-capture
+    latestOnly: false
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    retention:
+      keepDaily: 7
+      keepWeekly: 4
+  suspend: false

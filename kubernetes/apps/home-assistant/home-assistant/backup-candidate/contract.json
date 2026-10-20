@@ -1,0 +1,21 @@
+{
+  "application": "home-assistant",
+  "namespace": "home-assistant",
+  "status": "unregistered-draft-candidate",
+  "source_pvcs": [
+    "home-assistant",
+    "home-assistant-git",
+    "home-assistant-kopiur-capture"
+  ],
+  "credentials_provisioned": false,
+  "dedicated_credentials_required": [
+    "home-assistant-kopiur-nas",
+    "home-assistant-kopiur-r2",
+    "home-assistant-kopiur-postgres",
+    "home-assistant-kopiur-api"
+  ],
+  "original_nas_restore_qualified": false,
+  "original_r2_restore_qualified": false,
+  "native_application_boot_qualified": false,
+  "global_consistency_qualified": false
+}

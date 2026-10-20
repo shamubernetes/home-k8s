@@ -1,0 +1,14 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: pocket-id-native-daily
+spec:
+  policyRef:
+    name: pocket-id-native
+  schedule:
+    cron: 20 18 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+  failedJobsHistoryLimit: 3

@@ -1,0 +1,252 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: pocket-id-native
+spec:
+  repository:
+    kind: Repository
+    name: pocket-id-nas-smb
+  identity:
+    username: pocket-id
+    hostname: security
+  sources:
+    - pvc:
+        name: pocket-id-kopiur-capture
+      sourcePathOverride: /pvc/pocket-id-kopiur-capture
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  mover:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+  verification:
+    quick:
+      schedule:
+        cron: 20 21 * * *
+        jitter: 10m
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 20 22 * * 0
+        jitter: 10m
+      capacity: 2Gi
+      storageClassName: ceph-block
+    successExpr: snapshot != null && stats.errors == 0
+    verifyFilesPercent: 100
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 600
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  backup.home.arpa/cohort: k92-system
+                  backup.home.arpa/app: pocket-id
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                securityContext:
+                  runAsUser: 568
+                  runAsGroup: 568
+                  fsGroup: 568
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                initContainers:
+                  - name: objects
+                    image: public.ecr.aws/aws-cli/aws-cli:2.31.18@sha256:d3f5b7078a71fd7cb488719571c50abd252f4320cdf375601f2d6d40caf97b55
+                    command:
+                      - sh
+                      - -ec
+                      - |
+                        set -eu
+                        umask 077
+                        rm -rf /capture/pending
+                        mkdir -m 700 /capture/pending
+                        aws --endpoint-url http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80 s3api list-objects-v2 --bucket "$BUCKET" --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' > /capture/pending/objects-before.json 2>/dev/null
+                        aws --endpoint-url http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80 s3 sync "s3://$BUCKET" /capture/pending/rgw --only-show-errors 2>/dev/null
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: capture
+                        mountPath: /capture
+                      - name: tmp
+                        mountPath: /tmp
+                    env:
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-bucket
+                            key: AWS_ACCESS_KEY_ID
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-bucket
+                            key: AWS_SECRET_ACCESS_KEY
+                      - name: AWS_DEFAULT_REGION
+                        value: us-east-1
+                      - name: AWS_EC2_METADATA_DISABLED
+                        value: "true"
+                      - name: AWS_PAGER
+                        value: ""
+                      - name: BUCKET
+                        valueFrom:
+                          configMapKeyRef:
+                            name: pocket-id-bucket
+                            key: BUCKET_NAME
+                  - name: database
+                    image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+                    command:
+                      - sh
+                      - -ec
+                      - |
+                        set -eu
+                        umask 077
+                        mkdir -p /capture/pending
+                        pg_dump --format=custom --no-owner --no-privileges --file=/capture/pending/database.dump 2>/dev/null || { printf 'online database export failed\n' >&2; exit 1; }
+                        pg_restore --list /capture/pending/database.dump >/dev/null 2>&1
+                        test -s /identity/ENCRYPTION_KEY
+                        cp /identity/ENCRYPTION_KEY /capture/pending/ENCRYPTION_KEY
+                        chmod 600 /capture/pending/ENCRYPTION_KEY
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: capture
+                        mountPath: /capture
+                      - name: tmp
+                        mountPath: /tmp
+                      - name: identity
+                        mountPath: /identity
+                        readOnly: true
+                    env:
+                      - name: PGHOST
+                        value: postgres17-rw.database.svc.cluster.local
+                      - name: PGPORT
+                        value: "5432"
+                      - name: PGSSLMODE
+                        value: require
+                      - name: PGCONNECT_TIMEOUT
+                        value: "15"
+                      - name: PGUSER
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-kopiur-postgres
+                            key: PGUSER
+                      - name: PGPASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-kopiur-postgres
+                            key: PGPASSWORD
+                      - name: PGDATABASE
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-kopiur-postgres
+                            key: PGDATABASE
+                containers:
+                  - name: objects-validate
+                    image: public.ecr.aws/aws-cli/aws-cli:2.31.18@sha256:d3f5b7078a71fd7cb488719571c50abd252f4320cdf375601f2d6d40caf97b55
+                    command:
+                      - sh
+                      - -ec
+                      - |
+                        set -eu
+                        umask 077
+                        aws --endpoint-url http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80 s3api list-objects-v2 --bucket "$BUCKET" --query 'Contents[].{Key:Key,ETag:ETag,Size:Size}' > /capture/pending/objects-after.json 2>/dev/null
+                        cmp /capture/pending/objects-before.json /capture/pending/objects-after.json >/dev/null || { printf 'bucket changed across database export; capture rejected\n' >&2; exit 1; }
+                        printf '%s\n' '{"format":"pocket-id-native-v1","cross_store_atomicity_qualified":false}' > /capture/pending/capture.json
+                        rm -rf /capture/previous
+                        if test -d /capture/current; then mv /capture/current /capture/previous; fi
+                        mv /capture/pending /capture/current
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: capture
+                        mountPath: /capture
+                      - name: tmp
+                        mountPath: /tmp
+                    env:
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-bucket
+                            key: AWS_ACCESS_KEY_ID
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: pocket-id-bucket
+                            key: AWS_SECRET_ACCESS_KEY
+                      - name: AWS_DEFAULT_REGION
+                        value: us-east-1
+                      - name: AWS_EC2_METADATA_DISABLED
+                        value: "true"
+                      - name: AWS_PAGER
+                        value: ""
+                      - name: BUCKET
+                        valueFrom:
+                          configMapKeyRef:
+                            name: pocket-id-bucket
+                            key: BUCKET_NAME
+                volumes:
+                  - name: capture
+                    persistentVolumeClaim:
+                      claimName: pocket-id-kopiur-capture
+                  - name: tmp
+                    emptyDir: {}
+                  - name: identity
+                    secret:
+                      secretName: pocket-id-secret
+                      items:
+                        - key: ENCRYPTION_KEY
+                          path: ENCRYPTION_KEY
+          timeout: 12m
+          continueOnFailure: false

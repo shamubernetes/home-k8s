@@ -5,7 +5,7 @@ resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
 - ./externalsecret-oidc.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy-api.yaml
 - ./httproute-envoy-browser.yaml
@@ -23,13 +23,6 @@ components:
 - ../../../../components/kopiur-postgres
 patches:
 - path: ./kopiur-postgres-patch.yaml
-- target:
-    kind: PersistentVolumeClaim
-  patch: |-
-    - op: add
-      path: /metadata/annotations
-      value:
-        kustomize.toolkit.fluxcd.io/prune: disabled
 configMapGenerator:
 - name: bazarr-scripts
   files:

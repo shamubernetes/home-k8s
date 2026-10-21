@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kometa-k92-sqlite-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        recovery.kopiur.home.arpa/role: kometa-sql-original
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: docker.io/kometateam/kometa:v2.5.3@sha256:48c3cb318ec984213587f221e8e762c5ad2dbd0e6966efc7bba0a5868a6c5758
+          command:
+            - python3
+            - /kopiur/original-sqlite.py
+          env:
+            - name: RECOVERY_TARGET
+              value: isolated
+            - name: TARGET_APP
+              value: kometa
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: ORIGINAL_POINTS
+              value: '{"nas": "51d4ff1d2fac7327e4f401bcb02626b1", "r2": "7c57cd09e9687c65c469d98a080d7b6a"}'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+            limits:
+              memory: 1Gi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - name: nas
+              mountPath: /original/nas
+              readOnly: true
+            - name: r2
+              mountPath: /original/r2
+              readOnly: true
+            - name: helper
+              mountPath: /kopiur
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: kometa-k92-existing-nas
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: kometa-k92-existing-r2
+            readOnly: true
+        - name: helper
+          configMap:
+            name: kometa-k92-sqlite-original
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kometa-k92-sqlite-originals
+spec:
+  podSelector:
+    matchLabels:
+      recovery.kopiur.home.arpa/role: kometa-sql-original
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

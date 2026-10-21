@@ -25,9 +25,11 @@ spec:
     podStartupDeadlineSeconds: 300
   mover:
     podSecurityContext:
-      runAsGroup: 0
-      runAsNonRoot: false
-      runAsUser: 0
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
     resources:
       limits:
         memory: 1Gi
@@ -35,17 +37,15 @@ spec:
         cpu: 100m
         memory: 256Mi
     securityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
       allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
       capabilities:
-        add:
-          - CHOWN
-          - FOWNER
-          - DAC_OVERRIDE
         drop:
           - ALL
-      runAsGroup: 0
-      runAsNonRoot: false
-      runAsUser: 0
+        add: []
   options:
     enableFileDeletion: false
     ignoreErrors: false
@@ -103,9 +103,11 @@ spec:
     podStartupDeadlineSeconds: 300
   mover:
     podSecurityContext:
-      runAsGroup: 0
-      runAsNonRoot: false
-      runAsUser: 0
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
     resources:
       limits:
         memory: 1Gi
@@ -113,17 +115,15 @@ spec:
         cpu: 100m
         memory: 256Mi
     securityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
       allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
       capabilities:
-        add:
-          - CHOWN
-          - FOWNER
-          - DAC_OVERRIDE
         drop:
           - ALL
-      runAsGroup: 0
-      runAsNonRoot: false
-      runAsUser: 0
+        add: []
   options:
     enableFileDeletion: false
     ignoreErrors: false

@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: changedetection-k92-native-originals
+  name: changedetection-k92-native-originals-v2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 600
@@ -33,6 +33,8 @@ spec:
               value: '{"nas":"1bf1bdd97f0f6b0f03fd81434cc07301","r2":"c641590c2d584bd1a2f5b6640049785b"}'
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
+            - name: PYTHONPATH
+              value: /app
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

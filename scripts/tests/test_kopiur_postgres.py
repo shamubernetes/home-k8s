@@ -210,6 +210,11 @@ class ManifestTests(unittest.TestCase):
     def test_whisparr_original_receipt_never_admits_another_application(self):
         directory = REPO / "kubernetes/apps/arrs/whisparr/app"
         policy, schedule, replication = capture_resources(directory)
+        # Exercise the synthetic suspended state independently of the live
+        # Whisparr activation, which has its own accepted production receipt.
+        policy["spec"]["suspend"] = True
+        schedule["spec"]["schedule"]["suspend"] = True
+        replication["spec"]["suspend"] = True
         self.assert_capture_activation("whisparr", policy, schedule, replication, qualification_suspended=True)
         policy["metadata"]["annotations"] = {
             "kopiur.home.arpa/original-native-recovery": "https://github.com/shamubernetes/home-k8s/actions/runs/38035330767"}

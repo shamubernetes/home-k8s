@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: victoria-traces-native
+spec:
+  copyMethod: Direct
+  defaultDeletionPolicy: Retain
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  groupBy: VolumeGroupSnapshot
+  identity:
+    username: victoria-traces
+    hostname: observability
+  mover:
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+  repository:
+    kind: Repository
+    name: victoria-traces-nas-smb
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  sources:
+    - pvc:
+        name: vt-k92-retained-point
+      readOnly: true
+      sourcePathOverride: /pvc/victoria-traces-native
+  suspend: true
+  verification:
+    deep:
+      capacity: 30Gi
+      parallel: 2
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      storageClassName: ceph-block
+    quick:
+      maxErrors: 0
+      parallel: 2
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: victoria-traces-native-k92-original
+spec:
+  policyRef:
+    name: victoria-traces-native
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: victoria-traces-native-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T04:57:52.937451+00:00"
+spec:
+  destinationRef:
+    kind: Repository
+    name: victoria-traces-r2
+  migrate:
+    parallel: 8
+    policies: none
+  schedule:
+    cron: 20 4 * * *
+    timezone: UTC
+    jitter: 0s
+  selection:
+    identities:
+      include:
+        - username: victoria-traces
+          hostname: observability
+          sourcePath: /pvc/victoria-traces-native
+    latestOnly: true
+  sourceRef:
+    kind: Repository
+    name: victoria-traces-nas-smb
+  suspend: false

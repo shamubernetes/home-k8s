@@ -162,8 +162,8 @@ spec:
   policyRef:
     name: stash
   schedule:
-    cron: 0 19 * * *
-    timezone: America/New_York
+    cron: 20 0 * * *
+    timezone: UTC
     jitter: 5m
     runOnCreate: false
     concurrencyPolicy: Forbid
@@ -187,7 +187,8 @@ spec:
     kind: Repository
     name: stash-r2
   schedule:
-    cron: 0 20 * * *
+    cron: 0 1 * * *
+    timezone: UTC
     jitter: 5m
   selection:
     identities:

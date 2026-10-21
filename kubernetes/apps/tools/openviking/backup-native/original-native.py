@@ -48,6 +48,19 @@ def pack(path):
     return records, vectors, files
 
 
+def canonical_records(values):
+    # The native store materializes the optional, unset md5 as an empty string.
+    # Normalize only that representation; preserve every populated scalar.
+    result = {}
+    for row in values:
+        record = dict(row)
+        record['scalars'] = dict(row.get('scalars', {}))
+        if record['scalars'].get('md5') == '':
+            record['scalars'].pop('md5')
+        result[row['record_id']] = record
+    return result
+
+
 async def native(side):
     from openviking.service.core import OpenVikingService
     from openviking.server.identity import RequestContext, Role
@@ -82,14 +95,14 @@ async def native(side):
             await service.pack.backup_ovpack(str(exported), ctx=context, include_vectors=True)
             after = pack(exported)
             # Order is not part of the public package contract; records are identified by ID.
-            records = lambda values: {row['record_id']: row for row in values}
-            assert records(before[0]) == records(after[0])
+            assert canonical_records(before[0]) == canonical_records(after[0])
             assert before[1] == after[1] and before[2] == after[2]
         finally:
             await service.close()
     print(json.dumps({'native_original_passed': side, 'index_records': capture['index_records'],
                       'dense_vectors': capture['dense_vectors'], 'vector_mode': 'require',
-                      'all_original_records_vectors_files_equal': True}), flush=True)
+                      'all_original_record_content_vectors_files_equal': True,
+                      'empty_optional_md5_equivalent_to_absent': True}), flush=True)
 
 
 def main(side):

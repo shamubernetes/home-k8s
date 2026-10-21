@@ -56,7 +56,9 @@ def main():
             assert re.fullmatch(r'[0-9]{14}-[A-F0-9]+', name)
             source = ROOT / 'snapshots' / name
             files, size = link_native(source, pending)
-            assert files > 0 and (pending / 'data').is_dir() and (pending / 'indexdb').is_dir()
+            # Observed v1.154 native API layout is data + metadata, not the
+            # older top-level indexdb layout. Native original recovery passed.
+            assert files > 0 and (pending / 'data').is_dir() and (pending / 'metadata').exists()
             manifest = {'format': 1, 'application': 'victoria-metrics',
                         'contract': 'online-native-snapshot-same-volume-csi',
                         'native_snapshot': name, 'files': files, 'bytes': size,
@@ -92,6 +94,10 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
+        import traceback
+        lines = [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
+                 if frame.filename == __file__]
         print(json.dumps({'native_capture_failed': type(error).__name__,
+                          'source_lines': lines,
                           'private_details_withheld': True}), flush=True)
         raise SystemExit(1) from None

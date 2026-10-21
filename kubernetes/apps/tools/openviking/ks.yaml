@@ -13,7 +13,6 @@ spec:
   - name: external-secrets-secret-store
   - name: rook-ceph-cluster
   - name: snapshot-controller
-  - name: volsync
   path: ./kubernetes/apps/tools/openviking/app
   prune: true
   sourceRef:

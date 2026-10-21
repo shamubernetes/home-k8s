@@ -14,7 +14,6 @@ spec:
   - name: snapshot-controller
   - name: rook-ceph-cluster
   - name: external-secrets-secret-store
-  - name: volsync
   path: ./kubernetes/apps/media/audiobookshelf/app
   prune: true
   sourceRef:

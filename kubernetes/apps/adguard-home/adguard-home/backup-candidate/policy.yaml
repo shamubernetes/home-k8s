@@ -45,7 +45,8 @@ spec:
       schedule:
         cron: 0 22 * * 0
         jitter: 10m
-      capacity: 2Gi
+      # Restore the logical source tree, not only compressed repository bytes.
+      capacity: 10Gi
       storageClassName: ceph-block
     successExpr: stats.files > 0 && stats.errors == 0
     verifyFilesPercent: 100

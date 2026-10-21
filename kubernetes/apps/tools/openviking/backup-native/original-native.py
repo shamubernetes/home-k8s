@@ -123,7 +123,32 @@ if __name__ == '__main__':
             main(sys.argv[1].removeprefix('verify-'))
     except Exception as error:
         import traceback
+        import re
+        detail = str(error)
+        # Initialization has not imported user content. Still scrub every config
+        # and OAuth scalar before emitting a bounded diagnostic to the Job log.
+        def scrub(value):
+            nonlocal_detail = []
+            if isinstance(value, dict):
+                for child in value.values():
+                    nonlocal_detail.extend(scrub(child))
+            elif isinstance(value, list):
+                for child in value:
+                    nonlocal_detail.extend(scrub(child))
+            elif isinstance(value, str) and len(value) >= 6:
+                nonlocal_detail.append(value)
+            return nonlocal_detail
+        for source in [Path('/work/' + sys.argv[1] + '.conf'),
+                       Path('/original/' + sys.argv[1] + '-0/kopiur-native/current/codex_auth.json')]:
+            if source.is_file():
+                for value in sorted(scrub(json.loads(source.read_text())), key=len, reverse=True):
+                    detail = detail.replace(value, '[private]')
+        detail = re.sub(r'https?://\S+|[A-Za-z0-9_+/=-]{24,}', '[redacted]', detail)
+        frames = traceback.extract_tb(error.__traceback__)
         print(json.dumps({'native_original_failed': type(error).__name__,
-                          'lines': [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
+                          'diagnostic': detail[:600],
+                          'frames': [[Path(frame.filename).name, frame.name, frame.lineno]
+                                     for frame in frames[-8:]],
+                          'lines': [frame.lineno for frame in frames
                                     if frame.filename == __file__], 'private_details_withheld': True}), flush=True)
         raise SystemExit(1) from None

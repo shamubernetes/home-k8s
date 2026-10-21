@@ -107,7 +107,8 @@ def verify():
                 require(response.status == 200)
                 channels = json.load(response)
             require(isinstance(channels, list))
-            ids = sorted(c['uuid'] for c in channels)
+            # Native API exposes SQL channel.uuid as the response's id field.
+            ids = sorted(c['id'] for c in channels)
             require(ids == expected['channel_ids'])
             receipt = {'app': 'tunarr-frozen-rollback', 'backend': os.environ['BACKEND'],
                        'snapshot_id': os.environ['ORIGINAL_POINT'], 'native_http_status': 200,

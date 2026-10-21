@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: atproto-pds-k92-online-original
+spec:
+  policyRef:
+    name: atproto-pds
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+  description: K8S-92 observed-generation-2 online native PDS original

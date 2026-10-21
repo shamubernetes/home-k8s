@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: server-volume-victoria-metrics-ha-0
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-069f5049-4085-42f5-a0e9-01010356456d

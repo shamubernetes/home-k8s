@@ -1,0 +1,13 @@
+# Observed actual policy/helper/credential delivery before the original request.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: tubearchivist-k92-native-original
+spec:
+  policyRef:
+    name: tubearchivist-native
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

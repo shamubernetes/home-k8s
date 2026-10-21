@@ -1,0 +1,19 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: openviking-k92-native-original-1
+spec:
+  policyRef:
+    name: openviking-native
+  source:
+    sourceIndex: 1
+    target:
+      pvc:
+        name: openviking-auth
+        namespace: tools
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300

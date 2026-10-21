@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tools
+resources:
+  - policy.yaml
+  - repositories.yaml
+  - externalsecret.yaml
+  - schedule.yaml
+  - replication.yaml
+  - original-0.yaml
+  - original-1.yaml
+  - original-2.yaml
+configMapGenerator:
+  - name: openviking-native-capture
+    files:
+      - capture.py
+    options:
+      annotations:
+        reloader.stakater.com/ignore: "true"
+generatorOptions:
+  disableNameSuffixHash: true

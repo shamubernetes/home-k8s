@@ -28,3 +28,24 @@ spec:
       NAMESPACE: *namespace
       VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_VICTORIA_METRICS_HA}"
       VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_VICTORIA_METRICS_HA}"
+---
+# Dedicated prepared backends only. No app or capture activation.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: victoria-metrics-ha-kopiur-backends
+  namespace: ${KS_NAMESPACE}
+spec:
+  targetNamespace: observability
+  dependsOn:
+    - name: external-secrets-secret-store
+    - name: kopiur
+  path: ./kubernetes/apps/observability/victoria-metrics-ha/backup-backends
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: ${KS_GIT_REPO_NAME}
+  wait: true
+  interval: ${KS_INTERVAL}
+  retryInterval: ${KS_RETRY_INTERVAL}
+  timeout: ${KS_TIMEOUT}

@@ -29,3 +29,24 @@ spec:
       VOLSYNC_CAPACITY: 2Gi
       VOLSYNC_PUID: "1000"
       VOLSYNC_PGID: "1000"
+---
+# Dedicated prepared backends only. No app or capture activation.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: pocket-id-kopiur-backends
+  namespace: ${KS_NAMESPACE}
+spec:
+  targetNamespace: security
+  dependsOn:
+    - name: external-secrets-secret-store
+    - name: kopiur
+  path: ./kubernetes/apps/security/pocket-id/backup-backends
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: ${KS_GIT_REPO_NAME}
+  wait: true
+  interval: ${KS_INTERVAL}
+  retryInterval: ${KS_RETRY_INTERVAL}
+  timeout: ${KS_TIMEOUT}

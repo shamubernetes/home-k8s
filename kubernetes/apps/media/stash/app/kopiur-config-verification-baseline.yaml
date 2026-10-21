@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: stash-config-verification-baseline
+spec:
+  policyRef:
+    name: stash
+  # The retained native bundle covers source 1. Seed source 0 as well so the
+  # unchanged policy verifier can read a recovery point for each PVC identity.
+  source:
+    sourceIndex: 0
+    target:
+      pvc:
+        name: stash
+        namespace: media
+  deletionPolicy: Retain
+  pin: true
+  description: Config PVC recovery point for complete multi-source policy verification
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

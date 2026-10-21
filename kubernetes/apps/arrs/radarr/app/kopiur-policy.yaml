@@ -60,7 +60,8 @@ spec:
         jitter: 1h
       capacity: 24Gi
       storageClassName: ceph-block
-      parallel: 2
+      # Full online recovery bundles need concurrent reads within the fixed 1h cap.
+      parallel: 8
     successExpr: "stats.files > 0 && stats.errors == 0"
     verifyFilesPercent: 100
 ---

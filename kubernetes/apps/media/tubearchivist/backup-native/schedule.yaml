@@ -11,6 +11,6 @@ spec:
     runOnCreate: false
     concurrencyPolicy: Forbid
     startingDeadlineSeconds: 3600
-    suspend: true
+    suspend: false
     timezone: America/New_York
   failedJobsHistoryLimit: 3

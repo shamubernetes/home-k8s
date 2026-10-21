@@ -1,0 +1,154 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: home-assistant-k92-native-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: home-assistant-k92-native-originals
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: originals
+          image: ghcr.io/home-operations/home-assistant:2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+          command:
+            - python
+            - /scripts/original-native.py
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+            runAsUser: 0
+            runAsNonRoot: false
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: nas-0
+              mountPath: /original/nas-0
+              readOnly: true
+            - name: nas-1
+              mountPath: /original/nas-1
+              readOnly: true
+            - name: nas-2
+              mountPath: /original/nas-2
+              readOnly: true
+            - name: r2-0
+              mountPath: /original/r2-0
+              readOnly: true
+            - name: r2-1
+              mountPath: /original/r2-1
+              readOnly: true
+            - name: r2-2
+              mountPath: /original/r2-2
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+          command:
+            - sh
+            - -ec
+            - |
+              set -eu
+              umask 077
+              export PGHOST=/work PGUSER=postgres
+              initdb -D /work/data -U postgres --auth-local=trust --auth-host=reject >/work/init.log 2>&1
+              pg_ctl -D /work/data -l /work/server.log -o "-k /work -c listen_addresses=''" -w start >/dev/null
+              trap 'pg_ctl -D /work/data -m fast -w stop >/dev/null' EXIT
+              for side in nas r2; do
+                createdb "$side"
+                pg_restore --exit-on-error --no-owner --no-privileges -d "$side" "/work/$side.dump" >"/work/$side-restore.log" 2>&1 || { printf 'native original PG import failed\n'; exit 1; }
+                psql -d "$side" -XAt -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM states" >"/work/$side-count"
+              done
+              cmp /work/nas-count /work/r2-count
+              test "$(cat /work/nas-count)" -gt 0
+              printf '{"native_pg_original_import_passed":true,"both_originals_equal":true,"state_rows":%s}\n' "$(cat /work/nas-count)"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 999
+            runAsGroup: 999
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nas-0
+          persistentVolumeClaim:
+            claimName: home-assistant-k92-original-nas-0
+            readOnly: true
+        - name: nas-1
+          persistentVolumeClaim:
+            claimName: home-assistant-k92-original-nas-1
+            readOnly: true
+        - name: nas-2
+          persistentVolumeClaim:
+            claimName: home-assistant-k92-original-nas-2
+            readOnly: true
+        - name: r2-0
+          persistentVolumeClaim:
+            claimName: home-assistant-k92-original-r2-0
+            readOnly: true
+        - name: r2-1
+          persistentVolumeClaim:
+            claimName: home-assistant-k92-original-r2-1
+            readOnly: true
+        - name: r2-2
+          persistentVolumeClaim:
+            claimName: home-assistant-k92-original-r2-2
+            readOnly: true
+        - name: scripts
+          configMap:
+            name: home-assistant-native-capture
+        - name: work
+          emptyDir:
+            sizeLimit: 6Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: home-assistant-k92-native-originals
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: home-assistant-k92-native-originals
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

@@ -30,10 +30,7 @@ spec:
       GATUS_HOST_HEADER: "tube.${HOME_DOMAIN}"
       GATUS_SUBDOMAIN: tube
       GATUS_PATH: /api/health/
-      VOLSYNC_CAPACITY: 20Gi
-      VOLSYNC_CACHE_CAPACITY: 5Gi
-      VOLSYNC_SCHEDULE: "0 6 * * *"
-      VOLSYNC_R2_SCHEDULE: "0 7 * * *"
+
 ---
 # Dedicated prepared backends only. No app or capture activation.
 apiVersion: kustomize.toolkit.fluxcd.io/v1

@@ -6,6 +6,7 @@ resources:
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-existing-originals.yaml
+- ./kopiur-sqlite-originals.yaml
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./helmrelease.yaml
@@ -19,3 +20,5 @@ patches:
       name: ${APP}
       annotations:
         kustomize.toolkit.fluxcd.io/prune: disabled
+components:
+- ../../../../components/kopiur-sqlite-originals

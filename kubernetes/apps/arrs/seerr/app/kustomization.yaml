@@ -10,6 +10,7 @@ resources:
 - ./httproute-envoy.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-existing-originals.yaml
+- ./kopiur-sqlite-originals.yaml
 - ./kopiur-repositories.yaml
 - ../../../../templates/gatus/external
 patches:
@@ -20,3 +21,5 @@ patches:
       name: ${APP}
       annotations:
         kustomize.toolkit.fluxcd.io/prune: disabled
+components:
+- ../../../../components/kopiur-sqlite-originals

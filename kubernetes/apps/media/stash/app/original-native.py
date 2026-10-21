@@ -97,12 +97,43 @@ def main():
                         if time.monotonic() >= deadline:
                             raise TimeoutError('native Stash startup deadline') from None
                         time.sleep(1)
+                # Prove the real native process uses the restored original DB,
+                # rather than accepting a newly initialized empty application.
+                db_path = str(work / 'config/stash-go.sqlite')
+                open_paths = []
+                for fd in (Path('/proc') / str(process.pid) / 'fd').iterdir():
+                    with contextlib.suppress(FileNotFoundError):
+                        open_paths.append(os.readlink(fd))
+                require(db_path in open_paths)
                 native_counts = {}
+                native_catalog = {}
                 for entity in ('Scenes', 'Performers', 'Studios', 'Tags', 'Images', 'Galleries'):
-                    field = 'find' + entity
-                    count = graphql('{ ' + field + '(filter:{per_page:1}) { count } }')[field]['count']
-                    require(count == counts[entity.lower()])
-                    native_counts[entity.lower()] = count
+                    field, table = 'find' + entity, entity.lower()
+                    # Native visibility/counts need not equal a raw table's row
+                    # count (for example hidden/unlinked records). Preserve ALL
+                    # original SQL data and verify actual native catalog IDs.
+                    with contextlib.closing(sqlite3.connect((bundle / 'stash-go.sqlite').as_uri() + '?mode=ro', uri=True)) as original_db:
+                        original_ids = {str(row[0]) for row in original_db.execute('SELECT id FROM "' + table + '"')}
+                    page, ids, total = 1, set(), None
+                    while total is None or len(ids) < total:
+                        query = '{ ' + field + '(filter:{per_page:500,page:' + str(page) + '}) { count ' + table + ' { id } } }'
+                        response = graphql(query)[field]
+                        if total is None:
+                            total = response['count']
+                        require(response['count'] == total)
+                        batch_ids = {row['id'] for row in response[table]}
+                        require(batch_ids <= original_ids)
+                        if total and len(ids) < total:
+                            require(batch_ids - ids)
+                        ids.update(batch_ids)
+                        page += 1
+                        require(len(ids) <= total)
+                    native_counts[table] = total
+                    native_catalog[table] = hashlib.sha256(json.dumps(sorted(ids)).encode()).hexdigest()
+                require(sum(native_counts.values()) > 0 or sum(counts[t] for t in native_counts) == 0)
+                print(json.dumps({'backend': backend, 'native_original_db_open': True,
+                                  'native_entity_counts': native_counts,
+                                  'original_entity_table_counts': {t: counts[t] for t in native_counts}}), flush=True)
                 require(original_keys((work / 'config/config.yml').read_text()) == keys)
             finally:
                 process.terminate()
@@ -118,10 +149,12 @@ def main():
             with (bundle / name).open('rb') as stream:
                 require(hashlib.file_digest(stream, 'sha256').hexdigest() == expected_hash)
         results[backend] = dict(expected, native_entity_counts=native_counts,
+                               native_catalog_sha256=native_catalog, native_original_db_open=True,
                                snapshot_id=os.environ[backend.upper() + '_SNAPSHOT'],
                                native_graphql=True, original_native_keys_preserved=True,
                                original_unchanged=True)
     require(results['nas']['sha256'] == results['r2']['sha256'])
+    require(results['nas']['native_catalog_sha256'] == results['r2']['native_catalog_sha256'])
     receipt = {'app': 'stash', 'independent_original_native_recovery': True,
                'nas_r2_native_data_equal': True, 'full_bundle_equal': True, 'results': results}
     (work / 'native-receipt.json').write_text(json.dumps(receipt, sort_keys=True))

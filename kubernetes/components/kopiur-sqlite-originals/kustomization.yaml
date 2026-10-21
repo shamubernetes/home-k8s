@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+- name: ${APP}-k92-sqlite-original
+  files:
+  - original-sqlite.py
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
+generatorOptions:
+  disableNameSuffixHash: true

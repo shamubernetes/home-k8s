@@ -3,7 +3,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ./ocirepository.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./externalsecret.yaml
 - ./externalsecret-kopiur.yaml
 - ./externalsecret-oidc.yaml
@@ -24,11 +24,3 @@ configMapGenerator:
       reloader.stakater.com/ignore: "true"
 generatorOptions:
   disableNameSuffixHash: true
-patches:
-- patch: |-
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${APP}
-      annotations:
-        kustomize.toolkit.fluxcd.io/prune: disabled

@@ -11,6 +11,24 @@ resources:
 - ./httproute-envoy-browser.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-existing-originals.yaml
+- ./kopiur-native-originals.yaml
 - ./kopiur-repositories.yaml
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
+configMapGenerator:
+- name: homarr-k92-original-native
+  files:
+  - original-native.js
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
+generatorOptions:
+  disableNameSuffixHash: true
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${APP}
+      annotations:
+        kustomize.toolkit.fluxcd.io/prune: disabled

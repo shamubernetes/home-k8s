@@ -1,0 +1,154 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: audiobookshelf-daily-20261020080536
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+  policyRef:
+    name: audiobookshelf
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: audiobookshelf-k92-existing-nas
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: audiobookshelf-nas-smb
+  source:
+    identity:
+      hostname: media
+      snapshotID: 9ea2ee7843ea99c2e3265b20f2ef3336
+      sourcePath: /pvc/audiobookshelf
+      username: audiobookshelf
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 1Gi
+      name: audiobookshelf-k92-existing-nas
+      storageClassName: ceph-block
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: audiobookshelf-nas-to-r2-copy-a62e366b6748859e-d16e0695
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  repository:
+    kind: Repository
+    name: audiobookshelf-r2
+    namespace: media
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: audiobookshelf-k92-existing-r2
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: audiobookshelf-r2
+  source:
+    identity:
+      hostname: media
+      snapshotID: a62e366b6748859e3148f4d155c6ed15
+      sourcePath: /pvc/audiobookshelf
+      username: audiobookshelf
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 1Gi
+      name: audiobookshelf-k92-existing-r2
+      storageClassName: ceph-block

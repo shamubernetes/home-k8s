@@ -5,6 +5,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-existing-originals.yaml
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./externalsecret.yaml
@@ -17,3 +18,11 @@ configMapGenerator:
   - kids-tv.yml=./configs/kids-tv.yml
 generatorOptions:
   disableNameSuffixHash: true
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${APP}
+      annotations:
+        kustomize.toolkit.fluxcd.io/prune: disabled

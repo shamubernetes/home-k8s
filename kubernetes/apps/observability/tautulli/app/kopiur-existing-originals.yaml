@@ -1,0 +1,154 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: tautulli-daily-20261020053512
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+  policyRef:
+    name: tautulli
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: tautulli-k92-existing-nas
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: tautulli-nas-smb
+  source:
+    identity:
+      hostname: observability
+      snapshotID: 1d6862df61ee3e1cf7a7a741cec20134
+      sourcePath: /pvc/tautulli
+      username: tautulli
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 1Gi
+      name: tautulli-k92-existing-nas
+      storageClassName: ceph-block
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: tautulli-nas-to-r2-copy-f29146fb80395350-5717ed2e
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  repository:
+    kind: Repository
+    name: tautulli-r2
+    namespace: observability
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: tautulli-k92-existing-r2
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: tautulli-r2
+  source:
+    identity:
+      hostname: observability
+      snapshotID: f29146fb80395350c8591573dd57c185
+      sourcePath: /pvc/tautulli
+      username: tautulli
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 1Gi
+      name: tautulli-k92-existing-r2
+      storageClassName: ceph-block

@@ -80,11 +80,11 @@ def main():
             shutil.rmtree(path) if path.is_dir() else path.unlink()
         shutil.copytree(original, active, dirs_exist_ok=True)
         consistent = original / 'kopiur/wizarr-online.db'
-        expected = database(consistent)
-        require(expected['tables'] > 0)
         for suffix in ('-wal', '-shm', '-journal'):
             (active / ('database.db' + suffix)).unlink(missing_ok=True)
         shutil.copyfile(consistent, active / 'database.db')
+        expected = database(active / 'database.db')
+        require(expected['tables'] > 0)
         original_keys = (original / 'secrets.json').read_bytes()
         Path('/work/child-result.json').unlink(missing_ok=True)
         Path('/work/native-child-error.json').unlink(missing_ok=True)

@@ -8,5 +8,14 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-existing-originals.yaml
 - ./kopiur-repositories.yaml
 - ../../../../templates/gatus/guarded
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${APP}
+      annotations:
+        kustomize.toolkit.fluxcd.io/prune: disabled

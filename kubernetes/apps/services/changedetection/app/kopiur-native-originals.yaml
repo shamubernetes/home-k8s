@@ -1,0 +1,100 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: changedetection-k92-native-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        recovery.kopiur.home.arpa/role: changedetection-original-native
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: native
+          image: ghcr.io/dgtlmoon/changedetection.io:0.60.9@sha256:6e45efa0bac5966e528013726e0ce240e40f2717ba3cc007c22a8c26e0275949
+          command:
+            - python3
+            - /kopiur/original-native.py
+          workingDir: /app
+          env:
+            - name: RECOVERY_TARGET
+              value: isolated
+            - name: ORIGINAL_POINTS
+              value: '{"nas":"1bf1bdd97f0f6b0f03fd81434cc07301","r2":"c641590c2d584bd1a2f5b6640049785b"}'
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+            limits:
+              memory: 1Gi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - name: nas
+              mountPath: /original/nas
+              readOnly: true
+            - name: r2
+              mountPath: /original/r2
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: helper
+              mountPath: /kopiur
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: changedetection-k92-existing-nas
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: changedetection-k92-existing-r2
+            readOnly: true
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: helper
+          configMap:
+            name: changedetection-k92-original-native
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: changedetection-k92-original-native
+spec:
+  podSelector:
+    matchLabels:
+      recovery.kopiur.home.arpa/role: changedetection-original-native
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

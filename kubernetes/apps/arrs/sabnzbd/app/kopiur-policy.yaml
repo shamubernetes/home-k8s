@@ -193,7 +193,8 @@ spec:
     name: sabnzbd
   schedule:
     suspend: false
-    cron: 10 2 * * *
+    timezone: UTC
+    cron: 20 0 * * *
     jitter: 10m
     runOnCreate: false
     concurrencyPolicy: Forbid
@@ -214,7 +215,8 @@ spec:
     kind: Repository
     name: sabnzbd-r2
   schedule:
-    cron: 10 8 * * *
+    timezone: UTC
+    cron: 40 0 * * *
     jitter: 10m
   selection:
     identities:

@@ -1,0 +1,12 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: openviking-native-data-hook-recovery
+spec:
+  policyRef:
+    name: openviking-native-data
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300

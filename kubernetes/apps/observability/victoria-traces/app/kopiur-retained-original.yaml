@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/snapshot.storage.k8s.io/volumesnapshot_v1.json
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: vt-archive-b0e532c3403349f0acefbedfd76c399a
+  namespace: observability
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    kopiur.home.arpa/source-pvc-uid: 2cd4ccaa-dd57-40a3-a553-ba9a856d9dd0
+    kopiur.home.arpa/recovery-state: unqualified
+spec:
+  volumeSnapshotClassName: kopiur-rbd-retain
+  source:
+    persistentVolumeClaimName: server-volume-victoria-traces-0

@@ -14,7 +14,10 @@ rm -f "$root/COMPLETE" "$root/COMPLETE.tmp"
 for value in "$PGHOST" "$PGUSER" "$PGPASSWORD" "$CONFIG_FILE"; do [ -n "$value" ]; done
 [ "$CONFIG_FILE" = /runtime/config.yml ]
 for file in /runtime/config.yml /runtime/ROMM_AUTH_SECRET_KEY; do
-  [ -s "$file" ] && [ ! -L "$file" ]
+  [ -s "$file" ] && [ -f "$file" ]
+  # Kubelet's readonly Secret projection uses contained ..data links.
+  # Reject escapes, not the native projection required for the original key.
+  case "$(realpath "$file")" in /runtime/*) ;; *) exit 1 ;; esac
 done
 rm -rf "$root/pending"
 mkdir "$root/pending"

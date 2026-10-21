@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/persistentvolumeclaim_v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tunarr
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: tunarr-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: tunarr-dst
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-4c176bce-9d8f-4f3f-8005-1132ea9b2f18

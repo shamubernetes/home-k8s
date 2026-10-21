@@ -2,6 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./kopiur-native-original-nas-restore.yaml
 - ./kopiur-online-original.yaml
 - ./ocirepository.yaml
 - ./externalsecret.yaml

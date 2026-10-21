@@ -1,9 +1,12 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: stash
+  annotations:
+    kopiur.home.arpa/actual-native-original-recovery: stash-k92-native-originals-v5
 spec:
-  suspend: true
+  suspend: false
   repository:
     kind: Repository
     name: stash-nas-smb
@@ -73,8 +76,6 @@ spec:
                     volumeMounts:
                       - name: source
                         mountPath: /config
-                        # mode=ro SQLite still needs WAL/SHM bookkeeping here.
-                        # No SQL write connection or application writer hold.
                         readOnly: false
                       - name: helper
                         mountPath: /kopiur
@@ -150,9 +151,6 @@ spec:
       parallel: 2
     successExpr: stats.errors == 0 && stats.files > 0
     verifyFilesPercent: 100
-  # Raw PVC copies are independent. Original native recovery MUST use the
-  # self-contained bundle on stash-data, never pair the two live SQLite trees.
-  # The live cluster has no VolumeGroupSnapshotClass, so do not imply CSI atomicity.
   groupBy: None
 
 ---
@@ -170,6 +168,7 @@ spec:
     runOnCreate: false
     concurrencyPolicy: Forbid
     startingDeadlineSeconds: 3600
+    suspend: false
   failedJobsHistoryLimit: 3
 
 ---

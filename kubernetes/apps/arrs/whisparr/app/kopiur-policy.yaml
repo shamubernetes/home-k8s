@@ -62,7 +62,9 @@ spec:
         cron: "45 8 * * *"
         jitter: 30m
       parallel: 4
-      fileParallelism: 2
+      # Kopia 0.23.1 uses fileParallelism for tree and file verification workers.
+      # Two workers missed the unchanged 3600s deadline across retained history.
+      fileParallelism: 8
       maxErrors: 0
     deep:
       schedule:

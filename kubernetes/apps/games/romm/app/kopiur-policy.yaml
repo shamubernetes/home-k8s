@@ -4,7 +4,7 @@ kind: SnapshotPolicy
 metadata:
   name: romm
 spec:
-  suspend: true
+  suspend: false
   repository:
     kind: Repository
     name: romm-nas-smb
@@ -186,7 +186,7 @@ spec:
     runOnCreate: false
     concurrencyPolicy: Forbid
     startingDeadlineSeconds: 3600
-    suspend: true
+    suspend: false
   failedJobsHistoryLimit: 3
 
 ---
@@ -206,6 +206,7 @@ spec:
     name: romm-r2
   schedule:
     cron: 0 22 * * *
+    timezone: America/New_York
     jitter: 5m
   selection:
     identities:

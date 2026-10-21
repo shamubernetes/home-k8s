@@ -1,0 +1,24 @@
+# Retain exact existing bound volume and its historical bootstrap identity.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: atproto-pds
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: atproto-pds-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: atproto-pds-dst
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-145d38a9-8a81-43c5-bac0-ca7eb1b1cb5e

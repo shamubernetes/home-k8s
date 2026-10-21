@@ -32,8 +32,8 @@ spec:
   policyRef:
     name: atproto-pds
   schedule:
-    suspend: true
-    # Retain daily cadence; qualify format-2 original recovery before resuming.
+    suspend: false
+    # Paired format-2 native original recovery passed before daily activation.
     cron: "15 21 * * *"
     timezone: America/New_York
     jitter: 10m

@@ -1,0 +1,24 @@
+# Retain exact existing bound volume and its historical bootstrap identity.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pocket-id
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: pocket-id-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: pocket-id-dst
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-1450aea4-8aa7-4c05-9ca3-80d2f0585134

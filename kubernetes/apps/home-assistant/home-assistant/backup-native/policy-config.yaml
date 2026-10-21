@@ -10,7 +10,7 @@ spec:
     name: home-assistant-nas-smb
   identity:
     username: home-assistant
-    hostname: home-assistant
+    hostname: home-assistant-config
   sources:
     - pvc:
         name: home-assistant

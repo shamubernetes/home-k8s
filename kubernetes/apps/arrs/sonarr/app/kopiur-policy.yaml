@@ -33,9 +33,9 @@ spec:
             app.kubernetes.io/name: sonarr
             app.kubernetes.io/controller: sonarr
         container: kopiur-postgres
-        command: [sh, /kopiur/recurring-capture.sh]
-        # Existing bounded protocol: 120s acknowledgement, 600s capture, 30s escalation.
-        timeout: 13m
+        # Inline delivery avoids immutable subPath mounts and any Pod restart.
+        command: [sh, -ec, REPLACED_BY_KUSTOMIZE]
+        timeout: 10m
         continueOnFailure: false
   mover:
     podSecurityContext:
@@ -86,9 +86,10 @@ spec:
   policyRef:
     name: sonarr
   schedule:
-    # Native capture stops the application. Require non-disruptive recovery proof.
+    # Arm after the actual online producer's fresh NAS/R2 point is delivered.
     suspend: true
-    cron: "${VOLSYNC_SCHEDULE_SONARR}"
+    cron: "45 1 * * *"
+    timezone: America/New_York
     jitter: 10m
     runOnCreate: true
     concurrencyPolicy: Forbid
@@ -110,7 +111,8 @@ spec:
     kind: Repository
     name: sonarr-r2
   schedule:
-    cron: "${VOLSYNC_R2_SCHEDULE_SONARR}"
+    cron: "45 2 * * *"
+    timezone: America/New_York
     jitter: 10m
   selection:
     identities:
@@ -118,7 +120,7 @@ spec:
       - username: sonarr
         hostname: arrs
         sourcePath: /pvc/sonarr
-    latestOnly: false
+    latestOnly: true
   migrate:
     parallel: 2
     policies: none

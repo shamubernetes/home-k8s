@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: apollo-db-init
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+      - name: init-db
+        image: ghcr.io/home-operations/postgres-init:17.6.0@sha256:86a1992d46273c58fd4ad95b626081dfaabfe16bd56944675169e406d1a660dd
+        envFrom: &envFrom
+        - secretRef:
+            name: apollo-db-init-secret
+        securityContext: &securityContext
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+        resources: &resources
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {memory: 128Mi}
+      containers:
+      - name: init-schema
+        image: docker.io/library/postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          if psql -tAc "SELECT to_regclass('public.accounts')" | grep -qx accounts; then
+            echo "Apollo schema already loaded"
+          else
+            psql --single-transaction -v ON_ERROR_STOP=1 -f /schema/schema.sql
+          fi
+        envFrom: *envFrom
+        securityContext: *securityContext
+        resources: *resources
+        volumeMounts:
+        - name: schema
+          mountPath: /schema
+          readOnly: true
+      volumes:
+      - name: schema
+        configMap:
+          name: apollo-schema

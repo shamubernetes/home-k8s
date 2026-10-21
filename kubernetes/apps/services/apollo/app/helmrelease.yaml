@@ -1,0 +1,143 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app apollo
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: apollo
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      api:
+        strategy: Recreate
+        annotations: &annotations
+          reloader.stakater.com/auto: "true"
+        containers:
+          app: &runtime
+            image:
+              repository: ghcr.io/apollo-reborn/apollo-backend
+              tag: latest@sha256:d67a280e87167c29e64b7d8ff630b6c90c953c38ec69feffdaec7e73668b77a6
+            args: ["api"]
+            env: &env
+              TZ: ${TIMEZONE}
+              ENV: production
+              PORT: "4000"
+              APPLE_KEY_PATH: /etc/secrets/apple.p8
+              APPLE_APNS_TOPIC: dev.kil.apollo
+              APPLE_APNS_SANDBOX: "true"
+              # Dedicated logical databases isolate rmq queues from dedup locks and other apps.
+              REDIS_QUEUE_URL: redis://dragonfly.database.svc.cluster.local:6379/6
+              REDIS_LOCKS_URL: redis://dragonfly.database.svc.cluster.local:6379/7
+              OTEL_TRACES_EXPORTER: none
+              OTEL_METRICS_EXPORTER: none
+            envFrom:
+            - secretRef:
+                name: apollo-secret
+            probes:
+              liveness: &apiProbes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /v1/health
+                    port: 4000
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *apiProbes
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests: {cpu: 10m, memory: 32Mi}
+              limits: {memory: 256Mi}
+      scheduler:
+        # Exactly one scheduler owns the polling cadence.
+        replicas: 1
+        strategy: Recreate
+        annotations: *annotations
+        containers:
+          app:
+            <<: *runtime
+            args: ["scheduler"]
+            probes:
+              liveness: &schedulerProbes
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket: {port: 8080}
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+              readiness: *schedulerProbes
+      workers:
+        strategy: Recreate
+        annotations: *annotations
+        containers:
+          notifications: &worker
+            <<: *runtime
+            args: ["worker", "--queue", "notifications", "--consumers", "32"]
+            probes:
+              liveness: &workerProbes
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["pgrep", "apollo"]
+                  initialDelaySeconds: 15
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+              readiness: *workerProbes
+          stuck-notifications:
+            <<: *worker
+            args: ["worker", "--queue", "stuck-notifications", "--consumers", "32"]
+          subreddits:
+            <<: *worker
+            args: ["worker", "--queue", "subreddits", "--consumers", "32"]
+          trending:
+            <<: *worker
+            args: ["worker", "--queue", "trending", "--consumers", "32"]
+          users:
+            <<: *worker
+            args: ["worker", "--queue", "users", "--consumers", "32"]
+          live-activities:
+            <<: *worker
+            args: ["worker", "--queue", "live-activities", "--consumers", "32"]
+    defaultPodOptions:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: api
+        ports:
+          http:
+            port: 4000
+    persistence:
+      apns:
+        type: secret
+        name: apollo-apns-secret
+        defaultMode: 0440
+        globalMounts:
+        - path: /etc/secrets
+          readOnly: true
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp

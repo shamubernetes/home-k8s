@@ -54,7 +54,7 @@ spec:
     name: tunarr-rollback
   schedule:
     suspend: false
-    cron: 43 2 * * *
+    cron: 44 2 * * *
     timezone: America/New_York
     jitter: 0s
     runOnCreate: false

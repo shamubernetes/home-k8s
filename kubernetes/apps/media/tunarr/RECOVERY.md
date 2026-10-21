@@ -39,7 +39,7 @@ and legacy repository histories remain retained.
 ## Daily protection
 
 The rollback policy reads the original retained PVC through a fresh CSI point.
-The primary schedule is daily at 02:43 America/New_York, and offsite copy is daily
+The primary schedule is daily at 02:44 America/New_York, and offsite copy is daily
 at 03:43. This does not enable the retained application or operate the NAS app.
 The original PVC is declared separately with Flux pruning disabled before legacy
 source removal. Source retirement requires observed enabled daily policy and

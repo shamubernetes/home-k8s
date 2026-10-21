@@ -81,7 +81,7 @@ class CadenceTests(unittest.TestCase):
         self.assertFalse(policy['spec']['suspend'])
         schedule = next(d for d in native if d['kind'] == 'SnapshotSchedule')
         self.assertFalse(schedule['spec']['schedule']['suspend'])
-        self.assertEqual(schedule['spec']['schedule']['cron'], '43 2 * * *')
+        self.assertEqual(schedule['spec']['schedule']['cron'], '44 2 * * *')
         self.assertFalse(schedule['spec']['schedule']['runOnCreate'])
         self.assertNotIn('hooks', policy['spec'])
         self.assertEqual(policy['spec']['sources'][0]['pvc']['name'], 'tunarr')

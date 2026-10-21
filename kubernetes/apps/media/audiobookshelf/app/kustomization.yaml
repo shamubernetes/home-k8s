@@ -8,17 +8,9 @@ resources:
 - ./kopiur-existing-originals.yaml
 - ./kopiur-sqlite-originals.yaml
 - ./ocirepository.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
-patches:
-- patch: |-
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${APP}
-      annotations:
-        kustomize.toolkit.fluxcd.io/prune: disabled
 components:
 - ../../../../components/kopiur-sqlite-originals

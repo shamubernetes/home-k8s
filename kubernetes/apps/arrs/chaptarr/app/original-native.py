@@ -25,7 +25,9 @@ def main():
         config_bytes = (target / 'config.xml').read_bytes()
         require(len(config_bytes) < 1024 * 1024 and b'<!DOCTYPE' not in config_bytes)
         config = ET.fromstring(config_bytes)
-        require(config.tag == 'Config' and config.findtext('ApiKey'))
+        # The actual Chaptarr XML has session/OIDC settings, not an ApiKey
+        # element. Preserve it byte-for-byte and restore every native PG table.
+        require(config.tag == 'Config')
         base = target / '.kopiur-chaptarr'
         generation = (base / 'current').read_text().strip()
         require(re.fullmatch('[0-9a-f-]{36}', generation))

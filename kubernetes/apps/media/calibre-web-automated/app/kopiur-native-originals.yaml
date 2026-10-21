@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: calibre-web-automated-k92-native-originals
+  name: calibre-web-automated-k92-native-originals-v2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 900

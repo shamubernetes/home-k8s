@@ -2,8 +2,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: chaptarr-k92-native-originals-v2
+  name: chaptarr-k92-native-originals-v3
 spec:
+  # The actual paired PG17 recovery passed; preserve the drill without replay.
+  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 1200
   template:

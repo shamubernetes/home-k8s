@@ -18,6 +18,14 @@ resources:
 - ../../../../templates/gatus/guarded
 components:
 - ../../../../components/kopiur-sqlite-originals
+patches:
+- target:
+    kind: PersistentVolumeClaim
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        kustomize.toolkit.fluxcd.io/prune: disabled
 configMapGenerator:
 - name: chaptarr-kopiur-original-native
   files:

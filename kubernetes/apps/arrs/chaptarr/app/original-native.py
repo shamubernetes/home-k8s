@@ -29,7 +29,18 @@ def main():
         # element. Preserve it byte-for-byte and restore every native PG table.
         require(config.tag == 'Config')
         base = target / '.kopiur-chaptarr'
-        generation = (base / 'current').read_text().strip()
+        if (base / 'current').is_file():
+            generation = (base / 'current').read_text().strip()
+        else:
+            # The exact original has one self-contained complete generation.
+            # A missing mutable pointer never permits choosing a partial dump.
+            candidates = [p for p in base.iterdir() if p.is_dir()
+                          and (p / 'SHA256SUMS').is_file() and (p / 'metadata').is_file()]
+            selected = os.environ.get('ORIGINAL_NATIVE_GENERATION')
+            if selected:
+                candidates = [p for p in candidates if p.name == selected]
+            require(len(candidates) == 1)
+            generation = candidates[0].name
         require(re.fullmatch('[0-9a-f-]{36}', generation))
         folder = base / generation
         expected_names = {name + '.dump' for name in ('chaptarr_main', 'chaptarr_log', 'chaptarr_cache')}

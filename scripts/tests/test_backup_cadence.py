@@ -68,7 +68,7 @@ class CadenceTests(unittest.TestCase):
         self.assertFalse(owner['spec']['prune'])
         self.assertEqual(owner['spec']['deletionPolicy'], 'Orphan')
         root, = yaml_json('.', [app / 'backups/kustomization.yaml'])
-        self.assertEqual(set(root['resources']), {'./replicationsource.yaml', './kopiur-rollback-original.yaml', './kopiur-original-nas-restore.yaml', './kopiur-original-r2-restore.yaml', './kopiur-native-consumers.yaml', './kopiur-retained-pvc.yaml'})
+        self.assertEqual(set(root['resources']), {'./legacy-recovery-secrets.yaml', './kopiur-rollback-original.yaml', './kopiur-original-nas-restore.yaml', './kopiur-original-r2-restore.yaml', './kopiur-native-consumers.yaml', './kopiur-retained-pvc.yaml'})
         retained, = yaml_json('.', [app / 'backups/kopiur-retained-pvc.yaml'])
         self.assertEqual(retained['kind'], 'PersistentVolumeClaim')
         self.assertEqual(retained['metadata']['name'], 'tunarr')
@@ -98,11 +98,11 @@ class CadenceTests(unittest.TestCase):
             original = next(v for v in pod['volumes'] if v['name'] == 'original')
             self.assertTrue(original['persistentVolumeClaim']['readOnly'])
             self.assertNotEqual(original['persistentVolumeClaim']['claimName'], 'tunarr')
-        resource, = yaml_json('.', [app / 'backups/replicationsource.yaml'])
-        self.assertEqual(resource['kind'], 'ReplicationSource')
-        self.assertEqual(resource['spec']['sourcePVC'], 'tunarr')
-        self.assertEqual(resource['spec']['restic']['copyMethod'], 'Snapshot')
-        self.assertEqual(resource['metadata']['annotations']['kustomize.toolkit.fluxcd.io/prune'], 'disabled')
+        self.assertFalse((app / 'backups/replicationsource.yaml').exists())
+        access = yaml_json('.', [app / 'backups/legacy-recovery-secrets.yaml'])
+        self.assertEqual({d['kind'] for d in access}, {'ExternalSecret'})
+        self.assertEqual({d['spec']['target']['name'] for d in access},
+                         {'tunarr-volsync-secret', 'tunarr-volsync-r2-secret'})
 
     def test_all_declared_backup_cadences(self):
         common_path = ROOT / 'kubernetes/flux/vars/volsync-schedules.yaml'

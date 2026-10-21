@@ -79,7 +79,7 @@ kind: SnapshotReplication
 metadata:
   name: victoria-traces-native-nas-to-r2
   annotations:
-    kopiur.home-operations.com/run-requested: "2026-10-21T04:57:52.937451+00:00"
+    kopiur.home-operations.com/run-requested: "2026-10-21T06:00:00Z"
 spec:
   destinationRef:
     kind: Repository

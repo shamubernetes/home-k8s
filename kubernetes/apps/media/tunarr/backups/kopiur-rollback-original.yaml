@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: tunarr-rollback
+  namespace: media
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  repository:
+    kind: Repository
+    name: tunarr-nas-smb
+  identity:
+    username: tunarr-rollback
+    hostname: media
+  sources:
+    - pvc:
+        name: tunarr
+      readOnly: true
+      sourcePathOverride: /pvc/tunarr-rollback
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  suspend: true
+  mover:
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: tunarr-rollback-daily
+  namespace: media
+spec:
+  policyRef:
+    name: tunarr-rollback
+  schedule:
+    suspend: true
+    cron: 43 2 * * *
+    timezone: America/New_York
+    jitter: 0s
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: tunarr-k92-frozen-original
+spec:
+  policyRef:
+    name: tunarr-rollback
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: tunarr-rollback-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T03:36:37.342752+00:00"
+spec:
+  destinationRef:
+    kind: Repository
+    name: tunarr-r2
+  migrate:
+    parallel: 8
+    policies: none
+  schedule:
+    cron: 43 3 * * *
+    timezone: America/New_York
+    jitter: 0s
+  selection:
+    identities:
+      include:
+        - username: tunarr-rollback
+          hostname: media
+          sourcePath: /pvc/tunarr-rollback
+    latestOnly: true
+  sourceRef:
+    kind: Repository
+    name: tunarr-nas-smb
+  suspend: false

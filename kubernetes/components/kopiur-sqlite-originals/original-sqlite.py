@@ -96,7 +96,7 @@ def restore(original, target, app):
     os.chown(target, info.st_uid, info.st_gid)
     profile_info = None
     if app == 'profilarr':
-        archives = sorted((original / 'backups').glob('backup-*.tar.gz'))
+        archives = sorted(original.rglob('*backup*.tar.gz'), key=lambda p: p.stat().st_mtime_ns)
         require(archives)
         stage = target.parent / (target.name + '-native-archive')
         require(not stage.exists())

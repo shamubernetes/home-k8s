@@ -11,6 +11,8 @@ spec:
       app.kubernetes.io/name: tunarr
   dependsOn:
   - name: volsync
+  - name: kopiur
+  - name: tunarr-kopiur-backends
   # The old app Kustomization stays suspended and reconcile-disabled.
   # This root owns only its retained rollback volume's existing primary backup.
   path: ./kubernetes/apps/media/tunarr/backups

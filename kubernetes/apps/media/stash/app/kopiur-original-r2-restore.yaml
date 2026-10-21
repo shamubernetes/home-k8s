@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: stash-nas-to-r2-copy-9b0e637cbde3e94e-f5015336
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  repository:
+    kind: Repository
+    name: stash-r2
+    namespace: media
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: stash-k92-native-original-r2
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: stash-r2
+  source:
+    identity:
+      hostname: media
+      snapshotID: 9b0e637cbde3e94eb40de483da6a529a
+      sourcePath: /pvc/stash-data
+      username: stash
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 4Gi
+      name: stash-k92-native-original-r2
+      storageClassName: ceph-block

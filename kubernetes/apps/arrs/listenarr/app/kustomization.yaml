@@ -5,6 +5,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-shared-originals.yaml
 - ./ocirepository.yaml
 - ./externalsecret-oidc.yaml
 - ../../../../templates/volsync

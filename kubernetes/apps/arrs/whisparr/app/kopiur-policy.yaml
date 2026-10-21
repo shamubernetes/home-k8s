@@ -51,6 +51,13 @@ spec:
         timeout: 25m
         continueOnFailure: false
   mover:
+    # Retained archive working sets exceed Kopia's default content cache.
+    # Keep this disposable cache local rather than adding replicated Ceph usage.
+    cache:
+      mode: Ephemeral
+      capacity: 64Gi
+      storageClassName: openebs-hostpath
+      contentCacheSizeMb: 49152
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568

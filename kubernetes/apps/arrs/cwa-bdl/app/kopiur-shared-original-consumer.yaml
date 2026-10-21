@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k92-shared-sqlite-originals
+spec:
+  suspend: true
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        recovery.kopiur.home.arpa/role: shared-sqlite-originals
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+          command:
+            - python3
+            - /kopiur/shared-original-reader.py
+          env:
+            - name: RECOVERY_TARGET
+              value: isolated
+            - name: ORIGINAL_POINTS
+              value: '{"cwa-bdl":{"nas":"006b2a94683ace5db6892920a399f09f","r2":"f38664e5aa244b3c9a46c8b4afb0c4cc"},"listenarr":{"nas":"7ff2efc4196a94e2f95c5f6ede3e9c29","r2":"5447929d817fb5a2c7ba18910157b6a0"}}'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 1Gi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - name: cwa-bdl-nas
+              mountPath: /original/cwa-bdl/nas
+              readOnly: true
+            - name: cwa-bdl-r2
+              mountPath: /original/cwa-bdl/r2
+              readOnly: true
+            - name: listenarr-nas
+              mountPath: /original/listenarr/nas
+              readOnly: true
+            - name: listenarr-r2
+              mountPath: /original/listenarr/r2
+              readOnly: true
+            - name: helper
+              mountPath: /kopiur
+              readOnly: true
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: cwa-bdl-nas
+          persistentVolumeClaim:
+            claimName: cwa-bdl-k92-shared-nas
+            readOnly: true
+        - name: cwa-bdl-r2
+          persistentVolumeClaim:
+            claimName: cwa-bdl-k92-shared-r2
+            readOnly: true
+        - name: listenarr-nas
+          persistentVolumeClaim:
+            claimName: listenarr-k92-shared-nas
+            readOnly: true
+        - name: listenarr-r2
+          persistentVolumeClaim:
+            claimName: listenarr-k92-shared-r2
+            readOnly: true
+        - name: helper
+          configMap:
+            name: k92-shared-sqlite-originals
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: k92-shared-sqlite-originals
+spec:
+  podSelector:
+    matchLabels:
+      recovery.kopiur.home.arpa/role: shared-sqlite-originals
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

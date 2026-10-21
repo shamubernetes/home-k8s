@@ -13,10 +13,14 @@ resources:
 - ./kopiur-policy.yaml
 - ./kopiur-original-data.yaml
 - ./kopiur-original-restore.yaml
+- ./kopiur-original-r2-restore.yaml
+- ./kopiur-native-originals.yaml
 configMapGenerator:
 - name: stash-kopiur-native
   files:
   - capture.py
+  - restore.py
+  - original-native.py
   options:
     annotations:
       reloader.stakater.com/ignore: "true"

@@ -5,12 +5,20 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-shared-originals.yaml
+- ./kopiur-shared-original-consumer.yaml
 - ./ocirepository.yaml
 - ../../../../templates/volsync
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
 configMapGenerator:
+- name: k92-shared-sqlite-originals
+  files:
+  - shared-original-reader.py
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
 - name: cwa-bdl-kopiur-startup
   files:
   # Byte-identical copy of the existing CWA guard, checked by startup-test.py.

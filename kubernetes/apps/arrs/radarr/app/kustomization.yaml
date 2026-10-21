@@ -24,6 +24,13 @@ resources:
 components:
 - ../../../../components/kopiur-postgres
 patches:
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${APP}
+      annotations:
+        kustomize.toolkit.fluxcd.io/prune: disabled
 - path: ./kopiur-postgres-patch.yaml
 - path: ./kopiur-recurring-runtime-patch.yaml
 configMapGenerator:

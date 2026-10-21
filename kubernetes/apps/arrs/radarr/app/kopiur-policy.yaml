@@ -3,11 +3,12 @@ kind: SnapshotPolicy
 metadata:
   name: radarr
   annotations:
+    kopiur.home.arpa/online-original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/39522527396
     kopiur.home.arpa/original-native-recovery: https://github.com/shamubernetes/home-k8s/actions/runs/37981655593
 spec:
-  # K8S-109: capture stops the native application. Keep disabled until a
-  # non-disruptive backup has independent recovery proof and an approved cadence.
-  suspend: true
+  # Actual online original NAS/R2 native recovery39522527396 passed.
+  # The reviewed producer never stops or holds the production application.
+  suspend: false
   repository:
     kind: Repository
     name: radarr-nas-smb
@@ -87,12 +88,12 @@ spec:
   policyRef:
     name: radarr
   schedule:
-    suspend: true
-    # K8S-109: hourly disruptive captures are not authorized. Retain the old
-    # slot only as history; suspension must remain until the contract is repaired.
-    cron: "${VOLSYNC_SCHEDULE_RADARR}"
-    jitter: 10m
-    runOnCreate: true
+    suspend: false
+    # One daily online capture; no hourly inherited variable or redundant replay.
+    cron: "40 1 * * *"
+    timezone: UTC
+    jitter: 5m
+    runOnCreate: false
     concurrencyPolicy: Forbid
     startingDeadlineSeconds: 3600
   failedJobsHistoryLimit: 3
@@ -102,8 +103,6 @@ kind: SnapshotReplication
 metadata:
   name: radarr-nas-to-r2
   annotations:
-    # Copy-only original qualification. Producer and capture schedule stay suspended.
-    kopiur.home.arpa/original-copy-only: "true"
     kopiur.home-operations.com/run-requested: "2026-10-20T19:31:35Z"
 spec:
   sourceRef:
@@ -113,7 +112,7 @@ spec:
     kind: Repository
     name: radarr-r2
   schedule:
-    cron: "${VOLSYNC_R2_SCHEDULE_RADARR}"
+    cron: "20 2 * * *"
     timezone: UTC
     jitter: 10m
   selection:

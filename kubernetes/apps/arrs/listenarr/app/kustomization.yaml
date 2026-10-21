@@ -14,3 +14,11 @@ resources:
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${APP}
+      annotations:
+        kustomize.toolkit.fluxcd.io/prune: disabled

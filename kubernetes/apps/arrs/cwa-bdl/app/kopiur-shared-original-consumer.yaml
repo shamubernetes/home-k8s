@@ -4,7 +4,7 @@ kind: Job
 metadata:
   name: k92-shared-sqlite-originals
 spec:
-  suspend: true
+  suspend: false
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:

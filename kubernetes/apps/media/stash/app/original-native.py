@@ -113,7 +113,7 @@ def main():
                         time.sleep(1)
                 # Ask the actual native server for its effective database.
                 # SQLite may close idle descriptors; that is not data loss.
-                effective_database = graphql('{ configuration { general { database } } }')['configuration']['general']['database']
+                effective_database = graphql('{ configuration { general { databasePath } } }')['configuration']['general']['databasePath']
                 require(Path(effective_database).resolve() == (work / 'config/stash-go.sqlite').resolve())
                 native_counts = {}
                 native_catalog = {}

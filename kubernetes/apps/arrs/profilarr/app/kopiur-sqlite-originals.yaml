@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: profilarr-k92-sqlite-originals
+  name: profilarr-k92-sqlite-originals-v2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1800
@@ -89,7 +89,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: profilarr-k92-sqlite-originals
+  name: profilarr-k92-sqlite-originals-v2
 spec:
   podSelector:
     matchLabels:

@@ -11,7 +11,6 @@ spec:
       app.kubernetes.io/name: *app
   dependsOn:
   - name: rook-ceph-cluster
-  - name: volsync
   - name: external-secrets-secret-store
   path: ./kubernetes/apps/security/pocket-id/app
   prune: true

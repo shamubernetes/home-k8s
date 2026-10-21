@@ -1,0 +1,150 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: calibre-web-automated
+spec:
+  copyMethod: Snapshot
+  defaultDeletionPolicy: Retain
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  groupBy: VolumeGroupSnapshot
+  hooks:
+    beforeSnapshot:
+      - workloadExec:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: calibre-web-automated
+              app.kubernetes.io/controller: calibre-web-automated
+          container: app
+          command:
+            - /lsiopy/bin/python3
+            - -c
+            - |
+              import pathlib,uuid,json,os
+              namespace={'__name__':'existing_cwa_export'}
+              exec(compile('#!/usr/bin/env python3\n"""Export individually consistent CWA SQLite databases, without writer fences.\n\nRun against the config mount, never against the ingest NFS tree. This bundle\nis NOT a transaction across databases or between metadata and library bytes.\nThe caller must retain the later immutable CSI point and qualify that skew.\n"""\nimport argparse\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport sqlite3\nimport time\n\nDATABASES = (\'app.db\', \'cwa.db\', \'gdrive.db\', \'calibre-library/metadata.db\',\n             \'calibre-library/.calnotes/notes.db\')\n\n\ndef capture(root, destination, timeout=90):\n    root = Path(root).resolve(strict=True)\n    destination = Path(destination)\n    if destination.exists() or destination.is_symlink():\n        raise ValueError(\'destination must be a new private generation\')\n    destination.mkdir(mode=0o700)\n    deadline = time.monotonic() + timeout\n    records = []\n\n    def progress(*_):\n        if time.monotonic() >= deadline:\n            raise TimeoutError(\'online SQLite capture deadline\')\n\n    for relative in DATABASES:\n        source = root / relative\n        if source.resolve(strict=True) != source or not source.is_file() or source.stat().st_size == 0:\n            raise ValueError(\'unsafe database path\')\n        target = destination / relative\n        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)\n        started = time.time()\n        origin = sqlite3.connect(source.as_uri() + \'?mode=ro\', uri=True)\n        backup = sqlite3.connect(target)\n        try:\n            origin.backup(backup, pages=128, progress=progress, sleep=0.05)\n            backup.execute(\'PRAGMA journal_mode=DELETE\')\n            if backup.execute(\'PRAGMA integrity_check\').fetchall() != [(\'ok\',)]:\n                raise ValueError(\'SQLite integrity check failed\')\n        finally:\n            backup.close()\n            origin.close()\n        os.chmod(target, 0o600)\n        with target.open(\'rb\') as handle:\n            os.fsync(handle.fileno())\n            digest = hashlib.file_digest(handle, \'sha256\').hexdigest()\n        progress()\n        records.append({\'path\': relative, \'sha256\': digest,\n                        \'bytes\': target.stat().st_size, \'started_at\': started,\n                        \'completed_at\': time.time()})\n    manifest = {\'version\': 1, \'consistency\': \'per-database-online\',\n                \'library_bytes_captured\': False, \'ingest_captured\': False,\n                \'databases\': records}\n    # A failed attempt leaves no manifest and is never a valid generation.\n    with (destination / \'manifest.json\').open(\'x\') as handle:\n        os.chmod(handle.name, 0o600)\n        json.dump(manifest, handle, sort_keys=True)\n        handle.write(\'\\n\')\n        handle.flush()\n        os.fsync(handle.fileno())\n    fd = os.open(destination, os.O_RDONLY)\n    try:\n        os.fsync(fd)\n    finally:\n        os.close(fd)\n    return manifest\n\n\nif __name__ == \'__main__\':\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\'--root\', default=\'/config\')\n    parser.add_argument(\'--destination\', required=True)\n    args = parser.parse_args()\n    capture(args.root, args.destination)\n','existing_cwa_online.py','exec'),namespace)
+              base=pathlib.Path('/config/.kopiur-cwa');base.mkdir(mode=0o700,exist_ok=True)
+              generation=uuid.uuid4().hex
+              manifest=namespace['capture']('/config',base/generation,timeout=300)
+              manifest['generation']=generation
+              tmp=base/'current.pending';tmp.write_text(json.dumps(manifest,sort_keys=True));os.chmod(tmp,0o600);os.replace(tmp,base/'current.json')
+              print('CWA online native five-database capture complete',flush=True)
+          timeout: 6m
+          continueOnFailure: false
+  identity:
+    username: calibre-web-automated
+    hostname: media
+  mover:
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+  repository:
+    kind: Repository
+    name: calibre-web-automated-nas-smb
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  sources:
+    - pvc:
+        name: calibre-web-automated
+      readOnly: true
+      sourcePathOverride: /pvc/calibre-web-automated
+  staging:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ceph-block
+    timeout: 10m
+  suspend: true
+  verification:
+    deep:
+      capacity: 150Gi
+      parallel: 2
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      storageClassName: ceph-block
+    quick:
+      maxErrors: 0
+      parallel: 2
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+  volumeSnapshotClassName: csi-ceph-blockpool
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: calibre-web-automated-daily
+spec:
+  policyRef:
+    name: calibre-web-automated
+  schedule:
+    suspend: true
+    cron: 15 21 * * *
+    timezone: America/New_York
+    jitter: 0s
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: cwa-k92-online-original
+spec:
+  policyRef:
+    name: calibre-web-automated
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: calibre-web-automated-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T03:50:52.157499+00:00"
+spec:
+  destinationRef:
+    kind: Repository
+    name: calibre-web-automated-r2
+  migrate:
+    parallel: 8
+    policies: none
+  schedule:
+    cron: 15 22 * * *
+    timezone: America/New_York
+    jitter: 0s
+  selection:
+    identities:
+      include:
+        - username: calibre-web-automated
+          hostname: media
+          sourcePath: /pvc/calibre-web-automated
+    latestOnly: true
+  sourceRef:
+    kind: Repository
+    name: calibre-web-automated-nas-smb
+  suspend: false

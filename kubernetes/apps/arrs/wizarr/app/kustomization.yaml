@@ -10,4 +10,14 @@ resources:
 - ./kopiur-policy.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-original-restores.yaml
+- ./kopiur-native-originals.yaml
 - ../../../../templates/gatus/external
+configMapGenerator:
+- name: wizarr-k92-original-native
+  files:
+  - original-native.py
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
+generatorOptions:
+  disableNameSuffixHash: true

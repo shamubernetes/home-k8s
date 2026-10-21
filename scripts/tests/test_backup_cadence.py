@@ -68,7 +68,7 @@ class CadenceTests(unittest.TestCase):
         self.assertFalse(owner['spec']['prune'])
         self.assertEqual(owner['spec']['deletionPolicy'], 'Orphan')
         root, = yaml_json('.', [app / 'backups/kustomization.yaml'])
-        self.assertEqual(set(root['resources']), {'./replicationsource.yaml', './kopiur-rollback-original.yaml'})
+        self.assertEqual(set(root['resources']), {'./replicationsource.yaml', './kopiur-rollback-original.yaml', './kopiur-original-nas-restore.yaml'})
         for entry in root['resources']:
             self.assertTrue((app / 'backups' / entry).resolve().is_relative_to(app / 'backups'))
         native = yaml_json('.', [app / 'backups/kopiur-rollback-original.yaml'])
@@ -77,6 +77,9 @@ class CadenceTests(unittest.TestCase):
         self.assertTrue(policy['spec']['suspend'])
         self.assertNotIn('hooks', policy['spec'])
         self.assertEqual(policy['spec']['sources'][0]['pvc']['name'], 'tunarr')
+        restored, = yaml_json('.', [app / 'backups/kopiur-original-nas-restore.yaml'])
+        self.assertEqual(restored['kind'], 'Restore')
+        self.assertNotEqual(restored['spec']['target']['pvc']['name'], 'tunarr')
         resource, = yaml_json('.', [app / 'backups/replicationsource.yaml'])
         self.assertEqual(resource['kind'], 'ReplicationSource')
         self.assertEqual(resource['spec']['sourcePVC'], 'tunarr')

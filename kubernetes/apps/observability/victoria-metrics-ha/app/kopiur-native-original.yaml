@@ -147,7 +147,7 @@ kind: SnapshotReplication
 metadata:
   name: victoria-metrics-native-nas-to-r2
   annotations:
-    kopiur.home-operations.com/run-requested: "2026-10-21T06:00:00Z"
+    kopiur.home-operations.com/run-requested: "2026-10-21T11:16:00Z"
 spec:
   destinationRef:
     kind: Repository

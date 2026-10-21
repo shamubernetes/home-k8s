@@ -1,0 +1,16 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: tubearchivist-native-daily
+spec:
+  policyRef:
+    name: tubearchivist-native
+  schedule:
+    cron: 10 20 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+    suspend: true
+    timezone: America/New_York
+  failedJobsHistoryLimit: 3

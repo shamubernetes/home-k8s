@@ -1,0 +1,28 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: tubearchivist-native-nas-to-r2
+spec:
+  sourceRef:
+    kind: Repository
+    name: tubearchivist-nas-smb
+  destinationRef:
+    kind: Repository
+    name: tubearchivist-r2
+  schedule:
+    cron: 10 21 * * *
+    jitter: 10m
+    timezone: America/New_York
+  selection:
+    identities:
+      include:
+        - username: tubearchivist
+          hostname: media
+          sourcePath: /pvc/tubearchivist
+    latestOnly: true
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    none: {}
+  suspend: true

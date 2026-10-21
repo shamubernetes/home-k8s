@@ -3,17 +3,30 @@ import asyncio
 import hashlib
 import json
 import os
+import posixpath
 from pathlib import Path, PurePosixPath
 import tarfile
 import time
 import uuid
 
 
-def member_name(member):
+def member_name(member, allow_config_links=False):
     name = member.name.removeprefix("./")
     if PurePosixPath(name).is_absolute() or ".." in PurePosixPath(name).parts:
         raise ValueError("unsafe native archive path")
-    if not (member.isfile() or member.isdir()):
+    if allow_config_links and member.issym():
+        target = PurePosixPath(member.linkname)
+        if target.is_absolute():
+            # Observed native archive contains a link into the pinned image's
+            # immutable /usr runtime. Preserve it, never dereference in extraction.
+            resolved = Path(member.linkname).resolve(strict=True)
+            if not resolved.is_relative_to('/usr'):
+                raise ValueError("native config link leaves protected runtime")
+        else:
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), member.linkname))
+            if resolved != 'data' and not resolved.startswith('data/'):
+                raise ValueError("native config link escapes config archive")
+    elif not (member.isfile() or member.isdir()):
         raise ValueError("native archive link or special file requires explicit restore handling")
     return name
 
@@ -40,7 +53,7 @@ def validate_archive(path):
         names = set()
         with tarfile.open(fileobj=archive.extractfile(payload), mode="r|*") as inner:
             for member in inner:
-                name = member_name(member)
+                name = member_name(member, allow_config_links=True)
                 if name in names:
                     raise ValueError("duplicate native config member")
                 names.add(name)
@@ -53,12 +66,28 @@ def validate_archive(path):
                             pass
         if not {"data/configuration.yaml", "data/.storage/auth"}.issubset(names):
             raise ValueError("native archive lacks configuration or original authentication state")
+        return data
 
 
 async def capture():
     import aiohttp
     root = Path("/capture")
     root.mkdir(mode=0o700, exist_ok=True)
+    retained = root / "homeassistant.tar.pending"
+    if retained.exists():
+        # Resume the actual already-generated original, not another backup.
+        metadata = validate_archive(retained)
+        with retained.open('rb') as handle:
+            digest = hashlib.file_digest(handle, 'sha256').hexdigest()
+        retained.replace(root / 'homeassistant.tar')
+        (root / 'native.json').write_text(json.dumps({
+            'format': 'home-assistant-native-v1', 'sha256': digest,
+            'backup_id': metadata.get('backup_id') or metadata.get('slug'),
+            'completed': time.time(), 'database': 'external-postgresql',
+            'cross_store_atomicity_qualified': False,
+            'resumed_verified_native_original': True,
+        }, sort_keys=True) + '\n')
+        return
     token = Path("/credentials/token").read_text().strip()
     base = "http://home-assistant:8123"
     # Recorder.lock_database returns immediately for PostgreSQL in the pinned image.
@@ -126,5 +155,10 @@ if __name__ == "__main__":
     os.umask(0o077)
     try:
         asyncio.run(asyncio.wait_for(capture(), timeout=480))
-    except Exception:
-        raise SystemExit("native Home Assistant capture failed; details suppressed to protect credentials") from None
+    except Exception as error:
+        import traceback
+        lines = [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
+                 if frame.filename == __file__]
+        print(json.dumps({"native_capture_failed": type(error).__name__,
+                          "source_lines": lines, "private_details_withheld": True}), flush=True)
+        raise SystemExit(1) from None

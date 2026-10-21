@@ -1,0 +1,24 @@
+# Preserve exact existing provisioned volume and its historical bootstrap metadata.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: sonarr-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: sonarr-dst
+  resources:
+    requests:
+      storage: 15Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-a77ca8ec-29e5-4488-90a6-b32727aed81b

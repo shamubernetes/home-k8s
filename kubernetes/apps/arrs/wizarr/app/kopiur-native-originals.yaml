@@ -1,14 +1,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: wizarr-k92-native-originals
+  name: wizarr-k92-native-originals-v2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: wizarr-k92-native-originals
+        app.kubernetes.io/name: wizarr-k92-native-originals-v2
     spec:
       automountServiceAccountToken: false
       restartPolicy: Never
@@ -106,11 +106,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: wizarr-k92-native-originals
+  name: wizarr-k92-native-originals-v2
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: wizarr-k92-native-originals
+      app.kubernetes.io/name: wizarr-k92-native-originals-v2
   policyTypes:
     - Ingress
     - Egress

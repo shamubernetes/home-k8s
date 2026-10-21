@@ -4,6 +4,37 @@ metadata:
   name: plex
 spec:
   suspend: true
+  # Native state.tar contains every required raw config/metadata/plugin file.
+  # Avoid uploading that raw tree twice; only documented regenerative mounts
+  # are absent from the archive. Preserve the complete current native payload.
+  files:
+    ignoreRules:
+    - "/lost+found"
+    - "System Volume Information"
+    - "$$RECYCLE.BIN"
+    - "@eaDir"
+    - ".snapshot"
+    - "/Library"
+    - "/Drivers"
+    - "/Codecs"
+    - "/plexmediaserver.pid"
+    - "/Scanners"
+    - "/Media"
+    - "/Cache"
+    - "/Crash Reports"
+    - "/Preferences.xml"
+    - "/Plug-ins"
+    - "/Logs"
+    - "/Metadata"
+    - "/Diagnostics"
+    - "/Plug-in Support"
+    - "/Updates"
+    - "/Setup Plex.html"
+    - "/.LocalAdminToken"
+    - "/.kopiur-native/previous"
+    - "/.kopiur-native/pending"
+    - "/.kopiur-native/lock"
+    - "/.kopiur-native/unsupported"
   repository:
     kind: Repository
     name: plex-nas-smb

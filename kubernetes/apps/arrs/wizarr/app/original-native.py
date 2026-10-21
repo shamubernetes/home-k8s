@@ -30,7 +30,7 @@ def inventory(root):
                 with path.open('rb') as stream:
                     digest = hashlib.file_digest(stream, 'sha256').hexdigest()
             result[str(path.relative_to(root))] = [info.st_mode, info.st_uid, info.st_gid,
-                                                 info.st_mtime_ns,
+                                                 info.st_mtime_ns if path.is_file() else None,
                                                  info.st_size if path.is_file() else None, digest]
     return result
 
@@ -72,6 +72,7 @@ def main():
     trees = {b: inventory(p) for b, p in originals.items()}
     require(trees['nas'] and trees['nas'] == trees['r2'])
     results = {}
+    Path('/work/tmp').mkdir(mode=0o700, exist_ok=True)
     active = Path('/data/database')
     for backend, original in originals.items():
         require(active.is_dir() and not active.is_symlink())
@@ -86,11 +87,15 @@ def main():
         shutil.copyfile(consistent, active / 'database.db')
         original_keys = (original / 'secrets.json').read_bytes()
         Path('/work/child-result.json').unlink(missing_ok=True)
-        env = dict(os.environ, FLASK_SKIP_SCHEDULER='true', PYTHONPATH='/app', HOME='/work')
+        Path('/work/native-child-error.json').unlink(missing_ok=True)
+        env = dict(os.environ, FLASK_SKIP_SCHEDULER='true', PYTHONPATH='/app', HOME='/work',
+                   TMPDIR='/work/tmp', PYTHONDONTWRITEBYTECODE='1')
         # Native startup logs may contain original private integration state.
         with open(os.devnull, 'wb') as sink:
             child = subprocess.run(['/app/.venv/bin/python', __file__, '--native-child'], cwd='/app', env=env,
                                    stdout=sink, stderr=sink, timeout=180)
+        if child.returncode != 0 and Path('/work/native-child-error.json').is_file():
+            print(Path('/work/native-child-error.json').read_text(), flush=True)
         require(child.returncode == 0)
         result = json.loads(Path('/work/child-result.json').read_text())
         require(all(result[k] == expected[k] for k in ('tables', 'rows', 'sha256')))
@@ -102,6 +107,7 @@ def main():
     require(results['nas']['sha256'] == results['r2']['sha256'])
     receipt = {'app': 'wizarr', 'independent_original_native_recovery': True,
                'nas_r2_native_data_equal': True, 'full_original_tree_equal': True,
+               'regenerated_directory_mtimes_compared': False,
                'results': results}
     Path('/work/native-receipt.json').write_text(json.dumps(receipt, sort_keys=True))
     print(json.dumps(receipt, sort_keys=True), flush=True)
@@ -111,5 +117,12 @@ if __name__ == '__main__':
     try:
         native_child() if sys.argv[1:] == ['--native-child'] else main()
     except Exception as error:
-        print(json.dumps({'failed': True, 'class': type(error).__name__}), flush=True)
+        import traceback
+        frames = [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
+                  if frame.filename == __file__]
+        failure = json.dumps({'failed': True, 'class': type(error).__name__,
+                              'source_lines': frames})
+        if sys.argv[1:] == ['--native-child']:
+            Path('/work/native-child-error.json').write_text(failure)
+        print(failure, flush=True)
         raise SystemExit(1) from None

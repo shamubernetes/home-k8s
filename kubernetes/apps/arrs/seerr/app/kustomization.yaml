@@ -4,7 +4,7 @@ kind: Kustomization
 resources:
 - ./ocirepository.yaml
 - ./pvc.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./externalsecret-kopiur.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
@@ -13,13 +13,5 @@ resources:
 - ./kopiur-sqlite-originals.yaml
 - ./kopiur-repositories.yaml
 - ../../../../templates/gatus/external
-patches:
-- patch: |-
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${APP}
-      annotations:
-        kustomize.toolkit.fluxcd.io/prune: disabled
 components:
 - ../../../../components/kopiur-sqlite-originals

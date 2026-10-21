@@ -55,6 +55,9 @@ async def native(side):
     original = Path('/original/' + side + '-0/kopiur-native/current')
     capture = json.loads((original / 'capture.json').read_text())
     config = json.loads((original / 'ov.conf').read_text())
+    # Config loading creates the workspace before the service path override.
+    # Redirect that initialization too, never touching restored or production data.
+    config['storage']['workspace'] = '/work/' + side + '-bootstrap'
     config_file = Path('/work') / (side + '.conf')
     config_file.write_text(json.dumps(config))
     os.environ['OPENVIKING_CONFIG_FILE'] = str(config_file)

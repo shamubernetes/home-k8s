@@ -15,6 +15,7 @@ resources:
 - ./externalsecret-kopiur.yaml
 - ./kopiur-repositories.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-daily-recovery.yaml
 - ./kopiur-online-original.yaml
 - ./kopiur-online-original-v2.yaml
 - ./kopiur-online-original-v2-r2.yaml

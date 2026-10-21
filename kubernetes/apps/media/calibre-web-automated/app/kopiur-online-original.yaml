@@ -109,7 +109,7 @@ spec:
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: cwa-k92-online-original
+  name: cwa-k92-online-original-v2
 spec:
   policyRef:
     name: calibre-web-automated

@@ -49,14 +49,14 @@ def pack(path):
 
 
 def canonical_records(values):
-    # The pinned native _upsert_vector_snapshot_record explicitly resets these
-    # operational fields. Preserve strict identity, content and all other scalars.
-    reset_fields = {'created_at', 'updated_at', 'active_count'}
+    # The native store materializes the optional, unset md5 as an empty string.
+    # Normalize only that representation; preserve every populated scalar.
     result = {}
     for row in values:
         record = dict(row)
-        record['scalars'] = {key: value for key, value in row.get('scalars', {}).items()
-                             if key not in reset_fields}
+        record['scalars'] = dict(row.get('scalars', {}))
+        if record['scalars'].get('md5') == '':
+            record['scalars'].pop('md5')
         result[row['record_id']] = record
     return result
 
@@ -102,7 +102,7 @@ async def native(side):
     print(json.dumps({'native_original_passed': side, 'index_records': capture['index_records'],
                       'dense_vectors': capture['dense_vectors'], 'vector_mode': 'require',
                       'all_original_record_content_vectors_files_equal': True,
-                      'native_reset_scalar_fields': ['created_at', 'updated_at', 'active_count']}), flush=True)
+                      'empty_optional_md5_equivalent_to_absent': True}), flush=True)
 
 
 def main(side):

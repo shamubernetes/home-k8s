@@ -74,6 +74,20 @@ def main():
                 shutil.rmtree(path)
             path.mkdir()
         recipe.restore(bundle, *(work / name for name in ('config', 'data', 'plugins', 'scrapers')))
+        # The native archive preserves production paths. Rebase only these
+        # filesystem fields in the isolated copy; never replace original keys.
+        isolated_config = work / 'config/config.yml'
+        config_text = isolated_config.read_text()
+        paths = {'database': '/work/config/stash-go.sqlite', 'blobs_path': '/work/data/blobs',
+                 'metadata': '/work/data/metadata', 'plugins_path': '/work/plugins',
+                 'scrapers_path': '/work/scrapers', 'cache': '/work/cache',
+                 'generated': '/work/generated'}
+        for field, value in paths.items():
+            replacement = field + ': ' + json.dumps(value)
+            config_text, found = re.subn(r'^' + field + r':[^\n]*', replacement, config_text, flags=re.MULTILINE)
+            if not found:
+                config_text += '\n' + replacement + '\n'
+        isolated_config.write_text(config_text)
         env = dict(os.environ, HOME='/work/config', STASH_CONFIG_FILE='/work/config/config.yml',
                    STASH_DATABASE='/work/config/stash-go.sqlite', STASH_BLOBS_PATH='/work/data/blobs',
                    STASH_BLOBS_STORAGE='FILESYSTEM', STASH_METADATA='/work/data/metadata',
@@ -97,14 +111,10 @@ def main():
                         if time.monotonic() >= deadline:
                             raise TimeoutError('native Stash startup deadline') from None
                         time.sleep(1)
-                # Prove the real native process uses the restored original DB,
-                # rather than accepting a newly initialized empty application.
-                db_path = str(work / 'config/stash-go.sqlite')
-                open_paths = []
-                for fd in (Path('/proc') / str(process.pid) / 'fd').iterdir():
-                    with contextlib.suppress(FileNotFoundError):
-                        open_paths.append(os.readlink(fd))
-                require(db_path in open_paths)
+                # Ask the actual native server for its effective database.
+                # SQLite may close idle descriptors; that is not data loss.
+                effective_database = graphql('{ configuration { general { database } } }')['configuration']['general']['database']
+                require(Path(effective_database).resolve() == (work / 'config/stash-go.sqlite').resolve())
                 native_counts = {}
                 native_catalog = {}
                 for entity in ('Scenes', 'Performers', 'Studios', 'Tags', 'Images', 'Galleries'):

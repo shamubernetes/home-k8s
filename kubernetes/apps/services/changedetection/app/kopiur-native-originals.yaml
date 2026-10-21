@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: changedetection-k92-native-originals-v2
+  name: changedetection-k92-native-originals-v3
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 600
@@ -34,7 +34,7 @@ spec:
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
             - name: PYTHONPATH
-              value: /app
+              value: /app:/usr/local
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

@@ -10,12 +10,14 @@ import re
 import shutil
 import sqlite3
 import stat
+import tarfile
 
 CONTRACTS = {
     'seerr': ('db/db.sqlite3', 'kopiur/seerr-online.db', ['settings.json']),
     'tautulli': ('tautulli.db', 'kopiur/tautulli-online.db', ['config.ini']),
     'audiobookshelf': ('absdatabase.sqlite', None, ['metadata']),
     'kometa': ('config.cache', None, ['config.yml', 'UUID']),
+    'profilarr': ('data/profilarr.db', 'native-archive', []),
 }
 
 
@@ -82,7 +84,7 @@ def restore(original, target, app):
         file = original / name
         require(not file.is_symlink() and file.exists())
         require(file.is_dir() or file.stat().st_size > 0)
-    copied = artifact(original, db_name, fixed)
+    copied = None if app == 'profilarr' else artifact(original, db_name, fixed)
     require(not target.exists())
     shutil.copytree(original, target)
     for base, dirs, files in os.walk(original):
@@ -92,6 +94,27 @@ def restore(original, target, app):
             os.chown(target / file.relative_to(original), info.st_uid, info.st_gid)
     info = original.stat()
     os.chown(target, info.st_uid, info.st_gid)
+    profile_info = None
+    if app == 'profilarr':
+        archives = sorted((original / 'backups').glob('backup-*.tar.gz'))
+        require(archives)
+        stage = target.parent / (target.name + '-native-archive')
+        require(not stage.exists())
+        stage.mkdir()
+        with tarfile.open(archives[-1], 'r:gz') as archive:
+            members = archive.getmembers()
+            for member in members:
+                name = Path(member.name)
+                require(name.parts and name.parts[0] == 'data' and not name.is_absolute()
+                        and '..' not in name.parts and (member.isfile() or member.isdir()))
+            archive.extractall(stage, filter='data')
+        profile_info = json.loads((stage / 'data/INFO.json').read_text())
+        require(profile_info.get('sanitized') is False)
+        require(isinstance(profile_info.get('schemaVersion'), int))
+        require((stage / 'data/profilarr.db').is_file())
+        # Exact native local-backup restore format, never the sanitized download.
+        shutil.copytree(stage / 'data', target / 'data', dirs_exist_ok=True)
+        copied = stage / 'data/profilarr.db'
     restored = target / db_name
     for suffix in ('-wal', '-shm', '-journal'):
         Path(str(restored) + suffix).unlink(missing_ok=True)
@@ -115,6 +138,8 @@ def restore(original, target, app):
     for name in required:
         if (original / name).is_file():
             require((target / name).read_bytes() == (original / name).read_bytes())
+    if profile_info is not None:
+        result.update(native_unsanitized_archive_restored=True, native_schema_version=profile_info['schemaVersion'])
     result.update(captured_database_replayed=True, original_required_state_and_keys_equal=True)
     return result
 

@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: profilarr-k92-sqlite-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        recovery.kopiur.home.arpa/role: profilarr-sql-original
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+          command:
+            - python3
+            - /kopiur/original-sqlite.py
+          env:
+            - name: RECOVERY_TARGET
+              value: isolated
+            - name: TARGET_APP
+              value: profilarr
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: ORIGINAL_POINTS
+              value: '{"nas": "9841106cd58934a1617da47aceed3532", "r2": "df70494d6553c1c9d0baca68e6281519"}'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+                - DAC_OVERRIDE
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 2Gi
+            limits:
+              memory: 1Gi
+              ephemeral-storage: 6Gi
+          volumeMounts:
+            - name: nas
+              mountPath: /original/nas
+              readOnly: true
+            - name: r2
+              mountPath: /original/r2
+              readOnly: true
+            - name: helper
+              mountPath: /kopiur
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: profilarr-k92-existing-nas
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: profilarr-k92-existing-r2
+            readOnly: true
+        - name: helper
+          configMap:
+            name: profilarr-k92-sqlite-original
+        - name: work
+          emptyDir:
+            sizeLimit: 6Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: profilarr-k92-sqlite-originals
+spec:
+  podSelector:
+    matchLabels:
+      recovery.kopiur.home.arpa/role: profilarr-sql-original
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

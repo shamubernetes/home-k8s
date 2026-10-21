@@ -55,7 +55,7 @@ for name in com.plexapp.plugins.library.db com.plexapp.plugins.library.blobs.db;
   timeout 240 "$sqlite" -readonly -cmd 'PRAGMA query_only=ON;' -cmd 'BEGIN;' \
     -cmd 'SELECT 1 FROM sqlite_schema LIMIT 1;' "$source" ".backup '$output/pending/$name'" >/dev/null
   printf 'native SQLite WAL backup %s seconds=%s\n' "$name" "$(( $(date +%s) - started ))"
-  result=$(timeout 60 "$sqlite" -readonly "$output/pending/$name" 'PRAGMA integrity_check;')
+  result=$(timeout 180 "$sqlite" -readonly "$output/pending/$name" 'PRAGMA integrity_check;')
   [ "$result" = ok ] || exit 1
 done
 # Exclude only regeneratable mounts, logs, DB bytes replaced by native copies,

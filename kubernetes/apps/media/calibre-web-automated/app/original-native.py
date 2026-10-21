@@ -56,6 +56,16 @@ def database(path):
 
 
 def replay(source, target):
+    candidates = [source, source / 'config', source / 'data']
+    print(json.dumps({'backend': source.name, 'known_layout': [
+        {'root': str(p.relative_to(source)), 'database_presence': {
+            n: (p / n).is_file() for n in DATABASES},
+         'manifest': (p / '.kopiur-cwa/current.json').is_file(),
+         'native_directories': [c.name for c in p.iterdir() if 'kopiur' in c.name]
+         if p.is_dir() else []} for p in candidates]}), flush=True)
+    native_roots = [p for p in candidates if (p / '.kopiur-cwa/current.json').is_file()]
+    require(len(native_roots) == 1)
+    source = native_roots[0]
     manifest = json.loads((source / '.kopiur-cwa/current.json').read_text())
     require(manifest['version'] == 1 and manifest['consistency'] == 'per-database-online')
     require(re.fullmatch('[0-9a-f]{32}', manifest['generation']))

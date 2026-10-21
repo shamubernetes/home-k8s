@@ -1,0 +1,29 @@
+{
+  "pvc": "server-volume-victoria-metrics-ha-0",
+  "namespace": "observability",
+  "selector": {
+    "app.kubernetes.io/instance": "victoria-metrics-ha",
+    "app.kubernetes.io/name": "victoria-metrics-single"
+  },
+  "container": "vmsingle",
+  "native": "native-point.py",
+  "daily_cron": "30 21 * * *",
+  "dependencies": [
+    "Native /snapshot/create on the exact deployed v1.154.0 endpoint then retained whole-PVC CSI capture. Restore only exact snapshots/<native-name> from clone into empty isolated VM storage.",
+    "Both live VolumeSnapshotClasses have Delete policy. Parent storage owner must provision a scoped Retain RBD class before helper can run. Do not edit the shared classes here.",
+    "Provide durable private transaction storage, exclusive capture ownership, native-count/age/free-space guards and crash reconciliation for creating/captured/failed states before recurring integration. Helper does not implement that scheduler lifecycle.",
+    "Wire an HTTP-capable independent helper using existing native endpoint and network policy. Do not assume python, shell, wget or curl exists in vmsingle.",
+    "No native hardlink release until exact ready CSI/content UID proof with Retain policy. No deletion of retained CSI or remote archive points. Require original queries and equality after native restore."
+  ],
+  "cohort": "E",
+  "status": "draft-prerequisites",
+  "schedule_enabled": false,
+  "timezone": "America/New_York",
+  "run_on_create": false,
+  "shared_integration_requirements": [
+    "Provision dedicated per-app NAS and R2 Kopiur credentials in 1Password and ExternalSecrets; no existing scoped Repository was found. Do not reuse volsync-template or another app credential.",
+    "Parent must extend shared mover deadline selectors for capture, replication, verify, maintenance and discovery; retain strict read errors.",
+    "Parent must wire reviewed helpers without PodTemplate changes, qualify native NAS and exact-lineage R2 restores, then enable one daily schedule and retire VolSync separately. No legacy histories may be deleted."
+  ],
+  "production_recovery_verified": false
+}

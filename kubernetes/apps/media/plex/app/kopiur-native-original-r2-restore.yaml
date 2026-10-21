@@ -1,0 +1,64 @@
+# Independent offsite restore of the completed exact original copy.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: plex-k92-original-r2
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 16
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: plex-r2
+    namespace: media
+  source:
+    identity:
+      hostname: media
+      sourcePath: /pvc/plex
+      username: plex
+      snapshotID: fdde2dbabe409ca8a1c0b7cb959d9226
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 150Gi
+      name: plex-k92-original-r2
+      storageClassName: ceph-block

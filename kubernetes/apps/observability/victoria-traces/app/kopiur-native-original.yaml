@@ -4,14 +4,20 @@ kind: SnapshotPolicy
 metadata:
   name: victoria-traces-native
 spec:
-  copyMethod: Direct
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
   defaultDeletionPolicy: Retain
   errorHandling:
     failFast: true
     ignoreDirErrors: false
     ignoreFileErrors: false
     ignoreUnknownTypes: false
-  groupBy: VolumeGroupSnapshot
+
   identity:
     username: victoria-traces
     hostname: observability
@@ -20,7 +26,6 @@ spec:
       runAsNonRoot: false
       runAsUser: 0
       runAsGroup: 0
-      fsGroup: 0
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -38,10 +43,10 @@ spec:
     keepWeekly: 4
   sources:
     - pvc:
-        name: vt-k92-retained-point
+        name: server-volume-victoria-traces-0
       readOnly: true
       sourcePathOverride: /pvc/victoria-traces-native
-  suspend: true
+  suspend: false
   verification:
     deep:
       capacity: 30Gi
@@ -88,8 +93,8 @@ spec:
     parallel: 8
     policies: none
   schedule:
-    cron: 20 4 * * *
-    timezone: UTC
+    cron: 46 2 * * *
+    timezone: America/New_York
     jitter: 0s
   selection:
     identities:

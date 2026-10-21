@@ -1,6 +1,7 @@
 #!/bin/bash
 # Use Plex's own SQLite build, never the distribution SQLite against Plex data.
 set -euo pipefail
+trap 'printf "native Plex capture failed at source line %s\n" "$LINENO" >&2' ERR
 umask 077
 root='/config'
 output="$root/.kopiur-native"
@@ -30,10 +31,23 @@ inventory() {
 }
 inventory >"$output/pending/db.before"
 state_inventory() {
-  find "$root" \( -path "$output" -o -path "$root/$databases" -o -path "$root/Cache" -o -path "$root/Media" -o -path "$root/Logs" \) -prune -o -printf '%P/%y/%i/%s/%T@/%C@/%m/%U/%G\0' | sort -z
-  # Reject links and special files instead of archiving an incomplete dependency.
-  find "$root" \( -path "$output" -o -path "$root/$databases" -o -path "$root/Cache" -o -path "$root/Media" -o -path "$root/Logs" \) -prune -o \( ! -type f ! -type d \) -print >"$output/unsupported"
-  [ ! -s "$output/unsupported" ]
+  find "$root" \( -path "$output" -o -path "$root/$databases" -o -path "$root/Cache" -o -path "$root/Media" -o -path "$root/Logs" \) -prune -o -printf '%P/%y/%i/%s/%T@/%C@/%m/%U/%G/%l\0' | sort -z
+  # Plex Metadata uses relative links. Preserve them in tar, never dereference
+  # outside captured state or accept dangling links and special objects.
+  find "$root" \( -path "$output" -o -path "$root/$databases" -o -path "$root/Cache" -o -path "$root/Media" -o -path "$root/Logs" \) -prune -o \( ! -type f ! -type d ! -type l \) -print >"$output/unsupported"
+  [ ! -s "$output/unsupported" ] || return 1
+  find "$root" \( -path "$output" -o -path "$root/$databases" -o -path "$root/Cache" -o -path "$root/Media" -o -path "$root/Logs" \) -prune -o -type l -print0 >"$output/links"
+  while IFS= read -r -d '' link; do
+    target=$(readlink "$link") || return 1
+    case "$target" in /*) return 1 ;; esac
+    resolved=$(readlink -e "$link") || return 1
+    case "$resolved" in
+      "$output"|"$output/"*|"$root/$databases"|"$root/$databases/"*|"$root/Cache"|"$root/Cache/"*|"$root/Media"|"$root/Media/"*|"$root/Logs"|"$root/Logs/"*) return 1 ;;
+      "$root/"*) [ -f "$resolved" ] || return 1 ;;
+      *) return 1 ;;
+    esac
+  done <"$output/links"
+  rm "$output/links"
 }
 state_inventory >"$output/pending/state.before"
 for name in com.plexapp.plugins.library.db com.plexapp.plugins.library.blobs.db; do

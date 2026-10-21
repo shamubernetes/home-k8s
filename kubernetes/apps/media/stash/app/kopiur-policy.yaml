@@ -177,8 +177,10 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: stash-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T00:43:00Z"
 spec:
-  suspend: true
+  suspend: false
   sourceRef:
     kind: Repository
     name: stash-nas-smb

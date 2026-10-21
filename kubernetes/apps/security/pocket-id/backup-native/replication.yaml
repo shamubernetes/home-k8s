@@ -1,0 +1,28 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: pocket-id-native-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T04:33:10.743680+00:00"
+spec:
+  destinationRef:
+    kind: Repository
+    name: pocket-id-r2
+  migrate:
+    parallel: 8
+    policies: none
+  schedule:
+    cron: 20 20 * * *
+    timezone: America/New_York
+    jitter: 0s
+  selection:
+    identities:
+      include:
+        - username: pocket-id
+          hostname: security
+          sourcePath: /pvc/pocket-id-kopiur-capture
+    latestOnly: true
+  sourceRef:
+    kind: Repository
+    name: pocket-id-nas-smb
+  suspend: false

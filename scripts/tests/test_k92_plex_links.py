@@ -23,7 +23,7 @@ class PlexLinks(unittest.TestCase):
         (self.root / 'Metadata/original').write_bytes(b'original metadata')
         self.link = self.root / 'Metadata/link'
         source = SOURCE.read_text()
-        function = source.split('state_inventory() {', 1)[1].split('\n}\nstate_inventory', 1)[0]
+        function = source.split('state_inventory() {', 1)[1].split('\n}\n', 1)[0]
         self.command = '\n'.join([
             'set -euo pipefail',
             'find() { command ' + shlex.quote(shutil.which('gfind') or 'find') + ' "$@"; }',

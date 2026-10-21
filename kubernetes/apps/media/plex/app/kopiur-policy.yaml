@@ -1,40 +1,28 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
   name: plex
 spec:
   suspend: true
-  # Native state.tar contains every required raw config/metadata/plugin file.
-  # Avoid uploading that raw tree twice; only documented regenerative mounts
-  # are absent from the archive. Preserve the complete current native payload.
   files:
     ignoreRules:
-    - "/lost+found"
-    - "System Volume Information"
-    - "$$RECYCLE.BIN"
-    - "@eaDir"
-    - ".snapshot"
-    - "/Library"
-    - "/Drivers"
-    - "/Codecs"
-    - "/plexmediaserver.pid"
-    - "/Scanners"
-    - "/Media"
-    - "/Cache"
-    - "/Crash Reports"
-    - "/Preferences.xml"
-    - "/Plug-ins"
-    - "/Logs"
-    - "/Metadata"
-    - "/Diagnostics"
-    - "/Plug-in Support"
-    - "/Updates"
-    - "/Setup Plex.html"
-    - "/.LocalAdminToken"
-    - "/.kopiur-native/previous"
-    - "/.kopiur-native/pending"
-    - "/.kopiur-native/lock"
-    - "/.kopiur-native/unsupported"
+      - /lost+found
+      - /Cache
+      - /Media
+      - /Logs
+      - /.kopiur-native/previous
+      - /.kopiur-native/pending
+      - /.kopiur-native/lock
+      - /.kopiur-native/unsupported
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.db
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.db-wal
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.db-shm
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.db-journal
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.blobs.db
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.blobs.db-wal
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.blobs.db-shm
+      - /Plug-in Support/Databases/com.plexapp.plugins.library.blobs.db-journal
   repository:
     kind: Repository
     name: plex-nas-smb

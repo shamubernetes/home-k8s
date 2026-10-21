@@ -1,0 +1,26 @@
+{
+  "pvc": "tunarr",
+  "namespace": "media",
+  "selector": null,
+  "container": null,
+  "native": "backups/render-kopiur-rollback.py and backups/check-restored-sqlite.py",
+  "daily_cron": "43 2 * * *",
+  "dependencies": [
+    "Live old HelmRelease is suspended; old Deployment replicas=0 and no app Pod exists. Keep these exact states. Active ZooTV is NAS and must not be contacted or modified.",
+    "Render from a real current-generation Ready Repository JSON. No placeholder Repository or Secret name is committed. Generated policy and daily schedule remain suspended pending original archive/restore qualification.",
+    "Adopt only through existing backup-only Flux root, never unsuspend tunarr app root or HelmRelease. No native workloadExec hooks.",
+    "Archive the complete frozen rollback PVC through CSI clone; test private-file traversal as UID568. Preserve all Meilisearch/history/config bytes even when only SQLite integrity is validated.",
+    "Independently restore exact NAS and R2 archive points, byte-compare the full tree, inspect SQLite including WAL on an isolated copy, validate Meilisearch offline without starting the old application."
+  ],
+  "cohort": "E",
+  "status": "draft-prerequisites",
+  "schedule_enabled": false,
+  "timezone": "America/New_York",
+  "run_on_create": false,
+  "shared_integration_requirements": [
+    "Provision dedicated per-app NAS and R2 Kopiur credentials in 1Password and ExternalSecrets; no existing scoped Repository was found. Do not reuse volsync-template or another app credential.",
+    "Parent must extend shared mover deadline selectors for capture, replication, verify, maintenance and discovery; retain strict read errors.",
+    "Parent must wire reviewed helpers without PodTemplate changes, qualify native NAS and exact-lineage R2 restores, then enable one daily schedule and retire VolSync separately. No legacy histories may be deleted."
+  ],
+  "production_recovery_verified": false
+}

@@ -8,5 +8,8 @@ configMapGenerator:
   - capture.cjs
   options:
     disableNameSuffixHash: true
+    annotations:
+      # Projected directory update only. Keep Secret-driven Reloader behavior.
+      reloader.stakater.com/ignore: "true"
     labels:
       app.kubernetes.io/name: atproto-pds

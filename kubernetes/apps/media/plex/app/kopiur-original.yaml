@@ -2,7 +2,7 @@
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
-  name: plex-k92-native-original
+  name: plex-k92-native-original-v2
 spec:
   policyRef:
     name: plex

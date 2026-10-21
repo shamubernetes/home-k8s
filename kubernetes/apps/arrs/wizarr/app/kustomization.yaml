@@ -9,4 +9,5 @@ resources:
 - ./httproute-envoy.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-repositories.yaml
+- ./kopiur-original-restores.yaml
 - ../../../../templates/gatus/external

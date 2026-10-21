@@ -1,0 +1,153 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: wizarr-daily-20261020052354
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+  policyRef:
+    name: wizarr
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: wizarr-k92-original-nas
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 2
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: wizarr-nas-smb
+  source:
+    identity:
+      hostname: arrs
+      snapshotID: e80be7e5ca00c7fedefc665f10c4a3bb
+      sourcePath: /pvc/wizarr
+      username: wizarr
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 1Gi
+      name: wizarr-k92-original-nas
+      storageClassName: ceph-block
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: wizarr-nas-to-r2-copy-02e4174abaecc5f2-f1f7615e
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  repository:
+    kind: Repository
+    name: wizarr-r2
+    namespace: arrs
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: wizarr-k92-original-r2
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 2
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: wizarr-r2
+  source:
+    identity:
+      hostname: arrs
+      snapshotID: 02e4174abaecc5f2f308c346aaa0f945
+      sourcePath: /pvc/wizarr
+      username: wizarr
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 1Gi
+      name: wizarr-k92-original-r2
+      storageClassName: ceph-block

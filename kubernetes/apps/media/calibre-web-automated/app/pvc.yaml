@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: calibre-web-automated
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: calibre-web-automated-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: calibre-web-automated-dst
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-25ab02fa-a690-4f0f-83c9-e3094f6c6875

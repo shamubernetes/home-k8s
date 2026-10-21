@@ -4,4 +4,6 @@ kind: Namespace
 metadata:
   name: games
   annotations:
+    # Root restores preserve the original RomM owners and private permissions.
+    kopiur.home-operations.com/privileged-movers: "true"
     kustomize.toolkit.fluxcd.io/prune: disabled

@@ -1,0 +1,99 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: victoria-traces-nas-smb
+spec:
+  backend:
+    rclone:
+      remotePath: mnemosyne:kopiur-victoria-traces
+      configSecretRef:
+        name: victoria-traces-kopiur-nas
+      startupTimeout: 2m
+  encryption:
+    passwordSecretRef:
+      name: victoria-traces-kopiur-nas
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: false
+  maintenance:
+    enabled: false
+  moverDefaults:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 2Gi
+  suspend: false
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Repository
+metadata:
+  name: victoria-traces-r2
+spec:
+  backend:
+    s3:
+      bucket: kopiur-victoria-traces
+      prefix: kopiur/victoria-traces/r2/
+      endpoint: 0834f4848c703f1fcf5b524bdf5f1722.r2.cloudflarestorage.com
+      region: auto
+      auth:
+        secretRef:
+          name: victoria-traces-kopiur-r2
+  encryption:
+    passwordSecretRef:
+      name: victoria-traces-kopiur-r2
+      key: KOPIA_PASSWORD
+  create:
+    enabled: true
+  scheduleDefaults:
+    timezone: America/New_York
+  deletionProtection:
+    threshold: 10
+  health:
+    probe:
+      enabled: false
+  maintenance:
+    enabled: false
+  moverDefaults:
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 2Gi
+  suspend: false

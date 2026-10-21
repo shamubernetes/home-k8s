@@ -29,3 +29,24 @@ spec:
       VOLSYNC_CAPACITY: 100Gi
       VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_CALIBRE_WEB_AUTOMATED}"
       VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_CALIBRE_WEB_AUTOMATED}"
+---
+# Dedicated prepared backends only. No app or capture activation.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: calibre-web-automated-kopiur-backends
+  namespace: ${KS_NAMESPACE}
+spec:
+  targetNamespace: media
+  dependsOn:
+    - name: external-secrets-secret-store
+    - name: kopiur
+  path: ./kubernetes/apps/media/calibre-web-automated/backup-backends
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: ${KS_GIT_REPO_NAME}
+  wait: true
+  interval: ${KS_INTERVAL}
+  retryInterval: ${KS_RETRY_INTERVAL}
+  timeout: ${KS_TIMEOUT}

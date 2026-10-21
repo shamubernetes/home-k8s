@@ -33,16 +33,17 @@ def pack(path):
     from openviking.storage.ovpack.operations import (
         base_name_from_entries, read_manifest, validate_manifest_content, read_dense_vectors,
     )
+    from openviking.storage.ovpack.validation import _zip_file_members_by_path
     with zipfile.ZipFile(path) as archive:
         base = base_name_from_entries(archive.infolist())
         manifest = read_manifest(archive, base)
         records = validate_manifest_content(archive, manifest, archive.infolist(), base)
         vectors = read_dense_vectors(archive, manifest, base, records)
-        protected_paths = {entry['path'] for entry in manifest['entries']
-                           if entry['kind'] == 'file'}
-        files = {item.filename.removeprefix(base + '/'): hashlib.sha256(archive.read(item)).hexdigest()
-                 for item in archive.infolist() if not item.is_dir()
-                 and item.filename.removeprefix(base + '/') in protected_paths}
+        # Use the exact image's canonical mapping. ZIP members include a content
+        # prefix which is not present in the manifest's logical file paths.
+        files = {name: hashlib.sha256(archive.read(safe_path)).hexdigest()
+                 for name, (_, safe_path) in
+                 _zip_file_members_by_path(archive.infolist(), base).items()}
     assert files, 'native package has no protected file entries'
     return records, vectors, files
 

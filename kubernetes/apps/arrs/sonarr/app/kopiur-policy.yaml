@@ -101,8 +101,7 @@ kind: SnapshotReplication
 metadata:
   name: sonarr-nas-to-r2
   annotations:
-    # Copy the actual successful primary-schedule point.
-    kopiur.home-operations.com/run-requested: "2026-10-10T03:07:42Z"
+    kopiur.home-operations.com/run-requested: "2026-10-21T10:49:00Z"
 spec:
   sourceRef:
     kind: Repository

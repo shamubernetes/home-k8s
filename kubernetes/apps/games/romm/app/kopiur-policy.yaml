@@ -54,6 +54,7 @@ spec:
                   runAsGroup: 568
                   seccompProfile:
                     type: RuntimeDefault
+                  fsGroup: 568
                 affinity:
                   podAffinity:
                     requiredDuringSchedulingIgnoredDuringExecution:
@@ -102,10 +103,6 @@ spec:
                       - name: runtime
                         mountPath: /runtime
                         readOnly: true
-                      - name: app-config
-                        mountPath: /runtime/config.yml
-                        subPath: config.yml
-                        readOnly: true
                       - name: tmp
                         mountPath: /tmp
                     securityContext:
@@ -127,17 +124,22 @@ spec:
                   - name: helper
                     configMap:
                       name: romm-kopiur-native
-                  - name: runtime
-                    secret:
-                      secretName: romm-secret
-                      items:
-                        - key: ROMM_AUTH_SECRET_KEY
-                          path: ROMM_AUTH_SECRET_KEY
-                  - name: app-config
-                    configMap:
-                      name: romm-configmap
                   - name: tmp
                     emptyDir: {}
+                  - name: runtime
+                    projected:
+                      defaultMode: 288
+                      sources:
+                        - secret:
+                            name: romm-secret
+                            items:
+                              - key: ROMM_AUTH_SECRET_KEY
+                                path: ROMM_AUTH_SECRET_KEY
+                        - configMap:
+                            name: romm-configmap
+                            items:
+                              - key: config.yml
+                                path: config.yml
   mover:
     securityContext:
       allowPrivilegeEscalation: false

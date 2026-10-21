@@ -8,17 +8,9 @@ resources:
 - ./kopiur-shared-originals.yaml
 - ./ocirepository.yaml
 - ./externalsecret-oidc.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy-browser.yaml
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml
 - ../../../../templates/gatus/guarded
-patches:
-- patch: |-
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${APP}
-      annotations:
-        kustomize.toolkit.fluxcd.io/prune: disabled

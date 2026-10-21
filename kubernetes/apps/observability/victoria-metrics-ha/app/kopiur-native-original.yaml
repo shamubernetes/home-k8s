@@ -4,14 +4,20 @@ kind: SnapshotPolicy
 metadata:
   name: victoria-metrics-native
 spec:
-  copyMethod: Direct
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
   defaultDeletionPolicy: Retain
   errorHandling:
     failFast: true
     ignoreDirErrors: false
     ignoreFileErrors: false
     ignoreUnknownTypes: false
-  groupBy: VolumeGroupSnapshot
+
   identity:
     username: victoria-metrics-ha
     hostname: observability
@@ -20,7 +26,6 @@ spec:
       runAsNonRoot: false
       runAsUser: 0
       runAsGroup: 0
-      fsGroup: 0
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -38,10 +43,73 @@ spec:
     keepWeekly: 4
   sources:
     - pvc:
-        name: vm-k92-native-point
+        name: server-volume-victoria-metrics-ha-0
       readOnly: true
       sourcePathOverride: /pvc/victoria-metrics-ha-native
-  suspend: true
+  suspend: false
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          timeout: 12m
+          continueOnFailure: false
+          jobSpec:
+            activeDeadlineSeconds: 600
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  backup.home.arpa/app: victoria-metrics-ha
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            statefulset.kubernetes.io/pod-name: victoria-metrics-ha-0
+                        topologyKey: kubernetes.io/hostname
+                securityContext:
+                  runAsNonRoot: false
+                  runAsUser: 0
+                  runAsGroup: 0
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: capture
+                    image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:a605d07cc0e3a789e3491201cba4871418c203b3d974a0b9afc497c2bf25243f
+                    command:
+                      - python3
+                      - /kopiur/capture-native.py
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                        add:
+                          - DAC_OVERRIDE
+                          - FOWNER
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 64Mi
+                      limits:
+                        memory: 256Mi
+                    volumeMounts:
+                      - name: source
+                        mountPath: /capture
+                      - name: helper
+                        mountPath: /kopiur
+                        readOnly: true
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: server-volume-victoria-metrics-ha-0
+                  - name: helper
+                    configMap:
+                      name: victoria-metrics-native-capture
   verification:
     deep:
       capacity: 20Gi
@@ -88,8 +156,8 @@ spec:
     parallel: 8
     policies: none
   schedule:
-    cron: 20 4 * * *
-    timezone: UTC
+    cron: 47 2 * * *
+    timezone: America/New_York
     jitter: 0s
   selection:
     identities:

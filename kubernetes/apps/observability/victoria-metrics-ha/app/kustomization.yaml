@@ -2,6 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./kopiur-native-daily.yaml
 - ./kopiur-native-original-restores.yaml
 - ./kopiur-native-original.yaml
 - ./kopiur-native-original-point.yaml
@@ -12,3 +13,12 @@ resources:
 - ./networkpolicy.yaml
 - ./prometheusrule.yaml
 - ./volsync.yaml
+configMapGenerator:
+- name: victoria-metrics-native-capture
+  files:
+  - capture-native.py
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
+generatorOptions:
+  disableNameSuffixHash: true

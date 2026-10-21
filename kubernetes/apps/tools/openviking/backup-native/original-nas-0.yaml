@@ -1,0 +1,62 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: openviking-k92-original-nas-0
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 15m
+  repository:
+    kind: Repository
+    name: openviking-nas-smb
+  source:
+    identity:
+      username: openviking
+      hostname: tools
+      sourcePath: /pvc/openviking
+      snapshotID: 6087e10c1752fc44a7ad1a2addcaa0f5
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 20Gi
+      name: openviking-k92-original-nas-0
+      storageClassName: ceph-block

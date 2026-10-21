@@ -1,0 +1,13 @@
+# Observed actual policy/helper/credential delivery before the original request.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: home-assistant-k92-native-original-v2
+spec:
+  policyRef:
+    name: home-assistant-native
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

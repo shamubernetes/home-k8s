@@ -7,7 +7,8 @@ resources:
 - ./kopiur-native-original-nas-restore.yaml
 - ./kopiur-online-original.yaml
 - ./ocirepository.yaml
-- ../../../../templates/volsync
+- ./pvc.yaml
+- ./legacy-recovery-secrets.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded

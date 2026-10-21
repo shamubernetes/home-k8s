@@ -1,0 +1,63 @@
+# Exact accepted original points, independent non-production targets.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Restore
+metadata:
+  name: atproto-pds-k92-original-nas
+spec:
+  credentialProjection:
+    enabled: false
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+  mover:
+    podSecurityContext:
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+        drop:
+          - ALL
+      runAsGroup: 0
+      runAsNonRoot: false
+      runAsUser: 0
+  options:
+    enableFileDeletion: false
+    ignoreErrors: false
+    ignorePermissionErrors: false
+    parallel: 8
+    skipOwners: false
+    skipPermissions: false
+    skipTimes: false
+    writeFilesAtomically: true
+  policy:
+    onMissingSnapshot: Fail
+    waitTimeout: 1m
+  repository:
+    kind: Repository
+    name: atproto-pds-nas-smb
+  source:
+    identity:
+      hostname: services
+      snapshotID: c65cb96bad8cd42e089cc3734c10d6bd
+      sourcePath: /pvc/atproto-pds
+      username: atproto-pds
+  target:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      capacity: 20Gi
+      name: atproto-pds-k92-original-nas
+      storageClassName: ceph-block

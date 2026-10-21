@@ -47,8 +47,8 @@ kind: SnapshotReplication
 metadata:
   name: atproto-pds-nas-to-r2
   annotations:
-    # Copy the verified retained original before independent native recovery.
-    kopiur.home-operations.com/run-requested: "2026-10-11T11:30:00Z"
+    # Copy the completed non-disruptive format-2 original, retaining all history.
+    kopiur.home-operations.com/run-requested: "2026-10-21T07:20:00Z"
 spec:
   sourceRef:
     kind: Repository
@@ -66,7 +66,7 @@ spec:
       - username: atproto-pds
         hostname: services
         sourcePath: /pvc/atproto-pds
-    latestOnly: false
+    latestOnly: true
   migrate:
     parallel: 2
     policies: none

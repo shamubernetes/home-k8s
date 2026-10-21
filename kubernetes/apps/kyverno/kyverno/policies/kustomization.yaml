@@ -9,4 +9,3 @@ resources:
 - ./kopiur-movers.yaml
 - ./safeToEvict.yaml
 - ./talos-runner-boundary.yaml
-- ./volsync-movers.yaml

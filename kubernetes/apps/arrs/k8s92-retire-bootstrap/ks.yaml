@@ -1,0 +1,19 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: k8s92-retire-bootstrap
+  namespace: ${KS_NAMESPACE}
+spec:
+  targetNamespace: arrs
+  commonMetadata:
+    labels:
+      app.kubernetes.io/name: k8s92-retire-bootstrap
+  path: ./kubernetes/apps/arrs/k8s92-retire-bootstrap/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: ${KS_GIT_REPO_NAME}
+  wait: true
+  interval: ${KS_INTERVAL}
+  retryInterval: ${KS_RETRY_INTERVAL}
+  timeout: 10m

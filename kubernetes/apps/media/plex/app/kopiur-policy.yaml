@@ -4,7 +4,7 @@ kind: SnapshotPolicy
 metadata:
   name: plex
 spec:
-  suspend: true
+  suspend: false
   files:
     ignoreRules:
       - /lost+found
@@ -158,6 +158,7 @@ spec:
     name: plex
   schedule:
     cron: 0 18 * * *
+    suspend: false
     timezone: America/New_York
     jitter: 5m
     runOnCreate: false
@@ -182,6 +183,7 @@ spec:
     name: plex-r2
   schedule:
     cron: 0 19 * * *
+    timezone: America/New_York
     jitter: 5m
   selection:
     identities:
@@ -189,11 +191,9 @@ spec:
         - username: plex
           hostname: media
           sourcePath: /pvc/plex
-    latestOnly: false
+    latestOnly: true
   migrate:
     parallel: 2
     policies: none
   pruning:
-    retention:
-      keepDaily: 7
-      keepWeekly: 4
+    none: {}

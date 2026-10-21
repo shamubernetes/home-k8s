@@ -1,0 +1,13 @@
+# Exact fixed helper was read back before this fresh native production request.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: victoria-metrics-native-k92-live-v2
+spec:
+  policyRef:
+    name: victoria-metrics-native
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

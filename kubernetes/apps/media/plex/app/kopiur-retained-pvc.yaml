@@ -1,0 +1,24 @@
+# Exact original bound production volume; prune protection, no replacement.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: plex-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: plex-dst
+  resources:
+    requests:
+      storage: 150Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-442459e8-629c-4fad-b513-8606a040f3b2

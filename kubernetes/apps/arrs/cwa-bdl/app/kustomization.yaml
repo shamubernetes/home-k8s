@@ -27,3 +27,11 @@ configMapGenerator:
   - native-init.sh=kopiur-init.sh
 generatorOptions:
   disableNameSuffixHash: true
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${APP}
+      annotations:
+        kustomize.toolkit.fluxcd.io/prune: disabled

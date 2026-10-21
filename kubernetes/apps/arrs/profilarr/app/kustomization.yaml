@@ -11,6 +11,7 @@ resources:
 - ./httproute-envoy-browser.yaml
 - ./httproute-envoy-api-hermes.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-existing-originals.yaml
 - ./kopiur-repositories.yaml
 - ./securitypolicy-oidc.yaml
 - ./securitypolicy-hermes-machine.yaml

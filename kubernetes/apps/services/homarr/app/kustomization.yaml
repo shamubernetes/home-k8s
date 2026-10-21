@@ -10,6 +10,7 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy-browser.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-existing-originals.yaml
 - ./kopiur-repositories.yaml
 - ./securitypolicy-oidc.yaml
 - ./service-envoy-dns.yaml

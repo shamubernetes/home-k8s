@@ -38,10 +38,11 @@ def pack(path):
         manifest = read_manifest(archive, base)
         records = validate_manifest_content(archive, manifest, archive.infolist(), base)
         vectors = read_dense_vectors(archive, manifest, base, records)
+        protected_paths = {entry['path'] for entry in manifest['entries']
+                           if entry['kind'] == 'file'}
         files = {item.filename.removeprefix(base + '/'): hashlib.sha256(archive.read(item)).hexdigest()
                  for item in archive.infolist() if not item.is_dir()
-                 and item.filename.removeprefix(base + '/') in
-                 {entry['path'] for entry in manifest['entries'] if entry['kind'] == 'file'}}
+                 and item.filename.removeprefix(base + '/') in protected_paths}
     assert files, 'native package has no protected file entries'
     return records, vectors, files
 
@@ -56,8 +57,11 @@ async def native(side):
     config_file = Path('/work') / (side + '.conf')
     config_file.write_text(json.dumps(config))
     os.environ['OPENVIKING_CONFIG_FILE'] = str(config_file)
-    os.environ['OPENVIKING_CODEX_AUTH_PATH'] = '/original/' + side + '-1/codex_auth.json'
+    # The native bundle contains its own verified OAuth escrow. The separate
+    # live auth PVC may legitimately be newer; no cross-store atomicity gate.
+    os.environ['OPENVIKING_CODEX_AUTH_PATH'] = str(original / 'codex_auth.json')
     assert digest(Path(os.environ['OPENVIKING_CODEX_AUTH_PATH'])) == capture['oauth_sha256']
+    json.loads(Path('/original/' + side + '-1/codex_auth.json').read_text())
     for index, (account, item) in enumerate(sorted(capture['packages'].items())):
         source = original / item['file']
         assert digest(source) == item['sha256']
@@ -84,13 +88,14 @@ async def native(side):
                       'all_original_records_vectors_files_equal': True}), flush=True)
 
 
-def main():
+def main(side):
     os.umask(0o077)
-    for index in range(3):
-        left = tree(Path('/original/nas-' + str(index)))
-        assert left and left == tree(Path('/original/r2-' + str(index)))
+    if side == 'r2':
+        for index in range(3):
+            left = tree(Path('/original/nas-' + str(index)))
+            assert left and left == tree(Path('/original/r2-' + str(index)))
     # Native singleton storage and config managers are process-local.
-    for side in ['nas', 'r2']:
+    for side in [side]:
         result = subprocess.run([sys.executable, __file__, side], capture_output=True, timeout=600)
         Path('/work/' + side + '-private.log').write_bytes(result.stdout + result.stderr)
         if result.returncode:
@@ -103,17 +108,18 @@ def main():
                    if line.startswith('{"native_original_passed":')]
         assert len(receipt) == 1
         print(receipt[0], flush=True)
-    print(json.dumps({'all_three_original_sources_equal': True, 'native_nas_and_r2_recovered': True,
+    print(json.dumps({'all_three_original_sources_equal': side == 'r2', 'native_original_store_recovered': side,
                       'production_access': False}), flush=True)
 
 
 if __name__ == '__main__':
     try:
-        if len(sys.argv) == 2:
-            assert sys.argv[1] in ['nas', 'r2']
+        assert len(sys.argv) == 2
+        if sys.argv[1] in ['nas', 'r2']:
             asyncio.run(native(sys.argv[1]))
         else:
-            main()
+            assert sys.argv[1] in ['verify-nas', 'verify-r2']
+            main(sys.argv[1].removeprefix('verify-'))
     except Exception as error:
         import traceback
         print(json.dumps({'native_original_failed': type(error).__name__,

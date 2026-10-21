@@ -9,6 +9,7 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ./kopiur-policy.yaml
+- ./kopiur-existing-originals.yaml
 - ./kopiur-repositories.yaml
 - ./notification-sync.yaml
 - ../../../../templates/gatus/guarded

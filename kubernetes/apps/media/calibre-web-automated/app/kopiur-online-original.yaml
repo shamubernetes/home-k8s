@@ -125,7 +125,7 @@ kind: SnapshotReplication
 metadata:
   name: calibre-web-automated-nas-to-r2
   annotations:
-    kopiur.home-operations.com/run-requested: "2026-10-21T03:50:52.157499+00:00"
+    kopiur.home-operations.com/run-requested: "2026-10-21T04:53:35.449764+00:00"
 spec:
   destinationRef:
     kind: Repository

@@ -170,8 +170,10 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: plex-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T04:53:35.449764+00:00"
 spec:
-  suspend: true
+  suspend: false
   sourceRef:
     kind: Repository
     name: plex-nas-smb

@@ -1,0 +1,16 @@
+# Preserve exact original StatefulSet volume and historical bootstrap metadata.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: server-volume-victoria-traces-0
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-2cd4ccaa-dd57-40a3-a553-ba9a856d9dd0

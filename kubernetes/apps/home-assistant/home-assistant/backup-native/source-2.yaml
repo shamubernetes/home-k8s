@@ -1,0 +1,19 @@
+# Concrete installed-CRD source child; original primary source0 is not replayed.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: home-assistant-k92-source-2
+spec:
+  policyRef:
+    name: home-assistant-native
+  source:
+    sourceIndex: 2
+    target:
+      pvc:
+        name: home-assistant-kopiur-capture
+        namespace: home-assistant
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

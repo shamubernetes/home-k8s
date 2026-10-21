@@ -1,0 +1,118 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wizarr-k92-native-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wizarr-k92-native-originals
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: isolated-owner
+          image: ghcr.io/wizarrrr/wizarr:v2026.10.1@sha256:08f2c6de534ec7d36d39a4f55b7c5c379021ca881dc519c702aad0ddafbdc67a
+          command:
+            - python3
+            - -c
+            - import os; os.chmod('/work',0o700); os.chown('/work',1000,1000); os.chmod('/data/database',0o700); os.chown('/data/database',1000,1000)
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: active
+              mountPath: /data/database
+      containers:
+        - name: native
+          image: ghcr.io/wizarrrr/wizarr:v2026.10.1@sha256:08f2c6de534ec7d36d39a4f55b7c5c379021ca881dc519c702aad0ddafbdc67a
+          command:
+            - python3
+            - /kopiur/original-native.py
+          workingDir: /app
+          env:
+            - name: RECOVERY_TARGET
+              value: isolated
+            - name: NAS_SNAPSHOT
+              value: e80be7e5ca00c7fedefc665f10c4a3bb
+            - name: R2_SNAPSHOT
+              value: 02e4174abaecc5f2f308c346aaa0f945
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 2Gi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - name: nas
+              mountPath: /original/nas
+              readOnly: true
+            - name: r2
+              mountPath: /original/r2
+              readOnly: true
+            - name: helper
+              mountPath: /kopiur
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: active
+              mountPath: /data/database
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: wizarr-k92-original-nas
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: wizarr-k92-original-r2
+            readOnly: true
+        - name: helper
+          configMap:
+            name: wizarr-k92-original-native
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: active
+          emptyDir:
+            sizeLimit: 1Gi
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wizarr-k92-native-originals
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wizarr-k92-native-originals
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

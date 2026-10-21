@@ -13,3 +13,4 @@ resources:
 - ./pasta/ks.yaml
 - ./tunarr/ks.yaml
 - ./tunarr/backups-ks.yaml
+- ./tunarr/backup-backends-ks.yaml

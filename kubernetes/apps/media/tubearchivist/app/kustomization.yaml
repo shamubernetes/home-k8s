@@ -4,7 +4,8 @@ kind: Kustomization
 resources:
 - ../backup-native
 - ./ocirepository.yaml
-- ../../../../templates/volsync
+- ./pvc.yaml
+- ./legacy-recovery-secrets.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml

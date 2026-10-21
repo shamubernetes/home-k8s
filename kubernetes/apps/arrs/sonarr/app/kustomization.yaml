@@ -28,9 +28,26 @@ patches:
 - path: ./kopiur-postgres-patch.yaml
 - path: ./kopiur-recurring-runtime-patch.yaml
 configMapGenerator:
+- name: sonarr-kopiur-online-capture
+  files:
+  - capture=./online-capture.sh
+  options:
+    annotations:
+      reloader.stakater.com/ignore: "true"
 - name: sonarr-kopiur-recurring
   files:
   - recurring.sh=./recurring.sh
   - recurring-capture.sh=./recurring-capture.sh
 generatorOptions:
   disableNameSuffixHash: true
+replacements:
+- source:
+    kind: ConfigMap
+    name: sonarr-kopiur-online-capture
+    fieldPath: data.capture
+  targets:
+  - select:
+      kind: SnapshotPolicy
+      name: sonarr
+    fieldPaths:
+    - spec.hooks.beforeSnapshot.0.workloadExec.command.2

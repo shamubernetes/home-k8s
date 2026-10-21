@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calibre-web-automated-k92-native-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        recovery.kopiur.home.arpa/role: calibre-web-automated-k92-native-originals
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: native-replay
+          image: ghcr.io/crocodilestick/calibre-web-automated:V3.1.4@sha256:577e846f104fd21453ef306eefb4a95dd95b3b9ddd2463a150944494284da0fd
+          command:
+            - /lsiopy/bin/python3
+            - /kopiur/original-native.py
+          env:
+            - name: RECOVERY_TARGET
+              value: isolated
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: ORIGINAL_POINTS
+              value: '{"nas":"b2f45c41a1a48946d5ff359382e592f4","r2":"1f5f821db6485ee61ded26f51f1eed97"}'
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 2Gi
+              ephemeral-storage: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - DAC_OVERRIDE
+          volumeMounts:
+            - name: nas
+              mountPath: /original/nas
+              readOnly: true
+            - name: r2
+              mountPath: /original/r2
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: tmp
+              mountPath: /tmp
+            - name: helper
+              mountPath: /kopiur
+              readOnly: true
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: calibre-web-automated-k92-original-nas
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: calibre-web-automated-k92-original-r2
+            readOnly: true
+        - name: work
+          emptyDir:
+            sizeLimit: 4Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: helper
+          configMap:
+            name: calibre-web-automated-kopiur-original-native
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: calibre-web-automated-k92-native-originals
+spec:
+  podSelector:
+    matchLabels:
+      recovery.kopiur.home.arpa/role: calibre-web-automated-k92-native-originals
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

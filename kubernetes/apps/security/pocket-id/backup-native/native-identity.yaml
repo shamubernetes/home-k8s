@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: pocket-id-kopiur-postgres
+spec:
+  refreshPolicy: Periodic
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: pocket-id-kopiur-postgres
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      engineVersion: v2
+      data:
+        PGUSER: '{{ .PGUSER }}'
+        PGPASSWORD: '{{ .PGPASSWORD }}'
+        PGDATABASE: '{{ .PGDATABASE }}'
+  dataFrom:
+    - extract:
+        key: kopiur-pocket-id

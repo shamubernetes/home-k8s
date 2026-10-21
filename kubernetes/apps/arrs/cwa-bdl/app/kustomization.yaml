@@ -8,7 +8,7 @@ resources:
 - ./kopiur-shared-originals.yaml
 - ./kopiur-shared-original-consumer.yaml
 - ./ocirepository.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
@@ -27,11 +27,3 @@ configMapGenerator:
   - native-init.sh=kopiur-init.sh
 generatorOptions:
   disableNameSuffixHash: true
-patches:
-- patch: |-
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${APP}
-      annotations:
-        kustomize.toolkit.fluxcd.io/prune: disabled

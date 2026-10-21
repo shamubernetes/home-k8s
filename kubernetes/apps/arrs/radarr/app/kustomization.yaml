@@ -5,7 +5,7 @@ resources:
 - ./ocirepository.yaml
 - ./externalsecret.yaml
 - ./externalsecret-oidc.yaml
-- ../../../../templates/volsync
+- ./legacy-recovery-secrets.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy-api.yaml
 - ./httproute-envoy-browser.yaml
@@ -24,13 +24,6 @@ resources:
 components:
 - ../../../../components/kopiur-postgres
 patches:
-- patch: |-
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${APP}
-      annotations:
-        kustomize.toolkit.fluxcd.io/prune: disabled
 - path: ./kopiur-postgres-patch.yaml
 - path: ./kopiur-recurring-runtime-patch.yaml
 configMapGenerator:

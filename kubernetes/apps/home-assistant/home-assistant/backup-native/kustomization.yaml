@@ -3,6 +3,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: home-assistant
 resources:
+  - original-nas-0.yaml
+  - original-nas-1.yaml
+  - original-nas-2.yaml
   - source-1.yaml
   - source-2.yaml
   - original-v2.yaml

@@ -44,7 +44,9 @@ state_inventory() {
   done <"$output/links"
   rm "$output/links"
 }
-state_inventory >"$output/pending/state.before"
+# Strictly validate contained native links once, without requiring a globally
+# quiet live tree; the subsequent CSI point atomically captures ordinary files.
+state_inventory >/dev/null
 for name in com.plexapp.plugins.library.db com.plexapp.plugins.library.blobs.db; do
   source="$root/$databases/$name"
   [ -s "$source" ] && [ ! -L "$source" ]
@@ -61,14 +63,8 @@ done
 # Exclude only regeneratable mounts, logs, DB bytes replaced by native copies,
 # and this helper's private tree. All required config, metadata and plugins remain.
 [ -s "$root/Preferences.xml" ] && [ ! -L "$root/Preferences.xml" ]
-tar --create --one-file-system --numeric-owner --file="$output/pending/state.tar" \
-  --exclude='./.kopiur-native' --exclude='./Plug-in Support/Databases' \
-  --exclude='./Cache' --exclude='./Media' --exclude='./Logs' --directory="$root" .
-state_inventory >"$output/pending/state.after"
-cmp "$output/pending/state.before" "$output/pending/state.after" >/dev/null || exit 1
-rm "$output/pending/state.before" "$output/pending/state.after"
-printf 'format=1\napplication=plex\nconsistency=online-wal-snapshot-per-database\ncompleted_at=%s\n' "$(date -u +%FT%TZ)" >"$output/pending/metadata"
-(cd "$output/pending" && sha256sum ./*.db state.tar metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
+printf 'format=2\napplication=plex\nrequired_state=complete-csi-root\nconsistency=online-wal-snapshot-per-database\ncompleted_at=%s\n' "$(date -u +%FT%TZ)" >"$output/pending/metadata"
+(cd "$output/pending" && sha256sum ./*.db metadata >SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
 sync -f "$output/pending"
 rm -rf "$output/previous"
 if [ -d "$output/current" ]; then mv "$output/current" "$output/previous"; fi

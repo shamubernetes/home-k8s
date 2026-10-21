@@ -41,7 +41,9 @@ class WalReadSnapshotTest(unittest.TestCase):
         self.assertNotIn('db.before', text)
         self.assertNotIn('db.after', text)
         self.assertIn("sqlite='/usr/lib/plexmediaserver/Plex SQLite'", text)
-        self.assertIn('state_inventory >"$output/pending/state.after"', text)
+        self.assertNotIn('tar --create', text)
+        self.assertNotIn('state.before', text)
+        self.assertIn('required_state=complete-csi-root', text)
 
 
 if __name__ == '__main__':

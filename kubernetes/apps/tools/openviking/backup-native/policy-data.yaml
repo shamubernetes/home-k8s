@@ -61,7 +61,7 @@ spec:
       storageClassName: ceph-block
     successExpr: snapshot != null && stats.errors == 0
     verifyFilesPercent: 100
-  suspend: true
+  suspend: false
   errorHandling:
     failFast: true
     ignoreDirErrors: false

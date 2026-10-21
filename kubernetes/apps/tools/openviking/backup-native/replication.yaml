@@ -19,6 +19,9 @@ spec:
     identities:
       include:
         - username: openviking
+          hostname: tools-native
+          sourcePath: /pvc/openviking
+        - username: openviking
           hostname: tools
           sourcePath: /pvc/openviking
         - username: openviking

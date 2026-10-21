@@ -211,7 +211,7 @@ spec:
                       secretName: home-assistant-kopiur-api
           timeout: 12m
           continueOnFailure: false
-  suspend: true
+  suspend: false
   errorHandling:
     failFast: true
     ignoreDirErrors: false

@@ -1,0 +1,69 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: home-assistant-native-config
+  labels:
+    backup.home.arpa/daily-set: home-assistant-native
+spec:
+  repository:
+    kind: Repository
+    name: home-assistant-nas-smb
+  identity:
+    username: home-assistant
+    hostname: home-assistant
+  sources:
+    - pvc:
+        name: home-assistant
+      sourcePathOverride: /pvc/home-assistant
+      readOnly: true
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  mover:
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      runAsNonRoot: false
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+  verification:
+    quick:
+      schedule:
+        cron: 10 21 * * *
+        jitter: 10m
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 10 22 * * 0
+        jitter: 10m
+      capacity: 20Gi
+      storageClassName: ceph-block
+    successExpr: snapshot != null && stats.errors == 0
+    verifyFilesPercent: 100
+  suspend: true
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false

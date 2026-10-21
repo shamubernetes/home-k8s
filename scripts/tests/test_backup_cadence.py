@@ -68,7 +68,7 @@ class CadenceTests(unittest.TestCase):
         self.assertFalse(owner['spec']['prune'])
         self.assertEqual(owner['spec']['deletionPolicy'], 'Orphan')
         root, = yaml_json('.', [app / 'backups/kustomization.yaml'])
-        self.assertEqual(set(root['resources']), {'./replicationsource.yaml', './kopiur-rollback-original.yaml', './kopiur-original-nas-restore.yaml', './kopiur-original-r2-restore.yaml'})
+        self.assertEqual(set(root['resources']), {'./replicationsource.yaml', './kopiur-rollback-original.yaml', './kopiur-original-nas-restore.yaml', './kopiur-original-r2-restore.yaml', './kopiur-native-consumers.yaml'})
         for entry in root['resources']:
             self.assertTrue((app / 'backups' / entry).resolve().is_relative_to(app / 'backups'))
         native = yaml_json('.', [app / 'backups/kopiur-rollback-original.yaml'])
@@ -81,6 +81,15 @@ class CadenceTests(unittest.TestCase):
             restored, = yaml_json('.', [app / 'backups' / receipt])
             self.assertEqual(restored['kind'], 'Restore')
             self.assertNotEqual(restored['spec']['target']['pvc']['name'], 'tunarr')
+        consumers = yaml_json('.', [app / 'backups/kopiur-native-consumers.yaml'])
+        self.assertEqual({d['kind'] for d in consumers}, {'Job', 'NetworkPolicy'})
+        self.assertEqual(sum(d['kind'] == 'Job' for d in consumers), 2)
+        for job in [d for d in consumers if d['kind'] == 'Job']:
+            pod = job['spec']['template']['spec']
+            self.assertFalse(pod['automountServiceAccountToken'])
+            original = next(v for v in pod['volumes'] if v['name'] == 'original')
+            self.assertTrue(original['persistentVolumeClaim']['readOnly'])
+            self.assertNotEqual(original['persistentVolumeClaim']['claimName'], 'tunarr')
         resource, = yaml_json('.', [app / 'backups/replicationsource.yaml'])
         self.assertEqual(resource['kind'], 'ReplicationSource')
         self.assertEqual(resource['spec']['sourcePVC'], 'tunarr')

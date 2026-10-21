@@ -76,12 +76,13 @@ def prepare():
             # Active databases only; historical dumps remain fully restored but
             # are not incorrectly asserted to equal today's channel catalog.
             _inspect_active_database(file, target, databases)
+    # Tunarr 1.3.15 getDefaultDatabaseName() opens db.db in this directory.
+    # Historical SQLite copies are restored and checked, not active catalogs.
+    active_database = str((native_root / 'db.db').relative_to(target))
+    require(active_database in databases)
+    channel_ids = databases[active_database].get('channel_ids')
     for entry in databases.values():
-        if entry.get('channel_ids') is not None:
-            found = entry.pop('channel_ids')
-            if channel_ids is not None:
-                require(channel_ids == found)
-            channel_ids = found
+        entry.pop('channel_ids', None)
     require(databases and channel_ids is not None)
     require(original_tree(original) == before)
     for base, dirs, files in os.walk(target):

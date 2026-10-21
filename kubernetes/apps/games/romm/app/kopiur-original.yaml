@@ -10,3 +10,17 @@ spec:
   failurePolicy:
     activeDeadlineSeconds: 3600
     backoffLimit: 0
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: romm-k92-native-original-v2
+spec:
+  policyRef:
+    name: romm
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

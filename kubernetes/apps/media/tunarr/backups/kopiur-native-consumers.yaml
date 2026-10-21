@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: tunarr-frozen-native-nas
+  name: tunarr-frozen-native-nas-v2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1200
@@ -187,7 +187,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: tunarr-frozen-native-r2
+  name: tunarr-frozen-native-r2-v2
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1200

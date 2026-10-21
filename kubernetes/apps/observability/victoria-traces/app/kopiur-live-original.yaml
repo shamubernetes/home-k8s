@@ -1,0 +1,14 @@
+# Policy generation 2 was observed on the real source before requesting this.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: victoria-traces-k92-live-original
+spec:
+  policyRef:
+    name: victoria-traces-native
+  deletionPolicy: Retain
+  pin: true
+  description: Fresh online CSI production PVC point after independent native recovery
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

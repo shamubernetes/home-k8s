@@ -2,11 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: tools
 resources:
-  - original-native-r2-job.yaml
   - policy-data.yaml
   - policy-auth.yaml
   - policy-models.yaml
-  - original-native-job.yaml
   - original-nas-0.yaml
   - original-nas-1.yaml
   - original-nas-2.yaml

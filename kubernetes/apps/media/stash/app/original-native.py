@@ -81,7 +81,9 @@ def main():
                    STASH_PORT='9999', STASH_HOST='127.0.0.1',
                    STASH_CACHE='/work/cache', STASH_GENERATED='/work/generated')
         with open(os.devnull, 'wb') as sink:
-            process = subprocess.Popen(['/usr/bin/stash'], env=env, cwd='/work/config',
+            process = subprocess.Popen(['/usr/bin/stash', '--config', '/work/config/config.yml',
+                                        '--host', '127.0.0.1', '--port', '9999', '--nobrowser'],
+                                       env=env, cwd='/work/config',
                                        stdout=sink, stderr=sink)
             try:
                 deadline = time.monotonic() + 180
@@ -134,5 +136,5 @@ if __name__ == '__main__':
         frames = [frame.lineno for frame in traceback.extract_tb(error.__traceback__)
                   if frame.filename == __file__]
         print(json.dumps({'failed': True, 'class': type(error).__name__,
-                          'source_line': frames[-1] if frames else 0}), flush=True)
+                          'source_lines': frames}), flush=True)
         raise SystemExit(1) from None

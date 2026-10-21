@@ -1,14 +1,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: openviking-k92-native-r2-v2
+  name: openviking-k92-native-r2-v3
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 2400
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: openviking-k92-native-r2-v2
+        app.kubernetes.io/name: openviking-k92-native-r2-v3
     spec:
       automountServiceAccountToken: false
       restartPolicy: Never
@@ -102,11 +102,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: openviking-k92-native-r2-v2
+  name: openviking-k92-native-r2-v3
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: openviking-k92-native-r2-v2
+      app.kubernetes.io/name: openviking-k92-native-r2-v3
   policyTypes:
     - Ingress
     - Egress

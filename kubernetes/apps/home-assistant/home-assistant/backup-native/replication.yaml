@@ -2,6 +2,8 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotReplication
 metadata:
   name: home-assistant-native-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T13:07:00Z"
 spec:
   sourceRef:
     kind: Repository
@@ -31,4 +33,4 @@ spec:
     policies: none
   pruning:
     none: {}
-  suspend: true
+  suspend: false

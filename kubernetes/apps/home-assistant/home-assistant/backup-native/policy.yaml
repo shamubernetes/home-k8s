@@ -95,7 +95,7 @@ spec:
                     command:
                       - sh
                       - -ec
-                      - umask 077; rm -rf /capture/pending; mkdir -m 700 /capture/pending
+                      - umask 077; mkdir -p /capture/pending; chmod 700 /capture/pending
                     securityContext:
                       allowPrivilegeEscalation: false
                       readOnlyRootFilesystem: true

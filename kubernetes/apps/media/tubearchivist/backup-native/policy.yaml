@@ -1,0 +1,136 @@
+# Actual native seven-index PIT exporter, scoped readonly credential, no app restart.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: tubearchivist-native
+spec:
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  identity:
+    username: tubearchivist
+    hostname: media
+  mover:
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+  repository:
+    kind: Repository
+    name: tubearchivist-nas-smb
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  sources:
+    - pvc:
+        name: tubearchivist
+      readOnly: true
+      sourcePathOverride: /pvc/tubearchivist
+  suspend: true
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          timeout: 12m
+          continueOnFailure: false
+          jobSpec:
+            activeDeadlineSeconds: 600
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  backup.home.arpa/app: tubearchivist
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: tubearchivist
+                            app.kubernetes.io/controller: tubearchivist
+                        topologyKey: kubernetes.io/hostname
+                securityContext:
+                  runAsNonRoot: false
+                  runAsUser: 0
+                  runAsGroup: 0
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: capture
+                    image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+                    command:
+                      - python3
+                      - /kopiur/capture.py
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                        add:
+                          - DAC_OVERRIDE
+                          - FOWNER
+                    resources:
+                      requests:
+                        cpu: 25m
+                        memory: 64Mi
+                      limits:
+                        memory: 256Mi
+                    volumeMounts:
+                      - name: source
+                        mountPath: /capture
+                      - name: helper
+                        mountPath: /kopiur
+                        readOnly: true
+                    envFrom:
+                      - secretRef:
+                          name: tubearchivist-kopiur-es
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: tubearchivist
+                  - name: helper
+                    configMap:
+                      name: tubearchivist-native-capture
+  verification:
+    deep:
+      capacity: 20Gi
+      parallel: 2
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      storageClassName: ceph-block
+    quick:
+      maxErrors: 0
+      parallel: 2
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+  files:
+    ignoreRules:
+      - /lost+found
+      - /.kopiur-native-es/pending
+      - /.kopiur-native-es/previous

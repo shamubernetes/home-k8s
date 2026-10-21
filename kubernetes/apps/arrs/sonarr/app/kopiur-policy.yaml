@@ -86,12 +86,12 @@ spec:
   policyRef:
     name: sonarr
   schedule:
-    # Arm after the actual online producer's fresh NAS/R2 point is delivered.
-    suspend: true
+    # Actual online source and exact independent offsite copy succeeded.
+    suspend: false
     cron: "45 1 * * *"
     timezone: America/New_York
     jitter: 10m
-    runOnCreate: true
+    runOnCreate: false
     concurrencyPolicy: Forbid
     startingDeadlineSeconds: 3600
   failedJobsHistoryLimit: 3

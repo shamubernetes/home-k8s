@@ -149,7 +149,7 @@ spec:
       - ReadWriteOnce
     storageClassName: ceph-block
     timeout: 10m
-  suspend: true
+  suspend: false
   verification:
     deep:
       capacity: 150Gi
@@ -177,8 +177,8 @@ spec:
   policyRef:
     name: chaptarr
   schedule:
-    suspend: true
-    cron: 15 20 * * *
+    suspend: false
+    cron: 16 20 * * *
     timezone: America/New_York
     jitter: 0s
     runOnCreate: false

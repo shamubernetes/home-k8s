@@ -11,6 +11,14 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ../../../../templates/gatus/guarded
+patches:
+- target:
+    kind: PersistentVolumeClaim
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        kustomize.toolkit.fluxcd.io/prune: disabled
 configMapGenerator:
 - name: calibre-web-automated-kopiur-original-native
   files:

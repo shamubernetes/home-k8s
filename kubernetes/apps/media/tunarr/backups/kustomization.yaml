@@ -2,12 +2,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./legacy-recovery-secrets.yaml
 - ./kopiur-retained-pvc.yaml
 - ./kopiur-native-consumers.yaml
 - ./kopiur-original-r2-restore.yaml
 - ./kopiur-original-nas-restore.yaml
 - ./kopiur-rollback-original.yaml
-- ./replicationsource.yaml
 configMapGenerator:
 - name: tunarr-frozen-original-native
   files:

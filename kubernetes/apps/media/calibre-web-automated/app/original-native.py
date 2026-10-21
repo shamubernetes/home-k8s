@@ -9,6 +9,7 @@ import re
 import shutil
 import sqlite3
 import stat
+from calibre.db.backend import Connection
 
 DATABASES = ('app.db', 'cwa.db', 'gdrive.db', 'calibre-library/metadata.db',
              'calibre-library/.calnotes/notes.db')
@@ -42,31 +43,43 @@ def tree(root):
 
 
 def database(path):
-    with contextlib.closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
-        require(db.execute('PRAGMA integrity_check').fetchall() == [('ok',)])
+    # Calibre's native connection loads sqlite_extension, including the calibre
+    # FTS tokenizer required by notes.db. Plain sqlite3 cannot read those tables.
+    with contextlib.closing(Connection(str(path))) as db:
+        require(list(db.execute('PRAGMA integrity_check')) == [('ok',)])
         tables = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
         require(tables)
-        rows = {t: db.execute('SELECT count(*) FROM "' + t.replace('"', '""') + '"').fetchone()[0]
-                for t in tables}
         logical = hashlib.sha256()
-        for line in db.iterdump():
-            logical.update(line.encode() + b'\n')
-        return {'tables': len(tables), 'rows': sum(rows.values()), 'logical_sha256': logical.hexdigest(),
+        rows = 0
+        for table in tables:
+            schema = list(db.execute('SELECT sql FROM sqlite_master WHERE type=\'table\' AND name=?', (table,)))
+            logical.update(json.dumps([table, schema], sort_keys=True).encode() + b'\n')
+            values = [json.dumps(row, ensure_ascii=False, default=lambda value: {'blob': value.hex()})
+                      for row in db.execute('SELECT * FROM "' + table.replace('"', '""') + '"')]
+            rows += len(values)
+            for value in sorted(values):
+                logical.update(value.encode() + b'\n')
+        return {'tables': len(tables), 'rows': rows, 'logical_sha256': logical.hexdigest(),
                 'integrity_check': 'ok'}
 
 
 def replay(source, target):
-    candidates = [source, source / 'config', source / 'data']
-    print(json.dumps({'backend': source.name, 'known_layout': [
-        {'root': str(p.relative_to(source)), 'database_presence': {
-            n: (p / n).is_file() for n in DATABASES},
-         'manifest': (p / '.kopiur-cwa/current.json').is_file(),
-         'native_directories': [c.name for c in p.iterdir() if 'kopiur' in c.name]
-         if p.is_dir() else []} for p in candidates]}), flush=True)
-    native_roots = [p for p in candidates if (p / '.kopiur-cwa/current.json').is_file()]
-    require(len(native_roots) == 1)
-    source = native_roots[0]
-    manifest = json.loads((source / '.kopiur-cwa/current.json').read_text())
+    base = source / '.kopiur-cwa'
+    pointer = base / 'current.json'
+    if pointer.is_file():
+        manifest = json.loads(pointer.read_text())
+    else:
+        # These actual frozen originals contain one complete self-describing
+        # generation and one incomplete attempt, but no mutable current pointer.
+        # Never guess among multiple completed generations or use raw DB files.
+        candidates = sorted(base.glob('*/manifest.json'))
+        selected = os.environ.get('ORIGINAL_NATIVE_GENERATION')
+        if selected:
+            require(re.fullmatch('[0-9a-f]{32}', selected))
+            candidates = [p for p in candidates if p.parent.name == selected]
+        require(len(candidates) == 1)
+        manifest = json.loads(candidates[0].read_text())
+        manifest['generation'] = candidates[0].parent.name
     require(manifest['version'] == 1 and manifest['consistency'] == 'per-database-online')
     require(re.fullmatch('[0-9a-f]{32}', manifest['generation']))
     records = manifest['databases']

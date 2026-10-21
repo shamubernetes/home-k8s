@@ -2,8 +2,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: calibre-web-automated-k92-native-originals-v2
+  name: calibre-web-automated-k92-native-originals-v3
 spec:
+  # The existing paired originals passed the session-owned native Calibre job.
+  # Retain a runnable drill recipe without replaying accepted native recovery.
+  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:
@@ -23,9 +26,14 @@ spec:
         - name: native-replay
           image: ghcr.io/crocodilestick/calibre-web-automated:V3.1.4@sha256:577e846f104fd21453ef306eefb4a95dd95b3b9ddd2463a150944494284da0fd
           command:
-            - /lsiopy/bin/python3
-            - /kopiur/original-native.py
+            - /app/calibre/calibre-debug
+            - -c
+            - "import runpy; runpy.run_path('/kopiur/original-native.py',run_name='__main__')"
           env:
+            - name: HOME
+              value: /tmp
+            - name: CALIBRE_CONFIG_DIRECTORY
+              value: /tmp/calibre
             - name: RECOVERY_TARGET
               value: isolated
             - name: PYTHONDONTWRITEBYTECODE

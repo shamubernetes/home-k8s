@@ -1,0 +1,230 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshotpolicy_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: chaptarr
+spec:
+  copyMethod: Snapshot
+  defaultDeletionPolicy: Retain
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  groupBy: VolumeGroupSnapshot
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          continueOnFailure: false
+          timeout: 31m
+          jobSpec:
+            activeDeadlineSeconds: 1800
+            backoffLimit: 0
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: chaptarr-kopiur-capture
+              spec:
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: chaptarr
+                            app.kubernetes.io/controller: chaptarr
+                        topologyKey: kubernetes.io/hostname
+                automountServiceAccountToken: false
+                containers:
+                  - command:
+                      - bash
+                      - -c
+                      - |
+                        set -euo pipefail
+                        umask 077
+                        base=/config/.kopiur-chaptarr
+                        mkdir -p "$base"
+                        generation=$(cat /proc/sys/kernel/random/uuid)
+                        dest="$base/$generation"
+                        mkdir "$dest"
+                        for database in chaptarr_main chaptarr_log chaptarr_cache; do
+                         timeout 600 pg_dump --format=custom --no-owner --no-acl --dbname "$database" --file "$dest/$database.dump" 2>/tmp/native-pg-error || { printf 'native pg_dump failed
+                        ' >&2; exit 1; }
+                         timeout 60 pg_restore --list "$dest/$database.dump" >/dev/null 2>/tmp/native-pg-error || { printf 'native archive validation failed
+                        ' >&2; exit 1; }
+                         test -s "$dest/$database.dump"
+                        done
+                        (cd "$dest" && sha256sum ./*.dump > SHA256SUMS && sha256sum -c SHA256SUMS >/dev/null)
+                        printf 'format=1
+                        application=chaptarr
+                        consistency=per-database-online-pg-dump
+                        ' > "$dest/metadata"
+                        sync -f "$dest"
+                        printf '%s
+                        ' "$generation" > "$base/current.pending"
+                        mv "$base/current.pending" "$base/current"
+                        printf 'native three PostgreSQL databases exported without writer holds
+                        '
+                    env:
+                      - name: PGHOST
+                        value: postgres17-rw.database.svc.cluster.local
+                      - name: PGPORT
+                        value: "5432"
+                      - name: PGUSER
+                        valueFrom:
+                          secretKeyRef:
+                            name: chaptarr-secret
+                            key: INIT_POSTGRES_USER
+                      - name: PGPASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: chaptarr-secret
+                            key: INIT_POSTGRES_PASS
+                      - name: PGCONNECT_TIMEOUT
+                        value: "10"
+                    image: docker.io/library/postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+                    name: capture
+                    resources:
+                      limits:
+                        memory: 1Gi
+                      requests:
+                        cpu: 25m
+                        memory: 128Mi
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop:
+                          - ALL
+                      readOnlyRootFilesystem: true
+                    volumeMounts:
+                      - name: source
+                        mountPath: /config
+                      - name: tmp
+                        mountPath: /tmp
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 568
+                  runAsGroup: 568
+                  fsGroup: 568
+                  seccompProfile:
+                    type: RuntimeDefault
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: chaptarr
+                  - name: tmp
+                    emptyDir: {}
+            ttlSecondsAfterFinished: 86400
+  identity:
+    username: chaptarr
+    hostname: arrs
+  mover:
+    podSecurityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+  repository:
+    kind: Repository
+    name: chaptarr-nas-smb
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  sources:
+    - pvc:
+        name: chaptarr
+      readOnly: true
+      sourcePathOverride: /pvc/chaptarr
+  staging:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ceph-block
+    timeout: 10m
+  suspend: true
+  verification:
+    deep:
+      capacity: 150Gi
+      parallel: 2
+      schedule:
+        cron: 0 11 * * 0
+        jitter: 1h
+      storageClassName: ceph-block
+    quick:
+      maxErrors: 0
+      parallel: 2
+      schedule:
+        cron: 0 10 * * *
+        jitter: 30m
+    successExpr: stats.errors == 0 && stats.files > 0
+    verifyFilesPercent: 100
+  volumeSnapshotClassName: csi-ceph-blockpool
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: chaptarr-daily
+spec:
+  policyRef:
+    name: chaptarr
+  schedule:
+    suspend: true
+    cron: 15 20 * * *
+    timezone: America/New_York
+    jitter: 0s
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: chaptarr-k92-online-original
+spec:
+  policyRef:
+    name: chaptarr
+  deletionPolicy: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: chaptarr-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T04:07:04.080279+00:00"
+spec:
+  destinationRef:
+    kind: Repository
+    name: chaptarr-r2
+  migrate:
+    parallel: 8
+    policies: none
+  schedule:
+    cron: 15 21 * * *
+    timezone: America/New_York
+    jitter: 0s
+  selection:
+    identities:
+      include:
+        - username: chaptarr
+          hostname: arrs
+          sourcePath: /pvc/chaptarr
+    latestOnly: true
+  sourceRef:
+    kind: Repository
+    name: chaptarr-nas-smb
+  suspend: false

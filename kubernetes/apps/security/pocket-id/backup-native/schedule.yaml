@@ -6,7 +6,7 @@ spec:
   policyRef:
     name: pocket-id-native
   schedule:
-    suspend: true
+    suspend: false
     cron: 20 19 * * *
     timezone: America/New_York
     jitter: 0s

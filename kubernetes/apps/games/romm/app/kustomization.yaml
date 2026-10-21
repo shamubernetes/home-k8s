@@ -7,7 +7,8 @@ resources:
 - ./kopiur-original.yaml
 - ./externalsecret-kopiur-postgres.yaml
 - ./ocirepository.yaml
-- ../../../../templates/volsync
+- ./pvc.yaml
+- ./legacy-recovery-secrets.yaml
 - ./externalsecret.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml

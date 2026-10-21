@@ -108,17 +108,15 @@ spec:
                       - name: OPENVIKING_CONF_CONTENT
                         valueFrom:
                           secretKeyRef:
-                            name: openviking
+                            name: openviking-secret
                             key: OPENVIKING_CONF_CONTENT
                       - name: OV_BACKUP_ACCOUNTS_JSON
                         valueFrom:
                           secretKeyRef:
                             name: openviking-kopiur-native-auth
                             key: OV_BACKUP_ACCOUNTS_JSON
-                      - name: OPENVIKING_URL
+                      - name: OV_BACKUP_BASE_URL
                         value: http://openviking.tools.svc.cluster.local:1933
-                      - name: CAPTURE_ROOT
-                        value: /capture
                     securityContext:
                       allowPrivilegeEscalation: false
                       readOnlyRootFilesystem: true
@@ -133,7 +131,7 @@ spec:
                         memory: 1Gi
                     volumeMounts:
                       - name: source
-                        mountPath: /capture
+                        mountPath: /app/.openviking
                       - name: auth
                         mountPath: /auth
                         readOnly: true

@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: tools
 resources:
   - policy-data.yaml
+  - hook-recovery.yaml
   - policy-auth.yaml
   - policy-models.yaml
   - original-nas-0.yaml

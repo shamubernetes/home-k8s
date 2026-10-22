@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openviking
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: openviking-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: openviking-dst
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-fa697026-cf49-4d91-81d1-2d36362b8ebd

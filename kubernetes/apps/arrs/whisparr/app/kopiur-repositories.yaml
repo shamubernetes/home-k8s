@@ -35,7 +35,16 @@ spec:
         cron: "20 3 * * *"
         jitter: 1h
   moverDefaults:
-    # Keep disposable Kopia cache writes off the saturated node SATA disk.
+    # Preserve NVMe headroom and keep local policy cache off the degraded SATA node.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: NotIn
+              values: [k8s-chronos, k8s-rhea]
+    # Other repository jobs keep the existing disposable cache defaults.
     cache:
       mode: Ephemeral
       capacity: 8Gi

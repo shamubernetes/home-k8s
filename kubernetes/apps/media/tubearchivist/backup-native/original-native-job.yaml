@@ -1,0 +1,109 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tubearchivist-k92-native-originals
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tubearchivist-k92-native-originals
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 1000
+      initContainers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.19.23@sha256:4d0724bb8d78d7a2330693623e26ca4d621079d062ecc8a30b3e1fc180ec14c1
+          restartPolicy: Always
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+            - name: node.store.allow_mmap
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 768Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: es
+              mountPath: /usr/share/elasticsearch/data
+      containers:
+        - name: verify
+          image: ghcr.io/home-operations/home-assistant:2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+          command:
+            - python
+            - /scripts/original-native.py
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add:
+                - DAC_OVERRIDE
+              drop:
+                - ALL
+            runAsUser: 0
+            runAsNonRoot: false
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: nas
+              mountPath: /original/nas
+              readOnly: true
+            - name: r2
+              mountPath: /original/r2
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: tubearchivist-k92-original-nas
+            readOnly: true
+        - name: r2
+          persistentVolumeClaim:
+            claimName: tubearchivist-k92-original-r2
+            readOnly: true
+        - name: scripts
+          configMap:
+            name: tubearchivist-native-capture
+        - name: es
+          emptyDir:
+            sizeLimit: 2Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tubearchivist-k92-native-originals
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tubearchivist-k92-native-originals
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

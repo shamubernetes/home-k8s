@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tubearchivist
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: tubearchivist-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: tubearchivist-dst
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  volumeName: pvc-5612c42f-b2e6-48b1-9015-8efca3d48460

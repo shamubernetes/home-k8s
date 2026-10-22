@@ -1,0 +1,17 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: openviking-native-all-sources-daily
+spec:
+  policySelector:
+    matchLabels:
+      backup.home.arpa/daily-set: openviking-native
+  schedule:
+    cron: 30 18 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+    suspend: false
+    timezone: America/New_York
+  failedJobsHistoryLimit: 3

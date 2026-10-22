@@ -1,0 +1,158 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: openviking-native-data
+  labels:
+    backup.home.arpa/daily-set: openviking-native
+spec:
+  repository:
+    kind: Repository
+    name: openviking-nas-smb
+  identity:
+    username: openviking
+    hostname: tools-native
+  sources:
+    - pvc:
+        name: openviking
+      sourcePathOverride: /pvc/openviking
+      readOnly: true
+  copyMethod: Snapshot
+  volumeSnapshotClassName: csi-ceph-blockpool
+  staging:
+    timeout: 10m
+    storageClassName: ceph-block
+    accessModes:
+      - ReadWriteOnce
+  defaultDeletionPolicy: Retain
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+  mover:
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      runAsNonRoot: false
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+          - FOWNER
+          - DAC_OVERRIDE
+  verification:
+    quick:
+      schedule:
+        cron: 30 21 * * *
+        jitter: 10m
+      maxErrors: 0
+    deep:
+      schedule:
+        cron: 30 22 * * 0
+        jitter: 10m
+      capacity: 20Gi
+      storageClassName: ceph-block
+    successExpr: snapshot != null && stats.errors == 0
+    verifyFilesPercent: 100
+  suspend: false
+  errorHandling:
+    failFast: true
+    ignoreDirErrors: false
+    ignoreFileErrors: false
+    ignoreUnknownTypes: false
+  hooks:
+    beforeSnapshot:
+      - runJob:
+          jobSpec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 900
+            ttlSecondsAfterFinished: 86400
+            template:
+              metadata:
+                labels:
+                  backup.home.arpa/cohort: k92-system
+                  backup.home.arpa/app: openviking
+              spec:
+                automountServiceAccountToken: false
+                restartPolicy: Never
+                affinity:
+                  podAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            app.kubernetes.io/name: openviking
+                        namespaces:
+                          - tools
+                        topologyKey: kubernetes.io/hostname
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 568
+                  runAsGroup: 568
+                  fsGroup: 568
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: native
+                    image: ghcr.io/volcengine/openviking:0.2.12@sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d
+                    command:
+                      - python
+                      - /scripts/capture.py
+                    env:
+                      - name: OPENVIKING_CONF_CONTENT
+                        valueFrom:
+                          secretKeyRef:
+                            name: openviking-secret
+                            key: OPENVIKING_CONF_CONTENT
+                      - name: OV_BACKUP_ACCOUNTS_JSON
+                        valueFrom:
+                          secretKeyRef:
+                            name: openviking-kopiur-native-auth
+                            key: OV_BACKUP_ACCOUNTS_JSON
+                      - name: OV_BACKUP_BASE_URL
+                        value: http://openviking.tools.svc.cluster.local:1933
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 100m
+                        memory: 256Mi
+                      limits:
+                        memory: 1Gi
+                    volumeMounts:
+                      - name: source
+                        mountPath: /app/.openviking
+                      - name: auth
+                        mountPath: /auth
+                        readOnly: true
+                      - name: scripts
+                        mountPath: /scripts
+                        readOnly: true
+                      - name: tmp
+                        mountPath: /tmp
+                volumes:
+                  - name: source
+                    persistentVolumeClaim:
+                      claimName: openviking
+                  - name: auth
+                    persistentVolumeClaim:
+                      claimName: openviking-auth
+                      readOnly: true
+                  - name: scripts
+                    configMap:
+                      name: openviking-native-capture
+                  - name: tmp
+                    emptyDir:
+                      sizeLimit: 1Gi
+          timeout: 15m
+          continueOnFailure: false

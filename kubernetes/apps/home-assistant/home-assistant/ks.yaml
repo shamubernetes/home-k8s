@@ -25,11 +25,8 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
-      VOLSYNC_CAPACITY: 10Gi
       GATUS_INTERNAL_PORT: "8123"
       GATUS_SUBDOMAIN: ha
-      VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_HOME_ASSISTANT}"
-      VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_HOME_ASSISTANT}"
 ---
 # Dedicated prepared backends only. No app or capture activation.
 apiVersion: kustomize.toolkit.fluxcd.io/v1

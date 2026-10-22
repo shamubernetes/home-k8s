@@ -1,0 +1,39 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotReplication
+metadata:
+  name: openviking-native-nas-to-r2
+  annotations:
+    kopiur.home-operations.com/run-requested: "2026-10-21T18:10:00Z"
+spec:
+  sourceRef:
+    kind: Repository
+    name: openviking-nas-smb
+  destinationRef:
+    kind: Repository
+    name: openviking-r2
+  schedule:
+    cron: 30 20 * * *
+    jitter: 10m
+    timezone: America/New_York
+  selection:
+    identities:
+      include:
+        - username: openviking
+          hostname: tools-native
+          sourcePath: /pvc/openviking
+        - username: openviking
+          hostname: tools
+          sourcePath: /pvc/openviking
+        - username: openviking
+          hostname: tools
+          sourcePath: /pvc/openviking-auth
+        - username: openviking
+          hostname: tools
+          sourcePath: /pvc/openviking-models
+    latestOnly: true
+  migrate:
+    parallel: 2
+    policies: none
+  pruning:
+    none: {}
+  suspend: false

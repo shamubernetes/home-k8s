@@ -5,7 +5,8 @@ resources:
 - ../backup-native
 - ./ocirepository.yaml
 - ./externalsecret.yaml
-- ../../../../templates/volsync
+- ./primary-pvc.yaml
+- ./legacy-recovery-secrets.yaml
 - ./priorityclass.yaml
 - ./poddisruptionbudget.yaml
 - ./pvc.yaml

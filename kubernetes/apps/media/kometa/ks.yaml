@@ -13,7 +13,6 @@ spec:
   - name: kopiur
   - name: snapshot-controller
   - name: rook-ceph-cluster
-  - name: volsync
   - name: external-secrets-secret-store
   - name: plex
   - name: radarr

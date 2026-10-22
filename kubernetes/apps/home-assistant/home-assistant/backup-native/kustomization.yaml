@@ -3,6 +3,16 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: home-assistant
 resources:
+  - policy-config.yaml
+  - policy-git.yaml
+  - policy-bundle.yaml
+  - original-native-job.yaml
+  - original-r2-0.yaml
+  - original-r2-1.yaml
+  - original-r2-2.yaml
+  - original-nas-0.yaml
+  - original-nas-1.yaml
+  - original-nas-2.yaml
   - source-1.yaml
   - source-2.yaml
   - original-v2.yaml
@@ -18,6 +28,8 @@ configMapGenerator:
   - name: home-assistant-native-capture
     files:
       - capture=capture.py
+      - capture.py
+      - original-native.py
     options:
       annotations:
         reloader.stakater.com/ignore: "true"

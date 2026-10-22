@@ -70,8 +70,8 @@ spec:
         jitter: 30m
       parallel: 4
       # Kopia 0.23.1 uses fileParallelism for tree and file verification workers.
-      # Eight workers still missed 3600s with a full-history-sized local cache.
-      fileParallelism: 32
+      # Thirty-two I/O workers still missed 3600s with the full retained history.
+      fileParallelism: 128
       maxErrors: 0
     deep:
       schedule:

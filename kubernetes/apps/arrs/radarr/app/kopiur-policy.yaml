@@ -41,6 +41,11 @@ spec:
         timeout: 13m
         continueOnFailure: false
   mover:
+    # The repository holds 20.2 GB of physical content across 71 retained points.
+    # Keep that working set cached instead of rereading it through a 5 GB budget.
+    cache:
+      capacity: 32Gi
+      contentCacheSizeMb: 24576
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568

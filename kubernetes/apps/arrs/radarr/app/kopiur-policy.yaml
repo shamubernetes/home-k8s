@@ -57,7 +57,8 @@ spec:
         cron: "45 8 * * *"
         jitter: 30m
       parallel: 4
-      fileParallelism: 2
+      # Kopia 0.23.1 uses fileParallelism for both tree walking and file readers.
+      fileParallelism: 8
       maxErrors: 0
     deep:
       schedule:

@@ -58,7 +58,7 @@ spec:
         jitter: 30m
       parallel: 4
       # Kopia 0.23.1 uses fileParallelism for both tree walking and file readers.
-      fileParallelism: 8
+      fileParallelism: 16
       maxErrors: 0
     deep:
       schedule:

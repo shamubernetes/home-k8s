@@ -19,6 +19,10 @@ spec:
   values:
     controllers:
       backend:
+        # Recover the unchanged upstream-deleted digest from verified local cache.
+        pod:
+          nodeSelector:
+            kubernetes.io/hostname: k8s-chronos
         strategy: RollingUpdate
         rollingUpdate:
           surge: "0"
@@ -52,6 +56,7 @@ spec:
             image:
               repository: ghcr.io/get-convex/convex-backend
               tag: latest@sha256:1f2044e3eac463ac78973b136c0baf72d4ada602611d853d6f99f280e29e0a98
+              pullPolicy: IfNotPresent
             env:
               INSTANCE_NAME: convex
               DO_NOT_REQUIRE_SSL: "1"
@@ -99,7 +104,8 @@ spec:
                 cpu: 50m
                 memory: 256Mi
               limits:
-                memory: 1Gi
+                # The previous 1Gi cgroup limit was reached before OOMKilled.
+                memory: 2Gi
       dashboard:
         strategy: RollingUpdate
         containers:

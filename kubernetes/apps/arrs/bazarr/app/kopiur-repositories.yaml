@@ -10,6 +10,10 @@ spec:
       configSecretRef:
         name: bazarr-kopiur-nas
       startupTimeout: 2m
+  bootstrap:
+    failurePolicy:
+      # Cold rclone repository connection measured 157s, above the 120s default.
+      activeDeadlineSeconds: 300
   encryption:
     passwordSecretRef:
       name: bazarr-kopiur-nas

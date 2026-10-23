@@ -16,6 +16,7 @@ resources:
   - repositories.yaml
   - externalsecret.yaml
   - schedule.yaml
+  - capture-recovery.yaml
   - replication.yaml
   - original-0.yaml
   - original-1.yaml

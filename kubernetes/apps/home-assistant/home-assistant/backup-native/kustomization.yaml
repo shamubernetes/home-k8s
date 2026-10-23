@@ -23,6 +23,7 @@ resources:
   - externalsecret.yaml
   - capture-pvc.yaml
   - schedule.yaml
+  - capture-recovery.yaml
   - replication.yaml
 configMapGenerator:
   - name: home-assistant-native-capture

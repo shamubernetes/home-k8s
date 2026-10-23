@@ -57,8 +57,9 @@ spec:
         cron: "45 8 * * *"
         jitter: 30m
       parallel: 4
-      # Kopia 0.23.1 uses fileParallelism for both tree walking and file readers.
-      fileParallelism: 16
+      # Kopia 0.23.1 couples tree walking and file readers to this worker count.
+      # The natural 16-worker run exceeded its unchanged 1h cap over 71 points.
+      fileParallelism: 64
       maxErrors: 0
     deep:
       schedule:

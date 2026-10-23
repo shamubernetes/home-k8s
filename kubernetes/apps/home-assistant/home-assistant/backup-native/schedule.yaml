@@ -1,7 +1,7 @@
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotSchedule
 metadata:
-  name: home-assistant-native-all-sources-daily
+  name: ha-daily
 spec:
   policySelector:
     matchLabels:
@@ -13,5 +13,24 @@ spec:
     concurrencyPolicy: Forbid
     startingDeadlineSeconds: 3600
     suspend: false
+    timezone: America/New_York
+  failedJobsHistoryLimit: 3
+---
+# Keep the owner of the invalid-name Pending captures and their staged sources.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: home-assistant-native-all-sources-daily
+spec:
+  policySelector:
+    matchLabels:
+      backup.home.arpa/daily-set: home-assistant-native
+  schedule:
+    cron: 10 18 * * *
+    jitter: 10m
+    runOnCreate: false
+    concurrencyPolicy: Forbid
+    startingDeadlineSeconds: 3600
+    suspend: true
     timezone: America/New_York
   failedJobsHistoryLimit: 3

@@ -1,0 +1,24 @@
+# Preserve the invalid-name scheduled captures and their staged sources.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ov-auth-recovery-20261023
+spec:
+  policyRef:
+    name: openviking-native-auth
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ov-models-recovery-20261023
+spec:
+  policyRef:
+    name: openviking-native-models
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

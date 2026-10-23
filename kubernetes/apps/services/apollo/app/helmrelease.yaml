@@ -34,7 +34,7 @@ spec:
               PORT: "4000"
               APPLE_KEY_PATH: /etc/secrets/apple.p8
               APPLE_APNS_TOPIC: dev.kil.apollo
-              APPLE_APNS_SANDBOX: "true"
+              APPLE_APNS_SANDBOX: "false"
               # Dedicated logical databases isolate rmq queues from dedup locks and other apps.
               REDIS_QUEUE_URL: redis://dragonfly.database.svc.cluster.local:6379/6
               REDIS_LOCKS_URL: redis://dragonfly.database.svc.cluster.local:6379/7

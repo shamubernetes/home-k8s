@@ -41,7 +41,7 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           initContainers:
           - name: kubectl
-            image: docker.io/bitnami/kubectl:latest@sha256:999d5eb28f404b45f15117f2a110ff23c6164f76edac261d75d783b6e88252b7
+            image: docker.io/bitnami/kubectl:latest@sha256:6d9e8ad566a6d2dcb4a7a6120d030bd65bddbcc952246f4b31022834d9be7e02
             imagePullPolicy: IfNotPresent
             command: [/bin/sh, -ec]
             args: ["cp /opt/bitnami/kubectl/bin/kubectl /tools/kubectl"]

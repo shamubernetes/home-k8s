@@ -19,7 +19,7 @@ spec:
   values:
     controllers:
       backend:
-        # Recover the unchanged upstream-deleted digest from verified local cache.
+        # Preserve verified backend placement during the upstream namespace repair.
         pod:
           nodeSelector:
             kubernetes.io/hostname: k8s-chronos
@@ -54,7 +54,7 @@ spec:
         containers:
           app:
             image:
-              repository: ghcr.io/get-convex/convex-backend
+              repository: ghcr.io/convex/convex-backend
               tag: latest@sha256:1f2044e3eac463ac78973b136c0baf72d4ada602611d853d6f99f280e29e0a98
               pullPolicy: IfNotPresent
             env:
@@ -111,7 +111,7 @@ spec:
         containers:
           app:
             image:
-              repository: ghcr.io/get-convex/convex-dashboard
+              repository: ghcr.io/convex/convex-dashboard
               tag: latest@sha256:284a2638e0c1a4ec0c2327d8219776f3a426ca5824b81686ae4d9454dc0ce8ed
             env:
               NEXT_PUBLIC_DEPLOYMENT_URL: https://convex-api.${HOME_DOMAIN}

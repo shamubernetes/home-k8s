@@ -81,7 +81,7 @@
       // Accepted K8S-92 original proofs retain these exact bytes. They are
       // dormant recipes, not the active app or its recurring capture policy.
       description: "Preserve the accepted OpenViking original-proof image",
-      matchManagers: ["kubernetes"],
+      matchManagers: ["kubernetes", "helm-values"],
       matchDatasources: ["docker"],
       matchFileNames: [
         "kubernetes/apps/tools/openviking/backup-native/original-native-job.yaml",

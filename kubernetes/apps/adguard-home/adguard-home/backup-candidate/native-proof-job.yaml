@@ -6,7 +6,10 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
-  suspend: false
+  # Retain the qualified one-shot recipe without replaying aged history.
+  # A completed attempt expires; Flux recreates only this suspended recipe.
+  suspend: true
+  ttlSecondsAfterFinished: 60
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:

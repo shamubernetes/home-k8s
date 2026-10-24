@@ -58,6 +58,24 @@ async function main() {
       cases += 5;
     }
   }
-  console.log(`PASS ${cases} real extractor/matcher cases: valid Zoo tag+digest, active capture enabled, only exact original proofs frozen`);
+  const convexFile = "kubernetes/apps/services/convex/app/helmrelease.yaml";
+  const convex = await extractors["helm-values"](fs.readFileSync(path.join(repo, convexFile), "utf8"), convexFile, {});
+  const convexRules = json5.parse(fs.readFileSync(path.join(repo, ".github/renovate/packageRules.json5"), "utf8")).packageRules.filter((r) => r.description === "Convex runtime image digests");
+  assert.equal(convexRules.length, 1);
+  for (const [image, pin] of [
+    ["backend", "sha256:1f2044e3eac463ac78973b136c0baf72d4ada602611d853d6f99f280e29e0a98"],
+    ["dashboard", "sha256:284a2638e0c1a4ec0c2327d8219776f3a426ca5824b81686ae4d9454dc0ce8ed"],
+  ]) {
+    const dep = convex.deps.find((d) => d.depName === `ghcr.io/convex/convex-${image}`);
+    assert.ok(dep);
+    assert.equal(dep.currentValue, "latest");
+    assert.equal(dep.currentDigest, pin);
+    const effective = await applyPackageRules({ ...dep, datasource: "docker", updateType: "digest", packageRules: convexRules });
+    assert.equal(effective.groupName, "convex-runtime");
+    assert.equal(effective.minimumGroupSize, 2);
+    assert.equal(effective.minimumReleaseAge, "7 days");
+    cases++;
+  }
+  console.log(`PASS ${cases} real extractor/matcher cases: valid pins, exact original-proof guards, canonical Convex namespace and unchanged digest-group policy`);
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

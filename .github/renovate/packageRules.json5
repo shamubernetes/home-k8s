@@ -277,8 +277,8 @@
       "description": "Convex runtime image digests",
       "groupName": "convex-runtime",
       "matchPackageNames": [
-        "ghcr.io/get-convex/convex-backend",
-        "ghcr.io/get-convex/convex-dashboard",
+        "ghcr.io/convex/convex-backend",
+        "ghcr.io/convex/convex-dashboard",
       ],
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["digest"],

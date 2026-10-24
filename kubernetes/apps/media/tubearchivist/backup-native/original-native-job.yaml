@@ -48,7 +48,7 @@ spec:
               mountPath: /usr/share/elasticsearch/data
       containers:
         - name: verify
-          image: ghcr.io/home-operations/home-assistant:2026.8.0@sha256:99c0293b3ad103151a9d8b860232fd1c6db425eadb9eb4905c0ecbef65b27363
+          image: ghcr.io/home-operations/home-assistant:2026.10.3@sha256:3a5bf87bb8192cbef21a2e44383477a48a227c2dd19c2383ada2cb229981c127
           command:
             - python
             - /scripts/original-native.py

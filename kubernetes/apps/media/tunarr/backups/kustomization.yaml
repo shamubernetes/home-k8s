@@ -4,8 +4,7 @@ kind: Kustomization
 resources:
 - ./legacy-recovery-secrets.yaml
 - ./kopiur-retained-pvc.yaml
-# Native original qualification is complete. Retain the original PVCs and
-# recipes, not continuously managed one-shot verifier Jobs.
+- ./kopiur-native-consumers.yaml
 - ./kopiur-original-r2-restore.yaml
 - ./kopiur-original-nas-restore.yaml
 - ./kopiur-rollback-original.yaml

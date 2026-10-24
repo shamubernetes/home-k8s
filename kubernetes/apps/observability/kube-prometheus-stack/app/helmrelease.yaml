@@ -29,6 +29,10 @@ spec:
       enabled: false
     cleanPrometheusOperatorObjectNames: true
     prometheusOperator:
+      # Keep the existing admission Secret's cert/key names and certificate.
+      extraArgs:
+      - --web.cert-file=/cert/cert
+      - --web.key-file=/cert/key
       image:
         sha: a001ed10a3823bbf2410ea347796d0e35ff8decd24fb98acbe7ab9e98d431c39
       admissionWebhooks:

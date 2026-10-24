@@ -57,7 +57,7 @@ spec:
               mountPath: /tools
           containers:
           - name: renovate
-            image: ghcr.io/mend/renovate-ce:15.7.0-full@sha256:e7d054de8a8fd0ec368a44e68f8b29fe5c191788e0e00f24d0ef3c1bd87fd56f
+            image: ghcr.io/mend/renovate-ce:15.10.0-full@sha256:02affed380dae06345e4d6625bcd0c78bd58677c06dc0a1b1a42449af6092c43
             command: [/usr/local/renovate/node, /config/fast-update-runner.cjs]
             env:
             - name: MEND_RNV_GITHUB_APP_ID

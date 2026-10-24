@@ -84,6 +84,7 @@ spec:
             - --branch=master
             - --wait=86400 # 1 day
             - --root=/add-ons
+            - --git-config=safe.directory:/add-ons
     defaultPodOptions:
       securityContext:
         runAsNonRoot: true

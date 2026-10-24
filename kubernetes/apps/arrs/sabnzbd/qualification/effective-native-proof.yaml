@@ -3,9 +3,13 @@
   "apiVersion": "batch/v1",
   "kind": "Job",
   "metadata": {
-    "name": "sabnzbd-k92-effective-native-v6"
+    "name": "sabnzbd-k92-effective-native-v6",
+    "annotations": {
+      "kustomize.toolkit.fluxcd.io/force": "enabled"
+    }
   },
   "spec": {
+    "ttlSecondsAfterFinished": 300,
     "activeDeadlineSeconds": 600,
     "backoffLimit": 0,
     "template": {
@@ -121,7 +125,7 @@
         ]
       }
     },
-    "suspend": false
+    "suspend": true
   }
 }
 ---

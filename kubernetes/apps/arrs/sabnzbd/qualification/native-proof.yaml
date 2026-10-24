@@ -3,7 +3,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: sabnzbd-k92-original-native-proof-v4
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
+  ttlSecondsAfterFinished: 300
   activeDeadlineSeconds: 600
   backoffLimit: 0
   template:

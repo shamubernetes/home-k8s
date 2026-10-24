@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: chaptarr-k92-native-originals-v3
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   # The actual paired PG17 recovery passed; preserve the drill without replay.
   suspend: true

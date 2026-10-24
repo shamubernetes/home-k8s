@@ -3,7 +3,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: tunarr-frozen-native-nas-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
+  ttlSecondsAfterFinished: 300
   backoffLimit: 0
   activeDeadlineSeconds: 1200
   template:
@@ -188,7 +192,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: tunarr-frozen-native-r2-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
+  ttlSecondsAfterFinished: 300
   backoffLimit: 0
   activeDeadlineSeconds: 1200
   template:

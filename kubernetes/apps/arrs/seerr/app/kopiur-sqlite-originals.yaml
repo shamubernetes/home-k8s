@@ -3,7 +3,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: seerr-k92-sqlite-originals
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
+  ttlSecondsAfterFinished: 300
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:

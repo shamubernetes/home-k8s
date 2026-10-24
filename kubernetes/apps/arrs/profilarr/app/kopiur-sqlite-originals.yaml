@@ -3,7 +3,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: profilarr-k92-sqlite-originals-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
+  ttlSecondsAfterFinished: 300
   backoffLimit: 0
   activeDeadlineSeconds: 1800
   template:

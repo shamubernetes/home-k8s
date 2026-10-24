@@ -29,7 +29,7 @@ spec:
           app:
             image:
               repository: ghcr.io/dictionarry-hub/profilarr
-              tag: latest@sha256:ddcdd0f340043c2ec0a85ca74b9a6be9be42b1c0288c75fc36a26a43f695860b
+              tag: latest@sha256:352e42dec74ecfd68d13bb198fbc6d9346e3a8c55003026e1814e59319a2176d
             env:
               AUTH: "off"
               ORIGIN: https://profilarr.${HOME_DOMAIN}

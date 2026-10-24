@@ -107,10 +107,28 @@ for database in $PGDATABASES; do
   printf 'database=%s server_version=%s tables=%s\n' "$database" "$version" "$tables" >>"$root/pending/metadata"
 done
 cp "$config" "$root/pending/application-config"
-tar --create --one-file-system --numeric-owner --file="$root/pending/application-state.tar" \
-  --exclude='./.kopiur-postgres' --directory=/config . 2>"$root/pending/archive.stderr" || {
-  printf 'application file archive failed\n' >&2; exit 1;
-}
+# Diagnostic text logs can grow while tar reads them. They are archived, but
+# their live tail is not transactional state. Accept only GNU tar's exact
+# changed-file warning for those logs, never read errors or other file changes.
+archive_result=0
+LC_ALL=C tar --create --one-file-system --numeric-owner --file="$root/pending/application-state.tar" \
+  --exclude='./.kopiur-postgres' --directory=/config . 2>"$root/pending/archive.stderr" || archive_result=$?
+if [ "$archive_result" -ne 0 ]; then
+  log_changes=0
+  unexpected=0
+  while IFS= read -r warning || [ -n "$warning" ]; do
+    case "$warning" in
+      'tar: ./logs/'*'.txt: file changed as we read it') log_changes=$((log_changes + 1)) ;;
+      *) unexpected=1 ;;
+    esac
+  done <"$root/pending/archive.stderr"
+  if [ "$archive_result" -ne 1 ] || [ "$log_changes" -eq 0 ] || [ "$unexpected" -ne 0 ]; then
+    cat "$root/pending/archive.stderr" >&2
+    printf 'application file archive failed\n' >&2
+    exit 1
+  fi
+  printf 'diagnostic_log_growth_during_archive=%s\n' "$log_changes" >>"$root/pending/metadata"
+fi
 rm "$root/pending/archive.stderr"
 filetree_inventory >"$root/pending/filetree.after"
 cmp -s "$root/pending/filetree.before" "$root/pending/filetree.after" || {

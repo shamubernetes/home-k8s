@@ -45,7 +45,7 @@ spec:
               mountPath: /native
       containers:
         - name: proof
-          image: docker.io/library/python:3.14.7-alpine@sha256:4677924bcc0e94505a3270e87cb1601c2af54cd92d021b8dc306618a14333bbe
+          image: docker.io/library/python:3.15.1-alpine@sha256:c480059ce7dd8fc98f30e2a56cc3b54e559c3b3b66cc498a92f641237a47f288
           command: [python3, /proof/native-proof.py]
           securityContext: *restricted
           env:

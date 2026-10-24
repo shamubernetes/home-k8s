@@ -26,30 +26,37 @@ async function main() {
   assert.ok(zoo[0].autoReplaceStringTemplate.includes("{{newValue}}"));
   assert.ok(zoo[0].autoReplaceStringTemplate.includes("{{newDigest}}"));
 
-  const { extractPackageFile } = await load("modules/manager/kubernetes/extract.js");
+  const extractors = {
+    kubernetes: (await load("modules/manager/kubernetes/extract.js")).extractPackageFile,
+    "helm-values": (await load("modules/manager/helm-values/extract.js")).extractPackageFile,
+  };
   const { applyPackageRules } = await load("util/package-rules/index.js");
   const name = "ghcr.io/volcengine/openviking";
   const digest = "sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d";
   const rules = config.packageRules.filter((r) => r.description === "Preserve the accepted OpenViking original-proof image");
   assert.equal(rules.length, 1);
-  const extract = (file) => extractPackageFile(fs.readFileSync(path.join(repo, file), "utf8"), file, {}).deps.find((d) => d.depName === name);
-  const apply = (dep, file) => applyPackageRules({ ...dep, manager: "kubernetes", packageFile: file, packageRules: rules });
+  assert.deepEqual(rules[0].matchManagers, Object.keys(extractors));
+  const extract = async (file, manager) => (await extractors[manager](fs.readFileSync(path.join(repo, file), "utf8"), file, {})).deps.find((d) => d.depName === name);
+  const apply = (dep, file, manager) => applyPackageRules({ ...dep, manager, packageFile: file, packageRules: rules });
   const policy = "kubernetes/apps/tools/openviking/backup-native/policy-data.yaml";
-  const active = extract(policy);
-  assert.equal(active.currentValue, "v0.4.23.1");
-  assert.equal(active.currentDigest, digest);
-  assert.notEqual((await apply(active, policy)).enabled, false);
-  let cases = 2;
-  for (const file of rules[0].matchFileNames) {
-    const dep = extract(file);
-    assert.equal(dep.currentValue, "0.2.12");
-    assert.equal(dep.currentDigest, digest);
-    assert.equal((await apply(dep, file)).enabled, false);
-    assert.notEqual((await apply({ ...dep, currentDigest: "sha256:" + "a".repeat(64) }, file)).enabled, false);
-    assert.notEqual((await apply({ ...dep, currentValue: "v0.4.23.1" }, file)).enabled, false);
-    assert.notEqual((await apply(dep, policy)).enabled, false);
-    assert.notEqual((await apply({ ...dep, depName: "example/other", packageName: "example/other" }, file)).enabled, false);
-    cases += 5;
+  let cases = 1;
+  for (const manager of Object.keys(extractors)) {
+    const active = await extract(policy, manager);
+    assert.equal(active.currentValue, "v0.4.23.1");
+    assert.equal(active.currentDigest, digest);
+    assert.notEqual((await apply(active, policy, manager)).enabled, false);
+    cases++;
+    for (const file of rules[0].matchFileNames) {
+      const dep = await extract(file, manager);
+      assert.equal(dep.currentValue, "0.2.12");
+      assert.equal(dep.currentDigest, digest);
+      assert.equal((await apply(dep, file, manager)).enabled, false);
+      assert.notEqual((await apply({ ...dep, currentDigest: "sha256:" + "a".repeat(64) }, file, manager)).enabled, false);
+      assert.notEqual((await apply({ ...dep, currentValue: "v0.4.23.1" }, file, manager)).enabled, false);
+      assert.notEqual((await apply(dep, policy, manager)).enabled, false);
+      assert.notEqual((await apply({ ...dep, depName: "example/other", packageName: "example/other" }, file, manager)).enabled, false);
+      cases += 5;
+    }
   }
   console.log(`PASS ${cases} real extractor/matcher cases: valid Zoo tag+digest, active capture enabled, only exact original proofs frozen`);
 }

@@ -2,7 +2,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: k8s92-retire-bootstrap
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Retain the completed recipe without rerunning retirement on image updates.
+  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 180
   template:

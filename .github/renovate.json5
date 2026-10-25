@@ -78,6 +78,21 @@
       enabled: false,
     },
     {
+      // Accepted K8S-92 original proofs retain these exact bytes. They are
+      // dormant recipes, not the active app or its recurring capture policy.
+      description: "Preserve the accepted OpenViking original-proof image",
+      matchManagers: ["kubernetes", "helm-values"],
+      matchDatasources: ["docker"],
+      matchFileNames: [
+        "kubernetes/apps/tools/openviking/backup-native/original-native-job.yaml",
+        "kubernetes/apps/tools/openviking/backup-native/original-native-r2-job.yaml",
+      ],
+      matchPackageNames: ["ghcr.io/volcengine/openviking"],
+      matchCurrentValue: "0.2.12",
+      matchJsonata: ["currentDigest = 'sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d'"],
+      enabled: false,
+    },
+    {
       description: "Helmfile OCI charts do not support synthesized digest fields",
       matchManagers: ["helmfile"],
       matchFileNames: ["talos/helmfile.yaml"],

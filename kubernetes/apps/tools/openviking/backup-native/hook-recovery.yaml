@@ -1,0 +1,27 @@
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: openviking-native-data-hook-recovery
+spec:
+  policyRef:
+    name: openviking-native-data
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300
+---
+# The first recovery hook was created before the policy update converged.
+# Preserve that immutable Job and capture with the reconciled generation.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: openviking-native-data-hook-recovery-converged
+spec:
+  policyRef:
+    name: openviking-native-data
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+    podStartupDeadlineSeconds: 300

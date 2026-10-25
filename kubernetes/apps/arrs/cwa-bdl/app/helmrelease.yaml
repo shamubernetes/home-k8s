@@ -19,8 +19,7 @@ spec:
   dependsOn:
   - name: rook-ceph-cluster
     namespace: rook-ceph
-  - name: volsync
-    namespace: volsync-system
+
   - name: calibre-web-automated
     namespace: media
   values:
@@ -32,7 +31,7 @@ spec:
           books-canary:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:4ef757349c3c7a7d90ba95b1e2a46ce4dd460a4776efbcf2aa1b1c476e7d5de5
+              tag: latest@sha256:acfa46b8be80f1e2f084a7703ff027ab274397feb24006114e92c05c140b62c3
             command:
               - /bin/sh
               - -ec
@@ -45,7 +44,7 @@ spec:
           app:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:4ef757349c3c7a7d90ba95b1e2a46ce4dd460a4776efbcf2aa1b1c476e7d5de5
+              tag: latest@sha256:acfa46b8be80f1e2f084a7703ff027ab274397feb24006114e92c05c140b62c3
             # Stage the unchanged qualified holder with an expired deadline.
             # /init below execs the pinned image's native dumb-init command.
             # A future coordinated Books capture needs a separate fixed expiry.
@@ -107,7 +106,7 @@ spec:
           books-monitor:
             image:
               repository: ghcr.io/calibrain/calibre-web-automated-book-downloader
-              tag: latest@sha256:4ef757349c3c7a7d90ba95b1e2a46ce4dd460a4776efbcf2aa1b1c476e7d5de5
+              tag: latest@sha256:acfa46b8be80f1e2f084a7703ff027ab274397feb24006114e92c05c140b62c3
             command:
               - /bin/sh
               - -ec

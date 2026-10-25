@@ -50,7 +50,7 @@ spec:
             type: RuntimeDefault
         initContainers:
         - name: install-talosctl
-          image: ghcr.io/home-operations/actions-runner:2.338.0@sha256:c867ecdf82d4e8537ea8a41acc6addae09f069daec137e5614b87e4678a953e8
+          image: ghcr.io/home-operations/actions-runner:2.338.1@sha256:9011bec82009308072bb8677229181791f96bada721df8a91108290ad4a3fdc5
           command: ["/bin/bash", "-ceu"]
           args:
           - install -m 0555 /source/talosctl /tools/talosctl
@@ -67,7 +67,7 @@ spec:
             mountPath: /tools
         containers:
         - name: runner
-          image: ghcr.io/home-operations/actions-runner:2.338.0@sha256:c867ecdf82d4e8537ea8a41acc6addae09f069daec137e5614b87e4678a953e8
+          image: ghcr.io/home-operations/actions-runner:2.338.1@sha256:9011bec82009308072bb8677229181791f96bada721df8a91108290ad4a3fdc5
           command: ["/home/runner/run.sh"]
           env:
           - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
@@ -99,7 +99,7 @@ spec:
           emptyDir: {}
         - name: talosctl-source
           image:
-            reference: ghcr.io/siderolabs/talosctl:v1.14.2@sha256:b655ae1c73789c4789fcf6fbd61c8f45400ed4b3bd9892a26092fcd4d8d95d86
+            reference: ghcr.io/siderolabs/talosctl:v1.14.4@sha256:b3233234327350f20ed194f3fad83d90a64344c1940f839c7b0c0abef50c8c33
             pullPolicy: IfNotPresent
     controllerServiceAccount:
       name: ghar-controller

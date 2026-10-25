@@ -41,6 +41,11 @@ spec:
         timeout: 13m
         continueOnFailure: false
   mover:
+    # The repository holds 20.2 GB of physical content across 71 retained points.
+    # Keep that working set cached instead of rereading it through a 5 GB budget.
+    cache:
+      capacity: 32Gi
+      contentCacheSizeMb: 24576
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568
@@ -52,7 +57,9 @@ spec:
         cron: "45 8 * * *"
         jitter: 30m
       parallel: 4
-      fileParallelism: 2
+      # Kopia 0.23.1 couples tree walking and file readers to this worker count.
+      # The natural 16-worker run exceeded its unchanged 1h cap over 71 points.
+      fileParallelism: 64
       maxErrors: 0
     deep:
       schedule:
@@ -60,7 +67,8 @@ spec:
         jitter: 1h
       capacity: 24Gi
       storageClassName: ceph-block
-      parallel: 2
+      # Full online recovery bundles need concurrent reads within the fixed 1h cap.
+      parallel: 8
     successExpr: "stats.files > 0 && stats.errors == 0"
     verifyFilesPercent: 100
 ---

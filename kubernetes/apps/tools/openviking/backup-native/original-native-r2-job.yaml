@@ -1,0 +1,114 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openviking-k92-native-r2-v4
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 2400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openviking-k92-native-r2-v4
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: native
+          image: ghcr.io/volcengine/openviking:0.2.12@sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d
+          command:
+            - python
+            - /scripts/original-native.py
+            - verify-r2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: nas-0
+              mountPath: /original/nas-0
+              readOnly: true
+            - name: nas-1
+              mountPath: /original/nas-1
+              readOnly: true
+            - name: nas-2
+              mountPath: /original/nas-2
+              readOnly: true
+            - name: r2-0
+              mountPath: /original/r2-0
+              readOnly: true
+            - name: r2-1
+              mountPath: /original/r2-1
+              readOnly: true
+            - name: r2-2
+              mountPath: /original/r2-2
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: tmp
+              mountPath: /tmp
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: nas-0
+          persistentVolumeClaim:
+            claimName: openviking-k92-original-nas-0
+            readOnly: true
+        - name: nas-1
+          persistentVolumeClaim:
+            claimName: openviking-k92-original-nas-1
+            readOnly: true
+        - name: nas-2
+          persistentVolumeClaim:
+            claimName: openviking-k92-original-nas-2
+            readOnly: true
+        - name: r2-0
+          persistentVolumeClaim:
+            claimName: openviking-k92-original-r2-0
+            readOnly: true
+        - name: r2-1
+          persistentVolumeClaim:
+            claimName: openviking-k92-original-r2-1
+            readOnly: true
+        - name: r2-2
+          persistentVolumeClaim:
+            claimName: openviking-k92-original-r2-2
+            readOnly: true
+        - name: scripts
+          configMap:
+            name: openviking-native-capture
+        - name: work
+          emptyDir:
+            sizeLimit: 8Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openviking-k92-native-r2-v4
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openviking-k92-native-r2-v4
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []

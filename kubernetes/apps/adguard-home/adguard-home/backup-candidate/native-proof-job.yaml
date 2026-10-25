@@ -6,7 +6,10 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
-  suspend: false
+  # Retain the qualified one-shot recipe without replaying aged history.
+  # A completed attempt expires; Flux recreates only this suspended recipe.
+  suspend: true
+  ttlSecondsAfterFinished: 60
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:
@@ -37,7 +40,7 @@ spec:
             - name: native
               mountPath: /native
         - name: yaml-binary
-          image: docker.io/mikefarah/yq:4.45.4@sha256:1f1fff606492a2661f969d857b2770f891b9aac201d0c87b83bb26d8a4dd2c84
+          image: docker.io/mikefarah/yq:4.54.1@sha256:2d6a23c682c574ae49320fdf2419441b6f10658588d44b6d8739d673b96903e5
           command: [/bin/cp, /usr/bin/yq, /native/yq]
           securityContext: *restricted
           volumeMounts:
@@ -45,7 +48,7 @@ spec:
               mountPath: /native
       containers:
         - name: proof
-          image: docker.io/library/python:3.14.7-alpine@sha256:4677924bcc0e94505a3270e87cb1601c2af54cd92d021b8dc306618a14333bbe
+          image: docker.io/library/python:3.15.1-alpine@sha256:c480059ce7dd8fc98f30e2a56cc3b54e559c3b3b66cc498a92f641237a47f288
           command: [python3, /proof/native-proof.py]
           securityContext: *restricted
           env:

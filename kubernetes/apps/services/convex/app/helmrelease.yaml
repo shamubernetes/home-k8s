@@ -19,6 +19,10 @@ spec:
   values:
     controllers:
       backend:
+        # Preserve verified backend placement during the upstream namespace repair.
+        pod:
+          nodeSelector:
+            kubernetes.io/hostname: k8s-chronos
         strategy: RollingUpdate
         rollingUpdate:
           surge: "0"
@@ -36,7 +40,7 @@ spec:
           init-buckets:
             image:
               repository: docker.io/amazon/aws-cli
-              tag: 2.37.13@sha256:d32864c20087d486f5988c3e70817d67a73f584a47535cada9ad97e0ea1e5196
+              tag: 2.38.5@sha256:c8156a0e74e13929a42d7e60f0d4e14e7d28d980cd21822505d4bff80e5460c1
             envFrom: *envFrom
             env:
               S3_ENDPOINT: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc.cluster.local:80
@@ -50,8 +54,9 @@ spec:
         containers:
           app:
             image:
-              repository: ghcr.io/get-convex/convex-backend
+              repository: ghcr.io/convex/convex-backend
               tag: latest@sha256:1f2044e3eac463ac78973b136c0baf72d4ada602611d853d6f99f280e29e0a98
+              pullPolicy: IfNotPresent
             env:
               INSTANCE_NAME: convex
               DO_NOT_REQUIRE_SSL: "1"
@@ -99,13 +104,14 @@ spec:
                 cpu: 50m
                 memory: 256Mi
               limits:
-                memory: 1Gi
+                # The previous 1Gi cgroup limit was reached before OOMKilled.
+                memory: 2Gi
       dashboard:
         strategy: RollingUpdate
         containers:
           app:
             image:
-              repository: ghcr.io/get-convex/convex-dashboard
+              repository: ghcr.io/convex/convex-dashboard
               tag: latest@sha256:284a2638e0c1a4ec0c2327d8219776f3a426ca5824b81686ae4d9454dc0ce8ed
             env:
               NEXT_PUBLIC_DEPLOYMENT_URL: https://convex-api.${HOME_DOMAIN}

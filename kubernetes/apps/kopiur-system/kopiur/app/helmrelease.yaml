@@ -32,6 +32,43 @@ spec:
             path: /spec/strategy
             value:
               type: Recreate
+      # Info alerts are intentionally null-routed. Capture gates need investigation.
+      - target:
+          group: monitoring.coreos.com
+          version: v1
+          kind: PrometheusRule
+          name: kopiur-controller
+        patch: |-
+          - op: test
+            path: /spec/groups/0/rules/11/alert
+            value: KopiurSnapshotsGated
+          - op: replace
+            path: /spec/groups/0/rules/11/labels/severity
+            value: warning
+      # The completed original remains recoverable, but is not recurring protection.
+      # Keep failures visible, and never exempt the active daily radarr policy.
+      - target:
+          group: monitoring.coreos.com
+          version: v1
+          kind: PrometheusRule
+          name: kopiur-controller
+        patch: |-
+          - op: test
+            path: /spec/groups/0/rules/1/alert
+            value: KopiurBackupStale
+          - op: replace
+            path: /spec/groups/0/rules/1/expr
+            value: >-
+              (
+                (time() - kopiur_policy_last_backup_success_timestamp_seconds > 604800)
+                or
+                (
+                  label_replace(kopiur_snapshot_consecutive_failures, "policy", "$1", "name", "(.*)") > 0
+                  unless on (namespace, policy, repository) kopiur_policy_last_backup_success_timestamp_seconds
+                )
+              )
+              unless on (namespace, policy)
+              (kopiur_snapshotpolicy_last_backup_success{namespace="arrs",policy="radarr-k8s92-original"} == 1)
   values:
     installScope: cluster
     # 0.10.10 continues reconciling without election after a Lease 403.

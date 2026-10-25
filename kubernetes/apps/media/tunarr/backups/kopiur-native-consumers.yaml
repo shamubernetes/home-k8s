@@ -6,6 +6,7 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Qualification is accepted. Retain a reproducible recipe, not active proof jobs.
   suspend: true
   ttlSecondsAfterFinished: 300
   backoffLimit: 0
@@ -195,6 +196,7 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Qualification is accepted. Retain a reproducible recipe, not active proof jobs.
   suspend: true
   ttlSecondsAfterFinished: 300
   backoffLimit: 0

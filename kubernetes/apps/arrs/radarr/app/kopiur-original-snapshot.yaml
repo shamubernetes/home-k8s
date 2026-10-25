@@ -4,8 +4,9 @@ kind: SnapshotPolicy
 metadata:
   name: radarr-k8s92-original
 spec:
-  # One original capture, guarded by the bounded native-startup pause.
-  suspend: false
+  # Retained one-time recovery recipe. Current daily protection uses policy radarr.
+  # Never schedule or freshness-monitor the already qualified original again.
+  suspend: true
   repository:
     kind: Repository
     name: radarr-nas-smb

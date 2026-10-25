@@ -13,7 +13,6 @@ spec:
   - name: external-secrets-secret-store
   - name: kube-prometheus-stack
   - name: rook-ceph-cluster
-  - name: volsync
   path: ./kubernetes/apps/observability/victoria-traces/app
   prune: true
   sourceRef:

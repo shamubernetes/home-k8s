@@ -15,6 +15,15 @@ flock -n 9 || { printf 'capture already running\n' >&2; exit 1; }
 # A pre-existing legacy hold needs separate operator diagnosis, not a backup.
 [ ! -e "$root/coordination/request" ] && [ ! -L "$root/coordination/request" ] || exit 1
 [ ! -e "$root/coordination/active" ] && [ ! -L "$root/coordination/active" ] || exit 1
+# Retry one transient filetree race with fresh database dumps and a fresh archive.
+# The caller's existing 1200-second timeout bounds both attempts together.
+# Invoke outside a conditional so errexit remains effective inside the subshell.
+attempt=0
+while [ "$attempt" -lt 2 ]; do
+  attempt=$((attempt + 1))
+  set +e
+  (
+  set -e
 # Invalidate success before validation. A failed retry can never accept an old dump.
 rm -f "$root/COMPLETE"
 # Bare variables keep Flux postBuild substitution out of runtime credentials.
@@ -115,13 +124,19 @@ LC_ALL=C tar --create --one-file-system --numeric-owner --file="$root/pending/ap
   --exclude='./.kopiur-postgres' --directory=/config . 2>"$root/pending/archive.stderr" || archive_result=$?
 if [ "$archive_result" -ne 0 ]; then
   log_changes=0
+  state_changes=0
   unexpected=0
   while IFS= read -r warning || [ -n "$warning" ]; do
     case "$warning" in
       'tar: ./logs/'*'.txt: file changed as we read it') log_changes=$((log_changes + 1)) ;;
+      'tar: ./'*': file changed as we read it') state_changes=$((state_changes + 1)) ;;
       *) unexpected=1 ;;
     esac
   done <"$root/pending/archive.stderr"
+  if [ "$archive_result" -eq 1 ] && [ "$state_changes" -gt 0 ] && [ "$unexpected" -eq 0 ]; then
+    printf 'application file state changed during archive\n' >&2
+    exit 75
+  fi
   if [ "$archive_result" -ne 1 ] || [ "$log_changes" -eq 0 ] || [ "$unexpected" -ne 0 ]; then
     cat "$root/pending/archive.stderr" >&2
     printf 'application file archive failed\n' >&2
@@ -132,7 +147,7 @@ fi
 rm "$root/pending/archive.stderr"
 filetree_inventory >"$root/pending/filetree.after"
 cmp -s "$root/pending/filetree.before" "$root/pending/filetree.after" || {
-  printf 'application file state changed during database capture\n' >&2; exit 1;
+  printf 'application file state changed during database capture\n' >&2; exit 75;
 }
 filetree_qualify
 sha256sum "$root/pending/filetree.before" >"$root/pending/inventory.checksum"
@@ -150,3 +165,10 @@ sync -f "$root/COMPLETE.tmp"
 mv "$root/COMPLETE.tmp" "$root/COMPLETE"
 sync -f "$root"
 printf 'native PostgreSQL recovery bundle complete\n'
+  )
+  capture_result=$?
+  set -e
+  [ "$capture_result" -ne 0 ] || exit 0
+  [ "$capture_result" -eq 75 ] || exit "$capture_result"
+done
+exit 75

@@ -202,6 +202,39 @@ class NativeTests(unittest.TestCase):
             self.assertIn("application file state changed", result.stderr)
             self.assertNotEqual(self.ex("test", "-e", "/config/.kopiur-postgres/COMPLETE").returncode, 0)
 
+    def test_whisparr_transient_filetree_race_retries_complete_capture(self):
+        self.reset_files()
+        prefix = '''pg_dump() {
+          printf dump >>/config/.kopiur-postgres/dump-count;
+          if [ ! -e /config/.kopiur-postgres/mutated ]; then
+            touch /config/.kopiur-postgres/mutated;
+            printf changed >>/config/MediaCover/fixture;
+          fi;
+          command pg_dump "$@";
+        }; '''
+        result = self.capture("whisparr", prefix=prefix)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.ex("cat", "/config/.kopiur-postgres/dump-count").stdout, "dump" * 4)
+        self.ex("sh", "-c", "cd /config/.kopiur-postgres/current; sha256sum -c SHA256SUMS; test -f ../COMPLETE", check=True)
+        archived = self.ex("tar", "-xOf", "/config/.kopiur-postgres/current/application-state.tar", "./MediaCover/fixture")
+        self.assertEqual(archived.stdout, "coverchanged")
+
+    def test_whisparr_archive_race_retries_but_read_error_does_not(self):
+        for warning, code, expected in (("tar: ./MediaCover/movie: file changed as we read it", 1, 0),
+                                        ("tar: ./MediaCover/movie: Cannot read: Permission denied", 2, 1)):
+            self.reset_files()
+            prefix = '''tar() {
+              if [ ! -e /config/.kopiur-postgres/tar-called ]; then
+                touch /config/.kopiur-postgres/tar-called;
+                printf '%s\\n' 'WARNING' >&2; return CODE;
+              fi;
+              command tar "$@";
+            }; '''.replace("WARNING", warning).replace("CODE", str(code))
+            result = self.capture("whisparr", prefix=prefix)
+            self.assertEqual(result.returncode, expected, result.stderr)
+            if expected:
+                self.assertNotEqual(self.ex("test", "-e", "/config/.kopiur-postgres/COMPLETE").returncode, 0)
+
     def test_whisparr_owned_filter_and_rollback(self):
         self.reset_files()
         result = self.capture("whisparr")

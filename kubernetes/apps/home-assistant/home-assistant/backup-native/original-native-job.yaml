@@ -2,7 +2,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: home-assistant-k92-native-originals-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Original recovery passed; image updates must not replay the retained proof.
+  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 1200
   template:

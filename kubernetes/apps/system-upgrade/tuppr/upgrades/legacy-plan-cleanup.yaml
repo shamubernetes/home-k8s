@@ -6,6 +6,7 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
   ttlSecondsAfterFinished: 300
   template:
     spec:

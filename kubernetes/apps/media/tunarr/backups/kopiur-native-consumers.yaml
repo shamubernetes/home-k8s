@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: tunarr-frozen-native-nas-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   # Qualification is accepted. Retain a reproducible recipe, not active proof jobs.
   suspend: true
@@ -24,7 +26,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: original-state
-          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:c89b0322721c3eba47221e5f916505e7e742684651f73c5215717340b6b5402f
           command:
             - python3
             - /kopiur/original-native.py
@@ -124,7 +126,7 @@ spec:
               memory: 4Gi
               ephemeral-storage: 8Gi
         - name: verify
-          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:c89b0322721c3eba47221e5f916505e7e742684651f73c5215717340b6b5402f
           command:
             - python3
             - /kopiur/original-native.py
@@ -191,6 +193,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: tunarr-frozen-native-r2-v2
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   # Qualification is accepted. Retain a reproducible recipe, not active proof jobs.
   suspend: true
@@ -212,7 +216,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: original-state
-          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:c89b0322721c3eba47221e5f916505e7e742684651f73c5215717340b6b5402f
           command:
             - python3
             - /kopiur/original-native.py
@@ -312,7 +316,7 @@ spec:
               memory: 4Gi
               ephemeral-storage: 8Gi
         - name: verify
-          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:b1795982db498ed5691a7b1231f0fac7eed2a1d53e9c81b8e834d02695e76104
+          image: ghcr.io/home-operations/sabnzbd:5.1.3@sha256:c89b0322721c3eba47221e5f916505e7e742684651f73c5215717340b6b5402f
           command:
             - python3
             - /kopiur/original-native.py

@@ -15,7 +15,7 @@ import tempfile
 import time
 import uuid
 
-MARIA = 'docker.io/linuxserver/mariadb:11.8.8@sha256:fa63c6ff84bd6bab0a188d68e1b4cd1e4e1b34c22101fc52d544a53dfd502d45'
+MARIA = 'docker.io/linuxserver/mariadb:11.8.9@sha256:2e6a148c7f7ac5ff1a18004b5d1fcc1ead4eceb17757453026c8f107e507072e'
 GRIMM = 'docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526'
 ROOT = Path(__file__).resolve().parents[1]
 HELPERS = ROOT / 'kubernetes/apps/media/grimmory/app'

@@ -134,6 +134,13 @@ spec:
           matchLabels:
             app.kubernetes.io/instance: &key kyverno-reports
             app.kubernetes.io/component: *key
+      # Cold cache rebuild after node restarts exceeded the chart's 128Mi limit.
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
     admissionController:
       initContainer:
         image:

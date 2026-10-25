@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-capture-recovery-20261025
+spec:
+  policyRef:
+    name: whisparr
+  deletionPolicy: Retain
+  pin: true
+  description: Verify online capture after bounded full-capture retry for concurrent filetree changes
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

@@ -24,7 +24,7 @@ engines=$("${client[@]}" -e "SELECT COUNT(*) FROM information_schema.tables WHER
 tables=$("${client[@]}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='grimmory' AND table_type='BASE TABLE'")
 [[ $tables -ge ${GRIMMORY_MIN_TABLES:-73} ]] || { printf 'table baseline failed\n' >&2; exit 1; }
 version=$("${client[@]}" -e 'SELECT VERSION()')
-[[ $version == 11.8.8-* ]] || { printf 'MariaDB version changed; requalify restore\n' >&2; exit 1; }
+[[ $version == 11.8.8-* || $version == 11.8.9-* ]] || { printf 'MariaDB version changed; requalify restore\n' >&2; exit 1; }
 runtime=/runtime-escrow
 [[ ! -L $runtime && ! -L $runtime/current && -f $runtime/COMPLETE ]] || exit 1
 generation=$(cat "$runtime/COMPLETE")

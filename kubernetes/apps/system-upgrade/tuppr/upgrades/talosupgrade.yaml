@@ -13,10 +13,23 @@ spec:
     rebootMode: powercycle
     waitForVolumeDetach: true
   healthChecks:
-  - apiVersion: volsync.backube/v1alpha1
-    kind: ReplicationSource
+  # VolSync is retired. Guard all active Kopiur data operations, including
+  # hook Jobs whose Snapshot has not entered its running phase yet.
+  - apiVersion: batch/v1
+    kind: Job
+    description: No active native backup, restore, replication or verification Jobs
     expr: |-
-      status.conditions.filter(c, c.type == "Synchronizing").all(c, c.status == "False")
+      !has(object.metadata.labels) ||
+      !('app.kubernetes.io/managed-by' in object.metadata.labels) ||
+      object.metadata.labels['app.kubernetes.io/managed-by'] != 'kopiur' ||
+      (has(status.conditions) &&
+       status.conditions.exists(c, c.type in ['Complete', 'Failed'] && c.status == 'True') &&
+       (!has(status.active) || status.active == 0)) ||
+      (has(object.spec.suspend) && object.spec.suspend && (!has(status.active) || status.active == 0)) ||
+      (object.metadata.name.endsWith('-discovery') &&
+       has(object.metadata.ownerReferences) &&
+       object.metadata.ownerReferences.exists(o, o.kind in ['Repository', 'ClusterRepository']) &&
+       object.spec.template.spec.volumes.all(v, !has(v.persistentVolumeClaim) && !has(v.hostPath)))
   - apiVersion: ceph.rook.io/v1
     kind: CephCluster
     expr: |-

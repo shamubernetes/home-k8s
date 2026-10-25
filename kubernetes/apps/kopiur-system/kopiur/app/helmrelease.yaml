@@ -77,9 +77,7 @@ spec:
     priorityClassName: system-cluster-critical
     podDisruptionBudget:
       enabled: true
-      # K8S-63 owned OS maintenance only; restore minAvailable: 1 before closure.
-      # Single-writer/Recreate and native data-operation quiescence remain enforced.
-      minAvailable: 0
+      minAvailable: 1
     topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: kubernetes.io/hostname

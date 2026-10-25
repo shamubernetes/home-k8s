@@ -47,7 +47,7 @@ spec:
           app:
             image:
               repository: ghcr.io/volcengine/openviking
-              tag: v0.4.23.1@sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d
+              tag: v0.4.23.1@sha256:6a9785424bb4fe36c5035332dbdd84539fd9f3b02b52c1d9fb1c4213e3978097
             command:
             - /bin/sh
             - -c

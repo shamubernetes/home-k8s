@@ -2,6 +2,23 @@
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Snapshot
 metadata:
+  name: homarr-before-5836
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+  pin: true
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0
+  policyRef:
+    name: homarr
+
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
   name: homarr-daily-20261020063834
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled

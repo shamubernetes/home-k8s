@@ -9,6 +9,7 @@ resources:
 - ./schedule.yaml
 - ./replication.yaml
 - ./original.yaml
+- ./verify-helper-6138.yaml
 configMapGenerator:
 - name: pocket-id-native-validation
   files:

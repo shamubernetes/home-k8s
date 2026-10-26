@@ -24,6 +24,7 @@ resources:
   - capture-pvc.yaml
   - schedule.yaml
   - capture-recovery.yaml
+  - verify-helper-6138.yaml
   - replication.yaml
 configMapGenerator:
   - name: home-assistant-native-capture

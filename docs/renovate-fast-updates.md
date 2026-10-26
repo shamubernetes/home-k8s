@@ -40,6 +40,34 @@ kubectl kustomize kubernetes/apps/renovate/renovate/access
 - Merges at most one ready PR per run under the repository's existing bounded maintenance helper. Rechecks that both maintenance members remain active with at least ten minutes left immediately before merging. Verifies the intended Flux revision (or proven descendant retaining the exact target pin), HelmRelease, Deployment image/readiness and configured HTTP health path before ending maintenance. Transient API/health observation failures are retried within the rollout deadline.
 - Does not blindly revert a binary after database migrations. A failed rollout is reported as a failed Job, with a finite maintenance expiry, rather than being represented as successful.
 
+### Maintenance admission scope
+
+The worker resolves the target's live Flux `dependsOn` graph, including prereqs,
+and protects those namespaces. It also protects platform namespaces regardless
+of explicit ordering, covering shared databases, Ceph/RGW, External Secrets and
+1Password, DNS/Cilium, Envoy, Pocket ID, Flux and monitoring. Namespace discovery
+uses the existing read-only Kustomization RBAC, including explicit health-check
+namespaces for operators without `targetNamespace`.
+
+Only namespaces owned by ordinary workload categories and absent from that
+protected set are independent. For Kanvil this admits workload alerts in
+`home-assistant` and `tools`, without an alert-name exception. Unknown namespaces,
+alerts without a namespace, and alerts carrying node/device/shared-storage scope
+still block. The same admission scope is persisted for end and stale-state repair,
+so new unrelated workload alerts do not prevent closure, but relevant regressions
+do, even when another silence suppresses them.
+
+The helper's optional `begin --scope-file <json>` accepts `namespaces` and
+`unrelatedNamespaces` arrays. `namespaces` must describe every affected or required
+dependency namespace. This mode is only for namespace-confined work, never node,
+cluster-wide or unknown effects. The silence adds an exact namespace matcher,
+leaving unrelated alerts visible. Its comment records the structured scope on both
+Alertmanager members. An existing window is admitted automatically only when its
+verified structured scope lies entirely in independent namespaces. Overlapping,
+unscoped, malformed or HA-divergent windows fail closed. A task name or a different
+reason is not proof of independence. Unscoped helper usage retains its existing
+cluster-wide behavior.
+
 Kubernetes prevents overlapping runs with `concurrencyPolicy: Forbid`. A rollout can therefore delay subsequent checks. Registry visibility, GitHub limits, protected CI and rollout time also affect delivery latency; the minute schedule is a check cadence, not a one-minute deployment guarantee.
 
 The worker explicitly configures Kubernetes access through the projected service-account token file and CA, without copying the token or passing it in command arguments. It softly prefers the regular server's node for its already-cached image, but can schedule elsewhere if that server is absent. Immutable utility images use `IfNotPresent`. The worker can read workload/Flux status but cannot modify workloads. Its only Kubernetes mutation permission is the existing maintenance coordination Lease in `observability`.

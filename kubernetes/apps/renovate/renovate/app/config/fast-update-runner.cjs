@@ -187,6 +187,43 @@ async function readyPull(targets, token, author, yaml) {
   return null;
 }
 
+function maintenanceScope(target, kustomizations) {
+  // Only ordinary workload categories can be independent. Every platform
+  // namespace remains protected, including dependencies not expressed in Flux
+  // ordering, such as DNS, Envoy, Pocket ID and storage controllers.
+  const workloads = new Set(['arrs', 'games', 'home-assistant', 'iot', 'media', 'services', 'tools']);
+  const protectedNamespaces = new Set(['kube-system', 'flux-system', 'default']);
+  const workloadNamespaces = new Set();
+  const byName = new Map();
+  const namespaces = ks => [...new Set([ks.spec?.targetNamespace, ...(ks.spec?.healthChecks || []).map(h => h.namespace)].filter(Boolean))];
+  for (const ks of kustomizations) {
+    assert.equal(ks.metadata?.namespace, 'flux-system', 'Unsupported Flux dependency namespace');
+    assert(!byName.has(ks.metadata.name), 'Duplicate Flux Kustomization');
+    byName.set(ks.metadata.name, ks);
+    const category = ks.spec?.path?.match(/^\.\/kubernetes\/apps\/([a-z0-9-]+)\//)?.[1];
+    for (const ns of namespaces(ks)) (workloads.has(category) ? workloadNamespaces : protectedNamespaces).add(ns);
+  }
+  const root = path.posix.basename(path.posix.dirname(path.posix.dirname(target.file)));
+  assert.equal(byName.get(root)?.spec?.path, './' + path.posix.dirname(target.file), 'Target Flux owner missing or changed');
+  const visited = new Set();
+  const visit = name => {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const ks = byName.get(name);
+    assert(ks && namespaces(ks).length, 'Unresolved Flux dependency scope: ' + name);
+    for (const ns of namespaces(ks)) protectedNamespaces.add(ns);
+    for (const dep of ks.spec.dependsOn || []) {
+      assert(!dep.namespace || dep.namespace === 'flux-system', 'Unsupported cross-namespace dependency');
+      visit(dep.name);
+    }
+  };
+  visit(root);
+  return {
+    namespaces: [...protectedNamespaces].sort(),
+    unrelatedNamespaces: [...workloadNamespaces].filter(ns => !protectedNamespaces.has(ns)).sort()
+  };
+}
+
 function maintenance(helper, action, args = []) {
   const env = { ...process.env, KUBECTL_BIN: kubectl, MAINTENANCE_STATE_FILE: path.join(WORK, 'maintenance.json') };
   const raw = execFileSync('python3', [helper, action, ...args], { env, encoding: 'utf8', timeout: 120000 });
@@ -311,7 +348,11 @@ async function main() {
   fs.writeFileSync(helper, await readFileAt('scripts/cluster-maintenance', base.sha, token), { mode: 0o700 });
   const baseline = JSON.parse(process.env.FAST_UPDATE_BASELINE_ALERTS || '[]');
   assert(Array.isArray(baseline) && baseline.every(s => typeof s === 'string'));
-  const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', ...baseline.flatMap(s => ['--allow-active-alert', s])];
+  const scope = maintenanceScope(candidate.target, kget('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system').items);
+  const scopeFile = path.join(WORK, 'maintenance-scope.json');
+  fs.writeFileSync(scopeFile, JSON.stringify(scope), { mode: 0o600 });
+  report({ phase: 'maintenance-scope', ...scope });
+  const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', '--scope-file', scopeFile, ...baseline.flatMap(s => ['--allow-active-alert', s])];
   const window = maintenance(helper, 'begin', args);
   assert(window.silenceId && window.state === 'active');
   report({ phase: 'maintenance', pull: candidate.pr.number, silenceId: window.silenceId });
@@ -339,7 +380,7 @@ async function main() {
   }
 }
 
-module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, verifyRollout, inClusterConfig };
+module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, maintenanceScope, verifyRollout, inClusterConfig };
 if (require.main === module) main().catch(error => {
   // Error objects from HTTP clients or child processes can contain credentials.
   report({ phase: 'failed', errorType: error.name, message: error instanceof assert.AssertionError || error.name === 'RolloutVerificationTimeout' ? error.message : 'Fast-update run failed; inspect private Pod diagnostics' });

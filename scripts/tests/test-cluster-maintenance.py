@@ -366,6 +366,105 @@ class ClusterMaintenanceTest(unittest.TestCase):
         )
         return result
 
+    def scoped_args(self):
+        scope = {"namespaces": ["services", "database", "rook-ceph", "network", "security",
+                                "external-secrets", "kube-system", "flux-system"],
+                 "unrelatedNamespaces": ["home-assistant", "tools"]}
+        path = Path(self.tmpdir.name, "scope.json")
+        path.write_text(json.dumps(scope))
+        return ["--scope-file", str(path)]
+
+    def test_scoped_lifecycle_leaves_irrelevant_alerts_visible_including_new_alerts(self):
+        for namespace in ("home-assistant", "tools"):
+            self.alertmanager.add_alert("KopiurSnapshotsGated", namespace=namespace)
+        output = json.loads(self.run_command("begin", "--reason", "Kanvil update",
+                                            *self.scoped_args()).stdout)
+        own = output["silenceId"]
+        self.assertIn("maintenanceScope", output)
+        for alert in self.alertmanager.alerts:
+            self.assertNotIn(own, alert["status"]["silencedBy"])
+        self.alertmanager.add_alert("UnrelatedWorkloadFailure", namespace="tools")
+        self.run_command("renew", "--id", own, "--duration", "30m")
+        self.run_command("end", "--id", own)
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_scoped_admission_rejects_dependencies_nodes_and_unknown_global_risks(self):
+        cases = [{"namespace": ns} for ns in ("services", "database", "rook-ceph", "network",
+                 "security", "external-secrets", "kube-system", "flux-system", "unknown")]
+        cases += [{}, {"namespace": "tools", "node": "worker"},
+                  {"namespace": "tools", "device": "sda"}]
+        for labels in cases:
+            with self.subTest(labels=labels):
+                self.alertmanager.alerts.clear()
+                self.alertmanager.add_alert("MaterialFailure", severity="critical", **labels)
+                self.run_command("begin", "--reason", "Kanvil update", *self.scoped_args(), expected=1)
+                self.assertEqual(self.alertmanager.posts, [])
+
+    def test_scoped_end_rejects_new_relevant_regression_even_when_suppressed(self):
+        own = json.loads(self.run_command("begin", "--reason", "Kanvil update",
+                                         *self.scoped_args()).stdout)["silenceId"]
+        self.alertmanager.add_alert("DatabaseDown", namespace="database", silenced_by=[own])
+        self.run_command("end", "--id", own, expected=1)
+        self.assertNotIn(own, self.alertmanager.deletes)
+
+    def test_scoped_concurrency_allows_only_verified_disjoint_namespace_effects(self):
+        other = self.alertmanager.add_managed_silence("other-window", "workload-only repair")
+        scope = {"namespaces": ["tools"], "unrelatedNamespaces": ["services"]}
+        silence = self.alertmanager.silences[other]
+        silence["comment"] += self.module.SCOPE_MARKER + json.dumps(scope)
+        silence["matchers"] = self.module.scope_matchers(scope)
+        before = json.dumps(silence, sort_keys=True)
+        own = json.loads(self.run_command("begin", "--reason", "Kanvil update",
+                                         *self.scoped_args()).stdout)
+        self.assertEqual(own["independentMaintenance"][0]["silenceId"], other)
+        self.run_command("end", "--id", own["silenceId"])
+        self.assertEqual(before, json.dumps(silence, sort_keys=True))
+        self.assertNotIn(other, self.alertmanager.deletes)
+
+    def test_scoped_concurrency_rejects_overlap_unknown_and_explicit_bypass(self):
+        for namespaces in (None, ["database"], ["tools", "network"], ["unknown"]):
+            with self.subTest(namespaces=namespaces):
+                self.alertmanager.silences.clear()
+                other = self.alertmanager.add_managed_silence("other-window", "other work")
+                if namespaces:
+                    scope = {"namespaces": namespaces, "unrelatedNamespaces": ["services"]}
+                    silence = self.alertmanager.silences[other]
+                    silence["comment"] += self.module.SCOPE_MARKER + json.dumps(scope)
+                    silence["matchers"] = self.module.scope_matchers(scope)
+                self.run_command("begin", "--reason", "Kanvil update", *self.scoped_args(),
+                                 "--independent-silence", other, expected=1)
+                self.assertEqual(self.alertmanager.posts, [])
+
+    def test_invalid_scope_fails_closed(self):
+        for scope in ({}, {"namespaces": ["services"], "unrelatedNamespaces": ["services"]},
+                      {"namespaces": [".*"], "unrelatedNamespaces": ["tools"]},
+                      {"namespaces": ["services"], "unrelatedNamespaces": [["tools"]]}):
+            with self.subTest(scope=scope), self.assertRaises(self.module.MaintenanceError):
+                self.module.validate_scope(scope)
+
+    def test_scoped_stale_repair_keeps_unrelated_alerts_visible(self):
+        own = json.loads(self.run_command("begin", "--reason", "Kanvil update",
+                                         *self.scoped_args()).stdout)["silenceId"]
+        self.alertmanager.add_alert("KopiurSnapshotsGated", namespace="tools")
+        silence = self.alertmanager.silences[own]
+        silence["endsAt"] = timestamp(dt.datetime.now(UTC) - dt.timedelta(seconds=1))
+        self.alertmanager.apply_silence(silence)
+        self.run_command("repair", "--id", own)
+        self.assertFalse(Path(self.tmpdir.name, "maintenance.json").exists())
+
+    def test_scoped_ha_coverage_rejects_broadened_namespace_matchers(self):
+        second = FakeAlertmanager()
+        second.mirror_source = self.alertmanager
+        second.mirror_matchers = self.module.MAINTENANCE_MATCHERS
+        try:
+            env = self.command_env(ALERTMANAGER_URLS=f"{self.alertmanager.url},{second.url}")
+            result = self.run_command("begin", "--reason", "Kanvil update", *self.scoped_args(),
+                                      expected=1, env=env)
+            self.assertIn("canonical maintenance matchers", result.stderr)
+            self.assertEqual(self.alertmanager.deletes, ["maintenance-1"])
+        finally:
+            second.close()
+
     def test_independent_window_is_recorded_and_never_modified(self):
         existing = self.alertmanager.add_managed_silence('other-window', 'unrelated workload')
         before = json.dumps(self.alertmanager.silences[existing], sort_keys=True)

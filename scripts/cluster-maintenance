@@ -8,6 +8,7 @@ import fcntl
 import json
 import os
 import queue
+import re
 import socket
 import subprocess
 import sys
@@ -289,8 +290,54 @@ def silence_definition_signature(silence):
     )
 
 
+SCOPE_MARKER = "\nmaintenance-scope: "
+
+
+def validate_scope(scope):
+    if scope is None:
+        return None
+    if not isinstance(scope, dict) or set(scope) != {"namespaces", "unrelatedNamespaces"}:
+        raise MaintenanceError("maintenance scope requires namespaces and unrelatedNamespaces")
+    for key, values in scope.items():
+        if (not isinstance(values, list) or (key == "namespaces" and not values)
+                or any(not isinstance(v, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", v)
+                       for v in values) or len(set(values)) != len(values)):
+            raise MaintenanceError(f"invalid maintenance scope {key}")
+    if set(scope["namespaces"]) & set(scope["unrelatedNamespaces"]):
+        raise MaintenanceError("maintenance scope namespaces overlap")
+    return scope
+
+
+def silence_scope(silence):
+    comment = silence.get("comment", "")
+    if SCOPE_MARKER not in comment:
+        return None
+    try:
+        return validate_scope(json.loads(comment.split(SCOPE_MARKER, 1)[1]))
+    except (ValueError, TypeError) as exc:
+        raise MaintenanceError("invalid structured maintenance scope") from exc
+
+
+def scope_matchers(scope):
+    return MAINTENANCE_MATCHERS + ([{
+        "name": "namespace", "value": "|".join(sorted(scope["namespaces"])),
+        "isRegex": True, "isEqual": True,
+    }] if scope else [])
+
+
+def unrelated_alert(alert, scope):
+    if not scope:
+        return False
+    labels = alert.get("labels", {})
+    # An exporter namespace must not hide node/storage/cluster risk.
+    infrastructure = {"node", "kubernetes_node", "device", "mountpoint", "storageclass",
+                      "persistentvolume", "ceph_daemon", "cluster_id"}
+    return (labels.get("namespace") in scope["unrelatedNamespaces"]
+            and not any(labels.get(key) for key in infrastructure))
+
+
 def require_canonical_matchers(silence):
-    if matcher_signature(silence.get("matchers", [])) != matcher_signature(MAINTENANCE_MATCHERS):
+    if matcher_signature(silence.get("matchers", [])) != matcher_signature(scope_matchers(silence_scope(silence))):
         raise MaintenanceError(
             f"silence {silence.get('id', 'unknown')} does not have the canonical maintenance matchers"
         )
@@ -755,7 +802,7 @@ def active_owned_silences(cluster):
     return list(found.values())
 
 
-def unsilenced_blockers(cluster, allowed_alerts=None, include_suppressed=False):
+def unsilenced_blockers(cluster, allowed_alerts=None, include_suppressed=False, scope=None):
     allowed_alerts = allowed_alerts or []
     blockers = {}
     allowed = {}
@@ -769,6 +816,8 @@ def unsilenced_blockers(cluster, allowed_alerts=None, include_suppressed=False):
                 and labels.get("alertname") not in EXCLUDED_ALERTS
             ):
                 item = compact_alert(alert)
+                if unrelated_alert(alert, scope):
+                    continue
                 if any(alert_matches_selector(alert, selector) for selector in allowed_alerts):
                     allowed[json.dumps(item, sort_keys=True)] = item
                 else:
@@ -779,6 +828,7 @@ def unsilenced_blockers(cluster, allowed_alerts=None, include_suppressed=False):
 def member_coverage(member, silence_id):
     silence = member.get_silence(silence_id)
     require_canonical_matchers(silence)
+    scope = silence_scope(silence)
     if silence.get("status", {}).get("state") != "active":
         raise MaintenanceError(
             f"maintenance silence {silence_id} is not active on {member.name} "
@@ -797,7 +847,7 @@ def member_coverage(member, silence_id):
                 wrongly_silenced.append(name)
         elif silence_id in silenced_by:
             covered.append(name)
-        else:
+        elif not scope or alert.get("labels", {}).get("namespace") in scope["namespaces"]:
             unmatched.append(name)
     if unmatched or wrongly_silenced:
         raise MaintenanceError(
@@ -906,7 +956,10 @@ def validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts=N
 
 
 def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=None,
-          recovery_alerts=None, recovery_plan=None):
+          recovery_alerts=None, recovery_plan=None, scope=None):
+    scope = validate_scope(scope)
+    if SCOPE_MARKER in reason:
+        raise MaintenanceError("reason must not contain structured maintenance scope")
     recovery_alerts = recovery_alerts or []
     validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts)
     with begin_lock() as lock:
@@ -914,6 +967,15 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
         peers = cluster.require_healthy()
         existing = active_owned_silences(cluster)
         approved = set(independent_silences or [])
+        if scope:
+            for other in existing:
+                other_scope = silence_scope(other)
+                if other_scope and set(other_scope["namespaces"]).issubset(scope["unrelatedNamespaces"]):
+                    approved.add(other["id"])
+            if any(s["id"] in approved and (not silence_scope(s)
+                   or not set(silence_scope(s)["namespaces"]).issubset(scope["unrelatedNamespaces"]))
+                   for s in existing):
+                raise MaintenanceError("concurrent maintenance has overlapping or unknown scope")
         existing_ids = {silence.get("id", "unknown") for silence in existing}
         if approved - existing_ids:
             raise MaintenanceError("independent silence IDs must identify active maintenance windows")
@@ -926,6 +988,8 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             if len(definitions) != 1:
                 raise MaintenanceError(f"independent silence {silence_id} differs between members")
             verified = silences[0][1]
+            if scope and (not silence_scope(verified) or not set(silence_scope(verified)["namespaces"]).issubset(scope["unrelatedNamespaces"])):
+                raise MaintenanceError("concurrent maintenance scope changed during admission")
             concurrent.append({"silenceId": silence_id,
                                "reason": verified["comment"][len(COMMENT_PREFIX):],
                                "endsAt": verified["endsAt"]})
@@ -950,9 +1014,9 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
                            for baseline in (allowed_alerts or [])):
                         raise MaintenanceError("recovery alerts cannot also be admitted as baselines")
         blockers, _ = unsilenced_blockers(
-            cluster, [*(allowed_alerts or []), *recovery_alerts], include_suppressed=True
+            cluster, [*(allowed_alerts or []), *recovery_alerts], include_suppressed=True, scope=scope
         )
-        _, allowed = unsilenced_blockers(cluster, allowed_alerts, include_suppressed=True)
+        _, allowed = unsilenced_blockers(cluster, allowed_alerts, include_suppressed=True, scope=scope)
         if blockers:
             names = ", ".join(item["alertname"] for item in blockers)
             raise MaintenanceError(
@@ -961,11 +1025,11 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             )
         now = utc_now()
         payload = {
-            "matchers": MAINTENANCE_MATCHERS,
+            "matchers": scope_matchers(scope),
             "startsAt": timestamp(now),
             "endsAt": timestamp(now + duration),
             "createdBy": MANAGED_BY,
-            "comment": COMMENT_PREFIX + reason,
+            "comment": COMMENT_PREFIX + reason + (SCOPE_MARKER + json.dumps(scope, sort_keys=True) if scope else ""),
         }
         silence_id = cluster.put_silence(payload)
         try:
@@ -994,11 +1058,13 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             "recoveryActiveAlerts": recovery_alerts,
             "recoveryPlan": recovery_plan,
             "independentMaintenance": concurrent,
+            "maintenanceScope": scope,
         }
 
 
 def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None,
-                      independent_silences=None, recovery_alerts=None, recovery_plan=None):
+                      independent_silences=None, recovery_alerts=None, recovery_plan=None, scope=None):
+    scope = validate_scope(scope)
     validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts)
     if load_state(required=False):
         raise MaintenanceError(
@@ -1008,7 +1074,7 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
     silence_id = None
     try:
         result = begin(cluster, reason, duration, allowed_alerts, independent_silences,
-                       recovery_alerts, recovery_plan)
+                       recovery_alerts, recovery_plan, scope)
         silence_id = result["silenceId"]
         write_state(
             {
@@ -1021,6 +1087,7 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
                 "recoveryActiveAlerts": recovery_alerts or [],
                 "recoveryPlan": recovery_plan,
                 "independentMaintenance": result["independentMaintenance"],
+                "maintenanceScope": result["maintenanceScope"],
             }
         )
     except Exception as action_error:
@@ -1104,7 +1171,8 @@ def end(cluster, silence_id):
     }
 
 
-def post_maintenance_blockers(cluster, allowed_alerts=None, required_clearance=None):
+def post_maintenance_blockers(cluster, allowed_alerts=None, required_clearance=None, scope=None):
+    scope = validate_scope(scope)
     cluster.require_healthy()
     blockers = {}
     for member, alerts in cluster.all_alerts():
@@ -1118,8 +1186,8 @@ def post_maintenance_blockers(cluster, allowed_alerts=None, required_clearance=N
                 alert_matches_selector(alert, {k: v for k, v in selector.items() if k != "severity"})
                 for selector in (required_clearance or [])
             )
-            if not recovery_incident and any(alert_matches_selector(alert, selector)
-                                             for selector in (allowed_alerts or [])):
+            if not recovery_incident and (unrelated_alert(alert, scope) or any(alert_matches_selector(alert, selector)
+                                             for selector in (allowed_alerts or []))):
                 continue
             key = json.dumps(labels, sort_keys=True)
             blockers.setdefault(key, {"members": [], **compact_alert(alert)})["members"].append(
@@ -1146,7 +1214,7 @@ def coordinated_end(cluster, silence_id, status_api=None):
     recovery_alerts = validate_persisted_alert_selectors(
         state.get("recoveryActiveAlerts", []), "recoveryActiveAlerts"
     )
-    post_maintenance_blockers(cluster, allowed_active_alerts, recovery_alerts)
+    post_maintenance_blockers(cluster, allowed_active_alerts, recovery_alerts, state.get("maintenanceScope"))
     current = status(cluster, silence_id)
     if current["state"] == "active":
         result = end(cluster, silence_id)
@@ -1241,6 +1309,7 @@ def coordinated_repair(cluster, silence_id, allowed_alerts=None, status_api=None
         cluster,
         [*persisted_active_alerts, *repair_alerts],
         recovery_alerts,
+        state.get("maintenanceScope"),
     )
     state_changed = False
     if repair_alerts != persisted_repair_alerts:
@@ -1422,6 +1491,8 @@ def build_parser():
     begin_parser = subparsers.add_parser("begin", help="start and verify a maintenance silence")
     begin_parser.add_argument("--reason", required=True, help="human-readable maintenance reason")
     begin_parser.add_argument("--duration", type=parse_duration, default=DEFAULT_DURATION)
+    begin_parser.add_argument("--scope-file", type=Path,
+                              help="JSON namespace dependency scope; omit for cluster-wide work")
     begin_parser.add_argument(
         "--public-status",
         action="store_true",
@@ -1495,6 +1566,7 @@ def main():
                     args.independent_silence,
                     args.recover_active_alert,
                     args.recovery_plan,
+                    json.loads(args.scope_file.read_text()) if args.scope_file else None,
                 )
             elif args.command == "renew":
                 result = coordinated_renew(cluster, args.id, args.duration)

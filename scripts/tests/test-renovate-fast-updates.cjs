@@ -124,6 +124,58 @@ test('maintenance admission requires two active members and ten minutes remainin
   ]) assert.equal(runner.maintenanceActive({ ...status, ...changed }, 'owned', now), false);
 });
 
+function scopeFixture() {
+  const ks = (name, category, namespace, dependencies = []) => ({
+    metadata: { name, namespace: 'flux-system' },
+    spec: { path: './kubernetes/apps/' + category + '/' + name + '/app', targetNamespace: namespace,
+      dependsOn: dependencies.map(name => ({ name })) }
+  });
+  return [ks('kanvil', 'services', 'services', ['kanvil-prereqs', 'rabbitmq-cluster', 'elasticsearch', 'rook-ceph-cluster']),
+    ks('kanvil-prereqs', 'services', 'services', ['cloudnative-pg-cluster', 'external-secrets-secret-store']),
+    ks('cloudnative-pg-cluster', 'database', 'database'), ks('rabbitmq-cluster', 'database', 'database'),
+    ks('elasticsearch', 'database', 'database'), ks('rook-ceph-cluster', 'rook-ceph', 'rook-ceph'),
+    ks('external-secrets-secret-store', 'external-secrets', 'external-secrets'),
+    ks('pocket-id', 'security', 'security'), ks('envoy-gateway', 'network', 'network'),
+    ks('home-assistant', 'home-assistant', 'home-assistant'), ks('searxng', 'tools', 'tools')];
+}
+
+test('maintenance dependency scope protects app, transitive data and implicit platform dependencies', () => {
+  const target = runner.targetsFromPreset(preset)[0];
+  const scope = runner.maintenanceScope(target, scopeFixture());
+  assert.deepEqual(scope.namespaces, ['database', 'default', 'external-secrets', 'flux-system', 'kube-system', 'network', 'rook-ceph', 'security', 'services']);
+  assert.deepEqual(scope.unrelatedNamespaces, ['home-assistant', 'tools']);
+  const changed = scopeFixture();
+  changed[1].spec.dependsOn.push({ name: 'searxng' });
+  assert(runner.maintenanceScope(target, changed).namespaces.includes('tools'));
+  assert(!runner.maintenanceScope(target, changed).unrelatedNamespaces.includes('tools'));
+});
+
+test('health-check namespaces resolve operator dependencies without targetNamespace', () => {
+  const resources = scopeFixture();
+  resources[3].spec.dependsOn.push({ name: 'rabbitmq-operator' });
+  resources.push({ metadata: { name: 'rabbitmq-operator', namespace: 'flux-system' }, spec: {
+    path: './kubernetes/apps/database/rabbitmq/operator/cluster', healthChecks: [{ namespace: 'rabbitmq-system' }]
+  } });
+  assert(runner.maintenanceScope(runner.targetsFromPreset(preset)[0], resources).namespaces.includes('rabbitmq-system'));
+});
+
+test('unresolved owners and dependencies fail closed; platform namespace classification wins', () => {
+  const target = runner.targetsFromPreset(preset)[0];
+  for (const mutate of [
+    rows => rows.shift(), rows => rows[0].spec.dependsOn.push({ name: 'missing' }),
+    rows => rows[0].spec.dependsOn.push({ name: 'searxng', namespace: 'foreign' }),
+    rows => rows[1].spec.targetNamespace = undefined
+  ]) {
+    const rows = scopeFixture(); mutate(rows);
+    assert.throws(() => runner.maintenanceScope(target, rows));
+  }
+  const rows = scopeFixture();
+  rows.push({ metadata: { name: 'shared-controller', namespace: 'flux-system' }, spec: {
+    path: './kubernetes/apps/new-platform/controller/app', targetNamespace: 'tools'
+  } });
+  assert(!runner.maintenanceScope(target, rows).unrelatedNamespaces.includes('tools'));
+});
+
 function rolloutFixture(revision = 'a'.repeat(40)) {
   const merge = 'a'.repeat(40), image = 'ghcr.io/maudecode/kanvil', pin = '0.1.3@sha256:' + 'b'.repeat(64);
   const target = { file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image };

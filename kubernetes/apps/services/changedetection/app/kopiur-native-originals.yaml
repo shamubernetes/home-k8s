@@ -21,7 +21,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: native
-          image: ghcr.io/dgtlmoon/changedetection.io:0.60.9@sha256:6e45efa0bac5966e528013726e0ce240e40f2717ba3cc007c22a8c26e0275949
+          image: ghcr.io/dgtlmoon/changedetection.io:0.60.10@sha256:82b82565b5f4fbb309c56ce888f03dd441b51805a17548f4763a7db840f27f0c
           command:
             - python3
             - /kopiur/original-native.py

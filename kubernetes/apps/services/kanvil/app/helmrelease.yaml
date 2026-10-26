@@ -64,6 +64,7 @@ spec:
               OIDC_DISCOVERY_URL: https://sso.${HOME_DOMAIN}/.well-known/openid-configuration
               OIDC_NAME: Pocket ID
               KANVIL_PUSH_ENABLED: "false"
+              KANVIL_API_KEY_RATE_LIMIT_ENABLED: "false"
             probes:
               liveness:
                 enabled: true

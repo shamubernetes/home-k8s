@@ -16,7 +16,7 @@ flock -n 9 || { printf 'capture already running\n' >&2; exit 1; }
 [ ! -e "$root/coordination/request" ] && [ ! -L "$root/coordination/request" ] || exit 1
 [ ! -e "$root/coordination/active" ] && [ ! -L "$root/coordination/active" ] || exit 1
 # Retry one transient filetree race with fresh database dumps and a fresh archive.
-# The caller's existing 1200-second timeout bounds both attempts together.
+# The caller's 2400-second timeout gives both full captures a bounded budget.
 # Invoke outside a conditional so errexit remains effective inside the subshell.
 attempt=0
 while [ "$attempt" -lt 2 ]; do

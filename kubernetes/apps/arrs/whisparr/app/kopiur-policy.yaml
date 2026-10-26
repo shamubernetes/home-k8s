@@ -46,9 +46,9 @@ spec:
             app.kubernetes.io/controller: whisparr
         container: kopiur-postgres
         # Embed the helper at render time, bypassing stale subPath file mounts.
-        command: [timeout, --kill-after=30, "1200", sh, -c, ""]
+        command: [timeout, --kill-after=30, "2400", sh, -c, ""]
         # Native online capture plus escalation and cleanup, never a writer hold.
-        timeout: 25m
+        timeout: 45m
         continueOnFailure: false
   mover:
     # Retained archive working sets exceed Kopia's default content cache.

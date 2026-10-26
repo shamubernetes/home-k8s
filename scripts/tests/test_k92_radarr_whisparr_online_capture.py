@@ -30,6 +30,20 @@ def appdir(app):
 
 
 class RenderTests(unittest.TestCase):
+    def test_whisparr_full_retry_budget(self):
+        rendered = run("kubectl", "kustomize", str(appdir("whisparr")))
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        docs = json.loads(run("yq", "ea", "-o=json", "-I=0", "[.]", input=rendered.stdout).stdout)
+        policy = next(d for d in docs if d.get("kind") == "SnapshotPolicy" and d["metadata"]["name"] == "whisparr")
+        hook = policy["spec"]["hooks"]["beforeSnapshot"][0]["workloadExec"]
+        self.assertEqual(hook["command"][:5], ["timeout", "--kill-after=30", "2400", "sh", "-c"])
+        self.assertEqual(hook["timeout"], "45m")
+        self.assertFalse(hook["continueOnFailure"])
+        script = hook["command"][5]
+        self.assertIn('while [ "$attempt" -lt 2 ]', script)
+        self.assertIn('cmp -s "$root/pending/filetree.before" "$root/pending/filetree.after"', script)
+        self.assertIn('sha256sum -c SHA256SUMS', script)
+
     def test_inline_delivery_and_unchanged_helmrelease(self):
         for app in APPS:
             rendered = run("kubectl", "kustomize", str(appdir(app)))

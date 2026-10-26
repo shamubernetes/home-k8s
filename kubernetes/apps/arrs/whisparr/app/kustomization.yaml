@@ -20,6 +20,7 @@ resources:
 - ./kopiur-capture-recovery-20261023.yaml
 - ./kopiur-capture-recovery-20261024.yaml
 - ./kopiur-capture-recovery-20261025.yaml
+- ./kopiur-budget-recovery-20261026.yaml
 - ./kopiur-online-original.yaml
 - ./kopiur-online-original-v2.yaml
 - ./kopiur-online-original-v2-r2.yaml

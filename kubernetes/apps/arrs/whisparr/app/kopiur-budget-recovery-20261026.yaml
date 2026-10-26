@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: whisparr-budget-recovery-20261026
+spec:
+  policyRef:
+    name: whisparr
+  deletionPolicy: Retain
+  pin: true
+  description: Verify strict online capture after full retry budget convergence
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

@@ -77,20 +77,6 @@ spec:
 
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
-kind: Snapshot
-metadata:
-  name: seerr-nas-to-r2-copy-95369b2e8d268a36-7860b50e
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: disabled
-spec:
-  deletionPolicy: Retain
-  repository:
-    kind: Repository
-    name: seerr-r2
-    namespace: arrs
-
----
-apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Restore
 metadata:
   name: seerr-k92-existing-r2

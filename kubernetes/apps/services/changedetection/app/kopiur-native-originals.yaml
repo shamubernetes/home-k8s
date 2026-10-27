@@ -3,7 +3,12 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: changedetection-k92-native-originals-v3
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Preserve the qualified recipe without replaying retained original points.
+  suspend: true
+  ttlSecondsAfterFinished: 60
   backoffLimit: 0
   activeDeadlineSeconds: 600
   template:

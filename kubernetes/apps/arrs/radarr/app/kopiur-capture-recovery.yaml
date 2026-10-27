@@ -19,3 +19,15 @@ spec:
   policyRef:
     name: radarr
   deletionPolicy: Retain
+---
+# A bounded observation and full read-only archive confirmed a quiet source tree.
+# Preserve both prior failures and require the unchanged strict capture gate.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: radarr-online-quiet-recovery-20261027
+  namespace: arrs
+spec:
+  policyRef:
+    name: radarr
+  deletionPolicy: Retain

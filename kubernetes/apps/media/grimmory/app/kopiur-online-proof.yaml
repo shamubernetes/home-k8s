@@ -7,6 +7,9 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Preserve the qualified recipe without replaying retained original points.
+  suspend: true
+  ttlSecondsAfterFinished: 60
   activeDeadlineSeconds: 300
   backoffLimit: 0
   template:

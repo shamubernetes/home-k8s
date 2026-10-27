@@ -43,6 +43,8 @@ spec:
               limits:
                 memory: 256Mi
     defaultPodOptions:
+      annotations:
+        isponsorblocktv.home.arpa/pairing-revision: "2"
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

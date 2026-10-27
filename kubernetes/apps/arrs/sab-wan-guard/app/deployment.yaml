@@ -27,7 +27,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: guard
-        image: docker.io/library/python:3.14-alpine@sha256:bc62fbcb684904b1bb81a6240041bb60e9c1ee19ddeaf17a6b4297e1cc9c95d2
+        image: docker.io/library/python:3.15-alpine@sha256:0aa144e9ec2ae8fd80dfd94070ef3e432a0df17b6e5e0091dc05323974ce9913
         command: [python3, -B, -u, /app/guard.py]
         env:
         - name: UNIFI_URL

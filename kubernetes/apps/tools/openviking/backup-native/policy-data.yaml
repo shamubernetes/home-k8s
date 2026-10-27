@@ -100,7 +100,7 @@ spec:
                     type: RuntimeDefault
                 containers:
                   - name: native
-                    image: ghcr.io/volcengine/openviking:v0.5.1.2@sha256:26122a0a287dd3c9318e04e5da8d22e0a38ddb688c9aec37ff7739d1f765b4e7
+                    image: ghcr.io/volcengine/openviking:v0.5.2.2026102718@sha256:ab127bedac8fb13091a16cca9b907380a32c070b9dc279f013507775d844abe3
                     command:
                       - python
                       - /scripts/capture.py

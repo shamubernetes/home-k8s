@@ -16,6 +16,48 @@ const kubectl = process.env.KUBECTL_BIN || '/tools/kubectl';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const report = event => console.log(JSON.stringify(event));
 
+// Never serialize client/child-process errors, URLs, bodies or arbitrary codes.
+const failures = new WeakMap();
+const CAUSE_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENETUNREACH', 'EHOSTUNREACH', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'UND_ERR_SOCKET', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'ERR_TLS_CERT_ALTNAME_INVALID', 'ENOENT', 'ENOBUFS']);
+const ERROR_TYPES = new Set(['Error', 'TypeError', 'SyntaxError', 'AssertionError', 'TimeoutError', 'AbortError', 'AggregateError', 'RolloutVerificationTimeout']);
+function failureDetails(error) {
+  const codes = new Set(), seen = new Set();
+  const visit = (value, depth) => {
+    if (!value || typeof value !== 'object' || seen.has(value) || depth > 4) return;
+    seen.add(value);
+    if (CAUSE_CODES.has(value.code)) codes.add(value.code);
+    visit(value.cause, depth + 1);
+    if (Array.isArray(value.errors)) for (const child of value.errors.slice(0, 8)) visit(child, depth + 1);
+  };
+  visit(error, 0);
+  return { errorType: ERROR_TYPES.has(error?.name) ? error.name : 'Error', causeCodes: [...codes].sort(), ...(failures.get(error) || {}) };
+}
+function noteFailure(error, operation, httpStatus) {
+  if (error && typeof error === 'object' && !failures.has(error)) {
+    failures.set(error, { operation, ...(Number.isInteger(httpStatus) ? { httpStatus } : {}) });
+  }
+  return error;
+}
+async function operation(name, action) {
+  try { return await action(); }
+  catch (error) { throw noteFailure(error, name); }
+}
+function githubOperation(url, method) {
+  const route = url.split('?')[0].replace(/^\/repos\/shamubernetes\/home-k8s/, '');
+  if (method === 'PUT' && /^\/pulls\/\d+\/merge$/.test(route)) return 'github-merge-pull';
+  if (route === '/pulls') return 'github-list-pulls';
+  if (/^\/pulls\/\d+\/files$/.test(route)) return 'github-read-pull-files';
+  if (/^\/pulls\/\d+$/.test(route)) return 'github-read-pull';
+  if (/^\/commits\/[a-f0-9]{40}\/check-runs$/.test(route)) return 'github-read-checks';
+  if (route.startsWith('/contents/')) return 'github-read-content';
+  if (route.startsWith('/compare/')) return 'github-compare-revisions';
+  if (route === '/commits/main') return 'github-read-main';
+  if (route === '/app') return 'github-app-identity';
+  if (route === '/installation') return 'github-read-installation';
+  if (/^\/app\/installations\/\d+\/access_tokens$/.test(route)) return 'github-installation-token';
+  return 'github-request';
+}
+
 function targetsFromPreset(preset) {
   assert(Array.isArray(preset.packageRules) && preset.packageRules.length > 0, 'Empty fast-update allowlist');
   const seen = new Set();
@@ -125,12 +167,16 @@ function kget(kind, namespace, name, selector) {
 }
 
 async function github(url, token, method = 'GET', body) {
-  const response = await fetch(`https://api.github.com$${url}`, {
-    method, headers: { Authorization: `Bearer $${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(30000)
-  });
-  if (!response.ok) throw new Error(`GitHub $${method} $${url.split('?')[0]} returned $${response.status}`);
-  return response.status === 204 ? null : response.json();
+  let status;
+  try {
+    const response = await fetch(`https://api.github.com$${url}`, {
+      method, headers: { Authorization: `Bearer $${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(30000)
+    });
+    status = response.status;
+    if (!response.ok) throw new Error('GitHub request rejected');
+    return response.status === 204 ? null : await response.json();
+  } catch (error) { throw noteFailure(error, githubOperation(url, method), status); }
 }
 
 async function pages(url, token, field) {
@@ -187,10 +233,49 @@ async function readyPull(targets, token, author, yaml) {
   return null;
 }
 
+function maintenanceScope(target, kustomizations) {
+  // Only ordinary workload categories can be independent. Every platform
+  // namespace remains protected, including dependencies not expressed in Flux
+  // ordering, such as DNS, Envoy, Pocket ID and storage controllers.
+  const workloads = new Set(['arrs', 'games', 'home-assistant', 'iot', 'media', 'services', 'tools']);
+  const protectedNamespaces = new Set(['kube-system', 'flux-system', 'default']);
+  const workloadNamespaces = new Set();
+  const byName = new Map();
+  const namespaces = ks => [...new Set([ks.spec?.targetNamespace, ...(ks.spec?.healthChecks || []).map(h => h.namespace)].filter(Boolean))];
+  for (const ks of kustomizations) {
+    assert.equal(ks.metadata?.namespace, 'flux-system', 'Unsupported Flux dependency namespace');
+    assert(!byName.has(ks.metadata.name), 'Duplicate Flux Kustomization');
+    byName.set(ks.metadata.name, ks);
+    const category = ks.spec?.path?.match(/^\.\/kubernetes\/apps\/([a-z0-9-]+)\//)?.[1];
+    for (const ns of namespaces(ks)) (workloads.has(category) ? workloadNamespaces : protectedNamespaces).add(ns);
+  }
+  const root = path.posix.basename(path.posix.dirname(path.posix.dirname(target.file)));
+  assert.equal(byName.get(root)?.spec?.path, './' + path.posix.dirname(target.file), 'Target Flux owner missing or changed');
+  const visited = new Set();
+  const visit = name => {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const ks = byName.get(name);
+    assert(ks && namespaces(ks).length, 'Unresolved Flux dependency scope: ' + name);
+    for (const ns of namespaces(ks)) protectedNamespaces.add(ns);
+    for (const dep of ks.spec.dependsOn || []) {
+      assert(!dep.namespace || dep.namespace === 'flux-system', 'Unsupported cross-namespace dependency');
+      visit(dep.name);
+    }
+  };
+  visit(root);
+  return {
+    namespaces: [...protectedNamespaces].sort(),
+    unrelatedNamespaces: [...workloadNamespaces].filter(ns => !protectedNamespaces.has(ns)).sort()
+  };
+}
+
 function maintenance(helper, action, args = []) {
   const env = { ...process.env, KUBECTL_BIN: kubectl, MAINTENANCE_STATE_FILE: path.join(WORK, 'maintenance.json') };
-  const raw = execFileSync('python3', [helper, action, ...args], { env, encoding: 'utf8', timeout: 120000 });
-  return JSON.parse(raw);
+  try {
+    const raw = execFileSync('python3', [helper, action, ...args], { env, encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'pipe'] });
+    return JSON.parse(raw);
+  } catch (error) { throw noteFailure(error, 'maintenance-' + action); }
 }
 
 function maintenanceActive(status, silenceId, now = Date.now()) {
@@ -305,13 +390,17 @@ async function main() {
   assert.equal(finished?.result, 'done', 'Renovate did not finish repository processing');
   assert.equal(extraction?.stats?.total?.fileCount, targets.length, 'Expected exact allowlisted manifest extraction');
   report({ phase: 'scan-complete', targets: targets.length, stats: extraction.stats });
-  const candidate = await readyPull(targets, token, author, yaml);
+  const candidate = await operation('select-ready-pull', () => readyPull(targets, token, author, yaml));
   if (!candidate) { report({ phase: 'complete', result: 'no merge-ready fast update' }); return; }
   const helper = path.join(WORK, 'cluster-maintenance');
   fs.writeFileSync(helper, await readFileAt('scripts/cluster-maintenance', base.sha, token), { mode: 0o700 });
   const baseline = JSON.parse(process.env.FAST_UPDATE_BASELINE_ALERTS || '[]');
   assert(Array.isArray(baseline) && baseline.every(s => typeof s === 'string'));
-  const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', ...baseline.flatMap(s => ['--allow-active-alert', s])];
+  const scope = await operation('resolve-maintenance-scope', () => maintenanceScope(candidate.target, kget('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system').items));
+  const scopeFile = path.join(WORK, 'maintenance-scope.json');
+  fs.writeFileSync(scopeFile, JSON.stringify(scope), { mode: 0o600 });
+  report({ phase: 'maintenance-scope', ...scope });
+  const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', '--scope-file', scopeFile, ...baseline.flatMap(s => ['--allow-active-alert', s])];
   const window = maintenance(helper, 'begin', args);
   assert(window.silenceId && window.state === 'active');
   report({ phase: 'maintenance', pull: candidate.pr.number, silenceId: window.silenceId });
@@ -339,9 +428,9 @@ async function main() {
   }
 }
 
-module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, verifyRollout, inClusterConfig };
+module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, maintenanceScope, verifyRollout, inClusterConfig, failureDetails, github, readyPull };
 if (require.main === module) main().catch(error => {
   // Error objects from HTTP clients or child processes can contain credentials.
-  report({ phase: 'failed', errorType: error.name, message: error instanceof assert.AssertionError || error.name === 'RolloutVerificationTimeout' ? error.message : 'Fast-update run failed; inspect private Pod diagnostics' });
+  report({ phase: 'failed', ...failureDetails(error), message: 'Fast-update run failed; inspect operation and cause codes' });
   process.exitCode = 1;
 });

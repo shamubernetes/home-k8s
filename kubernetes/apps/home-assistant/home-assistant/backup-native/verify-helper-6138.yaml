@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ha-helper-6138-20261026
+spec:
+  policyRef:
+    name: home-assistant-native-bundle
+  deletionPolicy: Retain
+  pin: true
+  description: Qualify the Python helper image update in PR 6138 without interrupting the application.
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ha-helper-6138-20261026-v2
+spec:
+  policyRef:
+    name: home-assistant-native-bundle
+  deletionPolicy: Retain
+  pin: true
+  description: Verify the target helper after policy generation 5 has converged. Preserve the first capture.

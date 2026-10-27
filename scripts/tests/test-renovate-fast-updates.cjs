@@ -13,6 +13,49 @@ compiled._compile(fs.readFileSync(sourcePath, 'utf8').replaceAll('$${', '${'), s
 const runner = compiled.exports;
 const preset = JSON.parse(fs.readFileSync(path.join(root, 'kubernetes/apps/renovate/renovate/app/config/fast-updates.json')));
 
+test('GitHub transport failures identify the operation without exposing credentials', async () => {
+  const original = global.fetch;
+  const secret = 'synthetic-credential-never-log';
+  const cause = new AggregateError([Object.assign(new Error(secret), { code: 'ECONNRESET' }), Object.assign(new Error(secret), { code: secret })], secret);
+  const error = new TypeError(secret, { cause });
+  error.headers = { Authorization: secret }; error.body = secret;
+  global.fetch = async () => { throw error; };
+  try {
+    await assert.rejects(runner.github('/repos/shamubernetes/home-k8s/pulls?secret=' + secret, secret), actual => {
+      assert.equal(actual, error);
+      const diagnostic = runner.failureDetails(actual);
+      assert.deepEqual(diagnostic, { errorType: 'TypeError', causeCodes: ['ECONNRESET'], operation: 'github-list-pulls' });
+      assert(!JSON.stringify(diagnostic).includes(secret));
+      return true;
+    });
+  } finally { global.fetch = original; }
+});
+
+test('HTTP and response-body failures retain only safe operation and status', async () => {
+  const original = global.fetch;
+  try {
+    for (const status of [401, 403, 429, 500, 502, 503]) {
+      global.fetch = async () => ({ ok: false, status });
+      await assert.rejects(runner.github('/repos/shamubernetes/home-k8s/pulls/123/merge', 'synthetic-token', 'PUT', { sha: 'a'.repeat(40) }), error => {
+        assert.deepEqual(runner.failureDetails(error), { errorType: 'Error', causeCodes: [], operation: 'github-merge-pull', httpStatus: status });
+        return true;
+      });
+    }
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('synthetic-private-response'); } });
+    await assert.rejects(runner.github('/repos/shamubernetes/home-k8s/contents/private?ref=secret', 'synthetic-token'), error => {
+      assert.deepEqual(runner.failureDetails(error), { errorType: 'SyntaxError', causeCodes: [], operation: 'github-read-content', httpStatus: 200 });
+      return true;
+    });
+  } finally { global.fetch = original; }
+});
+
+test('diagnostic traversal is bounded and rejects arbitrary names, codes and stderr', () => {
+  const error = Object.assign(new Error('synthetic-secret'), { name: 'synthetic-secret', code: 'synthetic-secret', stderr: 'synthetic-secret' });
+  error.cause = error;
+  assert.deepEqual(runner.failureDetails(error), { errorType: 'Error', causeCodes: [] });
+  assert.deepEqual(runner.failureDetails(null), { errorType: 'Error', causeCodes: [] });
+});
+
 test('one canonical preset excludes the exact image/file pair from regular Renovate', () => {
   const targets = runner.targetsFromPreset(preset);
   assert.deepEqual(targets, [{ file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil' }]);
@@ -122,6 +165,58 @@ test('maintenance admission requires two active members and ten minutes remainin
     { state: 'expired' }, { silenceId: 'other' }, { memberStates: { a: 'active', b: 'expired' } },
     { memberStates: { a: 'active' } }, { endsAt: new Date(now + 599999).toISOString() }, { endsAt: 'invalid' }
   ]) assert.equal(runner.maintenanceActive({ ...status, ...changed }, 'owned', now), false);
+});
+
+function scopeFixture() {
+  const ks = (name, category, namespace, dependencies = []) => ({
+    metadata: { name, namespace: 'flux-system' },
+    spec: { path: './kubernetes/apps/' + category + '/' + name + '/app', targetNamespace: namespace,
+      dependsOn: dependencies.map(name => ({ name })) }
+  });
+  return [ks('kanvil', 'services', 'services', ['kanvil-prereqs', 'rabbitmq-cluster', 'elasticsearch', 'rook-ceph-cluster']),
+    ks('kanvil-prereqs', 'services', 'services', ['cloudnative-pg-cluster', 'external-secrets-secret-store']),
+    ks('cloudnative-pg-cluster', 'database', 'database'), ks('rabbitmq-cluster', 'database', 'database'),
+    ks('elasticsearch', 'database', 'database'), ks('rook-ceph-cluster', 'rook-ceph', 'rook-ceph'),
+    ks('external-secrets-secret-store', 'external-secrets', 'external-secrets'),
+    ks('pocket-id', 'security', 'security'), ks('envoy-gateway', 'network', 'network'),
+    ks('home-assistant', 'home-assistant', 'home-assistant'), ks('searxng', 'tools', 'tools')];
+}
+
+test('maintenance dependency scope protects app, transitive data and implicit platform dependencies', () => {
+  const target = runner.targetsFromPreset(preset)[0];
+  const scope = runner.maintenanceScope(target, scopeFixture());
+  assert.deepEqual(scope.namespaces, ['database', 'default', 'external-secrets', 'flux-system', 'kube-system', 'network', 'rook-ceph', 'security', 'services']);
+  assert.deepEqual(scope.unrelatedNamespaces, ['home-assistant', 'tools']);
+  const changed = scopeFixture();
+  changed[1].spec.dependsOn.push({ name: 'searxng' });
+  assert(runner.maintenanceScope(target, changed).namespaces.includes('tools'));
+  assert(!runner.maintenanceScope(target, changed).unrelatedNamespaces.includes('tools'));
+});
+
+test('health-check namespaces resolve operator dependencies without targetNamespace', () => {
+  const resources = scopeFixture();
+  resources[3].spec.dependsOn.push({ name: 'rabbitmq-operator' });
+  resources.push({ metadata: { name: 'rabbitmq-operator', namespace: 'flux-system' }, spec: {
+    path: './kubernetes/apps/database/rabbitmq/operator/cluster', healthChecks: [{ namespace: 'rabbitmq-system' }]
+  } });
+  assert(runner.maintenanceScope(runner.targetsFromPreset(preset)[0], resources).namespaces.includes('rabbitmq-system'));
+});
+
+test('unresolved owners and dependencies fail closed; platform namespace classification wins', () => {
+  const target = runner.targetsFromPreset(preset)[0];
+  for (const mutate of [
+    rows => rows.shift(), rows => rows[0].spec.dependsOn.push({ name: 'missing' }),
+    rows => rows[0].spec.dependsOn.push({ name: 'searxng', namespace: 'foreign' }),
+    rows => rows[1].spec.targetNamespace = undefined
+  ]) {
+    const rows = scopeFixture(); mutate(rows);
+    assert.throws(() => runner.maintenanceScope(target, rows));
+  }
+  const rows = scopeFixture();
+  rows.push({ metadata: { name: 'shared-controller', namespace: 'flux-system' }, spec: {
+    path: './kubernetes/apps/new-platform/controller/app', targetNamespace: 'tools'
+  } });
+  assert(!runner.maintenanceScope(target, rows).unrelatedNamespaces.includes('tools'));
 });
 
 function rolloutFixture(revision = 'a'.repeat(40)) {

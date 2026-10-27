@@ -26,6 +26,9 @@ spec:
           - maxSkew: 1
             topologyKey: kubernetes.io/hostname
             whenUnsatisfiable: DoNotSchedule
+            # Count replicas of each gateway separately during worker drains.
+            matchLabelKeys:
+            - gateway.envoyproxy.io/owning-gateway-name
             labelSelector:
               matchLabels:
                 app.kubernetes.io/component: proxy

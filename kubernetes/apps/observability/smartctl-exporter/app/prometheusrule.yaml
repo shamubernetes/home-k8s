@@ -10,7 +10,7 @@ spec:
     - alert: SmartDeviceHighTemperature
       annotations:
         summary: Drive {{ $labels.device }} on node {{ $labels.kubernetes_node }} has a temperature higher than 65°C.
-      expr: smartctl_device_temperature{kubernetes_node!=""} > 65
+      expr: smartctl_device_temperature{kubernetes_node!="",temperature_type="current"} > 65
       for: 15m
       labels:
         severity: critical

@@ -77,20 +77,6 @@ spec:
 
 ---
 apiVersion: kopiur.home-operations.com/v1alpha1
-kind: Snapshot
-metadata:
-  name: cwa-bdl-nas-to-r2-copy-f38664e5aa244b3c-76f0854d
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: disabled
-spec:
-  deletionPolicy: Retain
-  repository:
-    kind: Repository
-    name: cwa-bdl-r2
-    namespace: arrs
-
----
-apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Restore
 metadata:
   name: cwa-bdl-k92-shared-r2

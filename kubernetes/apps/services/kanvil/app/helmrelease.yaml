@@ -27,7 +27,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/kanvil
-              tag: 0.4.0@sha256:c7c3421b37268fe38c1fae812c802ec9aa537c734576e13894877a9e88d0d2be
+              tag: 0.4.3@sha256:b3f7ffebdbe59b9f8a4837ad125c70efb16b8d01f350c82d6da323ae4113ea63
             envFrom:
             - secretRef:
                 name: kanvil-secret
@@ -64,6 +64,7 @@ spec:
               OIDC_DISCOVERY_URL: https://sso.${HOME_DOMAIN}/.well-known/openid-configuration
               OIDC_NAME: Pocket ID
               KANVIL_PUSH_ENABLED: "false"
+              KANVIL_API_KEY_RATE_LIMIT_ENABLED: "false"
             probes:
               liveness:
                 enabled: true

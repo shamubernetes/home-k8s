@@ -2,7 +2,7 @@
 image:
   repository: ghcr.io/controlplaneio-fluxcd/flux-operator
   # renovate: datasource=docker depName=ghcr.io/controlplaneio-fluxcd/flux-operator
-  tag: v0.61.0@sha256:d13f764cac8b6217f5a08aa4124c8a67a3721d307afc5c41899d73a202f5bade
+  tag: v0.62.1@sha256:40b5f519195b4575bd5d3a2cf208737bc763b8d211b652dca9f343b5076ba900
 priorityClassName: system-cluster-critical
 serviceMonitor:
   create: true

@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment.yaml
+- pvc.yaml
+- externalsecret.yaml
+configMapGenerator:
+- name: sab-wan-guard
+  files:
+  - guard.py

@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/deployment-apps-v1.json
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sab-wan-guard
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sab-wan-guard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sab-wan-guard
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: guard
+        image: docker.io/library/python:3.14-alpine@sha256:bc62fbcb684904b1bb81a6240041bb60e9c1ee19ddeaf17a6b4297e1cc9c95d2
+        command: [python3, -B, -u, /app/guard.py]
+        env:
+        - name: UNIFI_URL
+          value: https://${IPAM_IP_GATEWAY}
+        - name: UNIFI_CERT_SHA256
+          value: 78e83a9fdbbd9abc2aaf298e36e28f7d562ed78e41f9fac3bdcaa65afa30905b
+        - name: UNIFI_USER
+          valueFrom:
+            secretKeyRef:
+              name: sab-wan-guard-secret
+              key: UNIFI_USER
+        - name: UNIFI_PASS
+          valueFrom:
+            secretKeyRef:
+              name: sab-wan-guard-secret
+              key: UNIFI_PASS
+        - name: SAB_URL
+          value: http://sabnzbd.arrs.svc.cluster.local/api
+        - name: SAB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sabnzbd-secret
+              key: SABNZBD__API_KEY
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: code
+          mountPath: /app
+          readOnly: true
+        - name: state
+          mountPath: /state
+      volumes:
+      - name: code
+        configMap:
+          name: sab-wan-guard
+      - name: state
+        persistentVolumeClaim:
+          claimName: sab-wan-guard

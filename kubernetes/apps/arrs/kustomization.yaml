@@ -6,6 +6,7 @@ resources:
 - ./k8s92-retire-bootstrap/ks.yaml
 - ./media-nfs.yaml
 - ./sabnzbd/ks.yaml
+- ./sab-wan-guard/ks.yaml
 - ./radarr/ks.yaml
 - ./radarr-3d/ks.yaml
 - ./sonarr/ks.yaml

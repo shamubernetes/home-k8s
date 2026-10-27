@@ -13,6 +13,49 @@ compiled._compile(fs.readFileSync(sourcePath, 'utf8').replaceAll('$${', '${'), s
 const runner = compiled.exports;
 const preset = JSON.parse(fs.readFileSync(path.join(root, 'kubernetes/apps/renovate/renovate/app/config/fast-updates.json')));
 
+test('GitHub transport failures identify the operation without exposing credentials', async () => {
+  const original = global.fetch;
+  const secret = 'synthetic-credential-never-log';
+  const cause = new AggregateError([Object.assign(new Error(secret), { code: 'ECONNRESET' }), Object.assign(new Error(secret), { code: secret })], secret);
+  const error = new TypeError(secret, { cause });
+  error.headers = { Authorization: secret }; error.body = secret;
+  global.fetch = async () => { throw error; };
+  try {
+    await assert.rejects(runner.github('/repos/shamubernetes/home-k8s/pulls?secret=' + secret, secret), actual => {
+      assert.equal(actual, error);
+      const diagnostic = runner.failureDetails(actual);
+      assert.deepEqual(diagnostic, { errorType: 'TypeError', causeCodes: ['ECONNRESET'], operation: 'github-list-pulls' });
+      assert(!JSON.stringify(diagnostic).includes(secret));
+      return true;
+    });
+  } finally { global.fetch = original; }
+});
+
+test('HTTP and response-body failures retain only safe operation and status', async () => {
+  const original = global.fetch;
+  try {
+    for (const status of [401, 403, 429, 500, 502, 503]) {
+      global.fetch = async () => ({ ok: false, status });
+      await assert.rejects(runner.github('/repos/shamubernetes/home-k8s/pulls/123/merge', 'synthetic-token', 'PUT', { sha: 'a'.repeat(40) }), error => {
+        assert.deepEqual(runner.failureDetails(error), { errorType: 'Error', causeCodes: [], operation: 'github-merge-pull', httpStatus: status });
+        return true;
+      });
+    }
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('synthetic-private-response'); } });
+    await assert.rejects(runner.github('/repos/shamubernetes/home-k8s/contents/private?ref=secret', 'synthetic-token'), error => {
+      assert.deepEqual(runner.failureDetails(error), { errorType: 'SyntaxError', causeCodes: [], operation: 'github-read-content', httpStatus: 200 });
+      return true;
+    });
+  } finally { global.fetch = original; }
+});
+
+test('diagnostic traversal is bounded and rejects arbitrary names, codes and stderr', () => {
+  const error = Object.assign(new Error('synthetic-secret'), { name: 'synthetic-secret', code: 'synthetic-secret', stderr: 'synthetic-secret' });
+  error.cause = error;
+  assert.deepEqual(runner.failureDetails(error), { errorType: 'Error', causeCodes: [] });
+  assert.deepEqual(runner.failureDetails(null), { errorType: 'Error', causeCodes: [] });
+});
+
 test('one canonical preset excludes the exact image/file pair from regular Renovate', () => {
   const targets = runner.targetsFromPreset(preset);
   assert.deepEqual(targets, [{ file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil' }]);

@@ -3,6 +3,7 @@
 Run: python3 scripts/tests/test-kopiur-prometheusrule.py
 Requires existing yq and promtool binaries, or PROMTOOL=/path/to/promtool.
 """
+import functools
 import json
 import os
 from pathlib import Path
@@ -43,6 +44,22 @@ def sample(policy, value, namespace=NAMESPACE, failed=False, **labels):
 
 class KopiurStaleSelectorTests(unittest.TestCase):
     def test_retained_original_requires_complete_fresh_replacement_coverage(self):
+        for namespace, legacy, parts in (
+            ('home-assistant', 'home-assistant-native', ('bundle', 'config', 'git')),
+            ('tools', 'openviking-native', ('data', 'auth', 'models')),
+        ):
+            with self.subTest(namespace=namespace, policy=legacy):
+                self.check_retained_original(namespace, legacy, parts)
+
+    def check_retained_original(self, namespace, legacy_policy, parts):
+        # Exercise the same fail-closed coverage contract for each retired policy.
+        LEGACY = legacy_policy
+        REPLACEMENTS = [f'{LEGACY}-{part}' for part in parts]
+
+        series = functools.partial(globals()['series'], namespace=namespace)
+        timestamp = functools.partial(globals()['timestamp'], namespace=namespace)
+        sample = functools.partial(globals()['sample'], namespace=namespace)
+
         # Read the actual postRenderer expression so selector regressions fail.
         expression = json.loads(subprocess.check_output([
             'yq', '-o=json',

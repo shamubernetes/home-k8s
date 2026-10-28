@@ -1,7 +1,7 @@
 [tools]
 node = "24.22.1"
 actionlint = "1.7.12"
-kubectl = "1.37.1"
+kubectl = "1.37.2"
 sops = "3.13.3"
 age = "1.3.2"
 task = "3.54.0"

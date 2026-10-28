@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ov-6220-data
+spec:
+  policyRef:
+    name: openviking-native-data
+  deletionPolicy: Retain
+  onScheduleDelete: Retain

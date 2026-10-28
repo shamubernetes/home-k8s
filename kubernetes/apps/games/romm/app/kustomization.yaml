@@ -2,6 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./renovate-6224-verification.yaml
 - ./kopiur-native-original-restores.yaml
 - ./kopiur-policy.yaml
 - ./kopiur-original.yaml

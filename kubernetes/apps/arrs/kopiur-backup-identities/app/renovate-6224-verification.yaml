@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-bazarr
+spec:
+  policyRef:
+    name: bazarr
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-radarr
+spec:
+  policyRef:
+    name: radarr
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-radarr-3d
+spec:
+  policyRef:
+    name: radarr-3d
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-sonarr
+spec:
+  policyRef:
+    name: sonarr
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-whisparr
+spec:
+  policyRef:
+    name: whisparr
+  deletionPolicy: Retain
+  onScheduleDelete: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-chaptarr
+spec:
+  policyRef:
+    name: chaptarr
+  deletionPolicy: Retain
+  onScheduleDelete: Retain

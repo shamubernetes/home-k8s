@@ -6,6 +6,8 @@
       "matchDatasources": ["docker"],
       "matchFileNames": ["kubernetes/apps/services/kanvil/app/helmrelease.yaml"],
       "matchPackageNames": ["ghcr.io/maudecode/kanvil"],
+      "allowedVersions": "/^experimental$/",
+      "versioning": "docker",
       "enabled": false
     }
   ]

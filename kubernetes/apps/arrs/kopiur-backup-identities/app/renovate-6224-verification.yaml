@@ -58,3 +58,13 @@ spec:
     name: chaptarr
   deletionPolicy: Retain
   onScheduleDelete: Retain
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: pg17-6224-radarr-r1
+spec:
+  policyRef:
+    name: radarr
+  deletionPolicy: Retain
+  onScheduleDelete: Retain

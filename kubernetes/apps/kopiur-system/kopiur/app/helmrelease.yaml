@@ -68,7 +68,19 @@ spec:
                 )
               )
               unless on (namespace, policy)
-              (kopiur_snapshotpolicy_last_backup_success{namespace="arrs",policy="radarr-k8s92-original"} == 1)
+              (
+                (kopiur_snapshotpolicy_last_backup_success{namespace="arrs",policy="radarr-k8s92-original"} == 1)
+                or
+                (
+                  (kopiur_snapshotpolicy_last_backup_success{namespace="home-assistant",policy="home-assistant-native"} == 1)
+                  and on (namespace)
+                  (
+                    count by (namespace) (
+                      time() - kopiur_policy_last_backup_success_timestamp_seconds{namespace="home-assistant",policy=~"home-assistant-native-(bundle|config|git)"} <= 604800
+                    ) == 3
+                  )
+                )
+              )
   values:
     installScope: cluster
     # 0.10.10 continues reconciling without election after a Lease 403.

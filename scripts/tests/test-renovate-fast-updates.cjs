@@ -58,7 +58,7 @@ test('diagnostic traversal is bounded and rejects arbitrary names, codes and std
 
 test('one canonical preset excludes the exact image/file pair from regular Renovate', () => {
   const targets = runner.targetsFromPreset(preset);
-  assert.deepEqual(targets, [{ file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil' }]);
+  assert.deepEqual(targets, [{ file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil', channel: 'experimental' }]);
   const source = fs.readFileSync(path.join(root, '.github/renovate.json5'), 'utf8');
   assert(source.includes('github>shamubernetes/home-k8s//kubernetes/apps/renovate/renovate/app/config/fast-updates.json'));
 });
@@ -72,6 +72,8 @@ test('fast configuration ignores repository presets and denies unselected depend
   assert.deepEqual(config.includePaths, [targets[0].file]);
   assert.deepEqual(config.packageRules[0], { matchPackageNames: ['*'], enabled: false });
   assert.equal(config.packageRules[1].enabled, true);
+  assert.equal(config.packageRules[1].allowedVersions, '/^experimental$/');
+  assert.equal(config.packageRules[1].versioning, 'docker');
   assert.deepEqual(config.packageRules[1].matchPackageNames, [targets[0].image]);
   assert.deepEqual(config.packageRules[1].matchFileNames, [targets[0].file]);
   assert.equal(config.automerge, false, 'Only the maintenance-guarded worker may merge');
@@ -95,6 +97,8 @@ test('another application is enabled by adding one allowlist rule', () => {
   const config = runner.buildConfig(targets);
   assert.equal(targets.length, 2);
   assert.equal(config.packageRules.length, 3);
+  assert.equal(config.packageRules[2].versioning, 'semver');
+  assert.equal(config.packageRules[2].allowedVersions, '/^\\d+\\.\\d+\\.\\d+$/');
   assert.deepEqual(config.includePaths, [preset.packageRules[0].matchFileNames[0], second.matchFileNames[0]]);
 });
 
@@ -107,7 +111,10 @@ test('wildcard, duplicate, enabled, non-image and out-of-scope targets fail clos
     { matchDatasources: ['npm'] },
     { matchPackageNames: ['ghcr.io/../private'] },
     { matchFileNames: [...preset.packageRules[0].matchFileNames, 'another.yaml'] },
-    { unexpected: 'field' }
+    { unexpected: 'field' },
+    { allowedVersions: '/.*/' },
+    { versioning: 'semver' },
+    { allowedVersions: '/^latest$/' }
   ]) assert.throws(() => runner.targetsFromPreset({ packageRules: [{ ...preset.packageRules[0], ...changed }] }));
   assert.throws(() => runner.targetsFromPreset({ packageRules: [] }));
   assert.throws(() => runner.targetsFromPreset({ packageRules: [...preset.packageRules, ...preset.packageRules] }));
@@ -142,6 +149,30 @@ test('semantic merge guard rejects other images, config edits and downgrades', (
     assert.equal(runner.imageOnlyChange(before, bad, image), false);
   }
   assert.equal(runner.imageOnlyChange(before, before, image), false);
+});
+
+test('experimental merge guards accept only digest refreshes on the exact rolling channel', () => {
+  const target = runner.targetsFromPreset(preset)[0];
+  const oldTag = 'experimental@sha256:' + 'a'.repeat(64);
+  const newTag = 'experimental@sha256:' + 'b'.repeat(64);
+  const patch = '-              tag: ' + oldTag + '\n+              tag: ' + newTag;
+  const before = { image: { repository: target.image, tag: oldTag }, env: { MODE: 'production' } };
+  const after = structuredClone(before); after.image.tag = newTag;
+  assert(runner.pinOnlyPatch(target.file, patch, target.channel));
+  assert(runner.imageOnlyChange(before, after, target.image, target.channel));
+  assert.equal(runner.pinOnlyPatch(target.file, patch), false);
+  assert.equal(runner.imageOnlyChange(before, after, target.image), false);
+  assert.equal(runner.imageOnlyChange(before, before, target.image, target.channel), false);
+  const configEdit = structuredClone(after); configEdit.env.MODE = 'test';
+  assert.equal(runner.imageOnlyChange(before, configEdit, target.image, target.channel), false);
+  assert.equal(runner.pinOnlyPatch(target.file, patch + '\n+  evil: true', target.channel), false);
+  for (const tag of ['latest', '0.5.0', 'experimental-amd64', 'experimental-' + 'c'.repeat(40), 'experimental']) {
+    const pin = tag === 'experimental' ? tag : tag + '@sha256:' + 'b'.repeat(64);
+    const bad = structuredClone(before); bad.image.tag = pin;
+    assert.equal(runner.imageOnlyChange(before, bad, target.image, target.channel), false);
+    assert.equal(runner.imageOnlyChange(bad, after, target.image, target.channel), false);
+    assert.equal(runner.pinOnlyPatch(target.file, '-  tag: ' + oldTag + '\n+  tag: ' + pin, target.channel), false);
+  }
 });
 
 test('runtime Kubernetes client references the projected identity, never localhost or a copied token', () => {

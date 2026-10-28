@@ -62,7 +62,8 @@ function targetsFromPreset(preset) {
   assert(Array.isArray(preset.packageRules) && preset.packageRules.length > 0, 'Empty fast-update allowlist');
   const seen = new Set();
   return preset.packageRules.map(rule => {
-    assert.deepEqual(Object.keys(rule).sort(), ['description', 'enabled', 'matchDatasources', 'matchFileNames', 'matchPackageNames'].sort());
+    const experimental = rule.allowedVersions === '/^experimental$/' && rule.versioning === 'docker';
+    assert.deepEqual(Object.keys(rule).sort(), ['description', 'enabled', 'matchDatasources', 'matchFileNames', 'matchPackageNames', ...(experimental ? ['allowedVersions', 'versioning'] : [])].sort());
     assert.equal(rule.enabled, false, 'Regular Renovate must exclude every fast target');
     assert.deepEqual(rule.matchDatasources, ['docker']);
     assert.equal(rule.matchFileNames.length, 1);
@@ -72,7 +73,7 @@ function targetsFromPreset(preset) {
     assert(/^ghcr\.io\/[a-z0-9._/-]+$/.test(image) && !image.includes('..'), 'Expected an exact public GHCR image');
     assert(!seen.has(file), 'One fast-update image per manifest');
     seen.add(file);
-    return { file, image };
+    return { file, image, ...(experimental ? { channel: 'experimental' } : {}) };
   });
 }
 
@@ -84,7 +85,7 @@ function buildConfig(targets) {
     'helm-values': { managerFilePatterns: targets.map(t => t.file) },
     packageRules: [
       { matchPackageNames: ['*'], enabled: false },
-      ...targets.map(t => ({ matchManagers: ['helm-values'], matchDatasources: ['docker'], matchFileNames: [t.file], matchPackageNames: [t.image], enabled: true, allowedVersions: '/^\\d+\\.\\d+\\.\\d+$/', versioning: 'semver' }))
+      ...targets.map(t => ({ matchManagers: ['helm-values'], matchDatasources: ['docker'], matchFileNames: [t.file], matchPackageNames: [t.image], enabled: true, allowedVersions: t.channel === 'experimental' ? '/^experimental$/' : '/^\\d+\\.\\d+\\.\\d+$/', versioning: t.channel === 'experimental' ? 'docker' : 'semver' }))
     ],
     minimumReleaseAge: null, ignoreUnstable: true, pinDigests: true,
     separateMajorMinor: false, separateMinorPatch: false,
@@ -108,13 +109,14 @@ function buildConfig(targets) {
   };
 }
 
-function pinOnlyPatch(file, patch) {
+function pinOnlyPatch(file, patch, channel = 'stable') {
   if (!patch || !file.endsWith('/helmrelease.yaml')) return false;
   const changed = patch.split('\n').filter(line => /^[+-]/.test(line) && !/^(---|\+\+\+)/.test(line));
-  return changed.length === 2 && changed[0].startsWith('-') && changed[1].startsWith('+') && changed.every(line => /^[+-]\s+tag: ['"]?\d+\.\d+\.\d+@sha256:[a-f0-9]{64}['"]?\s*$/.test(line));
+  const pin = channel === 'experimental' ? /^[+-]\s+tag: ['"]?experimental@sha256:[a-f0-9]{64}['"]?\s*$/ : /^[+-]\s+tag: ['"]?\d+\.\d+\.\d+@sha256:[a-f0-9]{64}['"]?\s*$/;
+  return changed.length === 2 && changed[0].startsWith('-') && changed[1].startsWith('+') && changed.every(line => pin.test(line));
 }
 
-function imageOnlyChange(before, after, image) {
+function imageOnlyChange(before, after, image, channel = 'stable') {
   const find = (value, paths = [], prefix = []) => {
     if (!value || typeof value !== 'object') return paths;
     if (value.repository === image && typeof value.tag === 'string') paths.push(prefix);
@@ -127,10 +129,10 @@ function imageOnlyChange(before, after, image) {
   const at = object => keys.reduce((value, key) => value?.[key], object);
   const oldImage = at(before), newImage = at(after);
   if (!newImage || newImage.repository !== image || oldImage.tag === newImage.tag) return false;
-  const pin = /^(\d+)\.(\d+)\.(\d+)@sha256:[a-f0-9]{64}$/;
+  const pin = channel === 'experimental' ? /^experimental@sha256:[a-f0-9]{64}$/ : /^(\d+)\.(\d+)\.(\d+)@sha256:[a-f0-9]{64}$/;
   const oldPin = pin.exec(oldImage.tag), newPin = pin.exec(newImage.tag);
   if (!oldPin || !newPin) return false;
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; channel !== 'experimental' && i <= 3; i++) {
     const previous = Number(oldPin[i]), next = Number(newPin[i]);
     if (!Number.isSafeInteger(previous) || !Number.isSafeInteger(next) || next < previous) return false;
     if (next > previous) break;
@@ -223,10 +225,10 @@ async function readyPull(targets, token, author, yaml) {
     const files = await pages(`/repos/$${REPOSITORY}/pulls/$${pr.number}/files`, token);
     if (files.length !== 1) continue;
     const target = targets.find(t => t.file === files[0].filename);
-    if (!target || files[0].status !== 'modified' || !pinOnlyPatch(target.file, files[0].patch)) continue;
+    if (!target || files[0].status !== 'modified' || !pinOnlyPatch(target.file, files[0].patch, target.channel)) continue;
     const before = yaml.parse(await readFileAt(target.file, pr.base.sha, token));
     const after = yaml.parse(await readFileAt(target.file, pr.head.sha, token));
-    if (!imageOnlyChange(before, after, target.image)) continue;
+    if (!imageOnlyChange(before, after, target.image, target.channel)) continue;
     const checks = await pages(`/repos/$${REPOSITORY}/commits/$${pr.head.sha}/check-runs?filter=latest`, token, 'check_runs');
     if (checksPass(checks, pr.head.sha)) return { pr, target };
   }

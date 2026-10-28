@@ -80,6 +80,16 @@ spec:
                     ) == 3
                   )
                 )
+                or
+                (
+                  (kopiur_snapshotpolicy_last_backup_success{namespace="tools",policy="openviking-native"} == 1)
+                  and on (namespace)
+                  (
+                    count by (namespace) (
+                      time() - kopiur_policy_last_backup_success_timestamp_seconds{namespace="tools",policy=~"openviking-native-(data|auth|models)"} <= 604800
+                    ) == 3
+                  )
+                )
               )
   values:
     installScope: cluster

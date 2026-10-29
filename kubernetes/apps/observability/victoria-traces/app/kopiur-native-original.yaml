@@ -61,7 +61,9 @@ spec:
       schedule:
         cron: 0 10 * * *
         jitter: 30m
-    successExpr: stats.errors == 0 && stats.files > 0
+    # Cached-only captures report fileCount=0 while totalSize still covers the
+    # protected tree. Require nonempty content and zero verification errors.
+    successExpr: stats.errors == 0 && (stats.files > 0 || stats.bytes > 0)
     verifyFilesPercent: 100
 
 ---

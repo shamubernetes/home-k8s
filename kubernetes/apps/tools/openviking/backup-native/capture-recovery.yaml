@@ -22,3 +22,16 @@ spec:
   failurePolicy:
     activeDeadlineSeconds: 3600
     backoffLimit: 0
+---
+# Retain a production capture after the vectors-only index repair.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ov-index-recovery-20261029
+spec:
+  policyRef:
+    name: openviking-native-data
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

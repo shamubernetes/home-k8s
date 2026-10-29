@@ -35,3 +35,16 @@ spec:
   failurePolicy:
     activeDeadlineSeconds: 3600
     backoffLimit: 0
+---
+# Retain a fresh capture after the subsequent incomplete-index repair.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: ov-index-recovery-20261029b
+spec:
+  policyRef:
+    name: openviking-native-data
+  deletionPolicy: Retain
+  failurePolicy:
+    activeDeadlineSeconds: 3600
+    backoffLimit: 0

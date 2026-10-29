@@ -1,5 +1,5 @@
 [tools]
-node = "24.22.2"
+node = "26.13.0"
 actionlint = "1.7.12"
 kubectl = "1.37.2"
 sops = "3.13.3"

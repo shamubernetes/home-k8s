@@ -6,3 +6,4 @@ resources:
 - ./ocirepository.yaml
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
+- ./feedback-bridge.yaml

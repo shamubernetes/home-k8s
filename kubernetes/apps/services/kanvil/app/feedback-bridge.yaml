@@ -1,0 +1,110 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: talaria-feedback-bridge
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: op-secret-store
+  target:
+    name: talaria-feedback-bridge-secret
+    creationPolicy: Owner
+  dataFrom:
+  - extract:
+      key: talaria-feedback-bridge
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/batch/cronjob_v1.json
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: talaria-feedback-bridge
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            feedback-bridge: talaria
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: bridge
+            image: ghcr.io/maudecode/talaria-feedback-bridge:sha-dcb8438602bc@sha256:195731fe66c6544851b46ace97318d14097d17fcc2b22f69bd53899d9878332e
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 64Mi
+            env:
+            - name: RELAY_URL
+              value: https://relay.talaria.${DEV_DOMAIN}
+            - name: KANVIL_URL
+              value: http://kanvil.services.svc.cluster.local:5180
+            - name: KANVIL_PROJECT_ID
+              value: a9c3bfa2-755f-459e-9f98-694ce7590f33
+            envFrom:
+            - secretRef:
+                name: talaria-feedback-bridge-secret
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/networking.k8s.io/networkpolicy_v1.json
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: talaria-feedback-bridge
+spec:
+  podSelector:
+    matchLabels:
+      feedback-bridge: talaria
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kanvil
+          app.kubernetes.io/instance: kanvil
+    ports:
+    - protocol: TCP
+      port: 5180
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443

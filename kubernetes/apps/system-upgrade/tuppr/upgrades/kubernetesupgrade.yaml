@@ -6,12 +6,24 @@ metadata:
 spec:
   kubernetes:
     # renovate: datasource=github-releases depName=siderolabs/kubelet
-    version: v1.37.1
+    version: v1.37.2
   healthChecks:
-  - apiVersion: volsync.backube/v1alpha1
-    kind: ReplicationSource
+  - apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Snapshot
+    description: No native capture or snapshot operation in progress
     expr: |-
-      status.conditions.filter(c, c.type == "Synchronizing").all(c, c.status == "False")
+      has(status.phase) && status.phase in ['Succeeded', 'Failed', 'Discovered', 'Unchanged']
+  - apiVersion: batch/v1
+    kind: Job
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/managed-by: kopiur
+    description: No active or retrying native mover, replication, or hook Job
+    expr: |-
+      (has(status.conditions) && status.conditions.exists(c, c.type in ['Complete', 'Failed'] && c.status == 'True')) ||
+      (object.metadata.name.endsWith('-discovery') &&
+        (!has(object.spec.template.spec.volumes) ||
+          object.spec.template.spec.volumes.all(v, !has(v.persistentVolumeClaim))))
   - apiVersion: ceph.rook.io/v1
     kind: CephCluster
     expr: |-

@@ -3,7 +3,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: kometa-k92-sqlite-originals
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  # Completed original-recovery recipe, retain inputs without rerunning it.
+  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:

@@ -46,7 +46,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: bridge
-        image: ghcr.io/maudecode/talaria-feedback-bridge:1.23.2@sha256:310e2801f218cb07c12cd2751c96874acd74736a3062ac1b3595510cbd46c5e6
+        image: ghcr.io/maudecode/talaria-feedback-bridge:1.23.3@sha256:2d1739c6bd39512cdcc1312cfdbc6b20c6a7e29ef9dd3fd4e67ba98f893cba48
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

@@ -16,6 +16,7 @@ resources:
 - ./documenso/ks.yaml
 - ./kaneo/ks.yaml
 - ./kanvil/ks.yaml
+- ./talaria-feedback-bridge/ks.yaml
 - ./n8n-operator/ks.yaml
 - ./pelican/ks.yaml
 - ./rustdesk/ks.yaml

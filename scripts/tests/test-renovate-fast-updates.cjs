@@ -58,7 +58,10 @@ test('diagnostic traversal is bounded and rejects arbitrary names, codes and std
 
 test('one canonical preset excludes the exact image/file pair from regular Renovate', () => {
   const targets = runner.targetsFromPreset(preset);
-  assert.deepEqual(targets, [{ file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil', channel: 'experimental' }]);
+  assert.deepEqual(targets, [
+    { file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil', channel: 'experimental' },
+    { file: 'kubernetes/apps/services/talaria-feedback-bridge/app/helmrelease.yaml', image: 'ghcr.io/maudecode/talaria-feedback-bridge' }
+  ]);
   const source = fs.readFileSync(path.join(root, '.github/renovate.json5'), 'utf8');
   assert(source.includes('github>shamubernetes/home-k8s//kubernetes/apps/renovate/renovate/app/config/fast-updates.json'));
 });
@@ -69,13 +72,17 @@ test('fast configuration ignores repository presets and denies unselected depend
   assert.equal(config.requireConfig, 'ignored');
   assert.equal(config.inheritConfig, false);
   assert.deepEqual(config.enabledManagers, ['helm-values']);
-  assert.deepEqual(config.includePaths, [targets[0].file]);
+  assert.deepEqual(config.includePaths, targets.map(t => t.file));
   assert.deepEqual(config.packageRules[0], { matchPackageNames: ['*'], enabled: false });
   assert.equal(config.packageRules[1].enabled, true);
   assert.equal(config.packageRules[1].allowedVersions, '/^experimental$/');
   assert.equal(config.packageRules[1].versioning, 'docker');
   assert.deepEqual(config.packageRules[1].matchPackageNames, [targets[0].image]);
   assert.deepEqual(config.packageRules[1].matchFileNames, [targets[0].file]);
+  // The bridge follows stable semver releases.
+  assert.equal(config.packageRules[2].allowedVersions, '/^\\d+\\.\\d+\\.\\d+$/');
+  assert.equal(config.packageRules[2].versioning, 'semver');
+  assert.deepEqual(config.packageRules[2].matchPackageNames, [targets[1].image]);
   assert.equal(config.automerge, false, 'Only the maintenance-guarded worker may merge');
   assert.equal(config.platformAutomerge, false);
   assert.equal(config.branchPrefix, 'fast-update/');
@@ -95,11 +102,11 @@ test('another application is enabled by adding one allowlist rule', () => {
   const second = { description: 'Another app', matchDatasources: ['docker'], matchFileNames: ['kubernetes/apps/tools/example/app/helmrelease.yaml'], matchPackageNames: ['ghcr.io/example/app'], enabled: false };
   const targets = runner.targetsFromPreset({ packageRules: [...preset.packageRules, second] });
   const config = runner.buildConfig(targets);
-  assert.equal(targets.length, 2);
-  assert.equal(config.packageRules.length, 3);
-  assert.equal(config.packageRules[2].versioning, 'semver');
+  assert.equal(targets.length, 3);
+  assert.equal(config.packageRules.length, 4);
+  assert.equal(config.packageRules[3].versioning, 'semver');
   assert.equal(config.packageRules[2].allowedVersions, '/^\\d+\\.\\d+\\.\\d+$/');
-  assert.deepEqual(config.includePaths, [preset.packageRules[0].matchFileNames[0], second.matchFileNames[0]]);
+  assert.deepEqual(config.includePaths, [...preset.packageRules.map(rule => rule.matchFileNames[0]), second.matchFileNames[0]]);
 });
 
 test('wildcard, duplicate, enabled, non-image and out-of-scope targets fail closed', () => {

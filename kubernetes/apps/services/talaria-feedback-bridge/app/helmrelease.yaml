@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app talaria-feedback-bridge
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: talaria-feedback-bridge
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      strategy: rollback
+      retries: 3
+  values:
+    controllers:
+      # Not named after the release: the previous raw Deployment `talaria-feedback-bridge` had an
+      # immutable selector that cannot be adopted.
+      watch:
+        suffix: watch
+        replicas: 1
+        # Never two bridges at once; a delivery cut short by a rollout is safe to rerun.
+        strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        pod:
+          terminationGracePeriodSeconds: 300
+        containers:
+          app:
+            image:
+              repository: ghcr.io/maudecode/talaria-feedback-bridge
+              tag: 1.23.3@sha256:2d1739c6bd39512cdcc1312cfdbc6b20c6a7e29ef9dd3fd4e67ba98f893cba48
+            # Watch mode: an outbound Convex subscription delivers each report as soon as it is pending.
+            env:
+              RELAY_URL: https://relay.talaria.${DEV_DOMAIN}
+              RELAY_SYNC_URL: https://terrific-bloodhound-879.convex.cloud
+              KANVIL_URL: http://kanvil.services.svc.cluster.local:5180
+              KANVIL_PROJECT_ID: a9c3bfa2-755f-459e-9f98-694ce7590f33
+              HEALTH_PORT: "8080"
+            envFrom:
+            - secretRef:
+                name: talaria-feedback-bridge-secret
+            probes:
+              # /healthz is 200 only while the Relay subscription is authorized and connected.
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: &port 8080
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+            resources:
+              requests: {cpu: 100m, memory: 256Mi}
+              limits: {memory: 1Gi}
+    defaultPodOptions:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+    service:
+      app:
+        controller: watch
+        ports:
+          http:
+            port: *port
+    persistence:
+      # Per-report attachment staging for sharp and ffmpeg: a 20 MB upload plus its transcode.
+      tmp:
+        type: emptyDir
+        sizeLimit: 256Mi
+        globalMounts:
+        - path: /tmp

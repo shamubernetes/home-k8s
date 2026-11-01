@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/networking.k8s.io/networkpolicy_v1.json
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: talaria-feedback-bridge
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: talaria-feedback-bridge
+      app.kubernetes.io/instance: talaria-feedback-bridge
+  policyTypes: [Ingress, Egress]
+  # Only the fast-update worker's post-rollout health check reaches in; kubelet probes come from the host.
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: renovate
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kanvil
+          app.kubernetes.io/instance: kanvil
+    ports:
+    - protocol: TCP
+      port: 5180
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443

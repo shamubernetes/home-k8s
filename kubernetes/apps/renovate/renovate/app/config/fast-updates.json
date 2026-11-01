@@ -9,6 +9,13 @@
       "allowedVersions": "/^experimental$/",
       "versioning": "docker",
       "enabled": false
+    },
+    {
+      "description": "The Talaria feedback bridge is managed by the opt-in fast-update lane",
+      "matchDatasources": ["docker"],
+      "matchFileNames": ["kubernetes/apps/services/talaria-feedback-bridge/app/helmrelease.yaml"],
+      "matchPackageNames": ["ghcr.io/maudecode/talaria-feedback-bridge"],
+      "enabled": false
     }
   ]
 }

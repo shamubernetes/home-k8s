@@ -28,7 +28,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/github-scheduler
-              tag: 0.1.1@sha256:21a8b2477eeecf9e9a578096f192b10ef1e1ac77ad4db01a3358d69409f45d2f
+              tag: 0.1.2@sha256:4ce3b93449efe7a7b8738ac0307fcae0958978fa8eefbe163285d75f165171df
             # The image defaults to PORT=8080 and DATA_DIR=/data.
             envFrom:
             - secretRef:

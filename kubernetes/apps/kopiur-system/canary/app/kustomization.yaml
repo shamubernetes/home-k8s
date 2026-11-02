@@ -8,3 +8,4 @@ resources:
 - ./snapshotpolicy.yaml
 - ./snapshotschedule.yaml
 - ./snapshotreplication.yaml
+- ./renovate-6305-snapshot.yaml

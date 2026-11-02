@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: renovate-6305-kopiur-canary-long-capture-compatibility-check-20261102
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  policyRef:
+    name: kopiur-canary
+  deletionPolicy: Retain

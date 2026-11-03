@@ -60,7 +60,8 @@ test('one canonical preset excludes the exact image/file pair from regular Renov
   const targets = runner.targetsFromPreset(preset);
   assert.deepEqual(targets, [
     { file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil', channel: 'experimental' },
-    { file: 'kubernetes/apps/services/talaria-feedback-bridge/app/helmrelease.yaml', image: 'ghcr.io/maudecode/talaria-feedback-bridge' }
+    { file: 'kubernetes/apps/services/talaria-feedback-bridge/app/helmrelease.yaml', image: 'ghcr.io/maudecode/talaria-feedback-bridge' },
+    { file: 'kubernetes/apps/tools/github-scheduler/app/helmrelease.yaml', image: 'ghcr.io/maudecode/github-scheduler' }
   ]);
   const source = fs.readFileSync(path.join(root, '.github/renovate.json5'), 'utf8');
   assert(source.includes('github>shamubernetes/home-k8s//kubernetes/apps/renovate/renovate/app/config/fast-updates.json'));
@@ -102,10 +103,12 @@ test('another application is enabled by adding one allowlist rule', () => {
   const second = { description: 'Another app', matchDatasources: ['docker'], matchFileNames: ['kubernetes/apps/tools/example/app/helmrelease.yaml'], matchPackageNames: ['ghcr.io/example/app'], enabled: false };
   const targets = runner.targetsFromPreset({ packageRules: [...preset.packageRules, second] });
   const config = runner.buildConfig(targets);
-  assert.equal(targets.length, 3);
-  assert.equal(config.packageRules.length, 4);
-  assert.equal(config.packageRules[3].versioning, 'semver');
-  assert.equal(config.packageRules[2].allowedVersions, '/^\\d+\\.\\d+\\.\\d+$/');
+  const existing = preset.packageRules.length;
+  assert.equal(targets.length, existing + 1);
+  // One deny-all rule, then one enable rule per target in allowlist order.
+  assert.equal(config.packageRules.length, existing + 2);
+  assert.equal(config.packageRules.at(-1).versioning, 'semver');
+  assert.equal(config.packageRules.at(-1).allowedVersions, '/^\\d+\\.\\d+\\.\\d+$/');
   assert.deepEqual(config.includePaths, [...preset.packageRules.map(rule => rule.matchFileNames[0]), second.matchFileNames[0]]);
 });
 

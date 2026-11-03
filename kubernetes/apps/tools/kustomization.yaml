@@ -5,6 +5,7 @@ resources:
 - ./namespace.yaml
 - ./firecrawl/ks.yaml
 - ./garage/ks.yaml
+- ./github-scheduler/ks.yaml
 - ./open-webui/ks.yaml
 - ./openviking/ks.yaml
 - ./reflector/ks.yaml

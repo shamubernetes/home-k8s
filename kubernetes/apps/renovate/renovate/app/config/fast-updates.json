@@ -16,6 +16,13 @@
       "matchFileNames": ["kubernetes/apps/services/talaria-feedback-bridge/app/helmrelease.yaml"],
       "matchPackageNames": ["ghcr.io/maudecode/talaria-feedback-bridge"],
       "enabled": false
+    },
+    {
+      "description": "The GitHub scheduler is managed by the opt-in fast-update lane",
+      "matchDatasources": ["docker"],
+      "matchFileNames": ["kubernetes/apps/tools/github-scheduler/app/helmrelease.yaml"],
+      "matchPackageNames": ["ghcr.io/maudecode/github-scheduler"],
+      "enabled": false
     }
   ]
 }

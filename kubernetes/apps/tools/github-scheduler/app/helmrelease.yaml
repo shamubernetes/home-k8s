@@ -30,6 +30,9 @@ spec:
               repository: ghcr.io/maudecode/github-scheduler
               tag: 0.1.3@sha256:b5fa4e73d48514335e93443783306a7e9053eaa18f936e9c11e06a72950afa7f
             # The image defaults to PORT=8080 and DATA_DIR=/data.
+            env:
+              OIDC_ISSUER_URL: https://sso.${HOME_DOMAIN}
+              PUBLIC_URL: https://github-scheduler.${HOME_DOMAIN}
             envFrom:
             - secretRef:
                 name: github-scheduler-secret

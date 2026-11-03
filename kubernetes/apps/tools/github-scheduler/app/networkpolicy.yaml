@@ -22,8 +22,19 @@ spec:
     ports:
     - protocol: TCP
       port: 8080
-  # DNS, and HTTPS to the GitHub API only.
+  # DNS, HTTPS to the GitHub API, and Pocket ID through Envoy internal: the public SSO hostname
+  # resolves to the internal gateway, and Cilium applies policy after load-balancer translation.
   egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: network
+      podSelector:
+        matchLabels:
+          gateway.envoyproxy.io/owning-gateway-name: envoy-internal
+    ports:
+    - protocol: TCP
+      port: 10443
   - to:
     - namespaceSelector:
         matchLabels:

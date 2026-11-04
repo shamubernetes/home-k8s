@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radarr
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: "${VOLSYNC_CAPACITY}"
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  # Preserve the existing claim's immutable restore provenance, not a new restore.
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: radarr-dst

@@ -25,7 +25,7 @@ spec:
     substitute:
       APP: *app
       NAMESPACE: *namespace
-      # Measured paired state occupies 18.3Gi. Expand without deleting recovery bytes.
-      VOLSYNC_CAPACITY: 24Gi
+      # Preserve paired recovery bundles and headroom for application-state growth.
+      VOLSYNC_CAPACITY: 32Gi
       VOLSYNC_SCHEDULE: "${VOLSYNC_SCHEDULE_RADARR}"
       VOLSYNC_R2_SCHEDULE: "${VOLSYNC_R2_SCHEDULE_RADARR}"

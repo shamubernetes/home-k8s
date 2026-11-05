@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/talaria-feedback-bridge
-              tag: 1.23.3@sha256:2d1739c6bd39512cdcc1312cfdbc6b20c6a7e29ef9dd3fd4e67ba98f893cba48
+              tag: 1.24.1@sha256:45530961fde75270de5413219de14d6221fd2d9de31dc5c23076990455afdeed
             # Watch mode: an outbound Convex subscription delivers each report as soon as it is pending.
             env:
               RELAY_URL: https://relay.talaria.${DEV_DOMAIN}

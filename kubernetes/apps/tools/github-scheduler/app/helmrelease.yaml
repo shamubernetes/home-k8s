@@ -28,7 +28,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/github-scheduler
-              tag: 0.3.0@sha256:7ad2d3df6aefad9c91eef76cb5a38c6bf39104eeba9a654b36aa2920c8198b7d
+              tag: 0.4.0@sha256:f2b5687323d90fe6267ea723b4311812537324d55df2cea99ffe4f4b60550fc5
             # The image defaults to PORT=8080 and DATA_DIR=/data.
             env:
               OIDC_ISSUER_URL: https://sso.${HOME_DOMAIN}

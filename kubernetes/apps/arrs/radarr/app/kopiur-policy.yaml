@@ -41,6 +41,13 @@ spec:
         timeout: 13m
         continueOnFailure: false
   mover:
+    # Keep headroom for the bounded quick-verifier worker increase below.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 4Gi
     # The repository holds 20.2 GB of physical content across 71 retained points.
     # Keep that working set cached instead of rereading it through a 5 GB budget.
     cache:
@@ -58,8 +65,9 @@ spec:
         jitter: 30m
       parallel: 4
       # Kopia 0.23.1 couples tree walking and file readers to this worker count.
-      # The natural 16-worker run exceeded its unchanged 1h cap over 71 points.
-      fileParallelism: 64
+      # Both 64-worker attempts exceeded the fixed 1h cap with CPU headroom.
+      # Preserve full retained-history coverage while increasing read concurrency.
+      fileParallelism: 128
       maxErrors: 0
     deep:
       schedule:

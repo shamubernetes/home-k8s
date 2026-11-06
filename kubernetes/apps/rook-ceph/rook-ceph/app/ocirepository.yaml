@@ -9,8 +9,8 @@ spec:
   interval: 30m
   url: oci://ghcr.io/rook/rook-ceph
   ref:
-    tag: v1.20.9
-    digest: sha256:6777800d96b0bac0b05678ea9581216917b86553a3322030ff2125a9275c05e7
+    tag: v1.20.10
+    digest: sha256:534ef9f92a95b9a9a3c284586e1057b6cfd2a48cc506a976621fa9b49346477d
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy

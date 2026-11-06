@@ -26,7 +26,7 @@ spec:
           initialize-dynamic-security:
             image:
               repository: &imageRepository docker.io/library/eclipse-mosquitto
-              tag: &imageTag 2.1.2-alpine@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
+              tag: &imageTag 2.1.2-alpine@sha256:467ee25e5b6aaaa5562e1f64c60f723274ebb2dbad62cbb89f981d051eb7c6b7
             command: ["/bin/sh", "-ec"]
             args:
             - |

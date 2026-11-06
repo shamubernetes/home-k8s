@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import tomllib
 import unittest
 
 ROOT = pathlib.Path(__file__).parents[2]
@@ -59,13 +60,26 @@ class RenovateCIQuotaHardeningTests(unittest.TestCase):
     def test_yq_has_locked_platform_artifacts(self) -> None:
         config = (ROOT / ".mise.toml").read_text()
         lockfile = (ROOT / "mise.lock").read_text()
-        self.assertIn('"yq" = "4.54.1"', config)
+        version = tomllib.loads(config)["tools"]["yq"]
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
         self.assertNotIn("asdf-yq", config)
-        yq_entry = lockfile.split("[[tools.yq]]", 1)[1].split("[[tools.zizmor]]", 1)[0]
-        for platform in ("linux-x64", "macos-arm64"):
-            self.assertIn(f'platforms.{platform}', yq_entry)
-        self.assertEqual(yq_entry.count("checksum ="), 2)
-        self.assertEqual(yq_entry.count("url ="), 2)
+        entries = tomllib.loads(lockfile)["tools"]["yq"]
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry["version"], version)
+        self.assertEqual(entry["backend"], "aqua:mikefarah/yq")
+        for platform, artifact in (
+            ("linux-x64", "yq_linux_amd64"),
+            ("macos-arm64", "yq_darwin_arm64"),
+        ):
+            with self.subTest(platform=platform):
+                locked = entry[f"platforms.{platform}"]
+                self.assertRegex(locked["checksum"], r"^sha256:[0-9a-f]{64}$")
+                self.assertEqual(
+                    locked["url"],
+                    f"https://github.com/mikefarah/yq/releases/download/v{version}/{artifact}",
+                )
+                self.assertEqual(locked["provenance"], "cosign")
 
 if __name__ == "__main__":
     unittest.main()

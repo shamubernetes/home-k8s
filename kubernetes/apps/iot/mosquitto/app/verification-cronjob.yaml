@@ -26,7 +26,7 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
           - name: verify
-            image: docker.io/library/eclipse-mosquitto:2.1.2-alpine@sha256:467ee25e5b6aaaa5562e1f64c60f723274ebb2dbad62cbb89f981d051eb7c6b7
+            image: docker.io/library/eclipse-mosquitto:2.1.2-alpine@sha256:75d6662dee52c947dc9dd9c29f1d8d7ffef78ddaf38001caa09755681e8bbc98
             command: ["/bin/sh", "/scripts/verify.sh"]
             env:
             - name: MQTT_HOST

@@ -81,7 +81,7 @@ spec:
                             key: INIT_POSTGRES_PASS
                       - name: PGCONNECT_TIMEOUT
                         value: "10"
-                    image: docker.io/library/postgres:17@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3
+                    image: docker.io/library/postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
                     name: capture
                     resources:
                       limits:

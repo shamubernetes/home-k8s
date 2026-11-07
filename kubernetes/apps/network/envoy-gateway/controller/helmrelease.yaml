@@ -27,6 +27,10 @@ spec:
           tag: v1.10.0@sha256:c2243d43518bed91d3ed8c2db849a4b7a14ac9b96eb019f2ab104bb1ca8572b1
     config:
       envoyGateway:
+        runtimeFlags:
+          # Keep OIDC cookies readable while older proxies drain during upgrades.
+          disabled:
+          - OIDCTokenCookieChunking
         provider:
           type: Kubernetes
           kubernetes:

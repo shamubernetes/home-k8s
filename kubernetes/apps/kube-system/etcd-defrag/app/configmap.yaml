@@ -90,7 +90,7 @@ data:
 
     # Download talosctl
     echo "Downloading talosctl..."
-    curl -sLo /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
+    curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 --output /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
     chmod +x /usr/local/bin/talosctl
 
     # Test connection - FAIL if we can't connect
@@ -106,7 +106,7 @@ data:
     if [ -n "$TALOS_VERSION" ]; then
         echo "Detected Talos version: $TALOS_VERSION"
         echo "Downloading matching talosctl $TALOS_VERSION..."
-        curl -sLo /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
+        curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 --output /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
         chmod +x /usr/local/bin/talosctl
     fi
     echo ""

@@ -88,10 +88,24 @@ data:
     echo "Talosconfig created"
     echo ""
 
-    # Download talosctl
+    # Download through the release asset API, which also works when the
+    # browser-facing GitHub release download route returns gateway errors.
+    download_talosctl() {
+        RELEASE="$1"
+        ASSET_URL=$(curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 \
+            "https://api.github.com/repos/siderolabs/talos/releases/$RELEASE" \
+            | jq -er '.assets[] | select(.name == "talosctl-linux-amd64") | .url')
+        curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 \
+            --header "Accept: application/octet-stream" --output /usr/local/bin/talosctl "$ASSET_URL"
+        if [ "$(od -An -tx1 -N4 /usr/local/bin/talosctl | tr -d ' \n')" != "7f454c46" ]; then
+            echo "ERROR: talosctl download is not an ELF executable" >&2
+            return 1
+        fi
+        chmod +x /usr/local/bin/talosctl
+    }
+
     echo "Downloading talosctl..."
-    curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 --output /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
-    chmod +x /usr/local/bin/talosctl
+    download_talosctl latest
 
     # Test connection - FAIL if we can't connect
     echo "Testing connection to cluster..."
@@ -106,8 +120,7 @@ data:
     if [ -n "$TALOS_VERSION" ]; then
         echo "Detected Talos version: $TALOS_VERSION"
         echo "Downloading matching talosctl $TALOS_VERSION..."
-        curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 --output /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
-        chmod +x /usr/local/bin/talosctl
+        download_talosctl "tags/$TALOS_VERSION"
     fi
     echo ""
 

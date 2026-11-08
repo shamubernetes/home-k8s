@@ -88,10 +88,24 @@ data:
     echo "Talosconfig created"
     echo ""
 
+    # Fail on HTTP errors and never execute an HTML error page as a shell script.
+    download_talosctl() {
+        DOWNLOAD_PATH=/usr/local/bin/talosctl.download
+        curl --fail --silent --show-error --location \
+            --retry 5 --retry-all-errors --connect-timeout 15 --max-time 120 \
+            --output "$DOWNLOAD_PATH" "$1"
+        if [ "$(od -An -tx1 -N4 "$DOWNLOAD_PATH" | tr -d ' \n')" != "7f454c46" ]; then
+            rm -f "$DOWNLOAD_PATH"
+            echo "ERROR: Downloaded talosctl is not an ELF binary" >&2
+            return 1
+        fi
+        chmod +x "$DOWNLOAD_PATH"
+        mv "$DOWNLOAD_PATH" /usr/local/bin/talosctl
+    }
+
     # Download talosctl
     echo "Downloading talosctl..."
-    curl -sLo /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
-    chmod +x /usr/local/bin/talosctl
+    download_talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
 
     # Test connection - FAIL if we can't connect
     echo "Testing connection to cluster..."
@@ -106,8 +120,7 @@ data:
     if [ -n "$TALOS_VERSION" ]; then
         echo "Detected Talos version: $TALOS_VERSION"
         echo "Downloading matching talosctl $TALOS_VERSION..."
-        curl -sLo /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
-        chmod +x /usr/local/bin/talosctl
+        download_talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
     fi
     echo ""
 

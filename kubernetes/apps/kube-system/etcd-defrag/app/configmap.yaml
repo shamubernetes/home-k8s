@@ -9,7 +9,7 @@ data:
     set -eu
 
     # etcd Defragmentation Script for Talos Linux
-    # Discovers nodes and Talos version dynamically
+    # Discovers control-plane nodes and uses a pinned matching Talos client
     # Exits with error if it cannot properly check etcd status
 
     # Configuration
@@ -88,24 +88,11 @@ data:
     echo "Talosconfig created"
     echo ""
 
-    # Download through the release asset API, which also works when the
-    # browser-facing GitHub release download route returns gateway errors.
-    download_talosctl() {
-        RELEASE="$1"
-        ASSET_URL=$(curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 \
-            "https://api.github.com/repos/siderolabs/talos/releases/$RELEASE" \
-            | jq -er '.assets[] | select(.name == "talosctl-linux-amd64") | .url')
-        curl --fail --silent --show-error --location --retry 5 --retry-max-time 180 --connect-timeout 15 --max-time 60 \
-            --header "Accept: application/octet-stream" --output /usr/local/bin/talosctl "$ASSET_URL"
-        if [ "$(od -An -tx1 -N4 /usr/local/bin/talosctl | tr -d ' \n')" != "7f454c46" ]; then
-            echo "ERROR: talosctl download is not an ELF executable" >&2
-            return 1
-        fi
-        chmod +x /usr/local/bin/talosctl
-    }
-
-    echo "Downloading talosctl..."
-    download_talosctl latest
+    # Copy the matching client from its digest-pinned official OCI image.
+    # Image volumes are read-only, so execute a copy in the container filesystem.
+    echo "Installing pinned talosctl from OCI image..."
+    cp /opt/talos-client/talosctl /usr/local/bin/talosctl
+    chmod +x /usr/local/bin/talosctl
 
     # Test connection - FAIL if we can't connect
     echo "Testing connection to cluster..."
@@ -115,13 +102,6 @@ data:
         exit 1
     fi
 
-    # Get and install matching Talos version
-    TALOS_VERSION=$(talosctl -n "$FIRST_NODE_IP" version --short 2>/dev/null | grep "Tag:" | head -1 | awk '{print $2}')
-    if [ -n "$TALOS_VERSION" ]; then
-        echo "Detected Talos version: $TALOS_VERSION"
-        echo "Downloading matching talosctl $TALOS_VERSION..."
-        download_talosctl "tags/$TALOS_VERSION"
-    fi
     echo ""
 
     # Function to get fragmentation percentage for a node

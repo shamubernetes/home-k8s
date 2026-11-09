@@ -30,7 +30,7 @@ spec:
               CLEANRR_LISTEN_ADDR: 0.0.0.0:8080
               CLEANRR_POLL_INTERVAL: 1m
               CLEANRR_MINIMUM_AGE: 6h
-              CLEANRR_DRY_RUN: "true"
+              CLEANRR_DRY_RUN: "false"
               CLEANRR_REMOVE_FROM_CLIENT: "true"
               CLEANRR_SERVERS__SONARR__URL: http://sonarr.arrs.svc.cluster.local
               CLEANRR_SERVERS__SONARR__API_KEY:

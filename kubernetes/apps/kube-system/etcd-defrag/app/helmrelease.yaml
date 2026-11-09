@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: alpine
-              tag: "3.24@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a"
+              tag: "3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf"
             command:
               - /bin/sh
               - /scripts/defrag.sh
@@ -79,6 +79,15 @@ spec:
               name: etcd-defrag
               namespace: kube-system
     persistence:
+      talos-client:
+        type: custom
+        volumeSpec:
+          image:
+            reference: ghcr.io/siderolabs/talosctl:v1.14.5@sha256:0b852e35c1f513ee5eacc22183d6193486012420569fde39fcd5260c51938443
+            pullPolicy: IfNotPresent
+        globalMounts:
+          - path: /opt/talos-client
+            readOnly: true
       script:
         type: configMap
         name: etcd-defrag-script

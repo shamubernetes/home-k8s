@@ -37,7 +37,7 @@ jobs:
 
     - name: Setup Flate
       if: ${{ steps.relevant.outputs.changed_files != '[]' }}
-      uses: home-operations/flate/action@631b76b69c4e58c6f4d1cb01e23616fa61aebafa # v0.6.5
+      uses: home-operations/flate/action@43b92e26b196c6ca7eb1933b5b2c9074ff0ad1b7 # v0.7.1
       with:
         base: ""
         cache: true
@@ -85,7 +85,7 @@ jobs:
 
     - name: Setup Flate
       if: ${{ steps.kubernetes.outputs.changed_files != '[]' }}
-      uses: home-operations/flate/action@631b76b69c4e58c6f4d1cb01e23616fa61aebafa # v0.6.5
+      uses: home-operations/flate/action@43b92e26b196c6ca7eb1933b5b2c9074ff0ad1b7 # v0.7.1
       with:
         base: ""
         cache: true

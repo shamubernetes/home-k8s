@@ -9,7 +9,7 @@ data:
     set -eu
 
     # etcd Defragmentation Script for Talos Linux
-    # Discovers nodes and Talos version dynamically
+    # Discovers control-plane nodes and uses a pinned matching Talos client
     # Exits with error if it cannot properly check etcd status
 
     # Configuration
@@ -88,9 +88,10 @@ data:
     echo "Talosconfig created"
     echo ""
 
-    # Download talosctl
-    echo "Downloading talosctl..."
-    curl -sLo /usr/local/bin/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
+    # Copy the matching client from its digest-pinned official OCI image.
+    # Image volumes are read-only, so execute a copy in the container filesystem.
+    echo "Installing pinned talosctl from OCI image..."
+    cp /opt/talos-client/talosctl /usr/local/bin/talosctl
     chmod +x /usr/local/bin/talosctl
 
     # Test connection - FAIL if we can't connect
@@ -101,14 +102,6 @@ data:
         exit 1
     fi
 
-    # Get and install matching Talos version
-    TALOS_VERSION=$(talosctl -n "$FIRST_NODE_IP" version --short 2>/dev/null | grep "Tag:" | head -1 | awk '{print $2}')
-    if [ -n "$TALOS_VERSION" ]; then
-        echo "Detected Talos version: $TALOS_VERSION"
-        echo "Downloading matching talosctl $TALOS_VERSION..."
-        curl -sLo /usr/local/bin/talosctl "https://github.com/siderolabs/talos/releases/download/$TALOS_VERSION/talosctl-linux-amd64"
-        chmod +x /usr/local/bin/talosctl
-    fi
     echo ""
 
     # Function to get fragmentation percentage for a node

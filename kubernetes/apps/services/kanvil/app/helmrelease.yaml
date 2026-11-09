@@ -27,7 +27,7 @@ spec:
           app:
             image:
               repository: ghcr.io/maudecode/kanvil
-              tag: experimental@sha256:58d9f9b6fe7f1f4a42619cd2930ee89a819105b367eecbc70a7c93504b1ec013
+              tag: experimental@sha256:8a2e0c1f149690f170123ca7617cd7c1cd89da33c9278395f996903f01a61bbb
             envFrom:
             - secretRef:
                 name: kanvil-secret

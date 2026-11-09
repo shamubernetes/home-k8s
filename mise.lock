@@ -81,18 +81,20 @@ url = "https://github.com/budimanjojo/talhelper/releases/download/v3.1.17/talhel
 url_api = "https://api.github.com/repos/budimanjojo/talhelper/releases/assets/530086691"
 
 [[tools."github:home-operations/flate"]]
-version = "0.6.5"
+version = "0.7.1"
 backend = "github:home-operations/flate"
 
 [tools."github:home-operations/flate"."platforms.linux-x64"]
-checksum = "sha256:37eb0cd91a6752340754375743aa616c263cd8367ce594abd42ee955e1ec0099"
-url = "https://github.com/home-operations/flate/releases/download/v0.6.5/flate_0.6.5_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/541337294"
+checksum = "sha256:d449308d7484a4f9c6f309249fab1021e3ffce757bc970e3cac55267a4ca7372"
+checksum_source = "mise-versions"
+url = "https://github.com/home-operations/flate/releases/download/v0.7.1/flate_0.7.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/725659540"
 
 [tools."github:home-operations/flate"."platforms.macos-arm64"]
-checksum = "sha256:76274be5ef8b016e80ea0abf7b6f612adc76a89f7613d2e7f7e3550af5b9e186"
-url = "https://github.com/home-operations/flate/releases/download/v0.6.5/flate_0.6.5_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/541337298"
+checksum = "sha256:e8c17b8b19f05f0cf749c65c7d8e7d7d56daa06e8e8af6353faa3cd98a166239"
+checksum_source = "mise-versions"
+url = "https://github.com/home-operations/flate/releases/download/v0.7.1/flate_0.7.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/home-operations/flate/releases/assets/725659538"
 
 [[tools."github:home-operations/yayamlls"]]
 version = "0.3.3"
@@ -191,7 +193,7 @@ checksum = "sha256:d38bd5e5a2ddce6bbb5ce45e46e208337da4d51fffe611e567fd32073d643
 url = "https://nodejs.org/dist/v26.13.0/node-v26.13.0-darwin-arm64.tar.gz"
 
 [[tools."npm:renovate"]]
-version = "44.222.0"
+version = "44.222.5"
 backend = "npm:renovate"
 
 [tools."npm:renovate".options]
@@ -276,19 +278,19 @@ url = "https://github.com/go-task/task/releases/download/v3.54.0/task_darwin_arm
 url_api = "https://api.github.com/repos/go-task/task/releases/assets/604090068"
 
 [[tools.yq]]
-version = "4.54.2"
+version = "4.54.3"
 backend = "aqua:mikefarah/yq"
 
 [tools.yq."platforms.linux-x64"]
-checksum = "sha256:44c7759059b4910827a0059a2757b22001e59360cdecdb2ef8dedc4b6c7e9f32"
-url = "https://github.com/mikefarah/yq/releases/download/v4.54.2/yq_linux_amd64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/715419583"
+checksum = "sha256:129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/726219936"
 provenance = "cosign"
 
 [tools.yq."platforms.macos-arm64"]
-checksum = "sha256:34923a7ca09a32a4257702ced5f7f2e5e83b16968cce3866f5ff830e4ce1cdd4"
-url = "https://github.com/mikefarah/yq/releases/download/v4.54.2/yq_darwin_arm64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/715419585"
+checksum = "sha256:a2aebb93b5bdcb61bb76f630e42a0ef6a3ee10842a6516cd7b9e4080786ec593"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_darwin_arm64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/726219940"
 provenance = "cosign"
 
 [[tools.zizmor]]

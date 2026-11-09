@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/batch/job_v1.json
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kopiur-release-0-10-18-verify
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      serviceAccountName: kopiur-mover
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: mover
+        image: ghcr.io/home-operations/kopiur-mover@sha256:8a727876168de3e5ac96aca08e89f557330b22d889a16254ba711f0ea023a6f0
+        env:
+        - name: KOPIUR_WORK_SPEC
+          value: >-
+            {"version":1,"operation":{"verify":{"tier":{"quick":{"verifyFilesPercent":100,"maxErrors":0,"parallel":4,"fileParallelism":2}},"successExpr":"stats.errors == 0 && (stats.files > 0 || stats.bytes > 0)"}},"identity":{"username":"kopiur-canary","hostname":"kopiur-canary","sourcePath":"/pvc/kopiur-canary-data"},"repository":{"rclone":{"remotePath":"mnemosyne:Backups/kopiur/canary-smb","startupTimeout":"2m"}},"targetRef":{"apiVersion":"kopiur.home-operations.com/v1alpha1","kind":"SnapshotPolicy","name":"kopiur-canary","namespace":"kopiur-canary"},"hookPlan":{"pre":[],"post":[]},"options":{"progressIntervalSecs":5},"cache":{}}
+        - name: KOPIA_CACHE_DIRECTORY
+          value: /var/cache/kopia/cache
+        - name: KOPIA_LOG_DIR
+          value: /var/cache/kopia/logs
+        - name: KOPIA_CONFIG_PATH
+          value: /var/cache/kopia/repository.config
+        - name: RUST_LOG
+          value: info
+        - name: KOPIUR_LOG_FORMAT
+          value: json
+        envFrom:
+        - secretRef:
+            name: kopiur-nas-repository
+        resources:
+          requests:
+            cpu: 25m
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: kopia-cache
+          mountPath: /var/cache/kopia
+      volumes:
+      - name: kopia-cache
+        emptyDir: {}

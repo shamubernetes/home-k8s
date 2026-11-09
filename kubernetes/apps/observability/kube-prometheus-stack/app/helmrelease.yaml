@@ -80,6 +80,7 @@ spec:
     prometheus:
       prometheusSpec:
         image:
+          tag: v3.13.2-distroless
           sha: 64f71bb84e03c855948418b0fc5dea53e9543d8e3fc9931598f583805507f05e
         replicas: 2
         podMonitorSelectorNilUsesHelmValues: false

@@ -71,6 +71,7 @@ jobs:
       with:
         base: ""
         cache: true
+        version: 0.6.5
 
     - name: Render base and head image inventories
       env:

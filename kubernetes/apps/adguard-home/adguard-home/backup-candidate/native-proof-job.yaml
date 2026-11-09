@@ -40,7 +40,7 @@ spec:
             - name: native
               mountPath: /native
         - name: yaml-binary
-          image: docker.io/mikefarah/yq:4.54.2@sha256:e99d4be532b5fc852f001f8e152270026b1c9d3988c8b6039b490b316573b719
+          image: docker.io/mikefarah/yq:4.54.3@sha256:729b025841f0a6f55c7977482d5da4e0684376176d820a5f665e7a34770050aa
           command: [/bin/cp, /usr/bin/yq, /native/yq]
           securityContext: *restricted
           volumeMounts:

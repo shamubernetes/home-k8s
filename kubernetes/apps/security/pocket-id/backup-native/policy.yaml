@@ -77,7 +77,7 @@ spec:
                     type: RuntimeDefault
                 initContainers:
                   - name: objects
-                    image: docker.io/amazon/aws-cli:2.39.6@sha256:eccdb3ec77e159d43ca6a750a70738c546883138be7f094498294a1477ec7e42
+                    image: docker.io/amazon/aws-cli:2.39.7@sha256:bba262340b0bc7cbf3a8a48612531263b56f4b280c4f036a07816af1b271bda0
                     command:
                       - sh
                       - -ec
@@ -233,7 +233,7 @@ spec:
                         readOnly: true
                     env: []
                   - name: objects-validate
-                    image: docker.io/amazon/aws-cli:2.39.6@sha256:eccdb3ec77e159d43ca6a750a70738c546883138be7f094498294a1477ec7e42
+                    image: docker.io/amazon/aws-cli:2.39.7@sha256:bba262340b0bc7cbf3a8a48612531263b56f4b280c4f036a07816af1b271bda0
                     command:
                       - sh
                       - -ec

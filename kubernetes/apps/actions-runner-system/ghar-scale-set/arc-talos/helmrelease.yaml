@@ -99,7 +99,7 @@ spec:
           emptyDir: {}
         - name: talosctl-source
           image:
-            reference: ghcr.io/siderolabs/talosctl:v1.14.5@sha256:0b852e35c1f513ee5eacc22183d6193486012420569fde39fcd5260c51938443
+            reference: ghcr.io/siderolabs/talosctl:v1.14.6@sha256:82c9a9985fc7292a222e680414c65955ac0566db588b84d88f620b05d16b1d5b
             pullPolicy: IfNotPresent
     controllerServiceAccount:
       name: ghar-controller

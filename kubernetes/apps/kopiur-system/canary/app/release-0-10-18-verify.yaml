@@ -2,10 +2,12 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kopiur-release-0-10-18-verify
+  name: kopiur-release-0-10-20-verify
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
+  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 600
   template:
@@ -19,7 +21,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: mover
-        image: ghcr.io/home-operations/kopiur-mover@sha256:8a727876168de3e5ac96aca08e89f557330b22d889a16254ba711f0ea023a6f0
+        image: ghcr.io/home-operations/kopiur-mover@sha256:ed61072651ceff6e886a21be24a85dc1b1323e462d34cc2d4e437805384e42e7
         env:
         - name: KOPIUR_WORK_SPEC
           value: >-

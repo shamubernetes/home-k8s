@@ -29,9 +29,9 @@ K8S_AUTH_KUBECONFIG = "{{config_root}}/kubernetes/kubeconfig"
 TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 
 [settings]
-# Exact release signer from the verified Flux provenance certificate.
-# Keep SLSA required, with the upstream Aqua registry as fallback.
+# Exact release signers from verified Flux and Kyverno certificates.
+# Keep provenance required, with the upstream Aqua registry as fallback.
 aqua.registries = [
-  "https://raw.githubusercontent.com/shamubernetes/home-k8s/cffe18a3d38823cea9247a1787345b4cd86b0e0c/.mise/aqua-registry.yaml",
+  "https://raw.githubusercontent.com/shamubernetes/home-k8s/6daa586a179e708d564e61e984000e524477c873/.mise/aqua-registry.yaml",
   "https://github.com/aquaproj/aqua-registry",
 ]

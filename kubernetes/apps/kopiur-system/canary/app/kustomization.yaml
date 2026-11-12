@@ -10,3 +10,4 @@ resources:
 - ./snapshotreplication.yaml
 - ./renovate-6305-snapshot.yaml
 - ./release-0-10-18-verify.yaml
+- ./renovate-6519-snapshot.yaml

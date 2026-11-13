@@ -116,7 +116,7 @@ spec:
         cron: "15 8 * * *"
         jitter: 30m
       parallel: 4
-      fileParallelism: 2
+      fileParallelism: 8
       maxErrors: 0
     deep:
       schedule:

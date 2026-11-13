@@ -58,7 +58,7 @@ jobs:
         persist-credentials: false
 
     - name: Setup Mise
-      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
       with:
         install_args: ${{ matrix.install_args }}
         cache: true
@@ -118,7 +118,7 @@ jobs:
         persist-credentials: false
 
     - name: Setup validation tools
-      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
       with:
         install_args: crane flux2 helm jq kubectl kyverno node python yq npm:renovate
         cache: true
@@ -186,7 +186,7 @@ jobs:
         persist-credentials: false
 
     - name: Setup rendering tools
-      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
       with:
         install_args: kubectl yq
         cache: true
@@ -228,7 +228,7 @@ jobs:
         persist-credentials: false
 
     - name: Setup rendering tools
-      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
       with:
         install_args: flux2 helm jq kubectl python yq
         cache: true

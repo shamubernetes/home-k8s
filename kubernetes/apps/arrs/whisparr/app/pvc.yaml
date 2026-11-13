@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kubernetes/master/persistentvolumeclaim-v1.json
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whisparr
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: ceph-block
+  volumeMode: Filesystem
+  # Preserve the existing claim's restore provenance during online expansion.
+  dataSource:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: whisparr-dst
+  dataSourceRef:
+    apiGroup: volsync.backube
+    kind: ReplicationDestination
+    name: whisparr-dst
+  resources:
+    requests:
+      # Native state plus current/previous paired recovery bundles need headroom.
+      storage: 60Gi

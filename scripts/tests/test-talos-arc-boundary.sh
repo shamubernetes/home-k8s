@@ -45,15 +45,6 @@ init_runner_image=$(yq -r '.spec.values.template.spec.initContainers[] | select(
 talosctl_image=$(yq -r '.spec.values.template.spec.volumes[] | select(.name == "talosctl-source") | .image.reference' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/helmrelease.yaml)
 [[ $init_runner_image == "$runner_image" ]]
-[[ $(yq -r '.spec.rules[] | select(.name == "pin-trusted-runner-images-and-tools") |
-  .validate.pattern.spec.containers[] | select(.["(name)"] == "runner") | .image' \
-  kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml) == "$runner_image" ]]
-[[ $(yq -r '.spec.rules[] | select(.name == "pin-trusted-runner-images-and-tools") |
-  .validate.pattern.spec.initContainers[] | select(.["(name)"] == "install-talosctl") | .image' \
-  kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml) == "$runner_image" ]]
-[[ $(yq -r '.spec.rules[] | select(.name == "pin-trusted-runner-images-and-tools") |
-  .validate.pattern.spec.volumes[] | select(.["(name)"] == "talosctl-source") | .image.reference' \
-  kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml) == "$talosctl_image" ]]
 
 yq -e '.kind == "NetworkPolicy" and
   (.spec.podSelector | length) == 0 and

@@ -10,3 +10,4 @@ resources:
 - ./safeToEvict.yaml
 - ./talos-runner-boundary.yaml
 - ./talos-runner-boundary-cel.yaml
+- ./talos-runner-report-rbac.yaml

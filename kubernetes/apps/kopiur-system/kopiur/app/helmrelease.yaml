@@ -99,7 +99,7 @@ spec:
     priorityClassName: system-cluster-critical
     podDisruptionBudget:
       enabled: true
-      minAvailable: 0
+      minAvailable: 1
     topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: kubernetes.io/hostname

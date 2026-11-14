@@ -27,7 +27,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
         command:
         - sh
         - -ec
@@ -142,7 +142,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
         command:
         - sh
         - -ec
@@ -257,7 +257,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
         command:
         - sh
         - -ec
@@ -372,7 +372,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
         command:
         - sh
         - -ec
@@ -487,7 +487,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: grants
-        image: docker.io/library/postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+        image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
         command:
         - sh
         - -ec

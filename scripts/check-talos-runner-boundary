@@ -8,7 +8,6 @@ allowed_prefix='kubernetes/apps/actions-runner-system/ghar-scale-set/arc-talos/'
 allowed_exact=(
   'kubernetes/apps/actions-runner-system/namespace-talos.yaml'
   'kubernetes/apps/actions-runner-system/ghar-scale-set/talos-ks.yaml'
-  'kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml'
   'kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary-cel.yaml'
 )
 

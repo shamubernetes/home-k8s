@@ -11,3 +11,4 @@ resources:
 - ./renovate-6305-snapshot.yaml
 - ./release-0-10-18-verify.yaml
 - ./renovate-6519-snapshot.yaml
+- ./renovate-6568-snapshot.yaml

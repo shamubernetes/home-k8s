@@ -1,0 +1,186 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/policies.kyverno.io/validatingpolicy_v1.json
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-talos-runner-pods
+spec:
+  failurePolicy: Fail
+  validationActions: [Deny]
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  autogen:
+    podControllers:
+      controllers: []
+    validatingAdmissionPolicy:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ['']
+      apiVersions: [v1]
+      operations: [CREATE]
+      resources: [pods]
+  matchConditions:
+  - name: talos-runner-namespace
+    expression: object.metadata.namespace == 'actions-runner-talos'
+  variables:
+  - name: runnerImage
+    expression: "'ghcr.io/home-operations/actions-runner:2.338.2@sha256:2dd7caa094a425c041539447cb0e6ae63cda10b5242773764683b695b8fa5613'"
+  - name: talosImage
+    expression: "'ghcr.io/siderolabs/talosctl:v1.14.6@sha256:82c9a9985fc7292a222e680414c65955ac0566db588b84d88f620b05d16b1d5b'"
+  validations:
+  - expression: request.userInfo.username == 'system:serviceaccount:actions-runner-system:ghar-controller'
+    message: Only the ARC controller may create Pods in actions-runner-talos.
+  - expression: >-
+      object.spec.containers.size() == 1 &&
+      object.spec.initContainers.size() == 1 &&
+      object.spec.volumes.size() == 3 &&
+      object.spec.containers[0].name == 'runner' &&
+      object.spec.containers[0].image == variables.runnerImage &&
+      object.spec.initContainers[0].name == 'install-talosctl' &&
+      object.spec.initContainers[0].image == variables.runnerImage &&
+      object.spec.volumes.exists(v, v.name == 'talosctl-source' && v.image.reference == variables.talosImage)
+    message: The Talos runner must use exactly the pinned runner, installer, and three volumes.
+  - expression: >-
+      object.metadata.labels['actions.github.com/scale-set-name'] == 'ghar-set-talos' &&
+      object.metadata.ownerReferences.exists(o,
+        o.apiVersion == 'actions.github.com/v1alpha1' && o.kind == 'EphemeralRunner' && o.controller == true) &&
+      object.spec.automountServiceAccountToken == false &&
+      object.spec.serviceAccountName == 'ghar-set-talos-gha-rs-no-permission' &&
+      object.spec.securityContext.runAsUser == 1001 &&
+      object.spec.securityContext.runAsGroup == 123 &&
+      object.spec.securityContext.fsGroup == 123 &&
+      object.spec.securityContext.seccompProfile.type == 'RuntimeDefault'
+    message: The ARC-created Pod must retain the trusted owner and Pod security context.
+  - expression: >-
+      object.spec.containers.all(c,
+        c.securityContext.allowPrivilegeEscalation == false &&
+        c.securityContext.runAsNonRoot == true &&
+        'ALL' in c.securityContext.capabilities.drop &&
+        c.command == ['/home/runner/run.sh'] &&
+        c.volumeMounts.size() == 2 &&
+        c.volumeMounts.exists(m, m.name == 'talosconfig' && m.mountPath == '/var/run/secrets/talos.dev' && m.readOnly == true) &&
+        c.volumeMounts.exists(m, m.name == 'talosctl' && m.mountPath == '/opt/talosctl' && m.readOnly == true))
+    message: The runner command, security context, and credential mounts must match the trusted shape.
+  - expression: >-
+      object.spec.initContainers.all(c,
+        c.securityContext.allowPrivilegeEscalation == false &&
+        c.securityContext.runAsNonRoot == true &&
+        'ALL' in c.securityContext.capabilities.drop &&
+        c.command == ['/bin/bash', '-ceu'] &&
+        c.args == ['install -m 0555 /source/talosctl /tools/talosctl'] &&
+        c.volumeMounts.size() == 2 &&
+        c.volumeMounts.exists(m, m.name == 'talosctl-source' && m.mountPath == '/source' && m.readOnly == true) &&
+        c.volumeMounts.exists(m, m.name == 'talosctl' && m.mountPath == '/tools'))
+    message: The installer command, security context, and tool mounts must match the trusted shape.
+  - expression: >-
+      object.spec.volumes.exists(v, v.name == 'talosconfig' &&
+        v.secret.secretName == 'ghar-set-talos-talosconfig' && v.secret.defaultMode == 288) &&
+      object.spec.volumes.exists(v, v.name == 'talosctl' && has(v.emptyDir)) &&
+      object.spec.volumes.exists(v, v.name == 'talosctl-source' && v.image.pullPolicy == 'IfNotPresent')
+    message: The credential and tool volumes must match the trusted shape.
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/policies.kyverno.io/validatingpolicy_v1.json
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-talos-runner-ephemeral-containers
+spec:
+  failurePolicy: Fail
+  validationActions: [Deny]
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  autogen:
+    podControllers:
+      controllers: []
+    validatingAdmissionPolicy:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ['']
+      apiVersions: [v1]
+      operations: [UPDATE]
+      resources: [pods/ephemeralcontainers]
+  matchConditions:
+  - name: talos-runner-namespace
+    expression: object.metadata.namespace == 'actions-runner-talos'
+  validations:
+  - expression: 'false'
+    message: Ephemeral containers are forbidden in actions-runner-talos.
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/policies.kyverno.io/validatingpolicy_v1.json
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-talos-runner-controllers
+spec:
+  failurePolicy: Fail
+  validationActions: [Deny]
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  autogen:
+    podControllers:
+      controllers: []
+    validatingAdmissionPolicy:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [apps]
+      apiVersions: [v1]
+      operations: [CREATE, UPDATE]
+      resources: [daemonsets, deployments, replicasets, statefulsets]
+    - apiGroups: [batch]
+      apiVersions: [v1]
+      operations: [CREATE, UPDATE]
+      resources: [cronjobs, jobs]
+    - apiGroups: ['']
+      apiVersions: [v1]
+      operations: [CREATE, UPDATE]
+      resources: [replicationcontrollers]
+  matchConditions:
+  - name: talos-runner-namespace
+    expression: object.metadata.namespace == 'actions-runner-talos'
+  validations:
+  - expression: 'false'
+    message: Ordinary workload controllers are forbidden in actions-runner-talos.
+---
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/policies.kyverno.io/validatingpolicy_v1.json
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-talos-runner-service-account
+spec:
+  failurePolicy: Fail
+  validationActions: [Deny]
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  autogen:
+    podControllers:
+      controllers: []
+    validatingAdmissionPolicy:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [talos.dev]
+      apiVersions: [v1alpha1]
+      operations: [CREATE, UPDATE]
+      resources: [serviceaccounts]
+  matchConditions:
+  - name: talos-runner-namespace
+    expression: object.metadata.namespace == 'actions-runner-talos'
+  validations:
+  - expression: >-
+      object.metadata.name == 'ghar-set-talos-talosconfig' &&
+      object.spec.roles == ['os:operator']
+    message: actions-runner-talos may contain only ghar-set-talos-talosconfig with the os:operator role.

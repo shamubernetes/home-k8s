@@ -70,7 +70,9 @@ yq -e '.spec.endpointSelector.matchLabels."actions.github.com/scale-set-name" ==
 yq -e '.spec.endpointSelector.matchLabels."actions.github.com/scale-set-name" == "ghar-set-zoo" and (.spec.egressDeny | length) == 2' \
   kubernetes/apps/actions-runner-system/ghar-scale-set/arc-zoo/networkpolicy.yaml >/dev/null
 
-policy=kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary.yaml
+policy=kubernetes/apps/kyverno/kyverno/policies/talos-runner-boundary-cel.yaml
+[[ $(yq -r 'select(.metadata.name == "restrict-talos-runner-pods") | .spec.variables[] | select(.name == "runnerImage") | .expression' "$policy") == "'$runner_image'" ]]
+[[ $(yq -r 'select(.metadata.name == "restrict-talos-runner-pods") | .spec.variables[] | select(.name == "talosImage") | .expression' "$policy") == "'$talosctl_image'" ]]
 cat > "$tmpdir/arc-userinfo.yaml" <<'YAML'
 roles: []
 clusterRoles: []
@@ -210,27 +212,124 @@ spec:
         image: registry.k8s.io/pause@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 YAML
 
-kyverno apply "$policy" --resource "$tmpdir/runner-pod.yaml" \
-  --userinfo "$tmpdir/arc-userinfo.yaml" --remove-color
+# A loader, compile, or evaluation error must never count as a policy denial.
+assert_policy_result() {
+  local expected=$1 resource=$2 user=$3 result="$tmpdir/result.log" status=0
+  local values_file="$tmpdir/${4:-create}-values.yaml"
+  kyverno apply "$policy" --resource "$resource" --values-file "$values_file" \
+    --userinfo "$user" --remove-color > "$result" 2>&1 || status=$?
+  if [[ $expected == pass ]]; then
+    if [[ $status != 0 ]] || ! grep -Eq 'pass: 1, fail: 0, warn: 0, error: 0, skip: 0' "$result"; then
+      cat "$result" >&2
+      return 1
+    fi
+  else
+    if [[ $status != 1 ]] || ! grep -Eq 'fail: [1-9][0-9]*, warn: 0, error: 0, skip: 0' "$result"; then
+      cat "$result" >&2
+      echo "Expected an evaluated policy denial: $resource" >&2
+      return 1
+    fi
+  fi
+}
+cat > "$tmpdir/create-values.yaml" <<'YAML'
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+globalValues:
+  request.operation: CREATE
+YAML
+cat > "$tmpdir/update-values.yaml" <<'YAML'
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+globalValues:
+  request.operation: UPDATE
+YAML
+cat > "$tmpdir/ephemeral-values.yaml" <<'YAML'
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+globalValues:
+  request.operation: UPDATE
+subresources:
+- subresource:
+    name: pods/ephemeralcontainers
+    group: ""
+    version: v1
+    kind: Pod
+  parentResource:
+    name: pods
+    group: ""
+    version: v1
+    kind: Pod
+YAML
+assert_policy_result pass "$tmpdir/runner-pod.yaml" "$tmpdir/arc-userinfo.yaml"
+assert_policy_result fail "$tmpdir/runner-pod.yaml" "$tmpdir/arc-userinfo.yaml" ephemeral
 
 yq '.spec.containers[0].image = "registry.k8s.io/pause@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
   "$tmpdir/runner-pod.yaml" > "$tmpdir/untrusted-image-pod.yaml"
 yq '.spec.containers += [{"name": "sidecar", "image": "registry.k8s.io/pause@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]' \
   "$tmpdir/runner-pod.yaml" > "$tmpdir/sidecar-pod.yaml"
 for fixture in untrusted-image-pod.yaml sidecar-pod.yaml; do
-  if kyverno apply "$policy" --resource "$tmpdir/$fixture" \
-      --userinfo "$tmpdir/arc-userinfo.yaml" --remove-color >/dev/null 2>&1; then
-    echo "ARC-shape bypass fixture unexpectedly passed: $fixture" >&2
-    exit 1
-  fi
+  assert_policy_result fail "$tmpdir/$fixture" "$tmpdir/arc-userinfo.yaml"
 done
 
 for fixture in runner-pod.yaml admin-serviceaccount.yaml deployment.yaml; do
-  if kyverno apply "$policy" --resource "$tmpdir/$fixture" \
-      --userinfo "$tmpdir/flux-userinfo.yaml" --remove-color >/dev/null 2>&1; then
-    printf 'Kyverno accepted forbidden fixture: %s\n' "$fixture" >&2
-    exit 1
-  fi
+  assert_policy_result fail "$tmpdir/$fixture" "$tmpdir/flux-userinfo.yaml"
+done
+
+# Exercise each translated Pod restriction independently against the valid shape.
+mutations=(
+  '.spec.initContainers[0].image = "fixture.invalid/untrusted:latest"'
+  '.spec.volumes[2].image.reference = "fixture.invalid/untrusted:latest"'
+  '.metadata.labels."actions.github.com/scale-set-name" = "other"'
+  '.metadata.ownerReferences[0].kind = "Other"'
+  '.metadata.ownerReferences[0].controller = false'
+  '.spec.automountServiceAccountToken = true'
+  '.spec.serviceAccountName = "default"'
+  '.spec.securityContext.runAsUser = 0'
+  '.spec.securityContext.runAsGroup = 0'
+  '.spec.securityContext.fsGroup = 0'
+  '.spec.securityContext.seccompProfile.type = "Unconfined"'
+  '.spec.containers[0].securityContext.allowPrivilegeEscalation = true'
+  '.spec.containers[0].securityContext.runAsNonRoot = false'
+  '.spec.containers[0].securityContext.capabilities.drop = []'
+  '.spec.containers[0].command = ["/bin/sh"]'
+  '.spec.containers[0].command += ["extra"]'
+  '.spec.containers[0].volumeMounts[0].readOnly = false'
+  '.spec.containers[0].volumeMounts[0].mountPath = "/other"'
+  '.spec.containers[0].volumeMounts[1].readOnly = false'
+  '.spec.containers[0].volumeMounts += [{"name": "extra", "mountPath": "/extra"}]'
+  '.spec.initContainers[0].securityContext.allowPrivilegeEscalation = true'
+  '.spec.initContainers[0].securityContext.runAsNonRoot = false'
+  '.spec.initContainers[0].securityContext.capabilities.drop = []'
+  '.spec.initContainers[0].command = ["/bin/sh", "-ceu"]'
+  '.spec.initContainers[0].args = ["echo bypass"]'
+  '.spec.initContainers[0].volumeMounts[0].readOnly = false'
+  '.spec.initContainers[0].volumeMounts[1].mountPath = "/other"'
+  '.spec.initContainers += [.spec.initContainers[0] | .name = "extra"]'
+  '.spec.volumes[0].secret.secretName = "other"'
+  '.spec.volumes[0].secret.defaultMode = 420'
+  '.spec.volumes[1] = {"name": "talosctl", "hostPath": {"path": "/"}}'
+  '.spec.volumes[2].image.pullPolicy = "Always"'
+  '.spec.volumes += [{"name": "extra", "emptyDir": {}}]'
+)
+for mutation in "${mutations[@]}"; do
+  yq "$mutation" "$tmpdir/runner-pod.yaml" > "$tmpdir/mutated-pod.yaml"
+  assert_policy_result fail "$tmpdir/mutated-pod.yaml" "$tmpdir/arc-userinfo.yaml"
+done
+
+yq '.spec.roles = ["os:operator"]' "$tmpdir/admin-serviceaccount.yaml" > "$tmpdir/operator-serviceaccount.yaml"
+assert_policy_result pass "$tmpdir/operator-serviceaccount.yaml" "$tmpdir/flux-userinfo.yaml"
+assert_policy_result pass "$tmpdir/operator-serviceaccount.yaml" "$tmpdir/flux-userinfo.yaml" update
+assert_policy_result fail "$tmpdir/admin-serviceaccount.yaml" "$tmpdir/flux-userinfo.yaml" update
+assert_policy_result fail "$tmpdir/deployment.yaml" "$tmpdir/flux-userinfo.yaml" update
+for mutation in '.metadata.name = "other"' '.spec.roles += ["os:admin"]' '.spec.roles = []'; do
+  yq "$mutation" "$tmpdir/operator-serviceaccount.yaml" > "$tmpdir/mutated-serviceaccount.yaml"
+  assert_policy_result fail "$tmpdir/mutated-serviceaccount.yaml" "$tmpdir/flux-userinfo.yaml"
+done
+for identity in 'apps/v1 DaemonSet' 'apps/v1 ReplicaSet' 'apps/v1 StatefulSet' 'batch/v1 Job' 'batch/v1 CronJob' 'v1 ReplicationController'; do
+  read -r api kind <<< "$identity"
+  API="$api" KIND="$kind" yq '.apiVersion = strenv(API) | .kind = strenv(KIND)' \
+    "$tmpdir/deployment.yaml" > "$tmpdir/controller.yaml"
+  assert_policy_result fail "$tmpdir/controller.yaml" "$tmpdir/flux-userinfo.yaml"
 done
 
 scripts/check-talos-runner-boundary

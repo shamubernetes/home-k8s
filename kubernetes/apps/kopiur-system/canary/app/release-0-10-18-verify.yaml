@@ -21,7 +21,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: mover
-        image: ghcr.io/home-operations/kopiur-mover@sha256:68121d3324d3c1842ec90b81e9ba68201dfdc2b59d8c55e7bdeaca24f0d8fb19
+        image: ghcr.io/home-operations/kopiur-mover@sha256:b5323b2e49661c767ee6f8e7c592e3e3aa3e48bfadccb4f99161a3965a3704fa
         env:
         - name: KOPIUR_WORK_SPEC
           value: >-

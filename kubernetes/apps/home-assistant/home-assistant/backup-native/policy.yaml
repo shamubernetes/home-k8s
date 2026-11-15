@@ -91,7 +91,7 @@ spec:
                     type: RuntimeDefault
                 initContainers:
                   - name: prepare
-                    image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
+                    image: docker.io/library/postgres:17@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
                     command:
                       - sh
                       - -ec
@@ -147,7 +147,7 @@ spec:
                         value: postgresql
                 containers:
                   - name: database
-                    image: docker.io/library/postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
+                    image: docker.io/library/postgres:17@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
                     command:
                       - sh
                       - -ec

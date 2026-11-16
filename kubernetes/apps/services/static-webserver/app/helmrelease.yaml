@@ -27,7 +27,7 @@ spec:
           app:
             image:
               repository: joseluisq/static-web-server
-              tag: 2.44.2-alpine@sha256:8df70fd2c77ab2757fc757586b801aee6223ac49dd6b8346a15184a79213f6da
+              tag: 2.44.3-alpine@sha256:b3f7db31db9a68754205b3c0831fe5b066bd1daeb4f45aaa5007847a8c29ede2
             env:
               SERVER_PORT: &port 80
               SERVER_ROOT: /public

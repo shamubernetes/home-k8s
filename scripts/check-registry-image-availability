@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Check pinned image manifests and linux/amd64 configs without pulling layers."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+PIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9./:_-]*@(?P<digest>sha256:[0-9a-f]{64})$")
+MEDIA_TYPES = (
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+)
+
+
+def positive(value: str) -> float:
+    number = float(value)
+    if not 0 < number <= 120:
+        raise argparse.ArgumentTypeError("must be greater than zero and at most 120")
+    return number
+
+
+def crane(command: str, image: str, args: argparse.Namespace, platform: bool = False) -> str:
+    argv = [os.environ.get("CRANE", "crane"), command, image]
+    if platform:
+        argv += ["--platform", "linux/amd64"]
+    for attempt in range(args.attempts):
+        try:
+            return subprocess.run(argv, check=True, capture_output=True, text=True,
+                                  timeout=args.timeout).stdout
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+            # Do not echo registry diagnostics that could contain credential material.
+            if attempt + 1 == args.attempts:
+                kind = "timeout" if isinstance(error, subprocess.TimeoutExpired) else "registry request failed"
+                raise ValueError(f"{kind}: {command} {image}, {args.attempts} attempts") from error
+            time.sleep(args.retry_delay)
+    raise AssertionError("unreachable")
+
+
+def inspect(image: str, args: argparse.Namespace) -> None:
+    expected = PIN.fullmatch(image)
+    if expected is None:
+        raise ValueError(f"invalid pinned image: {image!r}")
+    if crane("digest", image, args).strip() != expected.group("digest"):
+        raise ValueError(f"registry digest mismatch: {image}")
+    config = json.loads(crane("config", image, args, platform=True))
+    if not isinstance(config, dict) or config.get("os") != "linux" or config.get("architecture") != "amd64":
+        raise ValueError(f"image does not support linux/amd64: {image}")
+    manifest = json.loads(crane("manifest", image, args, platform=True))
+    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 2 or manifest.get("mediaType") not in MEDIA_TYPES:
+        raise ValueError(f"invalid platform manifest: {image}")
+    config_descriptor, layers = manifest.get("config"), manifest.get("layers")
+    if (not isinstance(config_descriptor, dict) or not isinstance(layers, list)
+            or config_descriptor.get("mediaType") not in (
+                "application/vnd.oci.image.config.v1+json",
+                "application/vnd.docker.container.image.v1+json",
+            )):
+        raise ValueError(f"missing or invalid config or layers: {image}")
+    for descriptor in [config_descriptor, *layers]:
+        if (not isinstance(descriptor, dict)
+                or not isinstance(descriptor.get("mediaType"), str)
+                or not descriptor["mediaType"]
+                or not isinstance(descriptor.get("digest"), str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", descriptor["digest"]) is None
+                or type(descriptor.get("size")) is not int or descriptor["size"] < 0):
+            raise ValueError(f"invalid manifest descriptor: {image}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--images-json", required=True)
+    parser.add_argument("--attempts", type=int, choices=range(1, 4), default=3)
+    parser.add_argument("--timeout", type=positive, default=30)
+    parser.add_argument("--retry-delay", type=positive, default=2)
+    args = parser.parse_args()
+    try:
+        images = json.loads(args.images_json)
+        if not isinstance(images, list) or any(not isinstance(i, str) or not PIN.fullmatch(i) for i in images):
+            raise ValueError("images must be a JSON array of digest-pinned references")
+        for image in sorted(set(images)):
+            inspect(image, args)
+            print(f"available linux/amd64: {image}")
+        print(f"Registry availability verified for {len(set(images))} images.")
+    except (OSError, ValueError) as error:
+        print(f"check-registry-image-availability: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

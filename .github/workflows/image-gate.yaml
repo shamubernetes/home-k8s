@@ -8,7 +8,6 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
-  actions: read
   checks: write
   contents: read
   pull-requests: read
@@ -21,7 +20,7 @@ jobs:
   gate:
     name: Evaluate Talos image availability
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
     steps:
     - name: Publish pending exact-head gate
       id: pending
@@ -46,7 +45,7 @@ jobs:
             details_url: $url,
             output: {
               title: "Talos Image Availability",
-              summary: "Waiting for a fresh, commit-bound Talos image pre-pull result."
+              summary: "Checking registry availability for the exact pull request head."
             }
           }' | gh api \
             "repos/${REPOSITORY}/check-runs" \
@@ -64,8 +63,8 @@ jobs:
         path: trusted
         persist-credentials: false
 
-    - name: Require fresh trusted image pre-pull when applicable
-      id: evaluate
+    - name: Classify trusted pull request scope
+      id: scope
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         EVENT_ACTION: ${{ github.event.action }}
@@ -77,9 +76,8 @@ jobs:
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
-        expected_trigger="pull_request_target:${PULL_REQUEST}:${EVENT_ACTION}:${EVENT_UPDATED_AT}"
         if [[ $HEAD_REPOSITORY != "$REPOSITORY" ]]; then
-          echo 'Talos pre-pull is not available to fork pull requests.'
+          echo 'Registry inspection is not available to fork pull requests.'
           exit 0
         fi
         pr_json=$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}")
@@ -99,192 +97,151 @@ jobs:
           exit 0
         fi
 
-        download_exact_artifact() {
-          local run_id=$1 artifact_name=$2 zip_path=$3 output_dir=$4 expected_file=$5 max_bytes=$6
-          local artifact artifact_id artifacts artifact_size
-          local -a entries
-          artifacts=$(gh api "repos/${REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100") || return 1
-          artifact=$(jq -cer \
-            --arg name "$artifact_name" \
-            '[.artifacts[] | select(.expired == false and .name == $name)] | if length == 0 then empty else max_by(.id) end' \
-            <<<"$artifacts") || return 1
-          artifact_id=$(jq -er '.id | select(type == "number" and . >= 1 and floor == .)' <<<"$artifact") || return 1
-          artifact_size=$(jq -er '.size_in_bytes | select(type == "number" and . >= 0 and floor == .)' <<<"$artifact") || return 1
-          (( artifact_size <= max_bytes )) || return 1
-          gh api "repos/${REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$zip_path" || return 1
-          unzip -tq "$zip_path" >/dev/null || return 1
-          mapfile -t entries < <(zipinfo -1 "$zip_path")
-          [[ ${#entries[@]} -eq 1 && ${entries[0]} == "$expected_file" ]] || return 1
-          rm -rf "$output_dir"
-          mkdir -p "$output_dir"
-          unzip -q "$zip_path" -d "$output_dir" || return 1
-          [[ -f $output_dir/$expected_file ]] || return 1
-        }
+        printf 'applicable=true\n' >> "$GITHUB_OUTPUT"
 
-        for attempt in {1..320}; do
-          gh api --paginate --slurp \
-            "repos/${REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=all&per_page=100" \
-            > check-pages.json
-          jq '{check_runs: [.[].check_runs[]]}' check-pages.json > checks.json
-          jq '{check_runs: [.check_runs[] |
-            select(.name != "Talos Image Plan Attempt") |
-            select(.name != "Talos Image Prepull")]}' \
-            checks.json > current-checks.json
+    - name: Setup trusted inspection tools
+      if: steps.scope.outputs.applicable == 'true'
+      uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+      with:
+        working_directory: trusted
+        install_args: python crane
+        cache: true
+        fetch_from_github: false
 
-          while IFS=$'\t' read -r check_id external_id check_conclusion; do
-            [[ -n $check_id && -n $external_id && -n $check_conclusion ]] || continue
-            remainder=${external_id#talos-image-plan:}
-            source_run_id=${remainder%%:*}
-            trigger_id=${remainder#*:}
-            [[ $source_run_id =~ ^[0-9]+$ ]] || continue
-            [[ $trigger_id == "$expected_trigger" ]] || continue
-            source_run=$(gh api \
-              "repos/${REPOSITORY}/actions/runs/${source_run_id}")
-            [[ $(jq -r '.path' <<<"$source_run") == '.github/workflows/image-plan.yaml' ]] || continue
-            [[ $(jq -r '.event' <<<"$source_run") == pull_request_target ]] || continue
-            [[ $(jq -r '.head_sha' <<<"$source_run") == "$HEAD_SHA" ]] || continue
-            [[ $(jq -r '.conclusion // ""' <<<"$source_run") == "$check_conclusion" ]] || continue
-            if [[ $check_conclusion != success ]]; then
-              jq --argjson id "$check_id" --slurpfile all checks.json \
-                '.check_runs += [$all[0].check_runs[] | select(.id == $id)]' \
-                current-checks.json > fresh-checks.json
-              mv fresh-checks.json current-checks.json
-              continue
-            fi
-            download_exact_artifact \
-              "$source_run_id" \
-              "talos-image-plan-${HEAD_SHA}" \
-              "plan-${source_run_id}.zip" \
-              "plan-${source_run_id}" \
-              image-plan.json \
-              1048576 || continue
-            trusted/scripts/talos-image-plan verify \
-              --plan "plan-${source_run_id}/image-plan.json" \
-              --repository "$REPOSITORY" \
-              --pull-request "$PULL_REQUEST" \
-              --base-sha "$BASE_SHA" \
-              --head-sha "$HEAD_SHA" \
-              --trigger-id "$expected_trigger" >/dev/null || continue
-            jq --argjson id "$check_id" --slurpfile all checks.json \
-              '.check_runs += [$all[0].check_runs[] | select(.id == $id)]' \
-              current-checks.json > fresh-checks.json
-            mv fresh-checks.json current-checks.json
-          done < <(
-            jq -r '.check_runs[] |
-              select(.name == "Talos Image Plan Attempt") |
-              select(.app.id == 15368) |
-              select((.external_id // "") | startswith("talos-image-plan:")) |
-              [.id, .external_id, .conclusion] | @tsv' checks.json
-          )
+    - name: Resolve trusted pull request metadata
+      id: metadata
+      if: steps.scope.outputs.applicable == 'true'
+      env:
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        pr=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
+        metadata=$(jq -c '.pull_request | {number, base_sha: .base.sha, head_sha: .head.sha, head_repo: .head.repo.full_name}' "$GITHUB_EVENT_PATH")
+        trigger_id="pull_request_target:${pr}:${EVENT_ACTION}:${EVENT_UPDATED_AT}"
+        [[ $(jq -r '.head_repo' <<<"$metadata") == "$REPOSITORY" ]]
+        {
+          printf 'pull_request=%s\n' "$pr"
+          printf 'base_sha=%s\n' "$(jq -r '.base_sha' <<<"$metadata")"
+          printf 'head_sha=%s\n' "$(jq -r '.head_sha' <<<"$metadata")"
+          printf 'trigger_id=%s\n' "$trigger_id"
+        } >> "$GITHUB_OUTPUT"
 
-          while IFS=$'\t' read -r check_id external_id check_conclusion; do
-            [[ -n $check_id && -n $external_id && -n $check_conclusion ]] || continue
-            remainder=${external_id#talos-image-prepull:}
-            source_run_id=${remainder%%:*}
-            remainder=${remainder#*:}
-            consumer_run_id=${remainder%%:*}
-            trigger_id=${remainder#*:}
-            [[ $source_run_id =~ ^[0-9]+$ ]] || continue
-            [[ $consumer_run_id =~ ^[0-9]+$ ]] || continue
-            [[ $trigger_id == "$expected_trigger" ]] || continue
-            source_run=$(gh api \
-              "repos/${REPOSITORY}/actions/runs/${source_run_id}")
-            consumer_run=$(gh api \
-              "repos/${REPOSITORY}/actions/runs/${consumer_run_id}")
-            [[ $(jq -r '.path' <<<"$source_run") == '.github/workflows/image-plan.yaml' ]] || continue
-            [[ $(jq -r '.event' <<<"$source_run") == pull_request_target ]] || continue
-            [[ $(jq -r '.head_sha' <<<"$source_run") == "$HEAD_SHA" ]] || continue
-            [[ $(jq -r '.conclusion // ""' <<<"$source_run") == success ]] || continue
-            [[ $(jq -r '.path' <<<"$consumer_run") == '.github/workflows/image-pull.yaml' ]] || continue
-            [[ $(jq -r '.event' <<<"$consumer_run") == workflow_run ]] || continue
-            [[ $(jq -r '.conclusion // ""' <<<"$consumer_run") == "$check_conclusion" ]] || continue
-            download_exact_artifact \
-              "$consumer_run_id" \
-              "talos-image-prepull-result-${consumer_run_id}" \
-              "prepull-${consumer_run_id}.zip" \
-              "prepull-${consumer_run_id}" \
-              talos-image-prepull-result.json \
-              65536 || continue
-            jq -e \
-              --arg conclusion "$check_conclusion" \
-              --arg head_sha "$HEAD_SHA" \
-              --arg trigger_id "$expected_trigger" \
-              --argjson consumer_run_id "$consumer_run_id" \
-              --argjson pull_request "$PULL_REQUEST" \
-              --argjson source_run_id "$source_run_id" \
-              'type == "object" and
-               .schema_version == 1 and
-               .source_run_id == $source_run_id and
-               .consumer_run_id == $consumer_run_id and
-               .pull_request == $pull_request and
-               .head_sha == $head_sha and
-               .trigger_id == $trigger_id and
-               .conclusion == $conclusion' \
-              "prepull-${consumer_run_id}/talos-image-prepull-result.json" >/dev/null || continue
-            jq --argjson id "$check_id" --slurpfile all checks.json \
-              '.check_runs += [$all[0].check_runs[] | select(.id == $id)]' \
-              current-checks.json > fresh-checks.json
-            mv fresh-checks.json current-checks.json
-          done < <(
-            jq -r '.check_runs[] |
-              select(.name == "Talos Image Prepull") |
-              select(.app.id == 15368) |
-              select((.external_id // "") | startswith("talos-image-prepull:")) |
-              [.id, .external_id, .conclusion] | @tsv' checks.json
-          )
+    - name: Checkout pull request head
+      if: steps.scope.outputs.applicable == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ steps.metadata.outputs.head_sha }}
+        path: head
+        persist-credentials: false
 
-          set +e
-          planner=$(trusted/scripts/talos-check-gate \
-            --checks current-checks.json \
-            --app-id 15368 \
-            --required 'Talos Image Plan Attempt' 2>&1)
-          planner_status=$?
-          set -e
-          if [[ $planner_status -eq 1 ]]; then
-            printf '%s\n' "$planner" >&2
-            exit 1
-          fi
+    - name: Checkout exact pull request base
+      if: steps.scope.outputs.applicable == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ steps.metadata.outputs.base_sha }}
+        path: base
+        persist-credentials: false
 
-          if [[ $planner_status -eq 0 ]]; then
-            set +e
-            result=$(trusted/scripts/talos-check-gate \
-              --checks current-checks.json \
-              --app-id 15368 \
-              --required 'Talos Image Prepull' 2>&1)
-            status=$?
-            set -e
-            case "$status" in
-              0) printf '%s\n' "$result"; exit 0 ;;
-              1) printf '%s\n' "$result" >&2; exit 1 ;;
-              10) ;;
-              *) exit "$status" ;;
-            esac
-          elif [[ $planner_status -ne 10 ]]; then
-            exit "$planner_status"
-          fi
+    - name: Setup Flate
+      if: steps.scope.outputs.applicable == 'true'
+      uses: home-operations/flate/action@bbb6ebc344da051752dbdb1b413860ceffcfb63d # v0.7.3
+      with:
+        base: ""
+        cache: true
+        version: 0.6.5
 
-          if (( attempt == 320 )); then
-            printf '%s\n' "$planner" >&2
-            exit 1
-          fi
-          sleep 15
+    - name: Render base and head image inventories
+      if: steps.scope.outputs.applicable == 'true'
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+      run: |
+        set -euo pipefail
+        registry_config=$(mktemp)
+        trap 'rm -f "$registry_config"' EXIT
+        auth=$(printf '%s:%s' "$GHCR_USERNAME" "$GHCR_TOKEN" | base64 | tr -d '\n')
+        jq -n --arg auth "$auth" '{auths:{"ghcr.io":{auth:$auth}}}' > "$registry_config"
+
+        python3 - <<'PY'
+        from pathlib import Path
+        manifest = """apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: loki-bucket
+          namespace: observability
+        data:
+          BUCKET_NAME: flate-offline-placeholder
+          BUCKET_REGION: us-east-1
+        """
+        for checkout in (Path("base"), Path("head")):
+            values = checkout / "kubernetes/flux/vars/flate-ci-values.yaml"
+            values.write_text(manifest)
+            kustomization = checkout / "kubernetes/flux/vars/kustomization.yaml"
+            content = kustomization.read_text().replace(
+                "resources:\n", "resources:\n- ./flate-ci-values.yaml\n", 1
+            )
+            kustomization.write_text(content)
+        PY
+
+        for checkout in base head; do
+          trusted/scripts/render-flate-image-inventory \
+            --checkout "$checkout" \
+            --registry-config "$registry_config" \
+            --output "$PWD/${checkout}-images.json"
         done
+
+    - name: Build and inspect commit-bound image plan
+      if: steps.scope.outputs.applicable == 'true'
+      env:
+        GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        GHCR_USERNAME: ${{ vars.GHCR_READ_USERNAME }}
+        BASE_SHA: ${{ steps.metadata.outputs.base_sha }}
+        HEAD_SHA: ${{ steps.metadata.outputs.head_sha }}
+        PULL_REQUEST: ${{ steps.metadata.outputs.pull_request }}
+        REPOSITORY: ${{ github.repository }}
+        TRIGGER_ID: ${{ steps.metadata.outputs.trigger_id }}
+      run: |
+        set -euo pipefail
+        trusted/scripts/talos-image-plan build \
+          --base-inventory base-images.json \
+          --head-inventory head-images.json \
+          --repository "$REPOSITORY" \
+          --pull-request "$PULL_REQUEST" \
+          --base-sha "$BASE_SHA" \
+          --head-sha "$HEAD_SHA" \
+          --trigger-id "$TRIGGER_ID" \
+          --output image-plan.json
+        trusted/scripts/talos-image-plan verify \
+          --plan image-plan.json \
+          --repository "$REPOSITORY" \
+          --pull-request "$PULL_REQUEST" \
+          --base-sha "$BASE_SHA" \
+          --head-sha "$HEAD_SHA" \
+          --trigger-id "$TRIGGER_ID" > images.json
+        export DOCKER_CONFIG
+        DOCKER_CONFIG=$(mktemp -d)
+        trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+        auth=$(printf '%s:%s' "$GHCR_USERNAME" "$GHCR_TOKEN" | base64 | tr -d '\n')
+        jq -n --arg auth "$auth" '{auths:{"ghcr.io":{auth:$auth}}}' > "$DOCKER_CONFIG/config.json"
+        python3 trusted/scripts/check-registry-image-availability \
+          --images-json "$(cat images.json)"
 
     - name: Complete exact-head gate
       if: ${{ always() && steps.pending.outputs.check_id != '' }}
       env:
-        CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
         CHECK_ID: ${{ steps.pending.outputs.check_id }}
-        EVALUATE_RESULT: ${{ steps.evaluate.outcome }}
+        GATE_RESULT: ${{ job.status }}
         GH_TOKEN: ${{ github.token }}
         REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
         conclusion=failure
         summary='Talos image availability evaluation failed or did not complete.'
-        if [[ $CHECKOUT_RESULT == success && $EVALUATE_RESULT == success ]]; then
+        if [[ $GATE_RESULT == success ]]; then
           conclusion=success
-          summary='Talos image availability requirements are satisfied for this pull request head.'
+          summary='Changed pinned images are registry-accessible for linux/amd64, or no eligible changes require inspection.'
         fi
         jq -n \
           --arg conclusion "$conclusion" \

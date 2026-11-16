@@ -72,8 +72,8 @@ status=$?
 set -e
 [[ $status == 2 ]]
 
-grep -Fq 'trusted/scripts/render-flate-image-inventory' .github/workflows/image-plan.yaml
-if grep -Fq 'flate --no-progress get images' .github/workflows/image-plan.yaml; then
+grep -Fq 'trusted/scripts/render-flate-image-inventory' .github/workflows/image-gate.yaml
+if grep -Fq 'flate --no-progress get images' .github/workflows/image-gate.yaml; then
   echo 'image-plan workflow still bypasses the retrying inventory wrapper' >&2
   exit 1
 fi

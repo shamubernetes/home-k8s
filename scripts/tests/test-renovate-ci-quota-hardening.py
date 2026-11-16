@@ -24,15 +24,11 @@ class RenovateCIQuotaHardeningTests(unittest.TestCase):
                 self.assertIn("concurrency:", text)
                 self.assertIn("cancel-in-progress: true", text)
 
-    def test_workflow_run_uses_stable_source_branch_concurrency(self) -> None:
-        text = (WORKFLOWS / "image-pull.yaml").read_text()
-        concurrency = re.search(r"concurrency:\n(?P<block>(?:  .*\n)+)", text)
-        self.assertIsNotNone(concurrency)
-        assert concurrency is not None
-        block = concurrency.group("block")
-        self.assertIn("github.event.workflow_run.head_repository.full_name", block)
-        self.assertIn("github.event.workflow_run.head_branch", block)
-        self.assertNotIn("github.event.workflow_run.id", block)
+    def test_registry_gate_uses_pull_request_concurrency(self) -> None:
+        text = (WORKFLOWS / "image-gate.yaml").read_text()
+        self.assertIn("github.event.pull_request.number", text)
+        self.assertNotIn("workflow_run:", text)
+        self.assertFalse((WORKFLOWS / "image-pull.yaml").exists())
 
     def test_mise_installs_use_cache_and_avoid_github_bootstrap(self) -> None:
         blocks = []

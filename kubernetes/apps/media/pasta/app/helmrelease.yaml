@@ -26,6 +26,9 @@ spec:
             image:
               repository: docker.io/cglatot/pasta
               tag: 3.0.0@sha256:8679a66df95f8a612e4ae6911078efa6c711340f268141de581e71b0a64fcea6
+            env:
+              # Preserve the browser-only workflow without server-side tokens or automation.
+              PASTA_MODE: client
             probes:
               liveness: &probes
                 enabled: true

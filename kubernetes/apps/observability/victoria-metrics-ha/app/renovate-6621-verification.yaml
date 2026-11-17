@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://k8s-schemas.pages.dev/kopiur.home-operations.com/snapshot_v1alpha1.json
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: Snapshot
+metadata:
+  name: rq6621-victoria-metrics
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  policyRef:
+    name: victoria-metrics-native
+  pin: true
+  deletionPolicy: Retain
+  onScheduleDelete: Retain

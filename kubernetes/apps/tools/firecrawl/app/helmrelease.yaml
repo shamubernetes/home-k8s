@@ -160,6 +160,17 @@ spec:
             name: firecrawl-api
             annotations:
               reloader.stakater.com/auto: "true"
+      # The pinned API image serves /, not the newer chart's /health/* routes.
+      - target:
+          kind: Deployment
+          name: firecrawl-api
+        patch: |-
+          - op: replace
+            path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+            value: /
+          - op: replace
+            path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+            value: /
       - target:
           kind: Deployment
           name: firecrawl-worker

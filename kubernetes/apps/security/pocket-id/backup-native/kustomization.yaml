@@ -2,6 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+- ./renovate-6652-verification.yaml
 - ./renovate-6587-verification.yaml
 - ./renovate-6528-verification.yaml
 - ./renovate-6528-target.yaml

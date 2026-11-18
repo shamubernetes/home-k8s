@@ -27,6 +27,13 @@ spec:
       onFailure: Degrade
   maintenance:
     enabled: true
+    mover:
+      resources:
+        requests:
+          cpu: 25m
+          memory: 512Mi
+        limits:
+          memory: 1Gi
     schedule:
       quick:
         cron: "5 */6 * * *"

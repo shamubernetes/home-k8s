@@ -2,6 +2,8 @@ apiVersion: kopiur.home-operations.com/v1alpha1
 kind: Repository
 metadata:
   name: home-assistant-nas-smb
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
 spec:
   backend:
     rclone:

@@ -1,11 +1,11 @@
 {
-  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
-  timezone: 'America/New_York',
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  timezone: "America/New_York",
   dependencyDashboard: {
     enabled: true,
   },
   ignorePaths: [
-    'kubernetes/apps/iot/zoo-fleet/app/ocirepository.yaml',
+    "kubernetes/apps/iot/zoo-fleet/app/ocirepository.yaml",
   ],
   pruneStaleBranches: true,
   prHourlyLimit: 10,
@@ -13,176 +13,134 @@
   branchConcurrentLimit: 0,
   packageRules: [
     {
-      description: 'Rook must preserve the pinned CSI imageSet',
-      matchDatasources: [
-        'docker',
-      ],
+      // Rook 1.21 overwrites all seven imageSet entries with blanks despite
+      // correctly rendered CSI pins. Remove only after a verified runtime fix.
+      description: "Rook must preserve the pinned CSI imageSet",
+      matchDatasources: ["docker"],
       matchFileNames: [
-        'kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml',
-        'kubernetes/apps/rook-ceph/rook-ceph/app/ocirepository.yaml',
-        'kubernetes/apps/rook-ceph/rook-ceph/cluster/ocirepository.yaml',
+        "kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml",
+        "kubernetes/apps/rook-ceph/rook-ceph/app/ocirepository.yaml",
+        "kubernetes/apps/rook-ceph/rook-ceph/cluster/ocirepository.yaml",
       ],
-      matchPackageNames: [
-        'ghcr.io/rook/rook-ceph',
-        'ghcr.io/rook/rook-ceph-cluster',
-        'docker.io/rook/ceph',
-      ],
-      allowedVersions: '<1.21.0',
+      matchPackageNames: ["ghcr.io/rook/rook-ceph", "ghcr.io/rook/rook-ceph-cluster", "docker.io/rook/ceph"],
+      allowedVersions: "<1.21.0",
     },
     {
-      description: 'Renovate 44.131.1 through 44.132.1 have an unresolvable published npm dependency',
-      matchManagers: [
-        'mise',
-      ],
-      matchFileNames: [
-        '.mise.toml',
-      ],
-      matchPackageNames: [
-        'renovate',
-      ],
-      allowedVersions: '!/^44\\.(131\\.[1-4]|132\\.[01])$/',
+      // Remove when the Renovate npm artifact no longer depends on the
+      // unpublished Yarn got patch. K8S-63 records exact install failures.
+      description: "Renovate 44.131.1 through 44.132.1 have an unresolvable published npm dependency",
+      matchManagers: ["mise"],
+      matchFileNames: [".mise.toml"],
+      matchPackageNames: ["renovate"],
+      allowedVersions: "!/^44\\.(131\\.[1-4]|132\\.[01])$/",
     },
     {
-      description: 'Python 3.14.8 has no checksum-verified standalone binaries yet',
-      matchManagers: [
-        'mise',
-      ],
-      matchFileNames: [
-        '.mise.toml',
-      ],
-      matchPackageNames: [
-        'python/cpython',
-      ],
-      allowedVersions: '!/^3\\.14\\.8$/',
+      // Remove once standalone 3.14.8 binaries exist for Linux and macOS.
+      // K8S-63 tracks the missing artifacts and locked-install verification.
+      description: "Python 3.14.8 has no checksum-verified standalone binaries yet",
+      matchManagers: ["mise"],
+      matchFileNames: [".mise.toml"],
+      matchPackageNames: ["python/cpython"],
+      allowedVersions: "!/^3\\.14\\.8$/",
     },
     {
-      description: 'Ceph CSI operator must match the Rook bundled CRD API',
-      matchDatasources: [
-        'docker',
-      ],
-      matchFileNames: [
-        'kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml',
-      ],
-      matchPackageNames: [
-        'quay.io/cephcsi/ceph-csi-operator',
-      ],
-      allowedVersions: '<1.1.0',
+      // Rook 1.20.8 bundles operator CRDs below the v1.1 API.
+      // Remove after the chart ships ClientProfileReplication and matching RBAC.
+      // K8S-63 records the failed startup and protected rollback.
+      description: "Ceph CSI operator must match the Rook bundled CRD API",
+      matchDatasources: ["docker"],
+      matchFileNames: ["kubernetes/apps/rook-ceph/rook-ceph/app/helmrelease.yaml"],
+      matchPackageNames: ["quay.io/cephcsi/ceph-csi-operator"],
+      allowedVersions: "<1.1.0",
     },
     {
-      description: 'GitHub Actions tool inputs are version-only',
-      matchManagers: [
-        'github-actions',
-      ],
-      matchPackageNames: [
-        'helm/helm',
-        'sigstore/cosign',
-      ],
+      description: "GitHub Actions tool inputs are version-only",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["helm/helm", "sigstore/cosign"],
       pinDigests: false,
     },
     {
-      description: 'Cloudflare Wrangler Action v4.1.0 and v4.1.1 are missing their built entrypoint',
-      matchManagers: [
-        'github-actions',
-      ],
-      matchPackageNames: [
-        'cloudflare/wrangler-action',
-      ],
-      allowedVersions: '!/^v4\\.1\\.[01]$/',
+      description: "Cloudflare Wrangler Action v4.1.0 and v4.1.1 are missing their built entrypoint",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["cloudflare/wrangler-action"],
+      allowedVersions: "!/^v4\\.1\\.[01]$/",
     },
     {
-      description: 'Plane auth helper image is coupled to the chart planeVersion',
-      matchManagers: [
-        'kubernetes',
-      ],
-      matchFileNames: [
-        'kubernetes/apps/services/plane/app/helmrelease.yaml',
-      ],
-      matchPackageNames: [
-        'makeplane/backend-commercial',
-      ],
+      description: "Plane auth helper image is coupled to the chart planeVersion",
+      matchManagers: ["kubernetes"],
+      matchFileNames: ["kubernetes/apps/services/plane/app/helmrelease.yaml"],
+      matchPackageNames: ["makeplane/backend-commercial"],
       enabled: false,
     },
     {
-      description: 'Freeze Firecrawl schema helper digest after registry oscillation',
-      matchManagers: [
-        'helm-values',
-        'kubernetes',
-      ],
-      matchFileNames: [
-        'kubernetes/apps/tools/firecrawl/app/init-nuq-schema-job.yaml',
-      ],
-      matchPackageNames: [
-        'docker.io/library/postgres',
-      ],
+      description: "Freeze Firecrawl schema helper digest after registry oscillation",
+      matchManagers: ["helm-values", "kubernetes"],
+      matchFileNames: ["kubernetes/apps/tools/firecrawl/app/init-nuq-schema-job.yaml"],
+      matchPackageNames: ["docker.io/library/postgres"],
       enabled: false,
     },
     {
-      description: 'Preserve the accepted OpenViking original-proof image',
-      matchManagers: [
-        'kubernetes',
-        'helm-values',
-      ],
-      matchDatasources: [
-        'docker',
-      ],
+      // Accepted K8S-92 original proofs retain these exact bytes. They are
+      // dormant recipes, not the active app or its recurring capture policy.
+      description: "Preserve the accepted OpenViking original-proof image",
+      matchManagers: ["kubernetes", "helm-values"],
+      matchDatasources: ["docker"],
       matchFileNames: [
-        'kubernetes/apps/tools/openviking/backup-native/original-native-job.yaml',
-        'kubernetes/apps/tools/openviking/backup-native/original-native-r2-job.yaml',
+        "kubernetes/apps/tools/openviking/backup-native/original-native-job.yaml",
+        "kubernetes/apps/tools/openviking/backup-native/original-native-r2-job.yaml",
       ],
-      matchPackageNames: [
-        'ghcr.io/volcengine/openviking',
-      ],
-      matchCurrentValue: '0.2.12',
-      matchJsonata: [
-        "currentDigest = 'sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d'",
-      ],
+      matchPackageNames: ["ghcr.io/volcengine/openviking"],
+      matchCurrentValue: "0.2.12",
+      matchJsonata: ["currentDigest = 'sha256:23bfcc83f941e92d5bbf71dd5626d4a46e2173043c5ae68317778da47d42fb6d'"],
       enabled: false,
     },
     {
-      description: 'Helmfile OCI charts do not support synthesized digest fields',
-      matchManagers: [
-        'helmfile',
-      ],
-      matchFileNames: [
-        'talos/helmfile.yaml',
-      ],
+      description: "Helmfile OCI charts do not support synthesized digest fields",
+      matchManagers: ["helmfile"],
+      matchFileNames: ["talos/helmfile.yaml"],
       pinDigests: false,
     },
   ],
-  rebaseWhen: 'conflicted',
+  // Avoid mass rebasing every Renovate branch each run. Those updates fan out
+  // GitHub Actions jobs and overload the self-hosted ARC dind runner.
+  rebaseWhen: "conflicted",
+  // Renovate is deny-by-default. Narrow package rules may opt in only exact,
+  // low-risk dependencies after their release-age and CI gates pass.
   automerge: false,
-  automergeStrategy: 'squash',
+  automergeStrategy: "squash",
   platformAutomerge: false,
+  // Renovate PRs rely on automated checks and must not request human reviews.
   reviewers: [],
   additionalReviewers: [],
   reviewersFromCodeOwners: false,
   assigneesFromCodeOwners: false,
   extends: [
-    'config:best-practices',
-    'github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5',
-    'github>shamubernetes/home-k8s//.github/renovate/noPin.json5',
-    'github>shamubernetes/home-k8s//.github/renovate/customDatasources.json5',
-    'github>shamubernetes/home-k8s//.github/renovate/customManagers.json5',
-    'github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5',
-    'github>shamubernetes/home-k8s//.github/renovate/packageRules.json5',
-    'github>shamubernetes/home-k8s//kubernetes/apps/renovate/renovate/app/config/fast-updates.json',
+    "config:best-practices",
+    "github>shamubernetes/home-k8s//.github/renovate/fileMatch.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/noPin.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/customDatasources.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/customManagers.json5",
+    "github>shamubernetes/home-k8s//.github/renovate/commitmessages.json5",
+    // Apply explicit groups after generic manager and datasource formatting so
+    // grouped PRs retain their group scope regardless of which tools they update.
+    "github>shamubernetes/home-k8s//.github/renovate/packageRules.json5",
+    // The fast-update worker consumes this same allowlist independently.
+    "github>shamubernetes/home-k8s//kubernetes/apps/renovate/renovate/app/config/fast-updates.json",
   ],
-  labels: [
-    'renovate',
-  ],
-  minimumReleaseAge: '0 days',
+  labels: ["renovate"],
+  // config:best-practices waits three days by default. Only Talos and
+  // Kubernetes releases are delayed by the narrower package rule below.
+  minimumReleaseAge: "0 days",
   hostRules: [
     {
-      matchHost: 'https://grafana.com/api/',
+      matchHost: "https://grafana.com/api/",
       concurrentRequestLimit: 1,
       maxRequestsPerSecond: 1,
     },
   ],
-  prCreation: 'immediate',
+  prCreation: "immediate",
   vulnerabilityAlerts: {
     enabled: true,
-    labels: [
-      'security',
-    ],
+    labels: ["security"],
   },
 }

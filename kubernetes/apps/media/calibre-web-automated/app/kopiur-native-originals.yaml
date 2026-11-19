@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: calibre-web-automated-k92-native-originals-v3
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   # The existing paired originals passed the session-owned native Calibre job.
   # Retain a runnable drill recipe without replaying accepted native recovery.

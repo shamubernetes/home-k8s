@@ -19,6 +19,7 @@ resources:
 - ./replication.yaml
 - ./original.yaml
 - ./verify-helper-6138.yaml
+- ./renovate-6675-verification.yaml
 configMapGenerator:
 - name: pocket-id-native-validation
   files:

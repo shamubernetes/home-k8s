@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: native-replay
-          image: ghcr.io/crocodilestick/calibre-web-automated:V3.1.4@sha256:577e846f104fd21453ef306eefb4a95dd95b3b9ddd2463a150944494284da0fd
+          image: ghcr.io/crocodilestick/calibre-web-automated:v4.0.8@sha256:5e00373854247750cc3e4479b492ae09293ff5e06ed10177f226634d97888679
           command:
             - /app/calibre/calibre-debug
             - -c

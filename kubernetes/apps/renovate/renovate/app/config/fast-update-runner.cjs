@@ -169,6 +169,18 @@ function kget(kind, namespace, name, selector) {
 }
 
 async function github(url, token, method = 'GET', body) {
+  try { return await githubRequest(url, token, method, body); }
+  catch (error) {
+    const { operation, httpStatus, causeCodes } = failureDetails(error);
+    // A closed socket before headers can be retried once for this read, never for a GitHub write.
+    if (method !== 'GET' || operation !== 'github-list-pulls' || httpStatus !== undefined || !causeCodes.includes('UND_ERR_SOCKET')) throw error;
+    report({ phase: 'github-list-pulls-retry', operation, causeCodes: ['UND_ERR_SOCKET'] });
+    await sleep(250);
+    return githubRequest(url, token, method, body);
+  }
+}
+
+async function githubRequest(url, token, method, body) {
   let status;
   try {
     const response = await fetch(`https://api.github.com$${url}`, {

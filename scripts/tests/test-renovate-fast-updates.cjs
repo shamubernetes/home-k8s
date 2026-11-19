@@ -31,6 +31,37 @@ test('GitHub transport failures identify the operation without exposing credenti
   } finally { global.fetch = original; }
 });
 
+test('only PR listing retries one observed socket failure, without retrying writes or HTTP rejections', async t => {
+  const listing = '/repos/shamubernetes/home-k8s/pulls?state=open&base=main&page=1';
+  const socket = () => new TypeError('fetch failed', { cause: Object.assign(new Error('socket closed'), { code: 'UND_ERR_SOCKET' }) });
+  let calls = 0, responses = [];
+  t.mock.method(global, 'fetch', async () => {
+    const response = responses[calls++];
+    if (response instanceof Error) throw response;
+    return response;
+  });
+  const configure = (...values) => { calls = 0; responses = values; };
+  configure(socket(), { ok: true, status: 200, json: async () => [] });
+  assert.deepEqual(await runner.github(listing, 'synthetic-token'), []);
+  assert.equal(calls, 2);
+
+  const final = socket();
+  configure(socket(), final);
+  await assert.rejects(runner.github(listing, 'synthetic-token'), error => error === final);
+  assert.equal(calls, 2);
+
+  for (const [route, method, rejected] of [
+    [listing, 'GET', { ok: false, status: 429 }],
+    [listing, 'GET', new SyntaxError('invalid JSON')],
+    ['/repos/shamubernetes/home-k8s/pulls/123', 'GET', socket()],
+    ['/repos/shamubernetes/home-k8s/pulls/123/merge', 'PUT', socket()],
+  ]) {
+    configure(rejected);
+    await assert.rejects(runner.github(route, 'synthetic-token', method));
+    assert.equal(calls, 1);
+  }
+});
+
 test('HTTP and response-body failures retain only safe operation and status', async () => {
   const original = global.fetch;
   try {

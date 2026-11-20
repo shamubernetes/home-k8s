@@ -12,7 +12,7 @@ bundle=${1:?pass restored dump directory}
 export MYSQL_PWD="$MYSQL_PASSWORD"
 client=(mariadb --protocol=tcp --host=127.0.0.1 --port=3306 --user="$MYSQL_USER" --connect-timeout=5 --batch --skip-column-names)
 version=$("${client[@]}" -e 'SELECT VERSION()')
-[[ $version == 11.8.8-* || $version == 11.8.9-* ]] || exit 1
+[[ $version == 11.8.8-* || $version == 11.8.9-* || $version == 11.8.10-* ]] || exit 1
 [[ $("${client[@]}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='grimmory'") == 0 ]] || { printf 'refuse nonempty target\n' >&2; exit 1; }
 (cd "$bundle" && sha256sum -c grimmory.sql.sha256)
 # Preserve legacy v1 restores. New v2 points must carry the bound runtime escrow.

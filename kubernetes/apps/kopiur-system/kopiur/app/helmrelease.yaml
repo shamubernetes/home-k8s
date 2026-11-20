@@ -32,6 +32,21 @@ spec:
             path: /spec/strategy
             value:
               type: Recreate
+      # Central execution is not enabled. Preserve the current Gateway API permissions.
+      - target:
+          group: rbac.authorization.k8s.io
+          version: v1
+          kind: ClusterRole
+          name: ^kopiur$
+        patch: |-
+          - op: test
+            path: /rules/18
+            value:
+              apiGroups: [gateway.networking.k8s.io]
+              resources: [referencegrants]
+              verbs: [create, patch, delete]
+          - op: remove
+            path: /rules/18
       # Info alerts are intentionally null-routed. Capture gates need investigation.
       - target:
           group: monitoring.coreos.com

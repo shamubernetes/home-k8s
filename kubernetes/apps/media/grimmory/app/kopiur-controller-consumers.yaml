@@ -118,7 +118,7 @@ spec:
                   - -c
                   - bash /contract/consumer-database.sh >/private/database-bootstrap.log 2>&1 &
         - name: application
-          image: docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526
+          image: docker.io/grimmory/grimmory:v3.5.1@sha256:9fa586bff003956493aa851cbb69ae3d15a977b19913deba62f1dafc62e78c3f
           command:
             - sh
             - /contract/consumer-app.sh
@@ -351,7 +351,7 @@ spec:
                   - -c
                   - bash /contract/consumer-database.sh >/private/database-bootstrap.log 2>&1 &
         - name: application
-          image: docker.io/grimmory/grimmory:v3.5.0@sha256:83597bf02da48a8ec4042fd4d4f58b9631f5b131d6dee7d2fcc5cf3f2eec2526
+          image: docker.io/grimmory/grimmory:v3.5.1@sha256:9fa586bff003956493aa851cbb69ae3d15a977b19913deba62f1dafc62e78c3f
           command:
             - sh
             - /contract/consumer-app.sh

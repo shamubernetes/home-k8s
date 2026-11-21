@@ -26,7 +26,7 @@ spec:
           app: &runtime
             image:
               repository: ghcr.io/apollo-reborn/apollo-backend
-              tag: latest@sha256:d67a280e87167c29e64b7d8ff630b6c90c953c38ec69feffdaec7e73668b77a6
+              tag: latest@sha256:4e9401b4463888989c89b69df3f1315042d8dea60699f0ad936ead09dad345ec
             args: ["api"]
             env: &env
               TZ: ${TIMEZONE}

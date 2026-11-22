@@ -128,7 +128,7 @@ spec:
                             name: pocket-id-bucket
                             key: BUCKET_NAME
                   - name: database
-                    image: docker.io/library/postgres:17@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
+                    image: docker.io/library/postgres:17@sha256:223efeb196329b55b3b9a13db144956411dbc18e727e59f681c3e0aede6475cf
                     command:
                       - sh
                       - -ec
@@ -186,7 +186,7 @@ spec:
                             name: pocket-id-kopiur-postgres
                             key: PGDATABASE
                   - name: database-references
-                    image: docker.io/library/postgres:17@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
+                    image: docker.io/library/postgres:17@sha256:223efeb196329b55b3b9a13db144956411dbc18e727e59f681c3e0aede6475cf
                     command:
                       - sh
                       - -ec

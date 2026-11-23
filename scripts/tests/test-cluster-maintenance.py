@@ -442,6 +442,28 @@ class ClusterMaintenanceTest(unittest.TestCase):
             with self.subTest(scope=scope), self.assertRaises(self.module.MaintenanceError):
                 self.module.validate_scope(scope)
 
+    def test_scoped_window_preserves_same_namespace_backup_alert(self):
+        scope = {"namespaces": ["tools"], "unrelatedNamespaces": [],
+                 "preserveAlertnames": ["KopiurSnapshotFailed"]}
+        path = Path(self.tmpdir.name, "preserve-scope.json")
+        path.write_text(json.dumps(scope))
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="tools", policy="example")
+        args = ("begin", "--reason", "Search rollout", "--scope-file", str(path))
+        self.run_command(*args, expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+        own = json.loads(self.run_command(*args, "--allow-active-alert",
+            "alertname=KopiurSnapshotFailed,namespace=tools,policy=example").stdout)["silenceId"]
+        self.assertNotIn(own, self.alertmanager.alerts[-1]["status"]["silencedBy"])
+        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="tools", policy="other")
+        self.run_command("end", "--id", own, expected=1)
+        self.assertNotIn(own, self.alertmanager.deletes)
+
+    def test_preserved_alert_names_are_exact_literals(self):
+        for names in ("Failure", [".*"], ["X|Y"], ["X", "X"], ["Watchdog"], [None]):
+            with self.subTest(names=names), self.assertRaises(self.module.MaintenanceError):
+                self.module.validate_scope({"namespaces": ["tools"], "unrelatedNamespaces": [],
+                                            "preserveAlertnames": names})
+
     def test_scoped_stale_repair_keeps_unrelated_alerts_visible(self):
         own = json.loads(self.run_command("begin", "--reason", "Kanvil update",
                                          *self.scoped_args()).stdout)["silenceId"]

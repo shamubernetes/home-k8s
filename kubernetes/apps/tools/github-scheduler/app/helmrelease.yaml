@@ -63,8 +63,8 @@ spec:
               readOnlyRootFilesystem: true
               capabilities: {drop: ["ALL"]}
             resources:
-              requests: {cpu: 20m, memory: 128Mi}
-              limits: {memory: 384Mi}
+              requests: {cpu: 20m, memory: 256Mi}
+              limits: {memory: 768Mi}
     defaultPodOptions:
       automountServiceAccountToken: false
       securityContext:

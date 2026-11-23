@@ -29,7 +29,7 @@ spec:
           app:
             image:
               repository: docker.elastic.co/elasticsearch/elasticsearch
-              tag: 8.19.25@sha256:5bfdf4313b9bc05c0d46fe219d6e67710eb0c7654ed6c275167bdf9beefc56f0
+              tag: 8.19.26@sha256:d71769f4e1145dca3794a04ddcd67e12f1299048b3232025e55feda799904a5d
             env:
               discovery.type: single-node
               xpack.security.enabled: "true"

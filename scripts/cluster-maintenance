@@ -296,15 +296,24 @@ SCOPE_MARKER = "\nmaintenance-scope: "
 def validate_scope(scope):
     if scope is None:
         return None
-    if not isinstance(scope, dict) or set(scope) != {"namespaces", "unrelatedNamespaces"}:
+    required = {"namespaces", "unrelatedNamespaces"}
+    if (not isinstance(scope, dict) or not required <= scope.keys()
+            or scope.keys() - required - {"preserveAlertnames"}):
         raise MaintenanceError("maintenance scope requires namespaces and unrelatedNamespaces")
-    for key, values in scope.items():
+    for key in required:
+        values = scope[key]
         if (not isinstance(values, list) or (key == "namespaces" and not values)
                 or any(not isinstance(v, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", v)
                        for v in values) or len(set(values)) != len(values)):
             raise MaintenanceError(f"invalid maintenance scope {key}")
     if set(scope["namespaces"]) & set(scope["unrelatedNamespaces"]):
         raise MaintenanceError("maintenance scope namespaces overlap")
+    names = scope.get("preserveAlertnames", [])
+    if (not isinstance(names, list) or len(names) > 20
+            or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name)
+                   or name in EXCLUDED_ALERTS for name in names)
+            or len(set(names)) != len(names)):
+        raise MaintenanceError("invalid maintenance scope preserveAlertnames")
     return scope
 
 
@@ -319,10 +328,14 @@ def silence_scope(silence):
 
 
 def scope_matchers(scope):
-    return MAINTENANCE_MATCHERS + ([{
+    matchers = MAINTENANCE_MATCHERS + ([{
         "name": "namespace", "value": "|".join(sorted(scope["namespaces"])),
         "isRegex": True, "isEqual": True,
     }] if scope else [])
+    if scope and scope.get("preserveAlertnames"):
+        matchers.append({"name": "alertname", "value": "|".join(sorted(scope["preserveAlertnames"])),
+                         "isRegex": True, "isEqual": False})
+    return matchers
 
 
 def unrelated_alert(alert, scope):
@@ -841,7 +854,7 @@ def member_coverage(member, silence_id):
     for alert in member.get_alerts():
         name = alert.get("labels", {}).get("alertname", "unknown")
         silenced_by = alert.get("status", {}).get("silencedBy") or []
-        if name in EXCLUDED_ALERTS:
+        if name in EXCLUDED_ALERTS or (scope and name in scope.get("preserveAlertnames", [])):
             excluded.append(name)
             if silence_id in silenced_by:
                 wrongly_silenced.append(name)

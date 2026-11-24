@@ -248,6 +248,69 @@ jobs:
         HELM_IMAGE_SHARD_INDEX: ${{ matrix.index }}
       run: scripts/check-helmrelease-images
 
+  openviking-native-upgrade:
+    name: OpenViking native backup compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Detect an OpenViking candidate
+      id: scope
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: |
+        set -euo pipefail
+        if [[ -z $BASE_SHA || $BASE_SHA == 0000000000000000000000000000000000000000 ]]; then
+          echo 'applicable=true' >> "$GITHUB_OUTPUT"
+        else
+          [[ $BASE_SHA =~ ^[0-9a-f]{40}$ ]]
+          changed=$(git diff --name-only "$BASE_SHA" HEAD -- \
+            kubernetes/apps/tools/openviking/app/helmrelease.yaml \
+            kubernetes/apps/tools/openviking/backup-native/policy-data.yaml \
+            scripts/tests/openviking-native-upgrade.py \
+            .github/workflows/meta-static-analysis.yaml)
+          if [[ -n $changed ]]; then
+            echo 'applicable=true' >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+    - name: Setup YAML parser
+      if: steps.scope.outputs.applicable == 'true'
+      uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+      with:
+        install_args: yq
+        cache: true
+        fetch_from_github: false
+
+    - name: Verify native backup after workspace initialization
+      if: steps.scope.outputs.applicable == 'true'
+      run: |
+        set -euo pipefail
+        app_path=kubernetes/apps/tools/openviking/app/helmrelease.yaml
+        policy_path=kubernetes/apps/tools/openviking/backup-native/policy-data.yaml
+        tag_query='.spec.values.controllers.openviking.containers.app.image.tag'
+        app_image=$(yq -er '.spec.values.controllers.openviking.containers.app.image | .repository + ":" + .tag' "$app_path")
+        hook_image=$(yq -er '.spec.hooks.beforeSnapshot[].runJob.jobSpec.template.spec.containers[] | select(.name == "native") | .image' "$policy_path")
+        [[ $app_image == "$hook_image" && $app_image =~ ^ghcr\.io/volcengine/openviking:v[0-9]+(\.[0-9]+)+@sha256:[0-9a-f]{64}$ ]]
+        if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
+          base=$(jq -er '.pull_request.base.sha' "$GITHUB_EVENT_PATH")
+          [[ $base =~ ^[0-9a-f]{40}$ ]]
+          base_tag=$(git show "$base:$app_path" | yq -er "$tag_query" -)
+          fixture_changes=$(git diff --name-only "$base" HEAD -- scripts/tests/openviking-native-upgrade.py .github/workflows/meta-static-analysis.yaml)
+          if [[ "$app_image" == "ghcr.io/volcengine/openviking:$base_tag" && -z $fixture_changes ]]; then
+            echo 'OpenViking app and capture image pin unchanged.'
+            exit 0
+          fi
+        fi
+        docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+          --read-only --tmpfs /tmp:rw,size=256m -e TMPDIR=/tmp -e HOME=/tmp \
+          --entrypoint python "$app_image" - < scripts/tests/openviking-native-upgrade.py
+
   success:
     if: ${{ !cancelled() }}
     name: Static Analysis - Success
@@ -256,6 +319,7 @@ jobs:
     - image-pins
     - image-plan
     - lint
+    - openviking-native-upgrade
     - raw-image-pins
     - validation-fixtures
     runs-on: ubuntu-latest

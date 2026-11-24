@@ -87,13 +87,21 @@ test('diagnostic traversal is bounded and rejects arbitrary names, codes and std
   assert.deepEqual(runner.failureDetails(null), { errorType: 'Error', causeCodes: [] });
 });
 
-test('one canonical preset excludes the exact image/file pair from regular Renovate', () => {
-  const targets = runner.targetsFromPreset(preset);
-  assert.deepEqual(targets, [
-    { file: 'kubernetes/apps/services/kanvil/app/helmrelease.yaml', image: 'ghcr.io/maudecode/kanvil', channel: 'experimental' },
-    { file: 'kubernetes/apps/services/talaria-feedback-bridge/app/helmrelease.yaml', image: 'ghcr.io/maudecode/talaria-feedback-bridge' },
-    { file: 'kubernetes/apps/tools/github-scheduler/app/helmrelease.yaml', image: 'ghcr.io/maudecode/github-scheduler' }
+test('preset parsing preserves exact stable and rolling target identities', () => {
+  const rule = (name, extra = {}) => ({
+    description: name, matchDatasources: ['docker'],
+    matchFileNames: [`kubernetes/apps/tools/${name}/app/helmrelease.yaml`],
+    matchPackageNames: [`ghcr.io/example/${name}`], enabled: false, ...extra
+  });
+  assert.deepEqual(runner.targetsFromPreset({ packageRules: [
+    rule('stable'), rule('rolling', { allowedVersions: '/^experimental$/', versioning: 'docker' })
+  ] }), [
+    { file: 'kubernetes/apps/tools/stable/app/helmrelease.yaml', image: 'ghcr.io/example/stable' },
+    { file: 'kubernetes/apps/tools/rolling/app/helmrelease.yaml', image: 'ghcr.io/example/rolling', channel: 'experimental' }
   ]);
+});
+
+test('regular Renovate imports the canonical fast-update exclusions', () => {
   const source = fs.readFileSync(path.join(root, '.github/renovate.json5'), 'utf8');
   assert(source.includes('github>shamubernetes/home-k8s//kubernetes/apps/renovate/renovate/app/config/fast-updates.json'));
 });

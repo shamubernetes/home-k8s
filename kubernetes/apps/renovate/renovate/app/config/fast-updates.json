@@ -18,6 +18,13 @@
       "enabled": false
     },
     {
+      "description": "Cowtail is managed by the opt-in fast-update lane",
+      "matchDatasources": ["docker"],
+      "matchFileNames": ["kubernetes/apps/services/cowtail/app/helmrelease.yaml"],
+      "matchPackageNames": ["ghcr.io/maudecode/cowtail"],
+      "enabled": false
+    },
+    {
       "description": "The GitHub scheduler is managed by the opt-in fast-update lane",
       "matchDatasources": ["docker"],
       "matchFileNames": ["kubernetes/apps/tools/github-scheduler/app/helmrelease.yaml"],

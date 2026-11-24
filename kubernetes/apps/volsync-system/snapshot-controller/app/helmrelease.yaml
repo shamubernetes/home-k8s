@@ -24,11 +24,11 @@ spec:
       - name: registry.k8s.io/sig-storage/snapshot-controller
         newName: registry.k8s.io/sig-storage/snapshot-controller
         # renovate: datasource=docker depName=registry.k8s.io/sig-storage/snapshot-controller
-        newTag: v8.7.0@sha256:8511f417d0072efcd937aedd7cc79a937d5066e64ee17beb6097301c92742f19
+        newTag: v8.7.1@sha256:d3c3893704c86f0fe428a6429c705b7103a653bea151db0fc5ab0fdb25bb2290
       - name: registry.k8s.io/sig-storage/snapshot-conversion-webhook
         newName: registry.k8s.io/sig-storage/snapshot-conversion-webhook
         # renovate: datasource=docker depName=registry.k8s.io/sig-storage/snapshot-conversion-webhook
-        newTag: v8.7.0@sha256:23c744fa5d014b077cff130374e550c8769effc0602f40e487a1c46d14ac4df0
+        newTag: v8.7.1@sha256:359bf3c6d40a900bc386970d9b60983fcfc1e5d728ca9e5beac9511d9e4e0597
   values:
     controller:
       replicaCount: 2

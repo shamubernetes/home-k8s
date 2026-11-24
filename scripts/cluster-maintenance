@@ -5,6 +5,7 @@ import argparse
 import contextlib
 import datetime as dt
 import fcntl
+import functools
 import json
 import os
 import queue
@@ -347,6 +348,36 @@ def unrelated_alert(alert, scope):
                       "persistentvolume", "ceph_daemon", "cluster_id"}
     return (labels.get("namespace") in scope["unrelatedNamespaces"]
             and not any(labels.get(key) for key in infrastructure))
+
+
+JOB_ALERTS = {"KubeJobFailed", "KubeJobNotCompleted"}
+
+
+@functools.lru_cache(maxsize=None)
+def kopiur_job(namespace, name):
+    # An unreadable Job is not proven to be a backup, so its alert still blocks.
+    try:
+        result = run_kubectl(["-n", namespace, "get", "job", name, "-o",
+                              "jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}"])
+    except MaintenanceError:
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "kopiur"
+
+
+def backup_alert(alert):
+    # A failing backup never holds up maintenance: Kopiur's backup, repository and
+    # snapshot alerts, and a failed Job Kopiur runs. A failing restore still blocks.
+    labels = alert.get("labels", {})
+    name = labels.get("alertname", "")
+    if name.startswith("Kopiur"):
+        return name != "KopiurRestoreFailed"
+    if name in JOB_ALERTS and labels.get("namespace") and labels.get("job_name"):
+        return kopiur_job(labels["namespace"], labels["job_name"])
+    return False
+
+
+def nonblocking_alert(alert, scope):
+    return unrelated_alert(alert, scope) or backup_alert(alert)
 
 
 def require_canonical_matchers(silence):
@@ -829,7 +860,7 @@ def unsilenced_blockers(cluster, allowed_alerts=None, include_suppressed=False, 
                 and labels.get("alertname") not in EXCLUDED_ALERTS
             ):
                 item = compact_alert(alert)
-                if unrelated_alert(alert, scope):
+                if nonblocking_alert(alert, scope):
                     continue
                 if any(alert_matches_selector(alert, selector) for selector in allowed_alerts):
                     allowed[json.dumps(item, sort_keys=True)] = item
@@ -1199,7 +1230,7 @@ def post_maintenance_blockers(cluster, allowed_alerts=None, required_clearance=N
                 alert_matches_selector(alert, {k: v for k, v in selector.items() if k != "severity"})
                 for selector in (required_clearance or [])
             )
-            if not recovery_incident and (unrelated_alert(alert, scope) or any(alert_matches_selector(alert, selector)
+            if not recovery_incident and (nonblocking_alert(alert, scope) or any(alert_matches_selector(alert, selector)
                                              for selector in (allowed_alerts or []))):
                 continue
             key = json.dumps(labels, sort_keys=True)

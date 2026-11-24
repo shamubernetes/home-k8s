@@ -123,7 +123,7 @@ test('fast configuration ignores repository presets and denies unselected depend
   assert.equal(config.packageRules[2].allowedVersions, '/^\\d+\\.\\d+\\.\\d+$/');
   assert.equal(config.packageRules[2].versioning, 'semver');
   assert.deepEqual(config.packageRules[2].matchPackageNames, [targets[1].image]);
-  assert.equal(config.automerge, false, 'Only the maintenance-guarded worker may merge');
+  assert.equal(config.automerge, false, 'Only the fast-update worker may merge');
   assert.equal(config.platformAutomerge, false);
   assert.equal(config.branchPrefix, 'fast-update/');
   assert.equal(config.minimumReleaseAge, null);
@@ -235,68 +235,6 @@ test('runtime Kubernetes client references the projected identity, never localho
   assert(cron.includes('preferredDuringSchedulingIgnoredDuringExecution:'));
   assert(!cron.includes('requiredDuringSchedulingIgnoredDuringExecution:'));
   assert(cron.includes('imagePullPolicy: IfNotPresent'));
-});
-
-test('maintenance admission requires two active members and ten minutes remaining', () => {
-  const now = 1000000;
-  const status = { silenceId: 'owned', state: 'active', memberStates: { a: 'active', b: 'active' }, endsAt: new Date(now + 1800000).toISOString() };
-  assert(runner.maintenanceActive(status, 'owned', now));
-  for (const changed of [
-    { state: 'expired' }, { silenceId: 'other' }, { memberStates: { a: 'active', b: 'expired' } },
-    { memberStates: { a: 'active' } }, { endsAt: new Date(now + 599999).toISOString() }, { endsAt: 'invalid' }
-  ]) assert.equal(runner.maintenanceActive({ ...status, ...changed }, 'owned', now), false);
-});
-
-function scopeFixture() {
-  const ks = (name, category, namespace, dependencies = []) => ({
-    metadata: { name, namespace: 'flux-system' },
-    spec: { path: './kubernetes/apps/' + category + '/' + name + '/app', targetNamespace: namespace,
-      dependsOn: dependencies.map(name => ({ name })) }
-  });
-  return [ks('kanvil', 'services', 'services', ['kanvil-prereqs', 'rabbitmq-cluster', 'elasticsearch', 'rook-ceph-cluster']),
-    ks('kanvil-prereqs', 'services', 'services', ['cloudnative-pg-cluster', 'external-secrets-secret-store']),
-    ks('cloudnative-pg-cluster', 'database', 'database'), ks('rabbitmq-cluster', 'database', 'database'),
-    ks('elasticsearch', 'database', 'database'), ks('rook-ceph-cluster', 'rook-ceph', 'rook-ceph'),
-    ks('external-secrets-secret-store', 'external-secrets', 'external-secrets'),
-    ks('pocket-id', 'security', 'security'), ks('envoy-gateway', 'network', 'network'),
-    ks('home-assistant', 'home-assistant', 'home-assistant'), ks('searxng', 'tools', 'tools')];
-}
-
-test('maintenance dependency scope protects app, transitive data and implicit platform dependencies', () => {
-  const target = runner.targetsFromPreset(preset)[0];
-  const scope = runner.maintenanceScope(target, scopeFixture());
-  assert.deepEqual(scope.namespaces, ['database', 'default', 'external-secrets', 'flux-system', 'kube-system', 'network', 'rook-ceph', 'security', 'services']);
-  assert.deepEqual(scope.unrelatedNamespaces, ['home-assistant', 'tools']);
-  const changed = scopeFixture();
-  changed[1].spec.dependsOn.push({ name: 'searxng' });
-  assert(runner.maintenanceScope(target, changed).namespaces.includes('tools'));
-  assert(!runner.maintenanceScope(target, changed).unrelatedNamespaces.includes('tools'));
-});
-
-test('health-check namespaces resolve operator dependencies without targetNamespace', () => {
-  const resources = scopeFixture();
-  resources[3].spec.dependsOn.push({ name: 'rabbitmq-operator' });
-  resources.push({ metadata: { name: 'rabbitmq-operator', namespace: 'flux-system' }, spec: {
-    path: './kubernetes/apps/database/rabbitmq/operator/cluster', healthChecks: [{ namespace: 'rabbitmq-system' }]
-  } });
-  assert(runner.maintenanceScope(runner.targetsFromPreset(preset)[0], resources).namespaces.includes('rabbitmq-system'));
-});
-
-test('unresolved owners and dependencies fail closed; platform namespace classification wins', () => {
-  const target = runner.targetsFromPreset(preset)[0];
-  for (const mutate of [
-    rows => rows.shift(), rows => rows[0].spec.dependsOn.push({ name: 'missing' }),
-    rows => rows[0].spec.dependsOn.push({ name: 'searxng', namespace: 'foreign' }),
-    rows => rows[1].spec.targetNamespace = undefined
-  ]) {
-    const rows = scopeFixture(); mutate(rows);
-    assert.throws(() => runner.maintenanceScope(target, rows));
-  }
-  const rows = scopeFixture();
-  rows.push({ metadata: { name: 'shared-controller', namespace: 'flux-system' }, spec: {
-    path: './kubernetes/apps/new-platform/controller/app', targetNamespace: 'tools'
-  } });
-  assert(!runner.maintenanceScope(target, rows).unrelatedNamespaces.includes('tools'));
 });
 
 function rolloutFixture(revision = 'a'.repeat(40)) {

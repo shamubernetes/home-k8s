@@ -79,6 +79,12 @@ class FakeAlertmanager:
                     "isRegex": True,
                     "isEqual": False,
                 },
+                {
+                    "name": "alertname",
+                    "value": "Kopiur.+|KubeJobFailed|KubeJobNotCompleted",
+                    "isRegex": True,
+                    "isEqual": False,
+                },
             ],
             "startsAt": timestamp(now - dt.timedelta(minutes=1)),
             "endsAt": timestamp(now + dt.timedelta(hours=4)),
@@ -592,6 +598,12 @@ class ClusterMaintenanceTest(unittest.TestCase):
                     "isRegex": True,
                     "isEqual": False,
                 },
+                {
+                    "name": "alertname",
+                    "value": "Kopiur.+|KubeJobFailed|KubeJobNotCompleted",
+                    "isRegex": True,
+                    "isEqual": False,
+                },
             ],
         )
         routine, watchdog = self.alertmanager.alerts
@@ -612,6 +624,9 @@ class ClusterMaintenanceTest(unittest.TestCase):
                                     job_name="ov-daily-native-data-20261123233737-prehook-0")
         env = self.kopiur_env()
         own = json.loads(self.run_command("begin", "--reason", "routine", env=env).stdout)["silenceId"]
+        # The window does not hide them.
+        for alert in self.alertmanager.alerts:
+            self.assertNotIn(own, alert["status"]["silencedBy"], alert["labels"]["alertname"])
         self.run_command("end", "--id", own, env=env)
 
     def test_failed_restores_and_other_jobs_still_block_begin(self):

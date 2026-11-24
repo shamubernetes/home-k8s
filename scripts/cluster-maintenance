@@ -29,6 +29,9 @@ RECOVERY_MAX_DURATION = dt.timedelta(minutes=30)
 MANAGED_BY = "home-k8s cluster-maintenance"
 COMMENT_PREFIX = "cluster-maintenance: "
 EXCLUDED_ALERTS = {"Watchdog", "InfoInhibitor"}
+# Backup failures stay visible through every window. A silence cannot tell a Kopiur
+# Job's failure from another Job's, so no Job failure alert is silenced.
+VISIBLE_ALERTS = "Kopiur.+|KubeJobFailed|KubeJobNotCompleted"
 MAINTENANCE_MATCHERS = [
     {"name": "alertname", "value": ".+", "isRegex": True, "isEqual": True},
     {
@@ -37,6 +40,7 @@ MAINTENANCE_MATCHERS = [
         "isRegex": True,
         "isEqual": False,
     },
+    {"name": "alertname", "value": VISIBLE_ALERTS, "isRegex": True, "isEqual": False},
 ]
 VERIFY_TIMEOUT_SECONDS = float(os.environ.get("MAINTENANCE_VERIFY_TIMEOUT_SECONDS", "20"))
 LEASE_NAME = "cluster-maintenance-begin-lock"
@@ -885,7 +889,8 @@ def member_coverage(member, silence_id):
     for alert in member.get_alerts():
         name = alert.get("labels", {}).get("alertname", "unknown")
         silenced_by = alert.get("status", {}).get("silencedBy") or []
-        if name in EXCLUDED_ALERTS or (scope and name in scope.get("preserveAlertnames", [])):
+        if (name in EXCLUDED_ALERTS or re.fullmatch(VISIBLE_ALERTS, name)
+                or (scope and name in scope.get("preserveAlertnames", []))):
             excluded.append(name)
             if silence_id in silenced_by:
                 wrongly_silenced.append(name)

@@ -9,7 +9,7 @@ spec:
       app.kubernetes.io/name: github-scheduler
       app.kubernetes.io/instance: github-scheduler
   policyTypes: [Ingress, Egress]
-  # Envoy serves the internal route; the fast-update worker checks /readyz after a rollout.
+  # Envoy serves the internal route and the public webhook route; the fast-update worker checks /readyz after a rollout.
   # Kubelet probes come from the host.
   ingress:
   - from:

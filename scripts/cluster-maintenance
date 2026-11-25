@@ -1005,8 +1005,10 @@ def validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts=N
 
 
 def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=None,
-          recovery_alerts=None, recovery_plan=None, scope=None):
+          recovery_alerts=None, recovery_plan=None, scope=None, force=False):
     scope = validate_scope(scope)
+    if force and (recovery_alerts or independent_silences or allowed_alerts):
+        raise MaintenanceError("--force cannot be combined with recovery, baseline or independent options")
     if SCOPE_MARKER in reason:
         raise MaintenanceError("reason must not contain structured maintenance scope")
     recovery_alerts = recovery_alerts or []
@@ -1015,38 +1017,42 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
         lock.assert_healthy()
         peers = cluster.require_healthy()
         existing = active_owned_silences(cluster)
-        approved = set(independent_silences or [])
-        if scope:
-            for other in existing:
-                other_scope = silence_scope(other)
-                if other_scope and set(other_scope["namespaces"]).issubset(scope["unrelatedNamespaces"]):
-                    approved.add(other["id"])
-            if any(s["id"] in approved and (not silence_scope(s)
-                   or not set(silence_scope(s)["namespaces"]).issubset(scope["unrelatedNamespaces"]))
-                   for s in existing):
-                raise MaintenanceError("concurrent maintenance has overlapping or unknown scope")
-        existing_ids = {silence.get("id", "unknown") for silence in existing}
-        if approved - existing_ids:
-            raise MaintenanceError("independent silence IDs must identify active maintenance windows")
-        concurrent = []
-        for silence_id in sorted(approved):
-            silences = owned_silences(cluster, silence_id, canonical=True)
-            if not silences or any(s.get("status", {}).get("state") != "active" for _, s in silences):
-                raise MaintenanceError(f"independent silence {silence_id} is not active on every member")
-            definitions = {json.dumps(mutable_silence(s), sort_keys=True) for _, s in silences}
-            if len(definitions) != 1:
-                raise MaintenanceError(f"independent silence {silence_id} differs between members")
-            verified = silences[0][1]
-            if scope and (not silence_scope(verified) or not set(silence_scope(verified)["namespaces"]).issubset(scope["unrelatedNamespaces"])):
-                raise MaintenanceError("concurrent maintenance scope changed during admission")
-            concurrent.append({"silenceId": silence_id,
-                               "reason": verified["comment"][len(COMMENT_PREFIX):],
-                               "endsAt": verified["endsAt"]})
-        if existing_ids - approved:
-            ids = ", ".join(sorted(existing_ids - approved))
-            raise MaintenanceError(
-                f"an owned maintenance silence is already active ({ids}); renew or end it explicitly"
-            )
+        if force:
+            # A forced window opens alongside any other window and records the overlap.
+            concurrent = [{"silenceId": other.get("id", "unknown"), "forced": True} for other in existing]
+        else:
+            approved = set(independent_silences or [])
+            if scope:
+                for other in existing:
+                    other_scope = silence_scope(other)
+                    if other_scope and set(other_scope["namespaces"]).issubset(scope["unrelatedNamespaces"]):
+                        approved.add(other["id"])
+                if any(s["id"] in approved and (not silence_scope(s)
+                       or not set(silence_scope(s)["namespaces"]).issubset(scope["unrelatedNamespaces"]))
+                       for s in existing):
+                    raise MaintenanceError("concurrent maintenance has overlapping or unknown scope")
+            existing_ids = {silence.get("id", "unknown") for silence in existing}
+            if approved - existing_ids:
+                raise MaintenanceError("independent silence IDs must identify active maintenance windows")
+            concurrent = []
+            for silence_id in sorted(approved):
+                silences = owned_silences(cluster, silence_id, canonical=True)
+                if not silences or any(s.get("status", {}).get("state") != "active" for _, s in silences):
+                    raise MaintenanceError(f"independent silence {silence_id} is not active on every member")
+                definitions = {json.dumps(mutable_silence(s), sort_keys=True) for _, s in silences}
+                if len(definitions) != 1:
+                    raise MaintenanceError(f"independent silence {silence_id} differs between members")
+                verified = silences[0][1]
+                if scope and (not silence_scope(verified) or not set(silence_scope(verified)["namespaces"]).issubset(scope["unrelatedNamespaces"])):
+                    raise MaintenanceError("concurrent maintenance scope changed during admission")
+                concurrent.append({"silenceId": silence_id,
+                                   "reason": verified["comment"][len(COMMENT_PREFIX):],
+                                   "endsAt": verified["endsAt"]})
+            if existing_ids - approved:
+                ids = ", ".join(sorted(existing_ids - approved))
+                raise MaintenanceError(
+                    f"an owned maintenance silence is already active ({ids}); renew or end it explicitly"
+                )
         # Recovery is admission-only. End/repair still require incident clearance.
         if recovery_alerts:
             for member, alerts in cluster.all_alerts():
@@ -1066,7 +1072,7 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             cluster, [*(allowed_alerts or []), *recovery_alerts], include_suppressed=True, scope=scope
         )
         _, allowed = unsilenced_blockers(cluster, allowed_alerts, include_suppressed=True, scope=scope)
-        if blockers:
+        if blockers and not force:
             names = ", ".join(item["alertname"] for item in blockers)
             raise MaintenanceError(
                 "refusing routine maintenance while unrelated unsilenced warning/critical "
@@ -1108,11 +1114,14 @@ def begin(cluster, reason, duration, allowed_alerts=None, independent_silences=N
             "recoveryPlan": recovery_plan,
             "independentMaintenance": concurrent,
             "maintenanceScope": scope,
+            "forced": force,
+            "forcedOverAlerts": blockers if force else [],
         }
 
 
 def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api=None,
-                      independent_silences=None, recovery_alerts=None, recovery_plan=None, scope=None):
+                      independent_silences=None, recovery_alerts=None, recovery_plan=None, scope=None,
+                      force=False):
     scope = validate_scope(scope)
     validate_recovery(recovery_alerts, recovery_plan, duration, allowed_alerts)
     if load_state(required=False):
@@ -1123,7 +1132,7 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
     silence_id = None
     try:
         result = begin(cluster, reason, duration, allowed_alerts, independent_silences,
-                       recovery_alerts, recovery_plan, scope)
+                       recovery_alerts, recovery_plan, scope, force)
         silence_id = result["silenceId"]
         write_state(
             {
@@ -1137,6 +1146,7 @@ def coordinated_begin(cluster, reason, duration, allowed_alerts=None, status_api
                 "recoveryPlan": recovery_plan,
                 "independentMaintenance": result["independentMaintenance"],
                 "maintenanceScope": result["maintenanceScope"],
+                "forced": result["forced"],
             }
         )
     except Exception as action_error:
@@ -1263,7 +1273,10 @@ def coordinated_end(cluster, silence_id, status_api=None):
     recovery_alerts = validate_persisted_alert_selectors(
         state.get("recoveryActiveAlerts", []), "recoveryActiveAlerts"
     )
-    post_maintenance_blockers(cluster, allowed_active_alerts, recovery_alerts, state.get("maintenanceScope"))
+    # Ending a forced window only makes alerts visible again, so nothing holds it open.
+    if state.get("forced") is not True:
+        post_maintenance_blockers(cluster, allowed_active_alerts, recovery_alerts,
+                                  state.get("maintenanceScope"))
     current = status(cluster, silence_id)
     if current["state"] == "active":
         result = end(cluster, silence_id)
@@ -1565,6 +1578,11 @@ def build_parser():
               "requires a separate MAINTENANCE_STATE_FILE and never modifies those windows"),
     )
     begin_parser.add_argument(
+        "--force", action="store_true",
+        help=("open the window even while other maintenance windows are open or warning/critical "
+              "alerts are active; for automation that must never be blocked by admission"),
+    )
+    begin_parser.add_argument(
         "--recover-active-alert", action="append", type=parse_alert_selector, default=[],
         metavar="LABEL=VALUE,...",
         help=("admit an exact current incident only to execute the reviewed rollback; "
@@ -1616,6 +1634,7 @@ def main():
                     args.recover_active_alert,
                     args.recovery_plan,
                     json.loads(args.scope_file.read_text()) if args.scope_file else None,
+                    args.force,
                 )
             elif args.command == "renew":
                 result = coordinated_renew(cluster, args.id, args.duration)

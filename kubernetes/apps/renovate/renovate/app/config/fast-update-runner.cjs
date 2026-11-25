@@ -247,6 +247,58 @@ async function readyPull(targets, token, author, yaml) {
   return null;
 }
 
+function maintenanceScope(target, kustomizations) {
+  // Only ordinary workload categories can be independent. Every platform
+  // namespace remains protected, including dependencies not expressed in Flux
+  // ordering, such as DNS, Envoy, Pocket ID and storage controllers.
+  const workloads = new Set(['arrs', 'games', 'home-assistant', 'iot', 'media', 'services', 'tools']);
+  const protectedNamespaces = new Set(['kube-system', 'flux-system', 'default']);
+  const workloadNamespaces = new Set();
+  const byName = new Map();
+  const namespaces = ks => [...new Set([ks.spec?.targetNamespace, ...(ks.spec?.healthChecks || []).map(h => h.namespace)].filter(Boolean))];
+  for (const ks of kustomizations) {
+    assert.equal(ks.metadata?.namespace, 'flux-system', 'Unsupported Flux dependency namespace');
+    assert(!byName.has(ks.metadata.name), 'Duplicate Flux Kustomization');
+    byName.set(ks.metadata.name, ks);
+    const category = ks.spec?.path?.match(/^\.\/kubernetes\/apps\/([a-z0-9-]+)\//)?.[1];
+    for (const ns of namespaces(ks)) (workloads.has(category) ? workloadNamespaces : protectedNamespaces).add(ns);
+  }
+  const root = path.posix.basename(path.posix.dirname(path.posix.dirname(target.file)));
+  assert.equal(byName.get(root)?.spec?.path, './' + path.posix.dirname(target.file), 'Target Flux owner missing or changed');
+  const visited = new Set();
+  const visit = name => {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const ks = byName.get(name);
+    assert(ks && namespaces(ks).length, 'Unresolved Flux dependency scope: ' + name);
+    for (const ns of namespaces(ks)) protectedNamespaces.add(ns);
+    for (const dep of ks.spec.dependsOn || []) {
+      assert(!dep.namespace || dep.namespace === 'flux-system', 'Unsupported cross-namespace dependency');
+      visit(dep.name);
+    }
+  };
+  visit(root);
+  return {
+    namespaces: [...protectedNamespaces].sort(),
+    unrelatedNamespaces: [...workloadNamespaces].filter(ns => !protectedNamespaces.has(ns)).sort()
+  };
+}
+
+function maintenance(helper, action, args = []) {
+  const env = { ...process.env, KUBECTL_BIN: kubectl, MAINTENANCE_STATE_FILE: path.join(WORK, 'maintenance.json') };
+  try {
+    const raw = execFileSync('python3', [helper, action, ...args], { env, encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'pipe'] });
+    return JSON.parse(raw);
+  } catch (error) { throw noteFailure(error, 'maintenance-' + action); }
+}
+
+function maintenanceActive(status, silenceId, now = Date.now()) {
+  const states = Object.values(status.memberStates || {});
+  return status.silenceId === silenceId && status.state === 'active' &&
+    states.length >= 2 && states.every(state => state === 'active') &&
+    Date.parse(status.endsAt) - now >= 600000;
+}
+
 async function verifyRollout(target, mergeSha, token, yaml, options = {}) {
   const observe = options.observe || kget;
   const read = options.read || readFileAt;
@@ -354,20 +406,43 @@ async function main() {
   report({ phase: 'scan-complete', targets: targets.length, stats: extraction.stats });
   const candidate = await operation('select-ready-pull', () => readyPull(targets, token, author, yaml));
   if (!candidate) { report({ phase: 'complete', result: 'no merge-ready fast update' }); return; }
-  // The fast lane opens no maintenance window: an allowlisted pin-only change
-  // merges on its exact-head required checks and protected merge, then its
-  // rollout is verified through Flux, the HelmRelease, the Deployment and HTTP health.
-  const result = await github(`/repos/$${REPOSITORY}/pulls/$${candidate.pr.number}/merge`, token, 'PUT', { merge_method: 'squash', sha: candidate.pr.head.sha });
-  assert(result.merged && result.sha, 'Protected merge rejected');
-  report({ phase: 'merged', pull: candidate.pr.number, revision: result.sha });
-  // A failed verification fails the Job; never roll an old binary back across an
-  // unknown database migration.
-  const evidence = await verifyRollout(candidate.target, result.sha, token, yaml);
-  report({ phase: 'healthy', ...evidence });
-  report({ phase: 'complete', result: 'deployed and verified' });
+  const helper = path.join(WORK, 'cluster-maintenance');
+  fs.writeFileSync(helper, await readFileAt('scripts/cluster-maintenance', base.sha, token), { mode: 0o700 });
+  const baseline = JSON.parse(process.env.FAST_UPDATE_BASELINE_ALERTS || '[]');
+  assert(Array.isArray(baseline) && baseline.every(s => typeof s === 'string'));
+  const scope = await operation('resolve-maintenance-scope', () => maintenanceScope(candidate.target, kget('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system').items));
+  const scopeFile = path.join(WORK, 'maintenance-scope.json');
+  fs.writeFileSync(scopeFile, JSON.stringify(scope), { mode: 0o600 });
+  report({ phase: 'maintenance-scope', ...scope });
+  const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', '--scope-file', scopeFile, ...baseline.flatMap(s => ['--allow-active-alert', s])];
+  const window = maintenance(helper, 'begin', args);
+  assert(window.silenceId && window.state === 'active');
+  report({ phase: 'maintenance', pull: candidate.pr.number, silenceId: window.silenceId });
+  let merged = false;
+  try {
+    const active = maintenance(helper, 'status', ['--id', window.silenceId]);
+    assert(maintenanceActive(active, window.silenceId), 'Maintenance window is not active with at least ten minutes remaining');
+    const result = await github(`/repos/$${REPOSITORY}/pulls/$${candidate.pr.number}/merge`, token, 'PUT', { merge_method: 'squash', sha: candidate.pr.head.sha });
+    assert(result.merged && result.sha, 'Protected merge rejected'); merged = true;
+    report({ phase: 'merged', pull: candidate.pr.number, revision: result.sha });
+    const evidence = await verifyRollout(candidate.target, result.sha, token, yaml);
+    report({ phase: 'healthy', ...evidence });
+    maintenance(helper, 'end', ['--id', window.silenceId]);
+    report({ phase: 'complete', result: 'deployed and verified', silenceId: window.silenceId });
+  } catch (error) {
+    // Release an unused window. After merge, preserve fail-closed helper checks;
+    // never roll an old binary back across an unknown database migration.
+    if (!merged) {
+      try { maintenance(helper, 'end', ['--id', window.silenceId]); }
+      catch { report({ phase: 'maintenance-expiry-required', silenceId: window.silenceId, merged }); }
+    } else {
+      report({ phase: 'rollout-verification-failed', silenceId: window.silenceId, expiresAt: window.endsAt });
+    }
+    throw error;
+  }
 }
 
-module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, verifyRollout, inClusterConfig, failureDetails, github, readyPull };
+module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, maintenanceScope, verifyRollout, inClusterConfig, failureDetails, github, readyPull };
 if (require.main === module) main().catch(error => {
   // Error objects from HTTP clients or child processes can contain credentials.
   report({ phase: 'failed', ...failureDetails(error), message: 'Fast-update run failed; inspect operation and cause codes' });

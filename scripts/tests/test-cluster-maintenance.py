@@ -629,6 +629,21 @@ class ClusterMaintenanceTest(unittest.TestCase):
             self.assertNotIn(own, alert["status"]["silencedBy"], alert["labels"]["alertname"])
         self.run_command("end", "--id", own, env=env)
 
+    def test_forced_window_opens_over_another_window_and_alerts_and_always_ends(self):
+        other = self.alertmanager.add_managed_silence("other-window", "other work")
+        self.alertmanager.add_alert("CephHealthError", severity="critical")
+        output = json.loads(self.run_command("begin", "--reason", "fast update", "--force").stdout)
+        self.assertNotEqual(output["silenceId"], other)
+        self.assertEqual([item["alertname"] for item in output["forcedOverAlerts"]], ["CephHealthError"])
+        self.run_command("end", "--id", output["silenceId"])
+        self.assertIn(output["silenceId"], self.alertmanager.deletes)
+        self.assertNotIn(other, self.alertmanager.deletes)
+
+    def test_force_cannot_be_combined_with_baselines(self):
+        self.run_command("begin", "--reason", "fast update", "--force", "--allow-active-alert",
+                         "alertname=CephHealthError,namespace=rook-ceph", expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+
     def test_failed_restores_and_other_jobs_still_block_begin(self):
         for alertname, labels in (("KopiurRestoreFailed", {"namespace": "media"}),
                                   ("KubeJobFailed", {"namespace": "database",

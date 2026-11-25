@@ -235,8 +235,11 @@ and continue to reject every additional warning or critical alert.
 A failing backup never holds up a window or a PR. Admission and `end` ignore Kopiur's
 backup, repository and snapshot alerts (every `Kopiur*` alert except
 `KopiurRestoreFailed`) and `KubeJobFailed`/`KubeJobNotCompleted` for a Job labelled
-`app.kubernetes.io/managed-by=kopiur`. The Renovate fast lane
-(`docs/renovate-fast-updates.md`) opens no maintenance window at all.
+`app.kubernetes.io/managed-by=kopiur`. Automation that must
+never be blocked, such as the Renovate fast lane (`docs/renovate-fast-updates.md`),
+uses `begin --force`: the window opens even while another window is open or
+warning/critical alerts are active, and its `end` never waits for alerts to clear.
+`--force` cannot be combined with baselines, recovery or independent windows.
 
 The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
 and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.

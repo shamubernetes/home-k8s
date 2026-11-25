@@ -23,7 +23,7 @@ spec:
           app:
             image:
               repository: docker.io/gotenberg/gotenberg
-              tag: 9.9.3@sha256:9731688d1b6290e4c04d9a47dbd5fb29f92aa0076feb6592c5c777525892cd72
+              tag: 9.10.1@sha256:7d04e465cc8f700871092c2871c04f1e70d86eb399c9887cbd86a4a809e873ce
             args:
             - gotenberg
             - --api-port=3000

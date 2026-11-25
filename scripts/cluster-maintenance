@@ -32,6 +32,8 @@ EXCLUDED_ALERTS = {"Watchdog", "InfoInhibitor"}
 # Backup failures stay visible through every window. A silence cannot tell a Kopiur
 # Job's failure from another Job's, so no Job failure alert is silenced.
 VISIBLE_ALERTS = "Kopiur.+|KubeJobFailed|KubeJobNotCompleted"
+# A running CNPG barman backup outlasts LongRunningTransaction's threshold on every run.
+VISIBLE_APPLICATIONS = "barman_cloud_backup"
 MAINTENANCE_MATCHERS = [
     {"name": "alertname", "value": ".+", "isRegex": True, "isEqual": True},
     {
@@ -41,6 +43,7 @@ MAINTENANCE_MATCHERS = [
         "isEqual": False,
     },
     {"name": "alertname", "value": VISIBLE_ALERTS, "isRegex": True, "isEqual": False},
+    {"name": "application_name", "value": VISIBLE_APPLICATIONS, "isRegex": True, "isEqual": False},
 ]
 VERIFY_TIMEOUT_SECONDS = float(os.environ.get("MAINTENANCE_VERIFY_TIMEOUT_SECONDS", "20"))
 LEASE_NAME = "cluster-maintenance-begin-lock"
@@ -370,9 +373,12 @@ def kopiur_job(namespace, name):
 
 def backup_alert(alert):
     # A failing backup never holds up maintenance: Kopiur's backup, repository and
-    # snapshot alerts, and a failed Job Kopiur runs. A failing restore still blocks.
+    # snapshot alerts, a failed Job Kopiur runs, and any alert raised by a running
+    # CNPG barman backup. A failing restore still blocks.
     labels = alert.get("labels", {})
     name = labels.get("alertname", "")
+    if re.fullmatch(VISIBLE_APPLICATIONS, labels.get("application_name", "")):
+        return True
     if name.startswith("Kopiur"):
         return name != "KopiurRestoreFailed"
     if name in JOB_ALERTS and labels.get("namespace") and labels.get("job_name"):
@@ -887,9 +893,11 @@ def member_coverage(member, silence_id):
     unmatched = []
     wrongly_silenced = []
     for alert in member.get_alerts():
-        name = alert.get("labels", {}).get("alertname", "unknown")
+        labels = alert.get("labels", {})
+        name = labels.get("alertname", "unknown")
         silenced_by = alert.get("status", {}).get("silencedBy") or []
         if (name in EXCLUDED_ALERTS or re.fullmatch(VISIBLE_ALERTS, name)
+                or re.fullmatch(VISIBLE_APPLICATIONS, labels.get("application_name", ""))
                 or (scope and name in scope.get("preserveAlertnames", []))):
             excluded.append(name)
             if silence_id in silenced_by:

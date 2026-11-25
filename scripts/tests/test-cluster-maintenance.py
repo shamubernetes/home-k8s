@@ -85,6 +85,12 @@ class FakeAlertmanager:
                     "isRegex": True,
                     "isEqual": False,
                 },
+                {
+                    "name": "application_name",
+                    "value": "barman_cloud_backup",
+                    "isRegex": True,
+                    "isEqual": False,
+                },
             ],
             "startsAt": timestamp(now - dt.timedelta(minutes=1)),
             "endsAt": timestamp(now + dt.timedelta(hours=4)),
@@ -604,6 +610,12 @@ class ClusterMaintenanceTest(unittest.TestCase):
                     "isRegex": True,
                     "isEqual": False,
                 },
+                {
+                    "name": "application_name",
+                    "value": "barman_cloud_backup",
+                    "isRegex": True,
+                    "isEqual": False,
+                },
             ],
         )
         routine, watchdog = self.alertmanager.alerts
@@ -622,12 +634,24 @@ class ClusterMaintenanceTest(unittest.TestCase):
         self.alertmanager.add_alert("KopiurBackupStale", namespace="arrs")
         self.alertmanager.add_alert("KubeJobFailed", namespace="tools", kubernetes_node="worker",
                                     job_name="ov-daily-native-data-20261123233737-prehook-0")
+        # A scheduled CNPG backup outlasts the 5-minute transaction alert on every run.
+        self.alertmanager.add_alert("LongRunningTransaction", namespace="database",
+                                    pod="postgres17-2", application_name="barman_cloud_backup")
         env = self.kopiur_env()
         own = json.loads(self.run_command("begin", "--reason", "routine", env=env).stdout)["silenceId"]
         # The window does not hide them.
         for alert in self.alertmanager.alerts:
             self.assertNotIn(own, alert["status"]["silencedBy"], alert["labels"]["alertname"])
         self.run_command("end", "--id", own, env=env)
+
+    def test_coverage_rejects_a_silenced_barman_backup_alert(self):
+        own = json.loads(self.run_command("begin", "--reason", "routine").stdout)["silenceId"]
+        # Alertmanager reports the backup alert as silenced by the window.
+        self.alertmanager.ignore_silence_application = True
+        self.alertmanager.add_alert("LongRunningTransaction", silenced_by=[own], namespace="database",
+                                    application_name="barman_cloud_backup")
+        result = self.run_command("renew", "--id", own, expected=1)
+        self.assertIn("excluded-but-silenced=['LongRunningTransaction']", result.stderr)
 
     def test_forced_window_opens_over_another_window_and_alerts_and_always_ends(self):
         other = self.alertmanager.add_managed_silence("other-window", "other work")
@@ -647,7 +671,9 @@ class ClusterMaintenanceTest(unittest.TestCase):
     def test_failed_restores_and_other_jobs_still_block_begin(self):
         for alertname, labels in (("KopiurRestoreFailed", {"namespace": "media"}),
                                   ("KubeJobFailed", {"namespace": "database",
-                                                     "job_name": "snapshot-retention-29924850"})):
+                                                     "job_name": "snapshot-retention-29924850"}),
+                                  ("LongRunningTransaction", {"namespace": "database",
+                                                              "application_name": "psql"})):
             with self.subTest(alertname=alertname):
                 self.alertmanager.alerts.clear()
                 self.alertmanager.add_alert(alertname, **labels)

@@ -237,16 +237,6 @@ test('runtime Kubernetes client references the projected identity, never localho
   assert(cron.includes('imagePullPolicy: IfNotPresent'));
 });
 
-test('maintenance admission requires two active members and ten minutes remaining', () => {
-  const now = 1000000;
-  const status = { silenceId: 'owned', state: 'active', memberStates: { a: 'active', b: 'active' }, endsAt: new Date(now + 1800000).toISOString() };
-  assert(runner.maintenanceActive(status, 'owned', now));
-  for (const changed of [
-    { state: 'expired' }, { silenceId: 'other' }, { memberStates: { a: 'active', b: 'expired' } },
-    { memberStates: { a: 'active' } }, { endsAt: new Date(now + 599999).toISOString() }, { endsAt: 'invalid' }
-  ]) assert.equal(runner.maintenanceActive({ ...status, ...changed }, 'owned', now), false);
-});
-
 function scopeFixture() {
   const ks = (name, category, namespace, dependencies = []) => ({
     metadata: { name, namespace: 'flux-system' },

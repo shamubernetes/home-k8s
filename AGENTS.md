@@ -232,8 +232,21 @@ The established Renovate baseline is
 admission exception only: keep the alert visible, verify its identity has not changed,
 and continue to reject every additional warning or critical alert.
 
+A failing backup never holds up a window or a PR. Admission and `end` ignore Kopiur's
+backup, repository and snapshot alerts (every `Kopiur*` alert except
+`KopiurRestoreFailed`) and `KubeJobFailed`/`KubeJobNotCompleted` for a Job labelled
+`app.kubernetes.io/managed-by=kopiur`. Automation that must
+never be blocked, such as the Renovate fast lane (`docs/renovate-fast-updates.md`),
+uses `begin --force`: the window opens even while another window is open or
+warning/critical alerts are active, and its `end` never waits for alerts to clear.
+`--force` cannot be combined with baselines, recovery or independent windows.
+
 The standard matcher covers normal named alerts but deliberately excludes `Watchdog`
 and `InfoInhibitor`, preserving the dead-man heartbeat and null-routed helper path.
+It also excludes every `Kopiur*` alert, `KubeJobFailed` and `KubeJobNotCompleted`, so
+a backup failure stays visible through a window. A silence cannot tell a Kopiur Job
+from another Job, so no Job failure is silenced; one that is not Kopiur's still blocks
+admission and `end`.
 The default window is four hours and the hard maximum is 24 hours. Routine `begin`
 creates only the Alertmanager silence. Do not publish internal implementation work,
 new app deployments, rehearsals, or changes with no expected user-visible impact.

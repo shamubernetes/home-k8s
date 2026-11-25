@@ -79,6 +79,12 @@ class FakeAlertmanager:
                     "isRegex": True,
                     "isEqual": False,
                 },
+                {
+                    "name": "alertname",
+                    "value": "Kopiur.+|KubeJobFailed|KubeJobNotCompleted",
+                    "isRegex": True,
+                    "isEqual": False,
+                },
             ],
             "startsAt": timestamp(now - dt.timedelta(minutes=1)),
             "endsAt": timestamp(now + dt.timedelta(hours=4)),
@@ -443,20 +449,15 @@ class ClusterMaintenanceTest(unittest.TestCase):
                 self.module.validate_scope(scope)
 
     def test_scoped_window_preserves_same_namespace_backup_alert(self):
+        # A failing backup never blocks the window, but a preserved one stays visible.
         scope = {"namespaces": ["tools"], "unrelatedNamespaces": [],
                  "preserveAlertnames": ["KopiurSnapshotFailed"]}
         path = Path(self.tmpdir.name, "preserve-scope.json")
         path.write_text(json.dumps(scope))
         self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="tools", policy="example")
-        args = ("begin", "--reason", "Search rollout", "--scope-file", str(path))
-        self.run_command(*args, expected=1)
-        self.assertEqual(self.alertmanager.posts, [])
-        own = json.loads(self.run_command(*args, "--allow-active-alert",
-            "alertname=KopiurSnapshotFailed,namespace=tools,policy=example").stdout)["silenceId"]
+        own = json.loads(self.run_command("begin", "--reason", "Search rollout",
+                                          "--scope-file", str(path)).stdout)["silenceId"]
         self.assertNotIn(own, self.alertmanager.alerts[-1]["status"]["silencedBy"])
-        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="tools", policy="other")
-        self.run_command("end", "--id", own, expected=1)
-        self.assertNotIn(own, self.alertmanager.deletes)
 
     def test_preserved_alert_names_are_exact_literals(self):
         for names in ("Failure", [".*"], ["X|Y"], ["X", "X"], ["Watchdog"], [None]):
@@ -597,11 +598,62 @@ class ClusterMaintenanceTest(unittest.TestCase):
                     "isRegex": True,
                     "isEqual": False,
                 },
+                {
+                    "name": "alertname",
+                    "value": "Kopiur.+|KubeJobFailed|KubeJobNotCompleted",
+                    "isRegex": True,
+                    "isEqual": False,
+                },
             ],
         )
         routine, watchdog = self.alertmanager.alerts
         self.assertEqual(routine["status"]["silencedBy"], ["maintenance-1"])
         self.assertEqual(watchdog["status"]["silencedBy"], [])
+
+    def kopiur_env(self):
+        # Reports Kopiur as the manager of hook Jobs only, as Kopiur labels its own Jobs.
+        fake = Path(self.tmpdir.name, "kubectl")
+        fake.write_text('#!/bin/sh\ncase "$5" in *-prehook-0) printf kopiur ;; *) printf flux ;; esac\n')
+        fake.chmod(0o755)
+        return self.command_env(KUBECTL_BIN=str(fake))
+
+    def test_failing_backups_never_block_begin_or_end(self):
+        self.alertmanager.add_alert("KopiurLastBackupFailed", severity="critical", namespace="media")
+        self.alertmanager.add_alert("KopiurBackupStale", namespace="arrs")
+        self.alertmanager.add_alert("KubeJobFailed", namespace="tools", kubernetes_node="worker",
+                                    job_name="ov-daily-native-data-20261123233737-prehook-0")
+        env = self.kopiur_env()
+        own = json.loads(self.run_command("begin", "--reason", "routine", env=env).stdout)["silenceId"]
+        # The window does not hide them.
+        for alert in self.alertmanager.alerts:
+            self.assertNotIn(own, alert["status"]["silencedBy"], alert["labels"]["alertname"])
+        self.run_command("end", "--id", own, env=env)
+
+    def test_forced_window_opens_over_another_window_and_alerts_and_always_ends(self):
+        other = self.alertmanager.add_managed_silence("other-window", "other work")
+        self.alertmanager.add_alert("CephHealthError", severity="critical")
+        output = json.loads(self.run_command("begin", "--reason", "fast update", "--force").stdout)
+        self.assertNotEqual(output["silenceId"], other)
+        self.assertEqual([item["alertname"] for item in output["forcedOverAlerts"]], ["CephHealthError"])
+        self.run_command("end", "--id", output["silenceId"])
+        self.assertIn(output["silenceId"], self.alertmanager.deletes)
+        self.assertNotIn(other, self.alertmanager.deletes)
+
+    def test_force_cannot_be_combined_with_baselines(self):
+        self.run_command("begin", "--reason", "fast update", "--force", "--allow-active-alert",
+                         "alertname=CephHealthError,namespace=rook-ceph", expected=1)
+        self.assertEqual(self.alertmanager.posts, [])
+
+    def test_failed_restores_and_other_jobs_still_block_begin(self):
+        for alertname, labels in (("KopiurRestoreFailed", {"namespace": "media"}),
+                                  ("KubeJobFailed", {"namespace": "database",
+                                                     "job_name": "snapshot-retention-29924850"})):
+            with self.subTest(alertname=alertname):
+                self.alertmanager.alerts.clear()
+                self.alertmanager.add_alert(alertname, **labels)
+                result = self.run_command("begin", "--reason", "routine", env=self.kopiur_env(),
+                                          expected=1)
+                self.assertIn(alertname, result.stderr)
 
     def test_begin_fails_closed_when_unrelated_critical_alert_is_active(self):
         self.alertmanager.add_alert("CephHealthError", severity="critical")
@@ -718,8 +770,7 @@ class ClusterMaintenanceTest(unittest.TestCase):
         self.run_command("renew", "--id", output["silenceId"], "--duration", "30m")
 
     def test_recovery_rejects_other_alerts_and_wrong_or_missing_target(self):
-        self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
-                                    name="radarr-k8s92-original-retry1")
+        self.alertmanager.add_alert("KubePodCrashLooping", namespace="arrs", pod="radarr-0")
         self.run_command(*self.recovery_args(), expected=1)
         self.alertmanager.add_alert("KopiurSnapshotFailed", namespace="arrs",
                                     name="radarr-k8s92-original")

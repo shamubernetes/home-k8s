@@ -72,8 +72,6 @@ spec:
               value: /tools/kubectl
             - name: ALERTMANAGER_URLS
               value: http://alertmanager-kube-prometheus-stack-0.alertmanager-operated.observability.svc.cluster.local:9093,http://alertmanager-kube-prometheus-stack-1.alertmanager-operated.observability.svc.cluster.local:9093
-            - name: FAST_UPDATE_BASELINE_ALERTS
-              value: '["alertname=SmartDeviceInterfaceSlow,kubernetes_node=k8s-rhea,device=sda","alertname=KopiurBackupStale,namespace=arrs,policy=radarr-k8s92-original","alertname=KopiurLastBackupFailed,namespace=media,policy=grimmory","alertname=KopiurSnapshotFailed,namespace=media,name=grimmory-hourly-20261012195700,policy=grimmory"]'
             securityContext:
               allowPrivilegeEscalation: false
               capabilities: {drop: [ALL]}

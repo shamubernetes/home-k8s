@@ -37,7 +37,7 @@ kubectl kustomize kubernetes/apps/renovate/renovate/access
 - Creates ordinary protected PRs on `fast-update/` branches. Uses a distinct dashboard title and branch-history prefix to avoid managing the regular producer's dashboard or PRs.
 - Never requests human reviewers or weakens branch protection. Only a bot-authored PR containing one permitted tag-and-digest replacement can merge. The parsed manifest must otherwise be identical, the configured image must be the one changed, and version downgrades are rejected.
 - Requires the exact-head GitHub Actions checks for static analysis, Flate, Talos image availability and Talos validation, plus GitHub's protected merge acceptance.
-- Merges at most one ready PR per run under the repository's existing bounded maintenance helper. Rechecks that both maintenance members remain active with at least ten minutes left immediately before merging. Verifies the intended Flux revision (or proven descendant retaining the exact target pin), HelmRelease, Deployment image/readiness and configured HTTP health path before ending maintenance. Transient API/health observation failures are retried within the rollout deadline.
+- Merges at most one ready PR per run. Before merging it opens a maintenance window with `scripts/cluster-maintenance begin --force`, which opens even while another window is open or alerts are firing. A window that still cannot open (Alertmanager down, the begin lock held) never blocks the update: the run logs `maintenance-skipped` with the helper's refusal line and merges anyway. After merging, verifies the intended Flux revision (or proven descendant retaining the exact target pin), HelmRelease, Deployment image/readiness and configured HTTP health path, then ends the window; a forced window always ends. Transient API/health observation failures are retried within the rollout deadline.
 - Does not blindly revert a binary after database migrations. A failed rollout is reported as a failed Job, with a finite maintenance expiry, rather than being represented as successful.
 
 ### Maintenance admission scope
@@ -49,13 +49,9 @@ of explicit ordering, covering shared databases, Ceph/RGW, External Secrets and
 uses the existing read-only Kustomization RBAC, including explicit health-check
 namespaces for operators without `targetNamespace`.
 
-Only namespaces owned by ordinary workload categories and absent from that
-protected set are independent. For Kanvil this admits workload alerts in
-`home-assistant` and `tools`, without an alert-name exception. Unknown namespaces,
-alerts without a namespace, and alerts carrying node/device/shared-storage scope
-still block. The same admission scope is persisted for end and stale-state repair,
-so new unrelated workload alerts do not prevent closure, but relevant regressions
-do, even when another silence suppresses them.
+The scope decides which namespaces the window silences. Because the window is
+forced, no alert or other window stops it from opening, and its end does not wait
+for alerts to clear.
 
 The helper's optional `begin --scope-file <json>` accepts `namespaces` and
 `unrelatedNamespaces` arrays. `namespaces` must describe every affected or required

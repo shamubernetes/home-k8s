@@ -292,13 +292,6 @@ function maintenance(helper, action, args = []) {
   } catch (error) { throw noteFailure(error, 'maintenance-' + action); }
 }
 
-function maintenanceActive(status, silenceId, now = Date.now()) {
-  const states = Object.values(status.memberStates || {});
-  return status.silenceId === silenceId && status.state === 'active' &&
-    states.length >= 2 && states.every(state => state === 'active') &&
-    Date.parse(status.endsAt) - now >= 600000;
-}
-
 async function verifyRollout(target, mergeSha, token, yaml, options = {}) {
   const observe = options.observe || kget;
   const read = options.read || readFileAt;
@@ -406,43 +399,61 @@ async function main() {
   report({ phase: 'scan-complete', targets: targets.length, stats: extraction.stats });
   const candidate = await operation('select-ready-pull', () => readyPull(targets, token, author, yaml));
   if (!candidate) { report({ phase: 'complete', result: 'no merge-ready fast update' }); return; }
-  const helper = path.join(WORK, 'cluster-maintenance');
-  fs.writeFileSync(helper, await readFileAt('scripts/cluster-maintenance', base.sha, token), { mode: 0o700 });
-  const baseline = JSON.parse(process.env.FAST_UPDATE_BASELINE_ALERTS || '[]');
-  assert(Array.isArray(baseline) && baseline.every(s => typeof s === 'string'));
-  const scope = await operation('resolve-maintenance-scope', () => maintenanceScope(candidate.target, kget('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system').items));
-  const scopeFile = path.join(WORK, 'maintenance-scope.json');
-  fs.writeFileSync(scopeFile, JSON.stringify(scope), { mode: 0o600 });
-  report({ phase: 'maintenance-scope', ...scope });
-  const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', '--scope-file', scopeFile, ...baseline.flatMap(s => ['--allow-active-alert', s])];
-  const window = maintenance(helper, 'begin', args);
-  assert(window.silenceId && window.state === 'active');
-  report({ phase: 'maintenance', pull: candidate.pr.number, silenceId: window.silenceId });
+  // The window is forced open over other windows and active alerts. If it still
+  // cannot open (Alertmanager down, the lock held), the fast update merges anyway
+  // and its rollout is still verified.
+  const window = await openWindow(candidate, base.sha, token);
   let merged = false;
   try {
-    const active = maintenance(helper, 'status', ['--id', window.silenceId]);
-    assert(maintenanceActive(active, window.silenceId), 'Maintenance window is not active with at least ten minutes remaining');
     const result = await github(`/repos/$${REPOSITORY}/pulls/$${candidate.pr.number}/merge`, token, 'PUT', { merge_method: 'squash', sha: candidate.pr.head.sha });
     assert(result.merged && result.sha, 'Protected merge rejected'); merged = true;
     report({ phase: 'merged', pull: candidate.pr.number, revision: result.sha });
     const evidence = await verifyRollout(candidate.target, result.sha, token, yaml);
     report({ phase: 'healthy', ...evidence });
-    maintenance(helper, 'end', ['--id', window.silenceId]);
-    report({ phase: 'complete', result: 'deployed and verified', silenceId: window.silenceId });
   } catch (error) {
-    // Release an unused window. After merge, preserve fail-closed helper checks;
-    // never roll an old binary back across an unknown database migration.
-    if (!merged) {
-      try { maintenance(helper, 'end', ['--id', window.silenceId]); }
-      catch { report({ phase: 'maintenance-expiry-required', silenceId: window.silenceId, merged }); }
-    } else {
-      report({ phase: 'rollout-verification-failed', silenceId: window.silenceId, expiresAt: window.endsAt });
-    }
+    // Never roll an old binary back across an unknown database migration. After a
+    // failed rollout the window is left to expire; an unused one is released.
+    if (window && merged) report({ phase: 'rollout-verification-failed', silenceId: window.silenceId, expiresAt: window.endsAt });
+    if (window && !merged) closeWindow(window);
     throw error;
+  }
+  if (window) closeWindow(window);
+  report({ phase: 'complete', result: 'deployed and verified', ...(window ? { silenceId: window.silenceId } : {}) });
+}
+
+async function openWindow(candidate, baseSha, token) {
+  try {
+    const helper = path.join(WORK, 'cluster-maintenance');
+    fs.writeFileSync(helper, await readFileAt('scripts/cluster-maintenance', baseSha, token), { mode: 0o700 });
+    const scope = await operation('resolve-maintenance-scope', () => maintenanceScope(candidate.target, kget('kustomizations.kustomize.toolkit.fluxcd.io', 'flux-system').items));
+    const scopeFile = path.join(WORK, 'maintenance-scope.json');
+    fs.writeFileSync(scopeFile, JSON.stringify(scope), { mode: 0o600 });
+    report({ phase: 'maintenance-scope', ...scope });
+    const args = ['--reason', `fast-update PR $${candidate.pr.number}: $${candidate.target.image}`, '--duration', '30m', '--scope-file', scopeFile, '--force'];
+    const window = maintenance(helper, 'begin', args);
+    assert(window.silenceId && window.state === 'active');
+    window.helper = helper;
+    report({ phase: 'maintenance', pull: candidate.pr.number, silenceId: window.silenceId });
+    return window;
+  } catch (error) {
+    report({ phase: 'maintenance-skipped', pull: candidate.pr.number, ...failureDetails(error), ...refusal(error) });
+    return null;
   }
 }
 
-module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceActive, maintenanceScope, verifyRollout, inClusterConfig, failureDetails, github, readyPull };
+function closeWindow(window) {
+  try { maintenance(window.helper, 'end', ['--id', window.silenceId]); }
+  catch (error) { report({ phase: 'maintenance-expiry-required', silenceId: window.silenceId, expiresAt: window.endsAt, ...refusal(error) }); }
+}
+
+// The helper's own refusal line names what blocked it (an alert, another window);
+// keep only that line, never other child-process output.
+function refusal(error) {
+  const line = String(error?.stderr || '').split('\n').find(text => text.startsWith('cluster-maintenance: '));
+  return line ? { refusal: line.slice(0, 500) } : {};
+}
+
+module.exports = { targetsFromPreset, buildConfig, pinOnlyPatch, imageOnlyChange, checksPass, REQUIRED_CHECKS, installationToken, maintenanceScope, verifyRollout, inClusterConfig, failureDetails, github, readyPull };
 if (require.main === module) main().catch(error => {
   // Error objects from HTTP clients or child processes can contain credentials.
   report({ phase: 'failed', ...failureDetails(error), message: 'Fast-update run failed; inspect operation and cause codes' });

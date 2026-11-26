@@ -2,7 +2,7 @@
 # renovate: datasource=github-releases depName=siderolabs/talos
 talosVersion: v1.14.6
 # renovate: datasource=github-releases depName=siderolabs/kubelet
-kubernetesVersion: v1.37.2
+kubernetesVersion: v1.37.3
 
 clusterName: &cluster titans
 endpoint: https://10.100.47.10:6443

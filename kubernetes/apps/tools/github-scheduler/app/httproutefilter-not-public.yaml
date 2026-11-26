@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/gateway.envoyproxy.io/httproutefilter_v1alpha1.json
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: github-scheduler-not-public
+spec:
+  # What the public gateway does not serve is answered here, uncacheable. Envoy's own "no route" 404 has no
+  # Cache-Control, and Cloudflare hands such a 404 for a .png, .js or .css path to browsers with a four-hour
+  # lifetime: a phone that asked once from outside then kept the 404 for the internal UI's icon and scripts.
+  directResponse:
+    statusCode: 404
+    header:
+      set:
+      - name: Cache-Control
+        value: no-store

@@ -8,4 +8,5 @@ resources:
 - ./helmrelease.yaml
 - ./httproute-envoy.yaml
 - ./httproute-webhook-external.yaml
+- ./httproutefilter-not-public.yaml
 - ./networkpolicy.yaml

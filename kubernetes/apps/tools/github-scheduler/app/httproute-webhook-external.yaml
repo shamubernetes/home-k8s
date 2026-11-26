@@ -21,3 +21,14 @@ spec:
     backendRefs:
     - name: github-scheduler
       port: 8080
+  # Everything else under this hostname is internal only.
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    filters:
+    - type: ExtensionRef
+      extensionRef:
+        group: gateway.envoyproxy.io
+        kind: HTTPRouteFilter
+        name: github-scheduler-not-public

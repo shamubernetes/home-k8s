@@ -19,7 +19,7 @@ spec:
   values:
     config:
       repo: github://shamubernetes/home-k8s
-      clusterPath: ""
+      clusterPath: kubernetes/flux/config
       refreshInterval: 5m
       rerenderInterval: 1h
       maxDiffConcurrency: 1
